@@ -571,6 +571,7 @@ app.get('/api/health', (req, res) => {
 app.get('/api/diag/smtp', async (req, res) => {  const targets = [
     ['smtp.gmail.com', 587], ['smtp.gmail.com', 465],
     ['smtp.gmail.com', 25], ['142.251.127.108', 587],
+    ['smtp-relay.brevo.com', 587], ['smtp-relay.brevo.com', 465], ['smtp-relay.brevo.com', 25],
     ['www.google.com', 443], ['example.com', 80],
   ];
   const out = [];
@@ -578,6 +579,14 @@ app.get('/api/diag/smtp', async (req, res) => {  const targets = [
     out.push(h + ':' + p + ' => ' + await tcpTest(h, p, 8000));
   }
   res.json({ targets: out });
+});
+app.get('/api/diag/mail', async (req, res) => {
+  try {
+    const sent = await sendResetEmail('nassser8@gmail.com', 'TEST' + Date.now() % 100000, 10);
+    res.json({ sent, host: MAIL_HOST, port: MAIL_PORT, user: MAIL_USER, from: MAIL_FROM, passLen: (MAIL_PASS || '').length });
+  } catch (e) {
+    res.json({ error: e.message, stack: String(e && e.stack || '').split('\n').slice(0, 6) });
+  }
 });
 app.get('/api/diag/db', async (req, res) => {
   try {
