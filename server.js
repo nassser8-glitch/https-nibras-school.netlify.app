@@ -7,6 +7,7 @@ const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const nodemailer = require('nodemailer');
 const db = require('./db');
 
 const ROOT = process.env.WEBROOT || path.join(__dirname, 'public');
@@ -15,6 +16,48 @@ const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS) || 24 * 60 * 60 * 1000
 const SESSION_COOKIE = 'nibras_session';
 const MAX_BODY_MB = Number(process.env.MAX_BODY_MB) || 20;
 const BCRYPT_ROUNDS = 10;
+
+// بريد استعادة الرقم السري (SMTP) — يأتي من متغيرات البيئة (لا يُحفظ في الكود)
+const MAIL_HOST = process.env.MAIL_HOST || '';
+const MAIL_PORT = Number(process.env.MAIL_PORT) || 587;
+const MAIL_SECURE = Number(process.env.MAIL_PORT) === 465;
+const MAIL_USER = process.env.MAIL_USER || '';
+const MAIL_PASS = process.env.MAIL_PASS || '';
+const MAIL_FROM = process.env.MAIL_FROM || MAIL_USER;
+let mailTransporter = null;
+function getMailer() {
+  if (!MAIL_HOST || !MAIL_USER || !MAIL_PASS) return null;
+  if (!mailTransporter) {
+    mailTransporter = nodemailer.createTransport({
+      host: MAIL_HOST, port: MAIL_PORT, secure: MAIL_SECURE,
+      auth: { user: MAIL_USER, pass: MAIL_PASS },
+    });
+  }
+  return mailTransporter;
+}
+async function sendResetEmail(toEmail, code, expiresInMin) {
+  const m = getMailer();
+  if (!m) return false;
+  try {
+    await m.sendMail({
+      from: '"نظام نبراس" <' + MAIL_FROM + '>',
+      to: toEmail,
+      subject: 'نبراس — رمز استعادة الرقم السري',
+      text: 'نظام نبراس\n\nرمز استعادة الرقم السري الخاص بك هو: ' + code + '\nالرمز صالح لمدة ' + expiresInMin + ' دقائق.\n\nإذا لم تطلب هذا الرمز، تجاهل هذه الرسالة.',
+      html: '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #e2e8f0;border-radius:12px;padding:24px;color:#1f2937">'
+        + '<h2 style="color:#0f766e;margin:0 0 8px">نظام نبراس</h2>'
+        + '<p>رمز استعادة الرقم السري الخاص بك هو:</p>'
+        + '<div style="font-size:34px;font-weight:800;letter-spacing:10px;text-align:center;background:#f1f5f9;border-radius:8px;padding:14px;direction:ltr">' + code + '</div>'
+        + '<p>الرمز صالح لمدة <b>' + expiresInMin + ' دقائق</b>.</p>'
+        + '<p style="color:#64748b;font-size:13px">إذا لم تطلب هذا الرمز، تجاهل هذه الرسالة.</p>'
+        + '</div>',
+    });
+    return true;
+  } catch (e) {
+    console.error('[mail] فشل إرسال البريد:', e.message);
+    return false;
+  }
+}
 
 const PASSWORD_MIN = 8;
 const PASSWORD_RE = /^(?=.*[A-Za-z])[A-Za-z0-9@#$%^&*!._\-+=]{8,}$/;
@@ -266,7 +309,9 @@ app.post('/api/auth/forgot-password', (req, res) => {
     if (!u || !u.active) return res.status(404).json({ error: 'not_found' });
     const code = String(Math.floor(100000 + Math.random() * 900000));
     await db.updateUserProfile(u.id, { data: Object.assign({}, u.data, { resetCode: code, resetExpires: Date.now() + RESET_CODE_TTL_MS }) });
-    res.json({ ok: true, code, expiresInMin: 10 });
+    // إرسال الرمز إلى بريد المستخدم عبر SMTP (nassser8@gmail.com). إن لم يُضبط البريد: نعرضه في الاستجابة (وضع التطوير).
+    const sent = await sendResetEmail(u.email, code, Math.round(RESET_CODE_TTL_MS / 60000));
+    res.json(sent ? { ok: true, expiresInMin: 10 } : { ok: true, code, expiresInMin: 10, fallback: true });
   })().catch(fail(res));
 });
 

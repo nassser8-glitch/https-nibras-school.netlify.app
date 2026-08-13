@@ -1331,22 +1331,39 @@ async function forgotRequestCode(){
   __forgotBusy = true;
   try{
     const r = await __api('POST', 'forgot-password', { email });
-    if(r.status === 200 && r.j && r.j.code){
+    if(r.status === 200 && r.j && r.j.ok){
       __forgotEmail = email;
-      document.getElementById('forgotBody').innerHTML = `
-        <p class="muted" style="margin:0 0 10px">انسخ الرمز الظاهر أدناه، ثم أدخله مع كلمة المرور الجديدة. الرمز صالح 10 دقائق.</p>
-        <div class="dl-item" style="padding:10px;text-align:center">
-          <div style="font-size:11px;color:#6b7280">رمز الاستعادة</div>
-          <div style="font-size:30px;font-weight:800;letter-spacing:8px;direction:ltr;color:#1f2937">${r.j.code}</div>
-        </div>
-        <div id="forgotError" class="error-box" style="display:none"></div>
-        <label>رمز الاستعادة</label>
-        <input id="forgotCode" class="input" type="text" maxlength="6" inputmode="numeric" style="direction:ltr;text-align:center;letter-spacing:6px" />
-        <label>كلمة المرور الجديدة (8 أحرف على الأقل)</label>
-        <input id="forgotPw" class="input" type="password" minlength="8" placeholder="••••••••" />
-        <label>تأكيد كلمة المرور الجديدة</label>
-        <input id="forgotPw2" class="input" type="password" minlength="8" placeholder="••••••••" />
-        <button class="btn-primary full" style="margin-top:14px" onclick="forgotReset()">تغيير كلمة المرور</button>`;
+      if(r.j.code){
+        document.getElementById('forgotBody').innerHTML = `
+          <p class="muted" style="margin:0 0 10px">انسخ الرمز الظاهر أدناه، ثم أدخله مع كلمة المرور الجديدة. الرمز صالح 10 دقائق.</p>
+          <div class="dl-item" style="padding:10px;text-align:center">
+            <div style="font-size:11px;color:#6b7280">رمز الاستعادة</div>
+            <div style="font-size:30px;font-weight:800;letter-spacing:8px;direction:ltr;color:#1f2937">${r.j.code}</div>
+          </div>
+          <div id="forgotError" class="error-box" style="display:none"></div>
+          <label>رمز الاستعادة</label>
+          <input id="forgotCode" class="input" type="text" maxlength="6" inputmode="numeric" style="direction:ltr;text-align:center;letter-spacing:6px" />
+          <label>كلمة المرور الجديدة (8 أحرف على الأقل)</label>
+          <input id="forgotPw" class="input" type="password" minlength="8" placeholder="••••••••" />
+          <label>تأكيد كلمة المرور الجديدة</label>
+          <input id="forgotPw2" class="input" type="password" minlength="8" placeholder="••••••••" />
+          <button class="btn-primary full" style="margin-top:14px" onclick="forgotReset()">تغيير كلمة المرور</button>`;
+      } else {
+        document.getElementById('forgotBody').innerHTML = `
+          <div class="card" style="margin:0;border-color:#bbf7d0;background:#f0fdf4;color:#166534">
+            <p style="margin:0 0 4px;font-weight:700">✓ تم إرسال رمز الاستعادة</p>
+            <p class="muted" style="margin:0">أرسلنا رمزًا من 6 أرقام إلى <b dir="ltr">${escapeHtml(email)}</b>. الرمز صالح 10 دقائق. تحقق من صندوق الوارد (وجرّب البريد غير المرغوب إن لم يجده).</p>
+          </div>
+          <div id="forgotError" class="error-box" style="display:none"></div>
+          <div style="margin-top:14px"></div>
+          <label>رمز الاستعادة</label>
+          <input id="forgotCode" class="input" type="text" maxlength="6" inputmode="numeric" style="direction:ltr;text-align:center;letter-spacing:6px" />
+          <label>كلمة المرور الجديدة (8 أحرف على الأقل)</label>
+          <input id="forgotPw" class="input" type="password" minlength="8" placeholder="••••••••" />
+          <label>تأكيد كلمة المرور الجديدة</label>
+          <input id="forgotPw2" class="input" type="password" minlength="8" placeholder="••••••••" />
+          <button class="btn-primary full" style="margin-top:14px" onclick="forgotReset()">تغيير كلمة المرور</button>`;
+      }
       return;
     }
     el.style.display='block';
