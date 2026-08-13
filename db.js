@@ -19,7 +19,7 @@ async function initSchema() {
         id            TEXT PRIMARY KEY,
         school        TEXT NOT NULL CHECK (school IN ('BOYS','GIRLS')),
         name          TEXT NOT NULL,
-        email         TEXT NOT NULL UNIQUE,
+        email         TEXT NOT NULL,
         password_hash TEXT NOT NULL,
         role          TEXT NOT NULL CHECK (role IN ('ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE')),
         active        BOOLEAN NOT NULL DEFAULT true,

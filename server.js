@@ -296,11 +296,7 @@ app.post('/api/auth/change-password', requireAuth, (req, res) => {
     const me = await db.userById(req.session.user_id);
     if (!me) return res.status(401).json({ error: 'unauthorized' });
     const email = String(req.body && req.body.email || '').trim().toLowerCase();
-    if (email) {
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'bad_email' });
-      const other = await db.userByEmail(email);
-      if (other && other.id !== me.id) return res.status(409).json({ error: 'email_taken' });
-    }
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'bad_email' });
     // كل التحقق نجح — نطبّق التغييرات (كلمة المرور ثم البريد)
     const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
     await db.updateUserPasswordHash(me.id, hash, false);
@@ -322,11 +318,7 @@ app.post('/api/auth/update-profile', requireAuth, (req, res) => {
     if (!u) return res.status(401).json({ error: 'unauthorized' });
 
     const email = String(req.body && req.body.email || '').trim().toLowerCase();
-    if (email) {
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'bad_email' });
-      const other = await db.userByEmail(email);
-      if (other && other.id !== u.id) return res.status(409).json({ error: 'email_taken' });
-    }
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'bad_email' });
     const pw = String(req.body && req.body.newPassword || '');
     if (pw) {
       if (!PASSWORD_RE.test(pw)) return res.status(400).json({ error: 'weak_password', min: PASSWORD_MIN });
@@ -409,7 +401,6 @@ app.post('/api/auth/admin/create-user', requireAuth, (req, res) => {
     const role = String(req.body && req.body.role || '').toUpperCase();
     if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !PASSWORD_RE.test(pw) || !validRoleFor(req.session, role))
       return res.status(400).json({ error: 'invalid', min: PASSWORD_MIN });
-    if (await db.userByEmail(email)) return res.status(409).json({ error: 'email_taken' });
     const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
     const id = 'id_' + crypto.randomBytes(6).toString('hex');
     await db.insertUser({ id, school, name, email, password_hash: hash, role, active: true, first_login: true, data: {} });
@@ -468,11 +459,6 @@ async function userPresentInOtherSchool(id, school) {
 async function reconcileUserTable(school, prevUsers, nextUsers) {
   const nextMap = new Map((nextUsers || []).map(u => [u.id, u]));
   const prevMap = new Map((prevUsers || []).map(u => [u.id, u]));
-  // هل البريد متاح لتغييره لمستخدم معيّن؟ (يمنع تصادم المفتاح الفريد عند اشتراك حسابين بالبريد نفسه)
-  const emailFreeFor = async (id, email) => {
-    const other = await db.userByEmail(email);
-    return !other || other.id === id;
-  };
   for (const p of (prevUsers || [])) {
     const n = nextMap.get(p.id);
     if (!n) {
@@ -484,7 +470,7 @@ async function reconcileUserTable(school, prevUsers, nextUsers) {
     const tbl = await db.userById(p.id);
     if (!tbl) continue;
     if ((tbl.active ? true : false) !== (n.active !== false)) await db.setUserActive(p.id, n.active !== false);
-    if (n.email && tbl.email !== n.email && await emailFreeFor(p.id, n.email)) await db.updateUserIdentity(p.id, { email: n.email });
+    if (n.email && tbl.email !== n.email) await db.updateUserIdentity(p.id, { email: n.email });
     if (n.name && tbl.name !== n.name) await db.updateUserIdentity(p.id, { name: n.name });
   }
   // مستخدم جديد في بيانات هذا القسم (مثلاً منقول إليه): إعادة تفعيل حسابه وتصحيح قسمه
@@ -494,7 +480,7 @@ async function reconcileUserTable(school, prevUsers, nextUsers) {
     if (!tbl) continue;
     await db.setUserSchool(n.id, school);
     await db.setUserActive(n.id, n.active !== false);
-    if (n.email && tbl.email !== n.email && await emailFreeFor(n.id, n.email)) await db.updateUserIdentity(n.id, { email: n.email });
+    if (n.email && tbl.email !== n.email) await db.updateUserIdentity(n.id, { email: n.email });
   }
 }
 

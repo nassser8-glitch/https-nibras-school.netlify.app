@@ -1512,8 +1512,6 @@ async function saveAccount(){
         __mirrorSet(r.j.user);
         renderApp();
         alert('تم حفظ التغييرات بنجاح');
-      } else if(r.j && r.j.error === 'email_taken'){
-        el.style.display='block'; el.style.background='#fef2f2'; el.style.color='#dc2626'; el.textContent='هذا البريد مستخدم من قبل حساب آخر';
       } else {
         el.style.display='block'; el.style.background='#fef2f2'; el.style.color='#dc2626'; el.textContent='تعذر حفظ التغييرات — أعد المحاولة';
       }
@@ -3547,7 +3545,6 @@ function importTeachers(evt){
         const genPw = 'IniT@' + Math.random().toString(36).slice(2,8) + 'Z';
         const r = await __api('POST', 'admin/create-user', { name, email, role:'TEACHER', password: genPw });
         if(r.status === 200 && r.j && r.j.ok){ created++; temps.push(`${name}: ${genPw}`); }
-        else if(r.j && r.j.error === 'email_taken'){ skipped++; errors.push(`البريد "${email}" موجود مسبقًا`); }
         else { skipped++; errors.push(`تعذر إنشاء "${name}"`); }
       }
       await __refreshSchool(getActiveSchool());
@@ -3558,7 +3555,6 @@ function importTeachers(evt){
         let email = String(row['البريد الإلكتروني'] ?? '').trim();
         if(!email) email = name.replace(/\s+/g,'.').toLowerCase() + '@school.local';
         const password = String(row['كلمة المرور'] ?? '').trim() || '12345678';
-        if(d.users.some(u => u.email === email)){ skipped++; errors.push(`السطر ${i+2}: البريد "${email}" موجود مسبقًا`); return; }
         d.users.push({ id:uid(), name, email, password, role:'TEACHER', active:true, firstLogin:true, whatsapp:'' });
         created++;
       });
@@ -4323,7 +4319,7 @@ function renderUsers(){
   ${teacherMsg ? `<div class="card mb" style="color:#047857;border:1px solid #6ee7b7">✅ ${teacherMsg}</div>` : ''}
   <div id="userForm" class="card mb form-grid-5" style="display:none">
     <input id="uName" class="input" placeholder="الاسم" data-tip="الاسم الكامل للمستخدم الذي سيظهر في كل صفحات النظام" />
-    <input id="uEmail" class="input" type="email" placeholder="البريد الإلكتروني" data-tip="بريد إلكتروني فريد يُستخدم لتسجيل الدخول — لا يمكن تكراره بين المستخدمين" />
+    <input id="uEmail" class="input" type="email" placeholder="البريد الإلكتروني" data-tip="البريد الإلكتروني المستخدم لتسجيل الدخول" />
     <input id="uPassword" class="input" type="password" placeholder="كلمة المرور الأولية (8 أحرف على الأقل)" data-tip="كلمة مرور أولية يغيّرها المستخدم عند أول دخول — 8 أحرف على الأقل" />
     <select id="uRole" class="input" data-tip="صلاحية المستخدم: مدير يرى كل القسمين، وكيل يدير مدرسته فقط، موجه طلابي، أو معلم — المعلم والموجه لا يرى صفحات الإدارة">${Object.entries(roleLabels).map(([v,l])=>`<option value="${v}">${roleLabel(v)}</option>`).join('')}</select>
     <button class="btn-primary" onclick="addUser()">حفظ</button>
@@ -4357,8 +4353,7 @@ async function addUser(){
         document.getElementById('uPassword').value = '';
         document.getElementById('userForm').style.display = 'none';
       } else {
-        const msg = r.j && r.j.error === 'email_taken' ? 'البريد الإلكتروني مستخدم مسبقًا'
-          : r.j && r.j.error === 'forbidden' ? 'ليست لديك صلاحية إنشاء هذا النوع من الحسابات'
+        const msg = r.j && r.j.error === 'forbidden' ? 'ليست لديك صلاحية إنشاء هذا النوع من الحسابات'
           : 'تعذر إنشاء الحساب — تحقق من صحة البيانات وأعد المحاولة';
         if(errEl) errEl.innerHTML = `<div class="card mb" style="color:#dc2626">${msg}</div>`;
       }
@@ -4367,7 +4362,6 @@ async function addUser(){
     }
     // النسخة المحلية
     const d = loadDB();
-    if(d.users.some(u => u.email === email)){ if(errEl) errEl.innerHTML = '<div class="card mb" style="color:#dc2626">البريد الإلكتروني مستخدم مسبقًا</div>'; return; }
     const nu = { id:uid(), name, email, password, role, active:true };
     if(role === 'TEACHER'){ nu.firstLogin = true; nu.whatsapp = ''; }
     d.users.push(nu);
