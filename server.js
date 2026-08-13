@@ -356,6 +356,12 @@ app.post('/api/auth/forgot-password', (req, res) => {
     for (const c of active) {
       await db.updateUserProfile(c.id, { data: Object.assign({}, c.data, { resetCode: code, resetExpires: Date.now() + RESET_CODE_TTL_MS }) });
     }
+    // البريد الافتراضي للأنظمة (مثل @nibras.local أو @school.local) غير قابل للاستلام الفعلي:
+    // نعرض الرمز على الشاشة مباشرة بدل محاولة إرسال إلى عنوان غير موجود.
+    const FAKE_DOMAINS = /@(nibras|school|local|example|test)(\.|$)/i;
+    if (FAKE_DOMAINS.test(u.email)) {
+      return res.json({ ok: true, code, expiresInMin: 10, fallback: true });
+    }
     // إرسال الرمز إلى بريد المستخدم عبر SMTP (nassser8@gmail.com). إن لم يُضبط البريد: نعرضه في الاستجابة (وضع التطوير).
     const sent = await sendResetEmail(u.email, code, Math.round(RESET_CODE_TTL_MS / 60000));
     res.json(sent ? { ok: true, expiresInMin: 10 } : { ok: true, code, expiresInMin: 10, fallback: true });

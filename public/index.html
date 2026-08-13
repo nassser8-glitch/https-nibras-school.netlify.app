@@ -1338,11 +1338,11 @@ async function forgotRequestCode(){
           <p class="muted" style="margin:0 0 10px">انسخ الرمز الظاهر أدناه، ثم أدخله مع كلمة المرور الجديدة. الرمز صالح 10 دقائق.</p>
           <div class="dl-item" style="padding:10px;text-align:center">
             <div style="font-size:11px;color:#6b7280">رمز الاستعادة</div>
-            <div style="font-size:30px;font-weight:800;letter-spacing:8px;direction:ltr;color:#1f2937">${r.j.code}</div>
+            <div style="font-size:30px;font-weight:800;direction:ltr;color:#1f2937">${r.j.code.split('').join('&nbsp;')}</div>
           </div>
           <div id="forgotError" class="error-box" style="display:none"></div>
           <label>رمز الاستعادة</label>
-          <input id="forgotCode" class="input" type="text" maxlength="6" inputmode="numeric" style="direction:ltr;text-align:center;letter-spacing:6px" />
+          <input id="forgotCode" class="input" type="text" maxlength="6" inputmode="numeric" style="direction:ltr;text-align:center" />
           <label>كلمة المرور الجديدة (8 أحرف على الأقل)</label>
           <input id="forgotPw" class="input" type="password" minlength="8" placeholder="••••••••" />
           <label>تأكيد كلمة المرور الجديدة</label>
@@ -1357,7 +1357,7 @@ async function forgotRequestCode(){
           <div id="forgotError" class="error-box" style="display:none"></div>
           <div style="margin-top:14px"></div>
           <label>رمز الاستعادة</label>
-          <input id="forgotCode" class="input" type="text" maxlength="6" inputmode="numeric" style="direction:ltr;text-align:center;letter-spacing:6px" />
+          <input id="forgotCode" class="input" type="text" maxlength="6" inputmode="numeric" style="direction:ltr;text-align:center" />
           <label>كلمة المرور الجديدة (8 أحرف على الأقل)</label>
           <input id="forgotPw" class="input" type="password" minlength="8" placeholder="••••••••" />
           <label>تأكيد كلمة المرور الجديدة</label>
