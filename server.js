@@ -4,11 +4,25 @@
 // الاستبدال الكامل لخادم JSON + SYNC_KEY القديم
 // ============================================================
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const db = require('./db');
+
+// قراءة متغير: من Environment أولاً، ثم من ملف سري في /etc/secrets (بديل Render)
+function envOrSecret(name, fallback) {
+  if (process.env[name]) return process.env[name];
+  const p = '/etc/secrets/' + name;
+  try {
+    if (fs.existsSync(p)) {
+      const v = fs.readFileSync(p, 'utf8').trim();
+      if (v) return v;
+    }
+  } catch (_) { /* تجاهل */ }
+  return fallback;
+}
 
 const ROOT = process.env.WEBROOT || path.join(__dirname, 'public');
 const PORT = Number(process.env.PORT) || 8090;
@@ -18,12 +32,12 @@ const MAX_BODY_MB = Number(process.env.MAX_BODY_MB) || 20;
 const BCRYPT_ROUNDS = 10;
 
 // بريد استعادة الرقم السري (SMTP) — يأتي من متغيرات البيئة (لا يُحفظ في الكود)
-const MAIL_HOST = process.env.MAIL_HOST || '';
-const MAIL_PORT = Number(process.env.MAIL_PORT) || 587;
-const MAIL_SECURE = Number(process.env.MAIL_PORT) === 465;
-const MAIL_USER = process.env.MAIL_USER || '';
-const MAIL_PASS = process.env.MAIL_PASS || '';
-const MAIL_FROM = process.env.MAIL_FROM || MAIL_USER;
+const MAIL_HOST = envOrSecret('MAIL_HOST', '');
+const MAIL_PORT = Number(envOrSecret('MAIL_PORT', '587'));
+const MAIL_SECURE = Number(MAIL_PORT) === 465;
+const MAIL_USER = envOrSecret('MAIL_USER', '');
+const MAIL_PASS = envOrSecret('MAIL_PASS', '');
+const MAIL_FROM = envOrSecret('MAIL_FROM', '') || MAIL_USER;
 let mailTransporter = null;
 function getMailer() {
   if (!MAIL_HOST || !MAIL_USER || !MAIL_PASS) return null;
@@ -523,12 +537,12 @@ app.get('/api/health', (req, res) => {
   res.json({
     ok: true, schools: db.SCHOOLS, db: 'postgres',
     mail: {
-      host: !!process.env.MAIL_HOST,
-      user: !!process.env.MAIL_USER,
-      pass: !!process.env.MAIL_PASS,
-      passLen: (process.env.MAIL_PASS || '').length,
-      port: process.env.MAIL_PORT || null,
-      from: process.env.MAIL_FROM || null,
+      host: !!MAIL_HOST,
+      user: !!MAIL_USER,
+      pass: !!MAIL_PASS,
+      passLen: (MAIL_PASS || '').length,
+      port: MAIL_PORT,
+      from: MAIL_FROM || null,
     },
   });
 });
