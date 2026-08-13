@@ -594,8 +594,9 @@ app.get('/api/diag/smtp', async (req, res) => {  const targets = [
 });
 app.get('/api/diag/mail', async (req, res) => {
   try {
+    const apiKey = envOrSecret('MAIL_API_KEY', '') || (MAIL_PASS && String(MAIL_PASS).indexOf('xkeysib-') === 0 ? MAIL_PASS : '');
     const sent = await sendResetEmail('nassser8@gmail.com', 'TEST' + Date.now() % 100000, 10);
-    res.json({ sent, host: MAIL_HOST, port: MAIL_PORT, user: MAIL_USER, from: MAIL_FROM, passLen: (MAIL_PASS || '').length });
+    res.json({ sent, host: MAIL_HOST, port: MAIL_PORT, user: MAIL_USER, from: MAIL_FROM, passLen: (MAIL_PASS || '').length, apiKeyLen: (apiKey || '').length, apiKeyPrefix: String(apiKey || '').slice(0, 12) });
   } catch (e) {
     res.json({ error: e.message, stack: String(e && e.stack || '').split('\n').slice(0, 6) });
   }
