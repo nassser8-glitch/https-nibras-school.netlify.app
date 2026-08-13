@@ -1414,13 +1414,15 @@ function renderFirstLogin(user){
   <div class="login-wrap">
     <div class="card login-card">
       <h1>أهلاً بك، ${escapeHtml(user.name)}</h1>
-      <p class="muted">أول دخول — اختر كلمة مرور قوية جديدة (8 أحرف على الأقل)</p>
+      <p class="muted">أول دخول — سجّل بريدك الإلكتروني (سيصله رمز الاستعادة عند نسيان الرقم السري) واختر كلمة مرور قوية جديدة (8 أحرف على الأقل)</p>
       <div id="flError" class="error-box" style="display:none"></div>
+      <label>بريدك الإلكتروني (يصل إليه رمز استعادة الرقم السري)</label>
+      <input id="flEmail" class="input" type="email" placeholder="teacher@example.com" style="direction:ltr" />
       <label>كلمة المرور الجديدة</label>
       <input id="flSecret" class="input" type="password" placeholder="••••••••" minlength="8" />
       <label>تأكيد كلمة المرور الجديدة</label>
       <input id="flConfirm" class="input" type="password" placeholder="••••••••" minlength="8" />
-      <button class="btn-primary full" style="margin-top:18px" onclick="saveFirstLogin()">تعيين كلمة المرور وتفعيل الحساب</button>
+      <button class="btn-primary full" style="margin-top:18px" onclick="saveFirstLogin()">تعيين البريد وكلمة المرور وتفعيل الحساب</button>
     </div>
   </div>`;
 }
@@ -1429,13 +1431,15 @@ async function saveFirstLogin(){
   if(__firstLoginBusy) return;
   const s1 = document.getElementById('flSecret').value;
   const s2 = document.getElementById('flConfirm').value;
+  const email = document.getElementById('flEmail').value.trim();
   const el = document.getElementById('flError');
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ if(el){ el.style.display='block'; el.textContent='أدخل بريدك الإلكتروني الصحيح مثل teacher@example.com'; } return; }
   if(!s1 || s1.length < 8){ if(el){ el.style.display='block'; el.textContent='كلمة المرور يجب أن تكون 8 أحرف على الأقل'; } return; }
   if(s1 !== s2){ if(el){ el.style.display='block'; el.textContent='كلمتا المرور غير متطابقتين'; } return; }
   __firstLoginBusy = true;
   try{
     if(__serverEnabled()){
-      const r = await __api('POST', 'change-password', { newPassword: s1 });
+      const r = await __api('POST', 'change-password', { newPassword: s1, email });
       if(r.status === 200 && r.j && r.j.user){
         __sessionUser = r.j.user;
         __mirrorSet(r.j.user);

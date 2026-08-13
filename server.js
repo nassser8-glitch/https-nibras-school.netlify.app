@@ -266,6 +266,15 @@ app.post('/api/auth/change-password', requireAuth, (req, res) => {
     if (!PASSWORD_RE.test(pw)) return res.status(400).json({ error: 'weak_password', min: PASSWORD_MIN });
     const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
     await db.updateUserPasswordHash(req.session.user_id, hash, false);
+    const email = String(req.body && req.body.email || '').trim().toLowerCase();
+    if (email) {
+      const me = await db.userById(req.session.user_id);
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'bad_email' });
+      const other = await db.userByEmail(email);
+      if (other && other.id !== me.id) return res.status(409).json({ error: 'email_taken' });
+      await db.insertUser(Object.assign({}, me, { email }));
+      await updateSchoolUser(req.session.school, req.session.user_id, { email });
+    }
     await updateSchoolUser(req.session.school, req.session.user_id, { firstLogin: false });
     const u = await db.userById(req.session.user_id);
     res.json({ ok: true, user: sendUser(u, req.session) });
