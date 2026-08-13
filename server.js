@@ -573,6 +573,7 @@ app.get('/api/diag/smtp', async (req, res) => {  const targets = [
     ['smtp.gmail.com', 25], ['142.251.127.108', 587],
     ['smtp-relay.brevo.com', 587], ['smtp-relay.brevo.com', 465], ['smtp-relay.brevo.com', 25],
     ['www.google.com', 443], ['example.com', 80],
+    ['api.brevo.com', 443], ['app.brevo.com', 443], ['smtp-relay.brevo.com', 443],
   ];
   const out = [];
   for (const [h, p] of targets) {
