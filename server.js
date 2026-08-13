@@ -67,7 +67,7 @@ async function sendResetEmail(toEmail, code, expiresInMin) {
       htmlContent: '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #e2e8f0;border-radius:12px;padding:24px;color:#1f2937">'
         + '<h2 style="color:#0f766e;margin:0 0 8px">نظام نبراس</h2>'
         + '<p>رمز استعادة الرقم السري الخاص بك هو:</p>'
-        + '<div style="font-size:34px;font-weight:800;letter-spacing:10px;text-align:center;background:#f1f5f9;border-radius:8px;padding:14px;direction:ltr">' + code + '</div>'
+        + '<div style="font-size:34px;font-weight:800;text-align:center;background:#f1f5f9;border-radius:8px;padding:14px;direction:ltr">' + code.split('').join('&nbsp;') + '</div>'
         + '<p>الرمز صالح لمدة <b>' + expiresInMin + ' دقائق</b>.</p>'
         + '<p style="color:#64748b;font-size:13px">إذا لم تطلب هذا الرمز، تجاهل هذه الرسالة.</p>'
         + '</div>',
