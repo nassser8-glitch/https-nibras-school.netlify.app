@@ -190,6 +190,37 @@ async function deleteSession(tokenHash) {
 async function deleteUserSessions(userId) {
   await pool.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
 }
+// إنهاء الدخول برحلة واحدة: حذف الجلسات القديمة + إنشاء الجلسة + تحديث users.data
+// + تحديث جزئي لنسخة القسم (school_data.users) — بدل 4 استعلامات متتالية.
+async function finalizeLogin(userId, school, tokenHash, ttlMs, ip, ua, userDataJson, loginCount, lastLoginIso, historyJson) {
+  const r = await pool.query(
+    `WITH del AS (
+        DELETE FROM sessions WHERE user_id = $1
+     ), upd AS (
+        UPDATE users SET data = $4::jsonb WHERE id = $1
+     ), sc AS (
+        UPDATE school_data
+           SET data = jsonb_set(data, '{users}', (
+             SELECT COALESCE(jsonb_agg(
+               CASE WHEN elem->>'id' = $1
+                    THEN elem || jsonb_build_object(
+                           'lastLogin', to_jsonb($5::text),
+                           'loginCount', to_jsonb($3::int),
+                           'loginHistory', COALESCE($6::jsonb, '[]'::jsonb))
+                    ELSE elem END), '[]'::jsonb)
+             FROM jsonb_array_elements(data->'users') elem
+           ), false)
+         WHERE school = $2
+     ), ins AS (
+        INSERT INTO sessions (token_hash, user_id, school, expires_at, ip, user_agent)
+        VALUES ($7, $1, $2, now() + ($8::float/1000 || ' seconds')::interval, $9, $10)
+        RETURNING created_at, expires_at
+     )
+     SELECT created_at, expires_at FROM ins`,
+    [userId, school, loginCount, JSON.stringify(userDataJson), lastLoginIso, JSON.stringify(historyJson),
+     tokenHash, ttlMs, ip, ua]);
+  return r.rows[0] || null;
+}
 async function sweepSessions() {
   await pool.query('DELETE FROM sessions WHERE expires_at <= now()');
 }
@@ -233,6 +264,6 @@ module.exports = {
   userById, listUsers, listAllUsers, usernamesByIds, countAdmins, insertUser,
   updateUserPasswordHash, updateUserProfile,
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
-  createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions,
+  createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,
   getSchoolData, setSchoolData, patchSchoolUserStats,
 };

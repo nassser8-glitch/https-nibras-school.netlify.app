@@ -296,25 +296,22 @@ app.post('/api/auth/login', (req, res) => {
     if (!u) { fails.count++; return res.status(401).json({ error: 'invalid' }); }
     fails.count = 0;
 
-    // تنظيف جلسات هذا المستخدم القديمة ثم إنشاء جلسة جديدة
-    await db.deleteUserSessions(u.id);
+    // إنهاء الدخول برحلة واحدة: حذف الجلسات القديمة + إنشاء الجلسة + إحصاءات الدخول
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const nowMs = Date.now();
     const lastLoginIso = new Date(nowMs).toISOString();
-    await db.createSession(u.id, u.school, tokenHash, SESSION_TTL_MS, req.ip, (req.headers['user-agent'] || '').slice(0, 250));
-
-    // تسجيل الإحصاءات في جدول users ثم تحديث جزئي لنسخة القسم (بدون نقل الملف الكامل)
     const hist = Array.isArray(u.data.loginHistory) ? u.data.loginHistory.slice(-299) : [];
     hist.push(lastLoginIso);
     const loginCount = (u.data.loginCount || 0) + 1;
-    await db.updateUserProfile(u.id, { data: Object.assign({}, u.data, { lastLogin: lastLoginIso, loginCount, loginHistory: hist }) });
-    await db.patchSchoolUserStats(u.school, u.id, lastLoginIso, loginCount, hist);
+    const row = await db.finalizeLogin(
+      u.id, u.school, tokenHash, SESSION_TTL_MS, req.ip, (req.headers['user-agent'] || '').slice(0, 250),
+      Object.assign({}, u.data, { lastLogin: lastLoginIso, loginCount, loginHistory: hist }),
+      loginCount, lastLoginIso, hist);
 
     req._sessionToken = token;
-    const row = { created_at: lastLoginIso, expires_at: new Date(nowMs + SESSION_TTL_MS).toISOString() };
     res.setHeader('Set-Cookie', cookieOpts(req));
-    res.json({ ok: true, user: sendUser(u, row) });
+    res.json({ ok: true, user: sendUser(u, row || { created_at: lastLoginIso, expires_at: new Date(nowMs + SESSION_TTL_MS).toISOString() }) });
   })().catch(fail(res));
 });
 
