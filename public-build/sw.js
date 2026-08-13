@@ -1,5 +1,5 @@
 /* نبراس — Service Worker للتثبيت والعمل دون اتصال */
-const CACHE_NAME = 'nibras-v7';
+const CACHE_NAME = 'nibras-v8';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -29,6 +29,21 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== location.origin) return;
   if (url.pathname.indexOf('/api/') === 0) return;
   if (url.pathname.indexOf('xlsx.full.min.js') >= 0) return;
+
+  const isDocument = req.mode === 'navigate' || req.headers.get('accept').indexOf('text/html') === 0;
+  if (isDocument) {
+    // index.html دائمًا من الشبكة (مع السقوط إلى الخبطة عند انقطاع النت) — لا توجد نسخة قديمة عالقة
+    event.respondWith(
+      fetch(req).then((resp) => {
+        if (resp && resp.status === 200 && resp.type === 'basic') {
+          const copy = resp.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+        }
+        return resp;
+      }).catch(() => caches.match(req))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(req).then((cached) => {
