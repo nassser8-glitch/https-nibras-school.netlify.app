@@ -537,6 +537,16 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
 });
 
 /* ================= صحة وأمان ================= */
+const net = require('net');
+function tcpTest(host, port, ms) {
+  return new Promise((resolve) => {
+    const s = net.connect({ host, port, family: 4, timeout: ms });
+    const done = (ok, why) => { try { s.destroy(); } catch (_) {} resolve(ok ? 'OK' : 'FAIL ' + why); };
+    s.on('connect', () => done(true, ''));
+    s.on('timeout', () => done(false, 'timeout'));
+    s.on('error', (e) => done(false, e.code || e.message));
+  });
+}
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true, schools: db.SCHOOLS, db: 'postgres',
@@ -549,6 +559,17 @@ app.get('/api/health', (req, res) => {
       from: MAIL_FROM || null,
     },
   });
+});
+app.get('/api/diag/smtp', async (req, res) => {
+  const targets = [
+    ['smtp.gmail.com', 587], ['smtp.gmail.com', 465],
+    ['smtp.gmail.com', 25], ['142.251.127.108', 587],
+  ];
+  const out = [];
+  for (const [h, p] of targets) {
+    out.push(h + ':' + p + ' => ' + await tcpTest(h, p, 8000));
+  }
+  res.json({ targets: out });
 });
 
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));
