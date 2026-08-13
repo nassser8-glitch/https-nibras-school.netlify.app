@@ -293,8 +293,9 @@ app.post('/api/auth/change-password', requireAuth, (req, res) => {
     // كل التحقق نجح — نطبّق التغييرات (كلمة المرور ثم البريد)
     const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
     await db.updateUserPasswordHash(me.id, hash, false);
+    const after = await db.userById(me.id);
     if (email) {
-      await db.insertUser(Object.assign({}, me, { email }));
+      await db.insertUser(Object.assign({}, after, { email }));
       await updateSchoolUser(req.session.school, me.id, { email });
     }
     await updateSchoolUser(req.session.school, me.id, { firstLogin: false });
@@ -306,7 +307,7 @@ app.post('/api/auth/change-password', requireAuth, (req, res) => {
 app.post('/api/auth/update-profile', requireAuth, (req, res) => {
   (async () => {
     if (rateLimit('profile', 12, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
-    const u = await db.userById(req.session.user_id);
+    let u = await db.userById(req.session.user_id);
     if (!u) return res.status(401).json({ error: 'unauthorized' });
 
     const email = String(req.body && req.body.email || '').trim().toLowerCase();
@@ -314,7 +315,6 @@ app.post('/api/auth/update-profile', requireAuth, (req, res) => {
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'bad_email' });
       const other = await db.userByEmail(email);
       if (other && other.id !== u.id) return res.status(409).json({ error: 'email_taken' });
-      await db.insertUser(Object.assign({}, u, { email }));
     }
     const pw = String(req.body && req.body.newPassword || '');
     if (pw) {
@@ -322,8 +322,12 @@ app.post('/api/auth/update-profile', requireAuth, (req, res) => {
       const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
       await db.updateUserPasswordHash(u.id, hash, false);
       await updateSchoolUser(u.school, u.id, { firstLogin: false });
+      u = await db.userById(u.id);
     }
-    if (email) await updateSchoolUser(u.school, u.id, { email });
+    if (email) {
+      await db.insertUser(Object.assign({}, u, { email }));
+      await updateSchoolUser(u.school, u.id, { email });
+    }
     const updated = await db.userById(u.id);
     res.json({ ok: true, user: sendUser(updated, req.session) });
   })().catch(fail(res));
