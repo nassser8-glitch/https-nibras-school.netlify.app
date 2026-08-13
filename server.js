@@ -300,18 +300,19 @@ app.post('/api/auth/login', (req, res) => {
     await db.deleteUserSessions(u.id);
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const nowMs = Date.now();
+    const lastLoginIso = new Date(nowMs).toISOString();
     await db.createSession(u.id, u.school, tokenHash, SESSION_TTL_MS, req.ip, (req.headers['user-agent'] || '').slice(0, 250));
 
-    const data = await db.getSchoolData(u.school);
-    if (data && data.data) {
-      const hist = Array.isArray(u.data.loginHistory) ? u.data.loginHistory.slice(-299) : [];
-      hist.push(new Date().toISOString());
-      const upd = { lastLogin: new Date().toISOString(), loginCount: (u.data.loginCount || 0) + 1, loginHistory: hist };
-      await db.updateUserProfile(u.id, { data: Object.assign({}, u.data, upd) });
-      await updateSchoolUser(u.school, u.id, upd);
-    }
+    // تسجيل الإحصاءات في جدول users ثم تحديث جزئي لنسخة القسم (بدون نقل الملف الكامل)
+    const hist = Array.isArray(u.data.loginHistory) ? u.data.loginHistory.slice(-299) : [];
+    hist.push(lastLoginIso);
+    const loginCount = (u.data.loginCount || 0) + 1;
+    await db.updateUserProfile(u.id, { data: Object.assign({}, u.data, { lastLogin: lastLoginIso, loginCount, loginHistory: hist }) });
+    await db.patchSchoolUserStats(u.school, u.id, lastLoginIso, loginCount, hist);
+
     req._sessionToken = token;
-    const row = await db.sessionByTokenHash(tokenHash);
+    const row = { created_at: lastLoginIso, expires_at: new Date(nowMs + SESSION_TTL_MS).toISOString() };
     res.setHeader('Set-Cookie', cookieOpts(req));
     res.json({ ok: true, user: sendUser(u, row) });
   })().catch(fail(res));
@@ -630,9 +631,14 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       }
     }
 
-    // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات
+    // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
     const clean = JSON.parse(JSON.stringify(data));
-    if (Array.isArray(clean.users)) clean.users.forEach(u => STRIP_FIELDS.forEach(f => delete u[f]));
+    if (Array.isArray(clean.users) && clean.users.length) {
+      const uidSet = new Set(clean.users.map(u => u.id));
+      const unameMap = await db.usernamesByIds([...uidSet]);
+      clean.users.forEach(u => { if (unameMap.has(u.id)) u.username = unameMap.get(u.id); });
+      clean.users.forEach(u => STRIP_FIELDS.forEach(f => delete u[f]));
+    }
     await db.setSchoolData(school, clean, ts);
     // مزامنة جدول المصادقة مع أي تغيير في قسم المستخدمين (حذف/نقل/تعطيل)
     if (['ADMIN','AGENT'].includes(req.session.role)) {
@@ -701,6 +707,12 @@ app.get('/api/diag/db', async (req, res) => {
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));
 
 app.use((req, res) => res.status(404).json({ error: 'not_found' }));
+
+// إبقاء المثيل نشطًا على خطة Render المجانية (ينام بعد 15 دقيقة خمول فيبرد أول دخول)
+if (process.env.RENDER && process.env.PING_URL_DISABLED !== '1') {
+  const pingUrl = process.env.PING_URL || 'https://https-nibras-school-netlify-app-1.onrender.com';
+  setInterval(() => { fetch(pingUrl + '/api/health').catch(() => {}); }, 4 * 60 * 1000).unref();
+}
 
 app.listen(PORT, async () => {
   try {

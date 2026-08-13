@@ -121,6 +121,12 @@ async function listAllUsers() {
   const r = await pool.query('SELECT id, school, name, email, username, role, active, first_login FROM users ORDER BY school, role, name');
   return r.rows;
 }
+async function usernamesByIds(ids) {
+  const r = await pool.query('SELECT id, username FROM users WHERE id = ANY($1::text[]) AND username IS NOT NULL', [ids]);
+  const m = new Map();
+  r.rows.forEach(x => m.set(x.id, x.username));
+  return m;
+}
 async function countAdmins() {
   const r = await pool.query(`SELECT count(*)::int AS n FROM users WHERE role = 'ADMIN'`);
   return r.rows[0] ? r.rows[0].n : 0;
@@ -201,14 +207,32 @@ async function setSchoolData(school, data, ts) {
      ON CONFLICT (school) DO UPDATE SET data=EXCLUDED.data, ts=EXCLUDED.ts, updated_at=now()`,
     [school, JSON.stringify(data), ts]);
 }
+// تحديث إحصاءات الدخول داخل نسخة القسم (school_data.users) بتعديل جزئي على الخادم
+// دون نقل ملف البيانات الكامل (348KB) إلى العميل — أسرع بكثير في كل دخول.
+async function patchSchoolUserStats(school, userId, lastLoginIso, loginCount, historyJsonArray) {
+  await pool.query(
+    `UPDATE school_data
+        SET data = jsonb_set(data, '{users}', (
+          SELECT COALESCE(jsonb_agg(
+            CASE WHEN elem->>'id' = $1
+                 THEN elem || jsonb_build_object(
+                        'lastLogin', to_jsonb($2::text),
+                        'loginCount', to_jsonb($3::int),
+                        'loginHistory', COALESCE($4::jsonb, '[]'::jsonb))
+                 ELSE elem END), '[]'::jsonb)
+          FROM jsonb_array_elements(data->'users') elem
+        ), false)
+      WHERE school = $5`,
+    [userId, lastLoginIso, loginCount, JSON.stringify(historyJsonArray), school]);
+}
 
 module.exports = {
   pool, SCHOOLS,
   initSchema,
   userByEmail, usersByEmail, userByUsername, usernameExists, generateUsername, baseUsername,
-  userById, listUsers, listAllUsers, countAdmins, insertUser,
+  userById, listUsers, listAllUsers, usernamesByIds, countAdmins, insertUser,
   updateUserPasswordHash, updateUserProfile,
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions,
-  getSchoolData, setSchoolData,
+  getSchoolData, setSchoolData, patchSchoolUserStats,
 };
