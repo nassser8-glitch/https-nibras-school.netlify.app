@@ -246,10 +246,14 @@ app.post('/api/auth/login', (req, res) => {
     const email = String(req.body && req.body.email || '').trim().toLowerCase();
     const password = String(req.body && req.body.password || '');
     if (!email || !password) return res.status(400).json({ error: 'missing' });
-    const u = await db.userByEmail(email);
-    if (!u || !u.active) { fails.count++; return res.status(401).json({ error: 'invalid' }); }
-    const ok = await bcrypt.compare(password, u.password_hash);
-    if (!ok) { fails.count++; return res.status(401).json({ error: 'invalid' }); }
+    const candidates = await db.usersByEmail(email);
+    let u = null;
+    for (const c of candidates) {
+      if (!c.active) continue;
+      const ok = await bcrypt.compare(password, c.password_hash);
+      if (ok) { u = c; break; }
+    }
+    if (!u) { fails.count++; return res.status(401).json({ error: 'invalid' }); }
     fails.count = 0;
 
     // تنظيف جلسات هذا المستخدم القديمة ثم إنشاء جلسة جديدة
@@ -343,10 +347,15 @@ app.post('/api/auth/forgot-password', (req, res) => {
     if (rateLimit('forgot', 5, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
     const email = String(req.body && req.body.email || '').trim().toLowerCase();
     if (!email) return res.status(400).json({ error: 'missing' });
-    const u = await db.userByEmail(email);
-    if (!u || !u.active) return res.status(404).json({ error: 'not_found' });
+    const candidates = await db.usersByEmail(email);
+    if (!candidates.length) return res.status(404).json({ error: 'not_found' });
+    const active = candidates.filter(c => c.active);
+    if (!active.length) return res.status(404).json({ error: 'not_found' });
+    const u = active[0];
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    await db.updateUserProfile(u.id, { data: Object.assign({}, u.data, { resetCode: code, resetExpires: Date.now() + RESET_CODE_TTL_MS }) });
+    for (const c of active) {
+      await db.updateUserProfile(c.id, { data: Object.assign({}, c.data, { resetCode: code, resetExpires: Date.now() + RESET_CODE_TTL_MS }) });
+    }
     // إرسال الرمز إلى بريد المستخدم عبر SMTP (nassser8@gmail.com). إن لم يُضبط البريد: نعرضه في الاستجابة (وضع التطوير).
     const sent = await sendResetEmail(u.email, code, Math.round(RESET_CODE_TTL_MS / 60000));
     res.json(sent ? { ok: true, expiresInMin: 10 } : { ok: true, code, expiresInMin: 10, fallback: true });
@@ -360,11 +369,10 @@ app.post('/api/auth/recover-password', (req, res) => {
     const code = String(req.body && req.body.code || '').trim();
     const pw = String(req.body && req.body.newPassword || '');
     if (!email || !code || !pw) return res.status(400).json({ error: 'missing' });
-    const u = await db.userByEmail(email);
-    if (!u || !u.active) return res.status(404).json({ error: 'not_found' });
-    const stored = u.data && u.data.resetCode;
+    const candidates = await db.usersByEmail(email);
+    let u = candidates.find(c => c.active && c.data && String(c.data.resetCode) === code);
+    if (!u) return res.status(400).json({ error: 'bad_code' });
     const exp = u.data && u.data.resetExpires;
-    if (!stored || String(stored) !== code) return res.status(400).json({ error: 'bad_code' });
     if (!exp || exp < Date.now()) return res.status(400).json({ error: 'code_expired' });
     if (!PASSWORD_RE.test(pw)) return res.status(400).json({ error: 'weak_password', min: PASSWORD_MIN });
     const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);

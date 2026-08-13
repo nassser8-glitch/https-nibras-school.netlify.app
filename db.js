@@ -60,6 +60,10 @@ async function userByEmail(email) {
   const r = await pool.query('SELECT * FROM users WHERE email = $1', [String(email || '').toLowerCase().trim()]);
   return r.rows[0] || null;
 }
+async function usersByEmail(email) {
+  const r = await pool.query('SELECT * FROM users WHERE email = $1', [String(email || '').toLowerCase().trim()]);
+  return r.rows;
+}
 async function userById(id) {
   const r = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
   return r.rows[0] || null;
@@ -151,7 +155,7 @@ async function setSchoolData(school, data, ts) {
 module.exports = {
   pool, SCHOOLS,
   initSchema,
-  userByEmail, userById, listUsers, listAllUsers, countAdmins, insertUser,
+  userByEmail, usersByEmail, userById, listUsers, listAllUsers, countAdmins, insertUser,
   updateUserPasswordHash, updateUserProfile,
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity,
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions,
