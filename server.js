@@ -520,7 +520,17 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
 
 /* ================= صحة وأمان ================= */
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, schools: db.SCHOOLS, db: 'postgres' });
+  res.json({
+    ok: true, schools: db.SCHOOLS, db: 'postgres',
+    mail: {
+      host: !!process.env.MAIL_HOST,
+      user: !!process.env.MAIL_USER,
+      pass: !!process.env.MAIL_PASS,
+      passLen: (process.env.MAIL_PASS || '').length,
+      port: process.env.MAIL_PORT || null,
+      from: process.env.MAIL_FROM || null,
+    },
+  });
 });
 
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));
