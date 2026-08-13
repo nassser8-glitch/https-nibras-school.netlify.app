@@ -4324,6 +4324,7 @@ function renderUsers(){
     <div class="btn-group">
       <button class="btn-secondary" onclick="downloadTeacherTemplate()">⬇ تنزيل القالب</button>
       <label class="btn-secondary file-btn">📥 استيراد Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importTeachers(event)"/></label>
+      <button class="btn-secondary" onclick="exportCredentials()">📤 تصدير بيانات الدخول</button>
       <button class="btn-primary" onclick="toggleEl('userForm')">+ إضافة ${tl('معلم')}</button>
     </div>
   </div>
@@ -4343,8 +4344,52 @@ function renderUsers(){
   </div>`;
 }
 let __userBusy = false;
-function makeLocalUsername(base){
-  let candidate = String(base||'').toLowerCase().replace(/[^a-z0-9._-]/g,'').replace(/^[._-]+|[._-]+$/g,'') || 'user';
+function showTempList(creds){
+  const box = document.getElementById('importTeacherResult');
+  if(!box || !creds || !creds.length) return;
+  const rows = creds.map(c => `<tr><td>${escapeHtml(c.name)}</td><td style="direction:ltr">${escapeHtml(c.username||'')}</td><td style="direction:ltr">${escapeHtml(c.tempPassword)}</td><td>${c.school==='BOYS'?'البنين':'البنات'}</td></tr>`).join('');
+  box.innerHTML = `
+    <div class="card mb" style="border-color:#fde68a;background:#fffbeb;color:#92400e">
+      <p style="font-weight:600;margin:0 0 8px">كلمات المرور المؤقتة للمعلمين (أبلغ كل معلم بما يخصه — تتغير عند أول دخول):</p>
+      <div style="max-height:260px;overflow:auto">
+        <table class="data-table"><thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>كلمة المرور المؤقتة</th><th>القسم</th></tr></thead><tbody>${rows}</tbody></table>
+      </div>
+    </div>`;
+}
+async function exportCredentials(){
+  if(__userBusy) return;
+  if(!confirm('سيولّد الخادم كلمة مرور مؤقتة جديدة لكل معلم (تُجبره على تغييرها عند أول دخول)، ثم ينشئ ملف Excel فيه الاسم واسم المستخدم وكلمة المرور، ينزّله متصفحك ويرسله إلى بريدك. متابعة؟')) return;
+  const errEl = document.getElementById('userErr');
+  __userBusy = true;
+  try{
+    if(!__serverEnabled()){ if(errEl) errEl.innerHTML = '<div class="card mb" style="color:#dc2626">التصدير متاح في وضع الخادم فقط</div>'; return; }
+    const r = await __api('POST', 'admin/export-credentials');
+    if(r.status === 200 && r.j && r.j.ok){
+      const creds = r.j.credentials || [];
+      if(!creds.length){ window.__teacherMsg = 'لا يوجد معلمون للتصدير'; renderApp(); return; }
+      const rows = creds.map(c => ({ 'الاسم': c.name, 'اسم المستخدم': c.username, 'كلمة المرور المؤقتة': c.tempPassword, 'البريد الإلكتروني': c.email, 'القسم': c.school==='BOYS'?'البنين':'البنات' }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'بيانات الدخول');
+      const fname = 'بيانات_دخول_المعلمين.xlsx';
+      let mailOk = false, emailedTo = '';
+      try{
+        const b64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+        XLSX.writeFile(wb, fname);
+        const m = await __api('POST', 'admin/mail-credentials', { filename: fname, file: b64 });
+        if(m.status === 200 && m.j && m.j.ok){ mailOk = true; emailedTo = m.j.emailedTo; }
+      }catch(e){}
+      window.__teacherMsg = `تم توليد ${creds.length} حساب — الملف نُزّل إلى جهازك${mailOk ? ` وأُرسل إلى <b dir="ltr">${escapeHtml(emailedTo)}</b>` : ' (تعذر إرسال البريد — استخدم الملف المُنزّل)'}`;
+      renderApp();
+      showTempList(creds);
+      return;
+    }
+    if(errEl) errEl.innerHTML = '<div class="card mb" style="color:#dc2626">تعذر التصدير — تحقق أنك المدير وأعد المحاولة</div>';
+  }finally{
+    __userBusy = false;
+  }
+}
+function makeLocalUsername(base){  let candidate = String(base||'').toLowerCase().replace(/[^a-z0-9._-]/g,'').replace(/^[._-]+|[._-]+$/g,'') || 'user';
   let i = 1;
   const used = new Set();
   ['BOYS','GIRLS'].forEach(s => { try{ (loadDBFor(s).users||[]).forEach(u => { if(u.username) used.add(String(u.username).toLowerCase()); }); }catch(e){} });

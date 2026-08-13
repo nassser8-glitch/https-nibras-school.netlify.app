@@ -88,6 +88,43 @@ async function sendResetEmail(toEmail, code, expiresInMin) {
   }
 }
 
+/* إرسال بريد مع مرفق (ملف Excel ببيانات الدخول) عبر Brevo REST API */
+async function sendMailAttachment(toEmail, subject, html, filename, base64Content) {
+  const apiKey = envOrSecret('MAIL_API_KEY', '') || (MAIL_PASS && String(MAIL_PASS).indexOf('xkeysib-') === 0 ? MAIL_PASS : '');
+  if (!apiKey || !base64Content) return false;
+  try {
+    const mime = String(filename).toLowerCase().endsWith('.xlsx')
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : 'application/octet-stream';
+    const payload = {
+      sender: { email: MAIL_FROM, name: 'نظام نبراس' },
+      to: [{ email: toEmail }],
+      subject,
+      textContent: 'نظام نبراس\n\nالمرفق يحتوي بيانات دخول المعلمين (أسماء المستخدمين وكلمات المرور المؤقتة).\nأبلغ كل معلم باسم المستخدم وكلمة المرور، وسيُطلب منه تغييرها عند أول دخول.',
+      htmlContent: '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #e2e8f0;border-radius:12px;padding:24px;color:#1f2937">'
+        + '<h2 style="color:#0f766e;margin:0 0 8px">نظام نبراس</h2>'
+        + '<p>المرفق يحتوي <b>بيانات دخول المعلمين</b> (أسماء المستخدمين وكلمات المرور المؤقتة).</p>'
+        + '<p>أبلغ كل معلم باسم المستخدم وكلمة المرور الخاصين به، وسيُطلب منه تغيير كلمة المرور وتعيين بريده الحقيقي عند أول دخول.</p>'
+        + '<p style="color:#64748b;font-size:13px">لا تُرَد هذه الرسالة — إن لم تطلبها، تجاهلها وأبلغ مسؤول النظام.</p>'
+        + '</div>',
+      attachment: [{ name: String(filename).slice(0, 120), content: base64Content, type: mime }],
+    };
+    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': apiKey, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (resp.status === 201 || resp.status === 200) return true;
+    const detail = await resp.text().catch(() => '');
+    console.error('[mail] فشل إرسال البريد مع المرفق:', resp.status, detail, '| to=', toEmail);
+    return false;
+  } catch (e) {
+    console.error('[mail] فشل إرسال البريد مع المرفق:', e.message, '| to=', toEmail);
+    return false;
+  }
+}
+
 const PASSWORD_MIN = 8;
 const PASSWORD_RE = /^(?=.*[A-Za-z])[A-Za-z0-9@#$%^&*!._\-+=]{8,}$/;
 
@@ -444,6 +481,50 @@ app.post('/api/auth/admin/reset-password', requireAuth, (req, res) => {
     await updateSchoolUser(target.school, target.id, { firstLogin: true });
     await db.deleteUserSessions(target.id); // إنهاء جلسات المستخدم فورًا
     res.json({ ok: true, userId: target.id, name: target.name, tempPassword: temp, firstLogin: true });
+  })().catch(fail(res));
+});
+
+// توليد كلمة مرور مؤقتة جديدة لكل معلم وإرجاع قائمة (الاسم، اسم المستخدم، كلمة المرور) ليتسلمها المدير
+app.post('/api/auth/admin/export-credentials', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    if (rateLimit('export', 10, 60 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+    const rows = await db.listAllUsers();
+    const teachers = rows.filter(u => u.active !== false && u.role === 'TEACHER');
+    const out = [];
+    for (const u of teachers) {
+      const temp = crypto.randomBytes(6).toString('hex').slice(0, 10);
+      const hash = await bcrypt.hash(temp, BCRYPT_ROUNDS);
+      await db.updateUserPasswordHash(u.id, hash, true);
+      await updateSchoolUser(u.school, u.id, { firstLogin: true });
+      await db.deleteUserSessions(u.id);
+      out.push({ id: u.id, name: u.name, username: u.username, email: u.email, role: u.role, school: u.school, tempPassword: temp });
+    }
+    res.json({ ok: true, count: out.length, credentials: out });
+  })().catch(fail(res));
+});
+
+// استلام ملف Excel (base64) من المتصفح وإرساله إلى بريد المدير عبر Brevo
+app.post('/api/auth/admin/mail-credentials', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    if (rateLimit('mailcreds', 10, 60 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+    const filename = String(req.body && req.body.filename || 'بيانات الدخول.xlsx').slice(0, 120);
+    const b64 = String(req.body && req.body.file || '');
+    if (!b64) return res.status(400).json({ error: 'missing' });
+    const me = await db.userById(req.session.user_id);
+    const myEmail = (me && me.email) || '';
+    const to = /@(nibras|school|local|example|test)/i.test(myEmail)
+      ? (process.env.ADMIN_NOTIFY_EMAIL || 'nassser8@gmail.com')
+      : myEmail;
+    const sent = await sendMailAttachment(to, 'نبراس — بيانات دخول المعلمين',
+      '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #e2e8f0;border-radius:12px;padding:24px;color:#1f2937">'
+      + '<h2 style="color:#0f766e;margin:0 0 8px">نظام نبراس</h2>'
+      + '<p>المرفق يحتوي <b>بيانات دخول المعلمين</b> (أسماء المستخدمين وكلمات المرور المؤقتة).</p>'
+      + '<p>أبلغ كل معلم باسم المستخدم وكلمة المرور الخاصين به، وسيُطلب منه تغيير كلمة المرور وتعيين بريده الحقيقي عند أول دخول.</p>'
+      + '<p style="color:#64748b;font-size:13px">إن لم تطلب هذا الملف، تجاهل الرسالة.</p>'
+      + '</div>', filename, b64);
+    res.json(sent ? { ok: true, emailedTo: to } : { ok: false, error: 'mail_failed', emailedTo: to });
   })().catch(fail(res));
 });
 
