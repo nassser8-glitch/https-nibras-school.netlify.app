@@ -48,6 +48,7 @@ function getMailer() {
       connectionTimeout: 10000,
       greetingTimeout: 10000,
       socketTimeout: 20000,
+      connectionOptions: { family: 4 },
     });
   }
   return mailTransporter;
