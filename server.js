@@ -53,26 +53,37 @@ function getMailer() {
   }
   return mailTransporter;
 }
+// إرسال عبر REST API الخاصة بـ Brevo (يعمل من Render لأن منافذ SMTP 587/465 محجوبة
+// بينما api.brevo.com:443 متاحة). المفتاح يُقرأ من MAIL_PASS (xkeysib-...) أو MAIL_API_KEY.
 async function sendResetEmail(toEmail, code, expiresInMin) {
-  const m = getMailer();
-  if (!m) return false;
+  const apiKey = envOrSecret('MAIL_API_KEY', '') || (MAIL_PASS && String(MAIL_PASS).indexOf('xkeysib-') === 0 ? MAIL_PASS : '');
+  if (!apiKey) return false;
   try {
-    await m.sendMail({
-      from: '"نظام نبراس" <' + MAIL_FROM + '>',
-      to: toEmail,
+    const payload = {
+      sender: { email: MAIL_FROM, name: 'نظام نبراس' },
+      to: [{ email: toEmail }],
       subject: 'نبراس — رمز استعادة الرقم السري',
-      text: 'نظام نبراس\n\nرمز استعادة الرقم السري الخاص بك هو: ' + code + '\nالرمز صالح لمدة ' + expiresInMin + ' دقائق.\n\nإذا لم تطلب هذا الرمز، تجاهل هذه الرسالة.',
-      html: '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #e2e8f0;border-radius:12px;padding:24px;color:#1f2937">'
+      textContent: 'نظام نبراس\n\nرمز استعادة الرقم السري الخاص بك هو: ' + code + '\nالرمز صالح لمدة ' + expiresInMin + ' دقائق.\n\nإذا لم تطلب هذا الرمز، تجاهل هذه الرسالة.',
+      htmlContent: '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #e2e8f0;border-radius:12px;padding:24px;color:#1f2937">'
         + '<h2 style="color:#0f766e;margin:0 0 8px">نظام نبراس</h2>'
         + '<p>رمز استعادة الرقم السري الخاص بك هو:</p>'
         + '<div style="font-size:34px;font-weight:800;letter-spacing:10px;text-align:center;background:#f1f5f9;border-radius:8px;padding:14px;direction:ltr">' + code + '</div>'
         + '<p>الرمز صالح لمدة <b>' + expiresInMin + ' دقائق</b>.</p>'
         + '<p style="color:#64748b;font-size:13px">إذا لم تطلب هذا الرمز، تجاهل هذه الرسالة.</p>'
         + '</div>',
+    };
+    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': apiKey, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15000),
     });
-    return true;
+    if (resp.status === 201 || resp.status === 200) return true;
+    const detail = await resp.text().catch(() => '');
+    console.error('[mail] فشل إرسال البريد عبر API:', resp.status, detail, '| to=', toEmail);
+    return false;
   } catch (e) {
-    console.error('[mail] فشل إرسال البريد:', e.message, '| host=', MAIL_HOST, 'port=', MAIL_PORT, 'user=', MAIL_USER);
+    console.error('[mail] فشل إرسال البريد:', e.message, '| to=', toEmail);
     return false;
   }
 }
