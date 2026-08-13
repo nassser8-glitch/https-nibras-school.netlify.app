@@ -564,6 +564,7 @@ app.get('/api/diag/smtp', async (req, res) => {
   const targets = [
     ['smtp.gmail.com', 587], ['smtp.gmail.com', 465],
     ['smtp.gmail.com', 25], ['142.251.127.108', 587],
+    ['www.google.com', 443], ['example.com', 80],
   ];
   const out = [];
   for (const [h, p] of targets) {
