@@ -45,6 +45,9 @@ function getMailer() {
     mailTransporter = nodemailer.createTransport({
       host: MAIL_HOST, port: MAIL_PORT, secure: MAIL_SECURE,
       auth: { user: MAIL_USER, pass: MAIL_PASS },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
     });
   }
   return mailTransporter;
@@ -68,7 +71,7 @@ async function sendResetEmail(toEmail, code, expiresInMin) {
     });
     return true;
   } catch (e) {
-    console.error('[mail] فشل إرسال البريد:', e.message);
+    console.error('[mail] فشل إرسال البريد:', e.message, '| host=', MAIL_HOST, 'port=', MAIL_PORT, 'user=', MAIL_USER);
     return false;
   }
 }
