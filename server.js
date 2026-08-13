@@ -564,8 +564,7 @@ app.get('/api/health', (req, res) => {
     },
   });
 });
-app.get('/api/diag/smtp', async (req, res) => {
-  const targets = [
+app.get('/api/diag/smtp', async (req, res) => {  const targets = [
     ['smtp.gmail.com', 587], ['smtp.gmail.com', 465],
     ['smtp.gmail.com', 25], ['142.251.127.108', 587],
     ['www.google.com', 443], ['example.com', 80],
@@ -575,6 +574,14 @@ app.get('/api/diag/smtp', async (req, res) => {
     out.push(h + ':' + p + ' => ' + await tcpTest(h, p, 8000));
   }
   res.json({ targets: out });
+});
+app.get('/api/diag/db', async (req, res) => {
+  try {
+    const r = await db.pool.query('SELECT current_database() AS db, current_user AS usr, (SELECT count(*) FROM users) AS users');
+    res.json(r.rows[0]);
+  } catch (e) {
+    res.json({ error: e.message });
+  }
 });
 
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));
