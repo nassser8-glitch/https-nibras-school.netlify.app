@@ -29,6 +29,7 @@ async function ensureAdminAccount() {
     school: 'BOYS',
     name: 'مدير النظام',
     email: 'admin@nibras.local',
+    username: 'admin',
     password_hash: hash,
     role: 'ADMIN',
     active: true,

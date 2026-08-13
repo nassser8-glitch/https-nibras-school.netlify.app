@@ -928,10 +928,10 @@ function currentUser(){
   }
   return null;
 }
-async function login(email, password){
+async function login(login, password){
   if(__serverEnabled()){
     try{
-      const r = await __api('POST', 'login', { email, password });
+      const r = await __api('POST', 'login', { login, password });
       if(r.status === 200 && r.j && r.j.user){
         __sessionUser = r.j.user;
         __mirrorSet(r.j.user);
@@ -952,7 +952,8 @@ async function login(email, password){
   for(const s of SCHOOLS){
     localStorage.setItem(SCHOOL_KEY, s);
     const d = loadDB();
-    const u = d.users.find(u => u.email === email && u.password === password && u.active);
+    const l = login.trim().toLowerCase();
+    const u = d.users.find(u => ((u.username && u.username.toLowerCase() === l) || u.email === l) && u.password === password && u.active);
     if(u){
       u.lastLogin = new Date().toISOString();
       u.loginCount = (u.loginCount || 0) + 1;
@@ -1207,10 +1208,10 @@ function renderLogin(){
         <input id="loginPassword" class="input" type="password" placeholder="••••••••" autocomplete="current-password" />
         <button class="btn-primary full" style="margin-top:18px" onclick="handleLogin()">تسجيل الدخول</button>
         <p style="margin:8px 0 0;text-align:center"><button class="btn-secondary" style="padding:6px 12px;font-size:12px" onclick="openForgotModal()">نسيت كلمة المرور؟</button></p>
-        <p class="muted" style="font-size:11px;margin-top:10px;text-align:center">أول دخول: تُعرض كلمة مرور مؤقتة مرة واحدة في سطر أوامر الخادم، ثم يُطلب منك تعيين كلمة مرور قوية جديدة.</p>
+        <p class="muted" style="font-size:11px;margin-top:10px;text-align:center">أول دخول: تُعرض كلمة مرور مؤقتة مرة واحدة في سطر أوامر الخادم، ثم يُطلب منك تعيين بريدك الحقيقي وكلمة مرور قوية جديدة.</p>
       </div>
       <div class="card login-card" style="margin-top:14px;max-width:520px;overflow:auto">
-        <h3 style="margin:0 0 10px;font-size:15px">🔑 حسابات المدرسة — اختر بريدك ثم أدخل كلمة المرور</h3>
+        <h3 style="margin:0 0 10px;font-size:15px">🔑 حسابات المدرسة — اختر اسم المستخدم ثم أدخل كلمة المرور</h3>
         <div id="quickAccountsList"><p class="muted" style="text-align:center;margin:6px 0">جارٍ تحميل الحسابات…</p></div>
       </div>
     </div>`;
@@ -1228,13 +1229,13 @@ function renderLogin(){
       <h1>المدرسة السعودية في إسلام آباد</h1>
       <p class="muted">${hint}</p>
       <div id="loginError" class="error-box" style="display:none"></div>
-      <label>البريد الإلكتروني</label>
-      <input id="loginEmail" class="input" type="email" placeholder="admin@nibras.local" autocomplete="username" />
+      <label>اسم المستخدم (أو البريد الإلكتروني)</label>
+      <input id="loginEmail" class="input" type="text" placeholder="مثال: abdelwasea" autocomplete="username" />
       <label>كلمة المرور</label>
       <input id="loginPassword" class="input" type="password" placeholder="••••••••" autocomplete="current-password" />
       <button class="btn-primary full" style="margin-top:18px" onclick="handleLogin()">تسجيل الدخول</button>
       ${__serverEnabled() ? `<p style="margin:8px 0 0;text-align:center"><button class="btn-secondary" style="padding:6px 12px;font-size:12px" onclick="openForgotModal()">نسيت كلمة المرور؟</button></p>` : ''}
-      <p class="muted" style="font-size:11px;margin-top:10px;text-align:center">أول دخول: يُطلب منك تعيين كلمة مرور قوية جديدة قبل استخدام النظام.</p>
+      <p class="muted" style="font-size:11px;margin-top:10px;text-align:center">أول دخول: يُطلب منك تعيين بريدك الحقيقي وكلمة مرور قوية جديدة قبل استخدام النظام.</p>
     </div>
     <div class="card login-card" style="margin-top:14px;max-width:520px;overflow:auto">
       <h3 style="margin:0 0 10px;font-size:15px">🔑 حسابات جاهزة للدخول — اضغط "دخول سريع"</h3>
@@ -1257,11 +1258,11 @@ async function populateServerAccounts(){
   const prio = r => ({ ADMIN:1, AGENT:2, COUNSELOR:3, ADMINISTRATIVE:4 }[r] || 9);
   rows.sort((a,b) => (prio(a.role)-prio(b.role)) || (a.name||'').localeCompare(b.name||'','ar'));
   el.innerHTML = `
-    <table class="data-table"><thead><tr><th>الدور</th><th>البريد</th><th></th></tr></thead><tbody>
+    <table class="data-table"><thead><tr><th>الدور</th><th>اسم المستخدم</th><th></th></tr></thead><tbody>
     ${rows.map(a => `<tr>
-      <td>${escapeHtml((roleLabels[a.role]||a.role) + ' — ' + (a.name||a.email))}</td>
-      <td style="direction:ltr">${escapeHtml(a.email)}</td>
-      <td><button class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="fillLoginEmail('${escapeHtml(a.email).replace(/'/g,"\\'")}')">تعبئة البريد</button></td>
+      <td>${escapeHtml((roleLabels[a.role]||a.role) + ' — ' + (a.name||a.username||a.email))}</td>
+      <td style="direction:ltr">${escapeHtml(a.username || a.email)}</td>
+      <td><button class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="fillLoginEmail('${escapeHtml(a.username || a.email).replace(/'/g,"\\'")}')">تعبئة</button></td>
     </tr>`).join('')}
     </tbody></table>
     <p class="muted" style="font-size:11px;margin:8px 0 0;text-align:center">كلمات المرور لا تُعرض في هذه الصفحة إطلاقًا.</p>`;
@@ -1286,7 +1287,7 @@ async function handleLogin(){
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
   const el = document.getElementById('loginError');
-  if(!email || !password){ if(el){ el.style.display='block'; el.textContent='أدخل البريد الإلكتروني وكلمة المرور'; } return; }
+  if(!email || !password){ if(el){ el.style.display='block'; el.textContent='أدخل اسم المستخدم وكلمة المرور'; } return; }
   __loginBusy = true;
   if(el) el.style.display = 'none';
   try{
@@ -1296,7 +1297,7 @@ async function handleLogin(){
       location.hash = '#/';
       renderApp();
     } else {
-      if(el){ el.style.display='block'; el.textContent = (res && res.error === 'rate_limited') ? 'محاولات فاشلة كثيرة — أعد المحاولة بعد 15 دقيقة' : 'البريد الإلكتروني أو كلمة المرور غير صحيحة'; }
+      if(el){ el.style.display='block'; el.textContent = (res && res.error === 'rate_limited') ? 'محاولات فاشلة كثيرة — أعد المحاولة بعد 15 دقيقة' : 'اسم المستخدم أو كلمة المرور غير صحيحة'; }
     }
   }finally{
     __loginBusy = false;
@@ -1417,16 +1418,19 @@ function renderFirstLogin(user){
   <div class="login-wrap">
     <div class="card login-card">
       <h1>أهلاً بك، ${escapeHtml(user.name)}</h1>
-      <p class="muted">أول دخول — سجّل بريدك الإلكتروني (سيصله رمز الاستعادة عند نسيان الرقم السري) واختر كلمة مرور قوية جديدة (8 أحرف على الأقل)</p>
+      <p class="muted">أول دخول — سجّل بريدك الإلكتروني الحقيقي (سيصله رمز الاستعادة عند نسيان الرقم السري) واختر كلمة مرور قوية جديدة (8 أحرف على الأقل)</p>
+      <div class="card" style="margin:0 0 12px;border-color:#bfdbfe;background:#eff6ff;color:#1e40af">
+        <p style="margin:0;font-size:13px">اسم المستخدم للدخول: <b dir="ltr" style="font-size:16px">${escapeHtml(user.username || '')}</b></p>
+        <p class="muted" style="margin:6px 0 0;font-size:11px">ستستخدم هذا الاسم (وليس البريد) مع كلمة المرور لتسجيل الدخول لاحقاً.</p>
+      </div>
       <div id="flError" class="error-box" style="display:none"></div>
-      <label>بريدك الإلكتروني (يصل إليه رمز استعادة الرقم السري)</label>
+      <label>بريدك الإلكتروني الحقيقي (يصل إليه رمز استعادة الرقم السري)</label>
       <input id="flEmail" class="input" type="email" placeholder="teacher@example.com" style="direction:ltr" />
       <label>كلمة المرور الجديدة</label>
       <input id="flSecret" class="input" type="password" placeholder="••••••••" minlength="8" />
       <label>تأكيد كلمة المرور الجديدة</label>
       <input id="flConfirm" class="input" type="password" placeholder="••••••••" minlength="8" />
-      <button class="btn-primary full" style="margin-top:18px" onclick="saveFirstLogin()">تعيين البريد وكلمة المرور وتفعيل الحساب</button>
-    </div>
+      <button class="btn-primary full" style="margin-top:18px" onclick="saveFirstLogin()">تعيين البريد وكلمة المرور وتفعيل الحساب</button>    </div>
   </div>`;
 }
 let __firstLoginBusy = false;
@@ -1483,6 +1487,8 @@ function renderAccount(){
     <div id="accMsg" class="error-box" style="display:none"></div>
     <label>اسمك (ثابت — لا يمكن تغييره)</label>
     <input class="input" value="${escapeHtml(user.name)}" disabled />
+    <label>اسم المستخدم للدخول (ثابت — لا يمكن تغييره)</label>
+    <input class="input" style="direction:ltr" value="${escapeHtml(user.username || '')}" disabled />
     <label>البريد الإلكتروني</label>
     <input id="accWa" class="input" style="direction:ltr" value="${escapeHtml(user.email || '')}" placeholder="teacher@school.edu" />
     <label>كلمة المرور الجديدة (اختياري — اتركه فارغًا للإبقاء على الحالية، 8 أحرف على الأقل)</label>
@@ -3521,7 +3527,7 @@ function moveOneTeacher(id){
   renderApp();
 }
 function downloadTeacherTemplate(){
-  const ws = XLSX.utils.json_to_sheet([{ 'الاسم الكامل':'أحمد محمد', 'البريد الإلكتروني':'ahmed@school.local', 'كلمة المرور (اختياري — محلي فقط)':'12345678' }]);
+  const ws = XLSX.utils.json_to_sheet([{ 'الاسم الكامل':'أحمد محمد', 'اسم المستخدم (اختياري)':'ahmed', 'البريد الإلكتروني':'ahmed@school.local', 'كلمة المرور (اختياري — محلي فقط)':'12345678' }]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'المعلمون');
   XLSX.writeFile(wb, 'قالب_استيراد_المعلمين.xlsx');
@@ -3546,8 +3552,9 @@ function importTeachers(evt){
         let email = String(row['البريد الإلكتروني'] ?? '').trim();
         if(!email) email = name.replace(/\s+/g,'.').toLowerCase() + '@school.local';
         const genPw = 'IniT@' + Math.random().toString(36).slice(2,8) + 'Z';
-        const r = await __api('POST', 'admin/create-user', { name, email, role:'TEACHER', password: genPw });
-        if(r.status === 200 && r.j && r.j.ok){ created++; temps.push(`${name}: ${genPw}`); }
+        const prefUser = String(row['اسم المستخدم'] ?? row['اسم المستخدم (اختياري)'] ?? '').trim();
+        const r = await __api('POST', 'admin/create-user', { name, email, role:'TEACHER', password: genPw, username: prefUser });
+        if(r.status === 200 && r.j && r.j.ok){ created++; const uname = (r.j.user && r.j.user.username) || ''; temps.push(`${name} | دخول: ${uname} | ${genPw}`); }
         else { skipped++; errors.push(`تعذر إنشاء "${name}"`); }
       }
       await __refreshSchool(getActiveSchool());
@@ -3558,7 +3565,8 @@ function importTeachers(evt){
         let email = String(row['البريد الإلكتروني'] ?? '').trim();
         if(!email) email = name.replace(/\s+/g,'.').toLowerCase() + '@school.local';
         const password = String(row['كلمة المرور'] ?? '').trim() || '12345678';
-        d.users.push({ id:uid(), name, email, password, role:'TEACHER', active:true, firstLogin:true, whatsapp:'' });
+        const prefUser = String(row['اسم المستخدم'] ?? row['اسم المستخدم (اختياري)'] ?? '').trim();
+        d.users.push({ id:uid(), name, email, username: makeLocalUsername(prefUser || email.split('@')[0]), password, role:'TEACHER', active:true, firstLogin:true, whatsapp:'' });
         created++;
       });
       saveDB(d);
@@ -4300,6 +4308,7 @@ function renderUsers(){
         </div>` : '—';
     return `<tr>
     <td>${nameCell}</td>
+    <td style="direction:ltr"><b>${escapeHtml(u.username || '—')}</b></td>
     <td>${escapeHtml(u.email)}</td>
     <td>${roleLabel(u.role)}</td>
     <td>${authCell}</td>
@@ -4322,18 +4331,26 @@ function renderUsers(){
   ${teacherMsg ? `<div class="card mb" style="color:#047857;border:1px solid #6ee7b7">✅ ${teacherMsg}</div>` : ''}
   <div id="userForm" class="card mb form-grid-5" style="display:none">
     <input id="uName" class="input" placeholder="الاسم" data-tip="الاسم الكامل للمستخدم الذي سيظهر في كل صفحات النظام" />
-    <input id="uEmail" class="input" type="email" placeholder="البريد الإلكتروني" data-tip="البريد الإلكتروني المستخدم لتسجيل الدخول" />
+    <input id="uEmail" class="input" type="email" placeholder="بريد حقيقي (للاستعادة)" data-tip="بريد إلكتروني حقيقي يصل إليه رمز استعادة الرقم السري — يُسمح بتكراره بين عدة حسابات" />
     <input id="uPassword" class="input" type="password" placeholder="كلمة المرور الأولية (8 أحرف على الأقل)" data-tip="كلمة مرور أولية يغيّرها المستخدم عند أول دخول — 8 أحرف على الأقل" />
     <select id="uRole" class="input" data-tip="صلاحية المستخدم: مدير يرى كل القسمين، وكيل يدير مدرسته فقط، موجه طلابي، أو معلم — المعلم والموجه لا يرى صفحات الإدارة">${Object.entries(roleLabels).map(([v,l])=>`<option value="${v}">${roleLabel(v)}</option>`).join('')}</select>
     <button class="btn-primary" onclick="addUser()">حفظ</button>
   </div>
   <div id="userErr"></div>
   <div class="card table-card">
-    <table class="data-table"><thead><tr><th>الاسم</th><th>البريد الإلكتروني</th><th>الدور</th><th>بيانات الدخول</th><th>${tl('الفصول')}</th><th></th></tr></thead>
+    <table class="data-table"><thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>البريد الإلكتروني</th><th>الدور</th><th>بيانات الدخول</th><th>${tl('الفصول')}</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table>
   </div>`;
 }
 let __userBusy = false;
+function makeLocalUsername(base){
+  let candidate = String(base||'').toLowerCase().replace(/[^a-z0-9._-]/g,'').replace(/^[._-]+|[._-]+$/g,'') || 'user';
+  let i = 1;
+  const used = new Set();
+  ['BOYS','GIRLS'].forEach(s => { try{ (loadDBFor(s).users||[]).forEach(u => { if(u.username) used.add(String(u.username).toLowerCase()); }); }catch(e){} });
+  while(used.has(candidate)){ i++; candidate = String(base||'').toLowerCase().replace(/[^a-z0-9._-]/g,'').replace(/^[._-]+|[._-]+$/g,'') + i; }
+  return candidate;
+}
 async function addUser(){
   if(__userBusy) return;
   const name = document.getElementById('uName').value.trim();
@@ -4350,7 +4367,8 @@ async function addUser(){
       const r = await __api('POST', 'admin/create-user', { name, email, role, password });
       if(r.status === 200 && r.j && r.j.ok){
         await __refreshSchool(getActiveSchool());
-        window.__teacherMsg = `تم إنشاء الحساب "${escapeHtml(name)}" — سيُطلب منه تغيير كلمة المرور عند أول دخول`;
+        const uname = r.j.user && r.j.user.username;
+        window.__teacherMsg = `تم إنشاء الحساب "${escapeHtml(name)}"${uname ? ` — اسم المستخدم للدخول: <b dir="ltr" style="font-size:14px">${escapeHtml(uname)}</b>` : ''} — سيُطلب منه تغيير كلمة المرور عند أول دخول`;
         document.getElementById('uName').value = '';
         document.getElementById('uEmail').value = '';
         document.getElementById('uPassword').value = '';
@@ -4365,7 +4383,7 @@ async function addUser(){
     }
     // النسخة المحلية
     const d = loadDB();
-    const nu = { id:uid(), name, email, password, role, active:true };
+    const nu = { id:uid(), name, email, username: makeLocalUsername(email.split('@')[0]), password, role, active:true };
     if(role === 'TEACHER'){ nu.firstLogin = true; nu.whatsapp = ''; }
     d.users.push(nu);
     saveDB(d);

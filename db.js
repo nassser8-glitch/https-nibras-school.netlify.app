@@ -20,6 +20,7 @@ async function initSchema() {
         school        TEXT NOT NULL CHECK (school IN ('BOYS','GIRLS')),
         name          TEXT NOT NULL,
         email         TEXT NOT NULL,
+        username      TEXT,
         password_hash TEXT NOT NULL,
         role          TEXT NOT NULL CHECK (role IN ('ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE')),
         active        BOOLEAN NOT NULL DEFAULT true,
@@ -27,6 +28,7 @@ async function initSchema() {
         data          JSONB NOT NULL DEFAULT '{}'::jsonb,
         created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
       )`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_username_key ON users(username)`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS sessions (
         token_hash TEXT PRIMARY KEY,
@@ -64,6 +66,49 @@ async function usersByEmail(email) {
   const r = await pool.query('SELECT * FROM users WHERE email = $1', [String(email || '').toLowerCase().trim()]);
   return r.rows;
 }
+async function userByUsername(username) {
+  const r = await pool.query('SELECT * FROM users WHERE username = $1', [String(username || '').trim().toLowerCase()]);
+  return r.rows[0] || null;
+}
+async function usernameExists(username) {
+  const r = await pool.query('SELECT 1 FROM users WHERE username = $1', [String(username || '').trim().toLowerCase()]);
+  return r.rows.length > 0;
+}
+// تحويل الاسم العربي إلى اسم مستخدم لاتيني بسيط (للحصول على قيمة فريدة تُستخدم للدخول)
+const AR2LAT = {
+  'ا':'a','أ':'a','إ':'a','آ':'a','ٱ':'a','ب':'b','ت':'t','ث':'th','ج':'j','ح':'h','خ':'kh',
+  'د':'d','ذ':'dh','ر':'r','ز':'z','س':'s','ش':'sh','ص':'s','ض':'d','ط':'t','ظ':'z',
+  'ع':'a','غ':'gh','ف':'f','ق':'q','ك':'k','ل':'l','م':'m','ن':'n','ه':'h','و':'w','ي':'y',
+  'ة':'h','ى':'a','ء':'' , 'ؤ':'w','ئ':'y'
+};
+function baseUsername(name) {
+  let s = String(name || '');
+  s = s.replace(/[\u064B-\u0652\u0670\u0640]/g, ''); // التشكيل
+  let out = '';
+  for (const ch of s) {
+    if (AR2LAT[ch]) out += AR2LAT[ch];
+    else if (/[a-zA-Z0-9]/.test(ch)) out += ch.toLowerCase();
+    // أي حرف آخر (مسافات، رموز) يُتجاهل
+  }
+  if (!out) out = 'user';
+  out = out.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '');
+  if (!out) out = 'user';
+  return out.slice(0, 24);
+}
+async function generateUsername(name, preferred) {
+  const base = baseUsername(preferred && String(preferred).trim() ? preferred : name);
+  let candidate = base;
+  let i = 1;
+  while (await usernameExists(candidate)) { i++; candidate = base + i; }
+  return candidate;
+}
+async function generateUsernameUnique(name, existingUsernames) {
+  const base = baseUsername(name);
+  let candidate = base;
+  let i = 1;
+  while ((existingUsernames && existingUsernames.has(candidate)) || await usernameExists(candidate)) { i++; candidate = base + i; }
+  return candidate;
+}
 async function userById(id) {
   const r = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
   return r.rows[0] || null;
@@ -73,7 +118,7 @@ async function listUsers(school) {
   return r.rows;
 }
 async function listAllUsers() {
-  const r = await pool.query('SELECT id, school, name, email, role, active, first_login FROM users ORDER BY school, role, name');
+  const r = await pool.query('SELECT id, school, name, email, username, role, active, first_login FROM users ORDER BY school, role, name');
   return r.rows;
 }
 async function countAdmins() {
@@ -82,13 +127,14 @@ async function countAdmins() {
 }
 async function insertUser(u) {
   await pool.query(
-    `INSERT INTO users (id, school, name, email, password_hash, role, active, first_login, data)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    `INSERT INTO users (id, school, name, email, username, password_hash, role, active, first_login, data)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
      ON CONFLICT (id) DO UPDATE SET
-       name=EXCLUDED.name, email=EXCLUDED.email, password_hash=EXCLUDED.password_hash,
+       name=EXCLUDED.name, email=EXCLUDED.email, username=EXCLUDED.username,
+       password_hash=EXCLUDED.password_hash,
        role=EXCLUDED.role, active=EXCLUDED.active, first_login=EXCLUDED.first_login, data=EXCLUDED.data`,
-    [u.id, u.school, u.name, String(u.email).toLowerCase().trim(), u.password_hash, u.role,
-     u.active !== false, !!u.first_login, JSON.stringify(u.data || {})]);
+    [u.id, u.school, u.name, String(u.email).toLowerCase().trim(), u.username ? String(u.username).trim().toLowerCase() : null,
+     u.password_hash, u.role, u.active !== false, !!u.first_login, JSON.stringify(u.data || {})]);
 }
 async function updateUserPasswordHash(id, hash, firstLogin) {
   await pool.query('UPDATE users SET password_hash=$2, first_login=$3 WHERE id=$1',
@@ -110,8 +156,12 @@ async function updateUserIdentity(id, fields) {
   const vals = [id];
   if (fields.name !== undefined) { sets.push('name=$' + (vals.length + 1)); vals.push(fields.name); }
   if (fields.email !== undefined) { sets.push('email=$' + (vals.length + 1)); vals.push(String(fields.email).toLowerCase().trim()); }
+  if (fields.username !== undefined) { sets.push('username=$' + (vals.length + 1)); vals.push(String(fields.username).trim().toLowerCase()); }
   if (!sets.length) return;
   await pool.query('UPDATE users SET ' + sets.join(', ') + ' WHERE id=$1', vals);
+}
+async function setUserUsername(id, username) {
+  await pool.query('UPDATE users SET username=$2 WHERE id=$1', [id, String(username || '').trim().toLowerCase()]);
 }
 
 /* ===== الجلسات ===== */
@@ -155,9 +205,10 @@ async function setSchoolData(school, data, ts) {
 module.exports = {
   pool, SCHOOLS,
   initSchema,
-  userByEmail, usersByEmail, userById, listUsers, listAllUsers, countAdmins, insertUser,
+  userByEmail, usersByEmail, userByUsername, usernameExists, generateUsername, baseUsername,
+  userById, listUsers, listAllUsers, countAdmins, insertUser,
   updateUserPasswordHash, updateUserProfile,
-  setUserActive, deactivateUser, setUserSchool, updateUserIdentity,
+  setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions,
   getSchoolData, setSchoolData,
 };

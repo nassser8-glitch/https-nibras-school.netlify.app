@@ -210,7 +210,7 @@ function requireAuth(req, res, next) {
   }).catch(fail(res));
 }
 function sendUser(u, sessionRow) {
-  const user = { id: u.id, school: u.school, name: u.name, email: u.email, role: u.role, active: u.active, firstLogin: u.first_login, ...(u.data || {}) };
+  const user = { id: u.id, school: u.school, name: u.name, username: u.username, email: u.email, role: u.role, active: u.active, firstLogin: u.first_login, ...(u.data || {}) };
   STRIP_FIELDS.forEach(f => delete user[f]);
   if (sessionRow) user.session = { created: sessionRow.created_at, expires: sessionRow.expires_at };
   return user;
@@ -243,10 +243,13 @@ app.post('/api/auth/login', (req, res) => {
   (async () => {
     const fails = loginFailBucket(req);
     if (fails.count >= 10) return res.status(429).json({ error: 'rate_limited' });
-    const email = String(req.body && req.body.email || '').trim().toLowerCase();
+    const login = String(req.body && (req.body.login || req.body.email) || '').trim().toLowerCase();
     const password = String(req.body && req.body.password || '');
-    if (!email || !password) return res.status(400).json({ error: 'missing' });
-    const candidates = await db.usersByEmail(email);
+    if (!login || !password) return res.status(400).json({ error: 'missing' });
+    // الدخول يكون باسم المستخدم (username)، مع بقاء دعم البريد الإلكتروني كبديل (يحتوي @)
+    let candidates;
+    if (login.includes('@')) candidates = await db.usersByEmail(login);
+    else { const single = await db.userByUsername(login); candidates = single ? [single] : []; }
     let u = null;
     for (const c of candidates) {
       if (!c.active) continue;
@@ -419,7 +422,9 @@ app.post('/api/auth/admin/create-user', requireAuth, (req, res) => {
       return res.status(400).json({ error: 'invalid', min: PASSWORD_MIN });
     const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
     const id = 'id_' + crypto.randomBytes(6).toString('hex');
-    await db.insertUser({ id, school, name, email, password_hash: hash, role, active: true, first_login: true, data: {} });
+    const preferred = String(req.body && req.body.username || '').trim();
+    const username = await db.generateUsername(name, preferred || email.split('@')[0]);
+    await db.insertUser({ id, school, name, email, username, password_hash: hash, role, active: true, first_login: true, data: {} });
     const created = await db.userById(id);
     await appendSchoolUser(school, sendUser(created));
     res.json({ ok: true, user: sendUser(created) });
@@ -447,7 +452,7 @@ app.get('/api/auth/accounts', (req, res) => {
   db.listAllUsers().then(rows => {
     const accounts = rows
       .filter(u => u.active !== false)
-      .map(u => ({ name: u.name, email: u.email, role: u.role, school: u.school }));
+      .map(u => ({ name: u.name, username: u.username, email: u.email, role: u.role, school: u.school }));
     res.json({ ok: true, accounts });
   }).catch(fail(res));
 });
