@@ -446,6 +446,20 @@
   .dash-legend .row { display:flex; align-items:center; gap:7px; white-space:nowrap; }
   .dash-legend .swatch { width:11px; height:11px; border-radius:3px; flex-shrink:0; }
   .dash-legend b { margin-inline-start:auto; font-weight:800; }
+  .att-card { padding:0; }
+  .att-group { padding:14px 16px 16px; }
+  .att-group + .att-group { border-top:1px solid var(--line); }
+  .att-group-title { font-weight:800; font-size:13px; color:var(--text); margin:0 0 10px; display:flex; align-items:center; gap:6px; }
+  .att-flex { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .att-pct { display:flex; flex-direction:column; align-items:center; min-width:66px; cursor:pointer; }
+  .att-pct b { font-size:26px; font-weight:800; color:#059669; line-height:1; }
+  .att-pct span { font-size:10px; color:var(--muted); margin-top:3px; }
+  .att-legend { display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--text); min-width:0; }
+  .att-legend .row { display:flex; align-items:center; gap:7px; white-space:nowrap; }
+  .att-legend .swatch { width:11px; height:11px; border-radius:3px; flex-shrink:0; }
+  .att-legend b { margin-inline-start:auto; font-weight:800; }
+  .att-report-btn { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; border:none; background:transparent; color:#2563eb; font-size:12px; font-weight:700; cursor:pointer; padding:10px 16px; border-top:1px solid var(--line); font-family:inherit; }
+  .att-report-btn:hover { color:#1d4ed8; background:var(--light); }
   .dash-tabs { display:flex; gap:6px; background:var(--light); border-radius:10px; padding:4px; }
   .dash-tab { flex:1; border:none; background:transparent; border-radius:8px; padding:7px 10px; font-size:12.5px; font-weight:800; color:var(--muted); cursor:pointer; font-family:inherit; }
   .dash-tab.active { background:#fff; color:var(--navy); box-shadow:0 2px 6px rgba(15,70,120,.12); }
@@ -2722,21 +2736,38 @@ function renderDashboard(){
       </div>
     </a>`).join('') : '<p class="muted small" style="margin:4px 0">لا توجد أنشطة قادمة</p>';
 
-  // الحضور اليوم — دائرة
-  const attTotal = present + absent + late;
-  const pPct = attTotal ? Math.round(present/attTotal*100) : 0;
-  const aPct = attTotal ? Math.round(absent/attTotal*100) : 0;
-  const donutBg = attTotal ? `conic-gradient(#16a34a 0 ${pPct}%, #ef4444 ${pPct}% ${pPct+aPct}%, #f59e0b ${pPct+aPct}% 100%)` : 'conic-gradient(#e4edf5 0 100%)';
+  // الحضور اليوم — بطاقة الطلاب والمعلمين (تصميم الكود المرفق)
+  const attGroup = (title, present, absent, late, pct, click) => {
+    const total = present + absent + late;
+    const pPct = total ? Math.round(present/total*100) : 0;
+    const aPct = total ? Math.round(absent/total*100) : 0;
+    const donutBg = total ? `conic-gradient(#22c55e 0 ${pPct}%, #ef4444 ${pPct}% ${pPct+aPct}%, #f59e0b ${pPct+aPct}% 100%)` : 'conic-gradient(#e4edf5 0 100%)';
+    return `
+    <div class="att-group">
+      <p class="att-group-title">${title}</p>
+      <div class="att-flex">
+        <div class="att-pct" onclick="${click}" title="عرض التفاصيل"><b>${pct}%</b><span>حضور</span></div>
+        <div class="dash-donut" style="background:${donutBg}">
+          <div class="dash-donut-center"><b>${total}</b><span>مسجّل اليوم</span></div>
+        </div>
+        <div class="att-legend">
+          <div class="row"><span class="swatch" style="background:#22c55e"></span>حضور <b>${present}</b></div>
+          <div class="row"><span class="swatch" style="background:#ef4444"></span>غياب <b>${absent}</b></div>
+          <div class="row"><span class="swatch" style="background:#f59e0b"></span>تأخر <b>${late}</b></div>
+        </div>
+      </div>
+    </div>`;
+  };
+  const tPresent = teachers.length - absentTeachers.length - lateTeachers.length;
+  const sAttTotal = present + absent + late;
+  const sPct = sAttTotal ? Math.round(present/sAttTotal*100) : 0;
+  const tAttTotal = tPresent + absentTeachers.length + lateTeachers.length;
+  const tPct = tAttTotal ? Math.round(tPresent/tAttTotal*100) : 0;
   const donutHTML = `
-    <div class="dash-donut-wrap">
-      <div class="dash-donut" style="background:${donutBg}">
-        <div class="dash-donut-center"><b>${attTotal}</b><span>طالب سُجّل حضورهم</span></div>
-      </div>
-      <div class="dash-legend">
-        <div class="row"><span class="swatch" style="background:#16a34a"></span>حاضر <b>${present}</b></div>
-        <div class="row"><span class="swatch" style="background:#ef4444"></span>غائب <b>${absent}</b></div>
-        <div class="row"><span class="swatch" style="background:#f59e0b"></span>متأخر <b>${late}</b></div>
-      </div>
+    <div class="att-card">
+      ${attGroup('👨‍🎓 حضور الطلاب', present, absent, late, sPct, 'showTodayAttendance()')}
+      ${attGroup('👨‍🏫 حضور المعلمين', tPresent, absentTeachers.length, lateTeachers.length, tPct, canMgrT ? 'showTeacherAbsenceList()' : 'showTodayAttendance()')}
+      <button class="att-report-btn" onclick="showTodayAttendance()"><span>عرض تقرير الحضور</span><span>←</span></button>
     </div>`;
 
   // لوحة الأوائل — تبويبات
