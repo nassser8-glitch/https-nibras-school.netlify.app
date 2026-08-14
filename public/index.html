@@ -2740,12 +2740,22 @@ function renderDashboard(){
       <button class="att-report-btn" onclick="showTodayAttendance()"><span>عرض تقرير الحضور</span><span>←</span></button>
     </div>`;
 
-  // لوحة الأوائل — تبويبات
+  // لوحة الأوائل — المراحل (ابتدائي/متوسط/ثانوي)
   const ptsMap = studentPointsMap();
   const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
   const classLabelOf = s => { const c = s.classId ? classById(s.classId) : null; return c ? classLabel(c) : '—'; };
-  const topStudents = students.map(s => ({ s, pts: ptsMap[s.id] || 0 })).filter(x => x.pts !== 0).sort((a,b) => b.pts - a.pts).slice(0,5);
-  const stLeaders = topStudents.length ? topStudents.map((x,i) => `
+  const stageGroups = [
+    { tab:'pri', label:'ابتدائي', min:0, max:5 },
+    { tab:'mid', label:'متوسط', min:6, max:8 },
+    { tab:'sec', label:'ثانوي', min:9, max:11 },
+  ];
+  const stageLeaders = g => {
+    const gradeIds = new Set(d.grades.filter(x => x.order >= g.min && x.order <= g.max).map(x => x.id));
+    const classIds = new Set(d.classes.filter(c => gradeIds.has(c.gradeId)).map(c => c.id));
+    const studs = students.filter(s => s.classId && classIds.has(s.classId));
+    const withPts = studs.map(s => ({ s, pts: ptsMap[s.id] || 0 })).filter(x => x.pts !== 0).sort((a,b) => b.pts - a.pts || String(a.s.fullName).localeCompare(String(b.s.fullName),'ar'));
+    if(withPts.length === 0) return '<p class="muted small" style="margin:4px 0">لا توجد نقاط مسجلة في هذه المرحلة</p>';
+    return withPts.slice(0,5).map((x,i) => `
     <div class="dash-leader-row">
       <span class="dash-leader-medal">${medals[i] || '•'}</span>
       <div style="min-width:0">
@@ -2753,18 +2763,8 @@ function renderDashboard(){
         <div class="dash-leader-meta">${escapeHtml(classLabelOf(x.s))}</div>
       </div>
       <span class="dash-leader-pts" style="color:#16a34a">+${x.pts}</span>
-    </div>`).join('') : '<p class="muted small" style="margin:4px 0">لا توجد نقاط مسجلة بعد — سجّل ملاحظات من صفحة الطلاب</p>';
-  const actionsOf = id => { const att = d.attendance.filter(a => a.createdBy === id).length; const notes = d.notes.filter(n => n.createdBy === id).length; const trs = d.transfers.filter(t => t.createdBy === id).length; return att + notes + trs; };
-  const ranked = teachers.map(t => ({ t, a: actionsOf(t.id) })).sort((x,y) => y.a - x.a || String(x.t.lastLogin||'').localeCompare(String(y.t.lastLogin||''))).slice(0,3);
-  const tLeaders = ranked.length ? ranked.map((r,i) => `
-    <a class="dash-leader-row" href="#/teacher/${r.t.id}" style="text-decoration:none">
-      <span class="dash-leader-medal">${medals[i] || '•'}</span>
-      <div style="min-width:0">
-        <div class="dash-leader-name">${escapeHtml(r.t.name)}</div>
-        <div class="dash-leader-meta">${tl('معلم')}</div>
-      </div>
-      <span class="dash-leader-pts" style="color:#1672c4">${r.a}</span>
-    </a>`).join('') : '<p class="muted small" style="margin:4px 0">لا يوجد معلمون</p>';
+    </div>`).join('');
+  };
 
   const leadersHTML = `
     <div class="dash-panel" style="padding:0">
@@ -2774,11 +2774,9 @@ function renderDashboard(){
       </div>
       <div style="padding:0 12px 12px">
         <div class="dash-tabs">
-          <button class="dash-tab active" data-tab="teachers" onclick="switchLeadersTab('teachers')">المعلمون</button>
-          <button class="dash-tab" data-tab="students" onclick="switchLeadersTab('students')">الطلاب</button>
+          ${stageGroups.map((g,i) => `<button class="dash-tab ${i===0?'active':''}" data-tab="${g.tab}" onclick="switchLeadersTab('${g.tab}')">${g.label}</button>`).join('')}
         </div>
-        <div class="dash-leader-pane" data-tab="teachers" style="margin-top:10px">${tLeaders}</div>
-        <div class="dash-leader-pane" data-tab="students" style="margin-top:10px;display:none">${stLeaders}</div>
+        ${stageGroups.map((g,i) => `<div class="dash-leader-pane" data-tab="${g.tab}" style="margin-top:10px;${i===0?'':'display:none'}">${stageLeaders(g)}</div>`).join('')}
       </div>
     </div>`;
 
