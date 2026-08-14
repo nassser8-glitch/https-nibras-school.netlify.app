@@ -158,7 +158,7 @@ function securityHeaders(req, res, next) {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   res.setHeader('Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-src 'self' https://*.sharepoint.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com");
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.open-meteo.com; frame-src 'self' https://*.sharepoint.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com");
   if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
   next();
 }
