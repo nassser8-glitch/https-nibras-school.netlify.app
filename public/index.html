@@ -2633,10 +2633,6 @@ function renderDashboard(){
   const hasFollowups = pendingTransfers>0 || absentTeachers.length>0 || newMaintenance>0 || partPending>0 || absent>0 || late>0;
 
   // رسالة ترحيبية + بطاقة حالة
-  const uSchool = getUserSchool();
-  const isFemale = uSchool === 'GIRLS' && user.role !== 'ADMIN';
-  const roleTitle = { TEACHER:['أستاذ','أستاذة'], AGENT:['وكيل','وكيلة'], COUNSELOR:['موجه طلابي','موجهة طلابية'], ADMINISTRATIVE:['مساعد إداري','مساعدة إدارية'] }[user.role];
-  const title = user.role === 'ADMIN' ? 'المدير' : (roleTitle ? roleTitle[isFemale ? 1 : 0] : '');
   const firstName = String(user.name || '').split(' ')[0] || user.name;
   const greetH = new Date().getHours();
   const greetWord = greetH < 12 ? 'صباح الخير' : (greetH < 17 ? 'طاب يومك' : 'مساء الخير');
@@ -2646,7 +2642,7 @@ function renderDashboard(){
     <div class="dash-greet">
       <div class="dash-greet-icon">👋</div>
       <div>
-        <p class="dash-greet-title">${greetWord} يا ${title ? title + ' ' : ''}${escapeHtml(firstName)} 🌟</p>
+        <p class="dash-greet-title">${greetWord} ${escapeHtml(firstName)} 🌟</p>
         <p class="dash-greet-sub">بسم الله — نبدأ يومنا بالتوفيق والنجاح</p>
       </div>
     </div>
