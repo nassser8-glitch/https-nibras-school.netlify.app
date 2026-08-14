@@ -2755,7 +2755,7 @@ function renderDashboard(){
 
   // لوحة الأوائل — المراحل (ابتدائي/متوسط/ثانوي)
   const ptsMap = studentPointsMap();
-  const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
+  const medals = ['🥇','🥈','🥉'];
   const classLabelOf = s => { const c = s.classId ? classById(s.classId) : null; return c ? classLabel(c) : '—'; };
   const stageGroups = [
     { tab:'pri', label:'ابتدائي', min:0, max:5 },
@@ -2768,7 +2768,7 @@ function renderDashboard(){
     const studs = students.filter(s => s.classId && classIds.has(s.classId));
     const withPts = studs.map(s => ({ s, pts: ptsMap[s.id] || 0 })).filter(x => x.pts !== 0).sort((a,b) => b.pts - a.pts || String(a.s.fullName).localeCompare(String(b.s.fullName),'ar'));
     if(withPts.length === 0) return '<p class="muted small" style="margin:4px 0">لا توجد نقاط مسجلة في هذه المرحلة</p>';
-    return withPts.slice(0,5).map((x,i) => `
+    return withPts.slice(0,3).map((x,i) => `
     <div class="dash-leader-row">
       <span class="dash-leader-medal">${medals[i] || '•'}</span>
       <div style="min-width:0">
