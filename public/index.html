@@ -1202,6 +1202,12 @@ function renderLogin(){
     ? 'نظام إدارة المدرسة — دخول آمن عبر الخادم'
     : 'نظام إدارة المدرسة (نسخة محلية/تجريبية)';
   if(__serverEnabled()){
+    const qRows = QUICK_SERVER_ACCOUNTS.map(a => `
+      <tr>
+        <td>${a[0]}</td>
+        <td style="direction:ltr">${a[1]}</td>
+        <td><button class="btn-primary" style="padding:4px 10px;font-size:12px" onclick="quickLoginServer('${a[1]}')">دخول سريع</button></td>
+      </tr>`).join('');
     return `
     <div class="login-wrap">
       <div class="card login-card">
@@ -1216,6 +1222,11 @@ function renderLogin(){
         <button class="btn-primary full" style="margin-top:18px" onclick="handleLogin()">تسجيل الدخول</button>
         <p style="margin:8px 0 0;text-align:center"><button class="btn-secondary" style="padding:6px 12px;font-size:12px" onclick="openForgotModal()">نسيت كلمة المرور؟</button></p>
         <p class="muted" style="font-size:11px;margin-top:10px;text-align:center">أول دخول: يُطلب منك تعيين بريدك الحقيقي وكلمة مرور قوية جديدة قبل استخدام النظام. بيانات الدخول تُسلَّم من إدارة المدرسة.</p>
+      </div>
+      <div class="card login-card" style="margin-top:14px;max-width:520px;overflow:auto">
+        <h3 style="margin:0 0 10px;font-size:15px">🔑 دخول سريع للتجربة — اضغط الحساب للدخول مباشرة</h3>
+        <table class="data-table"><thead><tr><th>الدور</th><th>اسم المستخدم</th><th></th></tr></thead><tbody>${qRows}</tbody></table>
+        <p class="muted" style="font-size:11px;margin-top:8px;text-align:center">وضع تجريبي مؤقت لمراجعة المدير — يُزال بعد اكتمال التجربة.</p>
       </div>
     </div>`;
   }
@@ -1252,6 +1263,41 @@ function fillLoginEmail(email){
   const pw = document.getElementById('loginPassword');
   if(em){ em.value = email; }
   if(pw) pw.focus();
+}
+// حسابات الدخول السريع المؤقت للتجربة (يُحذف هذا القسم بعد تجربة المدير)
+const QUICK_SERVER_ACCOUNTS = [
+  ['👨‍💼 مدير النظام', 'admin'],
+  ['🧑‍💼 وكيل البنين — بخيت', 'wakil'],
+  ['👩‍💼 وكيلة البنات — باسمه', 'wakilah'],
+  ['🛠️ مساعد إداري بنين', 'adminassist'],
+  ['🛠️ مساعدة إدارية بنات', 'adminassistgirls'],
+  ['👨‍🏫 معلم — تركي حمدان عايد العنزي', 'turki'],
+  ['👩‍🏫 معلمة — الشيماء سامي محمد العجمي', 'alshaima'],
+];
+async function quickLoginServer(username){
+  if(__loginBusy) return;
+  __loginBusy = true;
+  const el = document.getElementById('loginError');
+  if(el) el.style.display = 'none';
+  try{
+    const r = await __api('POST', 'quick-login', { login: username });
+    if(r.status === 200 && r.j && r.j.user){
+      __sessionUser = r.j.user;
+      __mirrorSet(r.j.user);
+      if(r.j.user.role === 'ADMIN'){
+        localStorage.removeItem(SCHOOL_KEY);
+      } else {
+        localStorage.setItem(SCHOOL_KEY, r.j.user.school);
+      }
+      await syncPullAll();
+      location.hash = '#/';
+      renderApp();
+      return;
+    }
+    if(el){ el.style.display='block'; el.textContent = 'تعذر الدخول السريع — جرّب الدخول العادي بالاسم وكلمة المرور.'; }
+  }finally{
+    __loginBusy = false;
+  }
 }
 function quickLogin(email, password){
   if(__serverEnabled()){ fillLoginEmail(email); return; }
