@@ -2657,21 +2657,34 @@ function renderDashboard(){
     </div>
   </div>`;
 
-  // شريط الإحصائيات (6 بطاقات)
-  const stat = (icon, color, val, lbl, sub, click) => `
-    <div class="dash-stat ${click ? 'clickable' : ''}" ${click ? `onclick="${click}"` : ''}>
-      <div class="dash-stat-circle" style="background:${color}">${icon}</div>
-      <p class="dash-stat-val">${val}</p>
-      <p class="dash-stat-lbl">${lbl}</p>
-      ${sub ? `<p class="dash-stat-sub">${sub}</p>` : ''}
-    </div>`;
+  // جدول الإحصائيات (مؤشر واحد)
   const stats = `
-  <div class="dash-stats">
-    ${stat('👨‍🏫','linear-gradient(135deg,#8b5cf6,#6d28d9)',teachers.length,'المعلمون',tRate !== null ? '<span class="red">حضور ' + tRate + '%</span>' : '—', canMgrT ? 'showTeacherAbsenceList()' : '')}
-    ${stat('👨‍🎓','linear-gradient(135deg,#1672c4,#0f4678)',students.length,'الطلاب',rate !== null ? '<span class="red">حضور ' + fmtRate(rate) + '</span>' : '—','showTodayAttendance()')}
-    ${stat('❌','linear-gradient(135deg,#ef4444,#dc2626)',absent,'غائبون اليوم','اضغط للعرض','showAttendanceList(\'ABSENT\')')}
-    ${stat('⏰','linear-gradient(135deg,#f59e0b,#d97706)',late,'متأخرون اليوم','اضغط للعرض','showAttendanceList(\'LATE\')')}
-    ${stat('📨','linear-gradient(135deg,#06a6c7,#0e7490)',pendingTransfers,'تحويلات معلقة','بانتظار الاعتماد','showPendingTransfers()')}
+  <div class="card dash-stats-table" style="padding:0;overflow:hidden;margin-bottom:14px">
+    <table class="data-table">
+      <thead><tr><th>المؤشر</th><th style="width:80px">العدد</th><th>التفاصيل</th></tr></thead>
+      <tbody>
+        <tr class="clickable" style="cursor:pointer" onclick="${canMgrT ? 'showTeacherAbsenceList()' : ''}">
+          <td>👨‍🏫 المعلمون</td><td style="font-weight:800">${teachers.length}</td>
+          <td class="red">${tRate !== null ? 'حضور ' + tRate + '%' : '—'}</td>
+        </tr>
+        <tr class="clickable" style="cursor:pointer" onclick="showTodayAttendance()">
+          <td>👨‍🎓 الطلاب</td><td style="font-weight:800">${students.length}</td>
+          <td class="red">${rate !== null ? 'حضور ' + fmtRate(rate) : '—'}</td>
+        </tr>
+        <tr class="clickable" style="cursor:pointer" onclick="showAttendanceList('ABSENT')">
+          <td>❌ غائبون اليوم</td><td style="font-weight:800" class="red">${absent}</td>
+          <td class="muted">اضغط للعرض</td>
+        </tr>
+        <tr class="clickable" style="cursor:pointer" onclick="showAttendanceList('LATE')">
+          <td>⏰ متأخرون اليوم</td><td style="font-weight:800" class="amber">${late}</td>
+          <td class="muted">اضغط للعرض</td>
+        </tr>
+        <tr class="clickable" style="cursor:pointer" onclick="showPendingTransfers()">
+          <td>📨 تحويلات معلقة</td><td style="font-weight:800">${pendingTransfers}</td>
+          <td class="muted">بانتظار الاعتماد</td>
+        </tr>
+      </tbody>
+    </table>
   </div>`;
 
   // يحتاج إلى متابعتك
