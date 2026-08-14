@@ -2663,6 +2663,7 @@ function renderDashboard(){
         <p class="dash-greet-sub">بسم الله — نبدأ يومنا بالتوفيق والنجاح</p>
       </div>
     </div>
+    ${(user.role === 'ADMIN' || user.role === 'AGENT') ? `
     <div class="dash-status ${stableDay ? '' : 'warn'}">
       <div class="dash-status-icon">${stableDay ? '✅' : '📌'}</div>
       <div>
@@ -2671,7 +2672,7 @@ function renderDashboard(){
           ? 'لا توجد صيانة طارئة والغياب ضمن الحدود'
           : (urgentMaint>0 ? urgentMaint + ' بلاغ صيانة طارئ' : '') + (sAbsRate > 10 ? (urgentMaint>0 ? ' · ' : '') + 'غياب الطلاب أكثر من 10%' : '') + (tAbsRate > 10 ? ((urgentMaint>0 || sAbsRate > 10) ? ' · ' : '') + 'غياب المعلمين أكثر من 10%' : '')}</p>
       </div>
-    </div>
+    </div>` : ''}
   </div>`;
 
   // شريط الإحصائيات (6 بطاقات) — أُزيل: نسبة الحضور تُعرض بيانيًا في بطاقة الحضور
