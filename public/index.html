@@ -2653,7 +2653,7 @@ function renderDashboard(){
   const tAbsRate = teachers.length ? absentTeachers.length/teachers.length*100 : 0;
   const tLateRate = teachers.length ? lateTeachers.length/teachers.length*100 : 0;
   const urgentMaint = (d.maintenance||[]).filter(m => m.status === 'جديد' && ['عاجل','طارئ'].includes(m.priority)).length;
-  const stableDay = (sAbsRate + sLateRate) < 10 && (tAbsRate + tLateRate) < 10 && urgentMaint === 0;
+  const stableDay = sAbsRate <= 10 && tAbsRate <= 10 && urgentMaint === 0;
 
   // رسالة ترحيبية + بطاقة حالة
   const firstName = String(user.name || '').split(' ')[0] || user.name;
@@ -2674,8 +2674,8 @@ function renderDashboard(){
       <div>
         <p class="dash-status-title" style="margin:0">${stableDay ? 'المدرسة مستقرة اليوم' : 'هناك أمور بانتظار متابعتك'}</p>
         <p class="dash-status-sub">${stableDay
-          ? 'الغياب والتأخير ضمن الحدود ولا توجد بلاغات صيانة طارئة'
-          : ((sAbsRate + sLateRate) >= 10 ? Math.round(absent + late) + ' حالة غياب/تأخر للطلاب' : '') + (urgentMaint>0 ? ((sAbsRate + sLateRate) >= 10 ? ' · ' : '') + urgentMaint + ' بلاغ صيانة طارئ' : '') + ((tAbsRate + tLateRate) >= 10 ? (((sAbsRate + sLateRate) >= 10 || urgentMaint>0) ? ' · ' : '') + 'غياب/تأخر للمعلمين' : '')}</p>
+          ? 'لا توجد صيانة طارئة والغياب ضمن الحدود'
+          : (urgentMaint>0 ? urgentMaint + ' بلاغ صيانة طارئ' : '') + (sAbsRate > 10 ? (urgentMaint>0 ? ' · ' : '') + 'غياب الطلاب أكثر من 10%' : '') + (tAbsRate > 10 ? ((urgentMaint>0 || sAbsRate > 10) ? ' · ' : '') + 'غياب المعلمين أكثر من 10%' : '')}</p>
       </div>
     </div>
   </div>`;
