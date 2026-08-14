@@ -2095,13 +2095,6 @@ function renderLayout(user, hash){
           <div id="weatherBox"></div>
           ${(user.role === 'ADMIN' || user.role === 'AGENT') ? '<div id="presentNowBox"></div>' : ''}
         </div>
-        <div class="profile">
-          <div class="avatar">${user.role === 'ADMIN' ? '👤' : (getUserSchool() === 'GIRLS' ? '👩' : '👨')}</div>
-          <div class="profile-info">
-            <strong>${escapeHtml(user.name)}</strong>
-            <span>${roleLabel(user.role)}</span>
-          </div>
-        </div>
       </aside>
       <main class="main">
         <div id="page">${pageHtml}</div>
