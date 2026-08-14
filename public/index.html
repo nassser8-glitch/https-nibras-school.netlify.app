@@ -144,6 +144,8 @@
   .topbar { position:sticky; top:0; z-index:950; background:linear-gradient(180deg,var(--primary-light,#eef7ff) 0%,#ffffff 60%); border-bottom:1px solid var(--border-color,#e0edf7); box-shadow:0 2px 10px rgba(15,79,136,.06); }
   .topbar-inner { max-width:1180px; margin:0 auto; padding:8px 16px 10px; }
   .topbar-row { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .topbar-brand { display:flex; align-items:center; gap:10px; }
+  .topbar-logo { width:46px; height:46px; border-radius:50%; object-fit:cover; border:2px solid var(--primary,#0f4f88); background:#fff; flex-shrink:0; }
   .topbar-brand h1 { font-size:16px; font-weight:800; margin:0; color:var(--primary,#0f4f88); }
   .topbar-brand p { margin:2px 0 0; }
   .topbar-actions { margin-inline-start:auto; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
@@ -304,6 +306,7 @@
   @keyframes scrollAnnounce { 0%{transform:translateX(-120%)} 100%{transform:translateX(120%)} }
   .login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(#eef7ff,#fff); padding:16px; }
   .login-card { width:100%; max-width:360px; text-align:center; }
+  .school-logo { width:86px; height:86px; border-radius:50%; object-fit:cover; border:2px solid var(--primary,#0f4f88); background:#fff; margin:0 auto 10px; box-shadow:0 2px 10px rgba(15,79,136,.15); }
   .login-card h1 { color:#0f4f88; font-size:26px; margin:0 0 4px; }
   .login-card label { display:block; text-align:right; font-size:13px; font-weight:600; margin:14px 0 4px; }
   .error-box { background:#fef2f2; color:#dc2626; font-size:13px; border-radius:8px; padding:8px 12px; margin-top:12px; }
@@ -1199,6 +1202,7 @@ function renderLogin(){
     return `
     <div class="login-wrap">
       <div class="card login-card">
+        <img src="logo.jpg" alt="شعار المدرسة" class="school-logo" />
         <h1>المدرسة السعودية في إسلام آباد</h1>
         <p class="muted">${hint}</p>
         <div id="loginError" class="error-box" style="display:none"></div>
@@ -1222,6 +1226,7 @@ function renderLogin(){
   return `
   <div class="login-wrap">
     <div class="card login-card">
+      <img src="logo.jpg" alt="شعار المدرسة" class="school-logo" />
       <h1>المدرسة السعودية في إسلام آباد</h1>
       <p class="muted">${hint}</p>
       <div id="loginError" class="error-box" style="display:none"></div>
@@ -1324,7 +1329,8 @@ async function forgotRequestCode(){
           <input id="forgotPw" class="input" type="password" minlength="8" placeholder="••••••••" />
           <label>تأكيد كلمة المرور الجديدة</label>
           <input id="forgotPw2" class="input" type="password" minlength="8" placeholder="••••••••" />
-          <button class="btn-primary full" style="margin-top:14px" onclick="forgotReset()">تغيير كلمة المرور</button>`;
+          <button class="btn-primary full" style="margin-top:14px" onclick="forgotReset()">تغيير كلمة المرور</button>
+          <p style="margin:10px 0 0;text-align:center"><button class="btn-secondary" style="padding:6px 12px;font-size:12px" onclick="closeDetails()">← العودة للصفحة الرئيسية</button></p>`;
       } else {
         document.getElementById('forgotBody').innerHTML = `
           <div class="card" style="margin:0;border-color:#bbf7d0;background:#f0fdf4;color:#166534">
@@ -1339,7 +1345,8 @@ async function forgotRequestCode(){
           <input id="forgotPw" class="input" type="password" minlength="8" placeholder="••••••••" />
           <label>تأكيد كلمة المرور الجديدة</label>
           <input id="forgotPw2" class="input" type="password" minlength="8" placeholder="••••••••" />
-          <button class="btn-primary full" style="margin-top:14px" onclick="forgotReset()">تغيير كلمة المرور</button>`;
+          <button class="btn-primary full" style="margin-top:14px" onclick="forgotReset()">تغيير كلمة المرور</button>
+          <p style="margin:10px 0 0;text-align:center"><button class="btn-secondary" style="padding:6px 12px;font-size:12px" onclick="closeDetails()">← العودة للصفحة الرئيسية</button></p>`;
       }
       return;
     }
@@ -1390,6 +1397,7 @@ function renderFirstLogin(user){
   return `
   <div class="login-wrap">
     <div class="card login-card">
+      <img src="logo.jpg" alt="شعار المدرسة" class="school-logo" />
       <h1>أهلاً بك، ${escapeHtml(user.name)}</h1>
       <p class="muted">أول دخول — سجّل بريدك الإلكتروني الحقيقي (سيصله رمز الاستعادة عند نسيان الرقم السري) واختر كلمة مرور قوية جديدة (8 أحرف على الأقل)</p>
       <div class="card" style="margin:0 0 12px;border-color:#bfdbfe;background:#eff6ff;color:#1e40af">
@@ -1881,8 +1889,11 @@ function renderLayout(user, hash){
         <div class="topbar-row">
           <button class="menu-toggle" onclick="toggleSidebar()" title="القائمة">☰</button>
           <div class="topbar-brand">
-            <h1>المدرسة السعودية في إسلام آباد</h1>
-            <p class="muted small">${escapeHtml(schoolName)} <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span></p>
+            <img src="logo.jpg" alt="شعار المدرسة" class="topbar-logo" />
+            <div>
+              <h1>المدرسة السعودية في إسلام آباد</h1>
+              <p class="muted small">${escapeHtml(schoolName)} <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span></p>
+            </div>
           </div>
           <div class="topbar-actions">
             ${renderNotifState(user)}
