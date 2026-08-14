@@ -66,6 +66,8 @@
   .stat-value { font-size:20px; font-weight:800; color:#1f2937; margin:2px 0 0; }
   .stat-value.green { color:#16a34a; } .stat-value.red { color:#dc2626; }
   .stat-value.amber { color:#d97706; } .stat-value.brand { color:var(--accent,#1d7fd6); }
+  .red { color:#dc2626; }
+  .amber { color:#d97706; }
   .card:has(> p.muted + p.stat-value):not(:has(> :not(p))) { display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .card:has(> p.muted + p.stat-value):not(:has(> :not(p))) > p { margin:0; }
   .card:has(> p.muted + p.stat-value):not(:has(> :not(p))) > p.muted { font-size:12px; }
@@ -2610,7 +2612,7 @@ function renderDashboard(){
       <div class="small" style="margin-top:6px;display:flex;flex-direction:column;gap:3px;font-size:11px">
         <span>✅ ${tl('الحضور')}: <b>${cp}</b></span>
         <span>❌ ${tl('الغياب')}: <b class="red">${ca}</b> &nbsp; ⏰ ${tl('التأخر')}: <b class="amber">${cl}</b></span>
-        <span class="muted">${tl('نسبة الحضور')}: <b>${fmtRate(crate)}</b></span>
+        <span class="muted">${tl('نسبة الحضور')}: <b class="red">${fmtRate(crate)}</b></span>
         ${crate !== null ? `<div style="height:6px;border-radius:999px;background:#eef2f7;margin-top:4px;overflow:hidden"><div style="height:100%;width:${crate}%;background:${crate>=75?'#22c55e':(crate>=50?'#f59e0b':'#ef4444')};border-radius:999px"></div></div>` : ''}
       </div>
     </div>`;
@@ -2669,7 +2671,7 @@ function renderDashboard(){
     </div>`;
   const stats = `
   <div class="dash-stats">
-    ${stat('👨‍🏫','linear-gradient(135deg,#8b5cf6,#6d28d9)',teachers.length,'المعلمون',tRate !== null ? 'حضور ' + tRate + '%' : '—', canMgrT ? 'showTeacherAbsenceList()' : '')}
+    ${stat('👨‍🏫','linear-gradient(135deg,#8b5cf6,#6d28d9)',teachers.length,'المعلمون',tRate !== null ? 'حضور <span class="red">' + tRate + '%</span>' : '—', canMgrT ? 'showTeacherAbsenceList()' : '')}
     ${stat('❌','linear-gradient(135deg,#ef4444,#dc2626)',absent,'غائبون اليوم','اضغط للعرض','showAttendanceList(\'ABSENT\')')}
     ${stat('⏰','linear-gradient(135deg,#f59e0b,#d97706)',late,'متأخرون اليوم','اضغط للعرض','showAttendanceList(\'LATE\')')}
     ${stat('📨','linear-gradient(135deg,#06a6c7,#0e7490)',pendingTransfers,'تحويلات معلقة','بانتظار الاعتماد','showPendingTransfers()')}
