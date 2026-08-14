@@ -2793,17 +2793,6 @@ function renderDashboard(){
       </div>
     </div>`;
 
-  const grid2 = `
-  <div class="dash-grid2">
-    <div class="dash-panel">
-      <div class="dash-panel-head">
-        <p class="dash-panel-title">📌 يحتاج إلى متابعتك</p>
-        <span class="dash-panel-more" onclick="showPendingTransfers()" style="cursor:pointer">عرض التفاصيل</span>
-      </div>
-      ${needsHTML}
-    </div>
-  </div>`;
-
   const bottom = `
   <div class="dash-bottom">
     <div class="dash-panel">
@@ -2814,13 +2803,19 @@ function renderDashboard(){
       ${upcomingHTML}
     </div>
     ${leadersHTML}
+    <div class="dash-panel">
+      <div class="dash-panel-head">
+        <p class="dash-panel-title">📌 يحتاج إلى متابعتك</p>
+        <span class="dash-panel-more" onclick="showPendingTransfers()" style="cursor:pointer">عرض التفاصيل</span>
+      </div>
+      ${needsHTML}
+    </div>
   </div>`;
 
   return `
   ${renderAdminMsgAlerts()}
   ${hero}
   ${attPanel}
-  ${grid2}
   ${bottom}
   ${isTeacher ? renderTeacherWeekTT(d) : ''}
   ${isTeacher && myClasses.length ? `
