@@ -247,7 +247,7 @@ function requireAuth(req, res, next) {
   }).catch(fail(res));
 }
 function sendUser(u, sessionRow) {
-  const user = { id: u.id, school: u.school, name: u.name, username: u.username, email: u.email, role: u.role, active: u.active, firstLogin: u.first_login, ...(u.data || {}) };
+  const user = { id: u.id, school: u.school, name: u.name, username: u.username, email: u.email, role: u.role, active: u.active, firstLogin: u.first_login, granted: u.granted !== false, ...(u.data || {}) };
   STRIP_FIELDS.forEach(f => delete user[f]);
   if (sessionRow) user.session = { created: sessionRow.created_at, expires: sessionRow.expires_at };
   return user;
@@ -294,6 +294,11 @@ app.post('/api/auth/login', (req, res) => {
       if (ok) { u = c; break; }
     }
     if (!u) { fails.count++; return res.status(401).json({ error: 'invalid' }); }
+    // القيد الصارم: الدخول مسموح فقط للحسابات المُصدَّرة بيانات دخولها أو المضافة يدويًا من المدير
+    if (u.role !== 'ADMIN' && u.granted !== true) {
+      fails.count++;
+      return res.status(403).json({ error: 'not_granted' });
+    }
     fails.count = 0;
 
     // إنهاء الدخول برحلة واحدة: حذف الجلسات القديمة + إنشاء الجلسة + إحصاءات الدخول
@@ -459,7 +464,7 @@ app.post('/api/auth/admin/create-user', requireAuth, (req, res) => {
     const id = 'id_' + crypto.randomBytes(6).toString('hex');
     const preferred = String(req.body && req.body.username || '').trim();
     const username = await db.generateUsername(name, preferred || email.split('@')[0]);
-    await db.insertUser({ id, school, name, email, username, password_hash: hash, role, active: true, first_login: true, data: {} });
+    await db.insertUser({ id, school, name, email, username, password_hash: hash, role, active: true, first_login: true, granted: true, data: {} });
     const created = await db.userById(id);
     await appendSchoolUser(school, sendUser(created));
     res.json({ ok: true, user: sendUser(created) });
@@ -476,7 +481,8 @@ app.post('/api/auth/admin/reset-password', requireAuth, (req, res) => {
     const temp = crypto.randomBytes(6).toString('hex').slice(0, 10); // 10 محارف عشوائية
     const hash = await bcrypt.hash(temp, BCRYPT_ROUNDS);
     await db.updateUserPasswordHash(target.id, hash, true);
-    await updateSchoolUser(target.school, target.id, { firstLogin: true });
+    await db.grantUserAccess(target.id);
+    await updateSchoolUser(target.school, target.id, { firstLogin: true, granted: true });
     await db.deleteUserSessions(target.id); // إنهاء جلسات المستخدم فورًا
     res.json({ ok: true, userId: target.id, name: target.name, tempPassword: temp, firstLogin: true });
   })().catch(fail(res));
@@ -494,7 +500,8 @@ app.post('/api/auth/admin/export-credentials', requireAuth, (req, res) => {
       const temp = crypto.randomBytes(6).toString('hex').slice(0, 10);
       const hash = await bcrypt.hash(temp, BCRYPT_ROUNDS);
       await db.updateUserPasswordHash(u.id, hash, true);
-      await updateSchoolUser(u.school, u.id, { firstLogin: true });
+      await db.grantUserAccess(u.id);
+      await updateSchoolUser(u.school, u.id, { firstLogin: true, granted: true });
       await db.deleteUserSessions(u.id);
       out.push({ id: u.id, name: u.name, username: u.username, email: u.email, role: u.role, school: u.school, tempPassword: temp });
     }

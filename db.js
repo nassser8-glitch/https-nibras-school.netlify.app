@@ -25,10 +25,12 @@ async function initSchema() {
         role          TEXT NOT NULL CHECK (role IN ('ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE')),
         active        BOOLEAN NOT NULL DEFAULT true,
         first_login   BOOLEAN NOT NULL DEFAULT false,
+        granted       BOOLEAN NOT NULL DEFAULT false,
         data          JSONB NOT NULL DEFAULT '{}'::jsonb,
         created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
       )`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_username_key ON users(username)`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS granted BOOLEAN NOT NULL DEFAULT false`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS sessions (
         token_hash TEXT PRIMARY KEY,
@@ -133,14 +135,19 @@ async function countAdmins() {
 }
 async function insertUser(u) {
   await pool.query(
-    `INSERT INTO users (id, school, name, email, username, password_hash, role, active, first_login, data)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    `INSERT INTO users (id, school, name, email, username, password_hash, role, active, first_login, granted, data)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      ON CONFLICT (id) DO UPDATE SET
        name=EXCLUDED.name, email=EXCLUDED.email, username=EXCLUDED.username,
        password_hash=EXCLUDED.password_hash,
-       role=EXCLUDED.role, active=EXCLUDED.active, first_login=EXCLUDED.first_login, data=EXCLUDED.data`,
+       role=EXCLUDED.role, active=EXCLUDED.active, first_login=EXCLUDED.first_login,
+       granted=EXCLUDED.granted, data=EXCLUDED.data`,
     [u.id, u.school, u.name, String(u.email).toLowerCase().trim(), u.username ? String(u.username).trim().toLowerCase() : null,
-     u.password_hash, u.role, u.active !== false, !!u.first_login, JSON.stringify(u.data || {})]);
+     u.password_hash, u.role, u.active !== false, !!u.first_login, u.granted === true, JSON.stringify(u.data || {})]);
+}
+// منح حق الدخول لحساب (بعد تصدير بيانات دخوله أو إنشائه يدويًا من المدير)
+async function grantUserAccess(id) {
+  await pool.query('UPDATE users SET granted = true WHERE id = $1', [id]);
 }
 async function updateUserPasswordHash(id, hash, firstLogin) {
   await pool.query('UPDATE users SET password_hash=$2, first_login=$3 WHERE id=$1',
@@ -262,7 +269,7 @@ module.exports = {
   initSchema,
   userByEmail, usersByEmail, userByUsername, usernameExists, generateUsername, baseUsername,
   userById, listUsers, listAllUsers, usernamesByIds, countAdmins, insertUser,
-  updateUserPasswordHash, updateUserProfile,
+  updateUserPasswordHash, updateUserProfile, grantUserAccess,
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,
   getSchoolData, setSchoolData, patchSchoolUserStats,
