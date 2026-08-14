@@ -1978,8 +1978,8 @@ function renderLayout(user, hash){
   const homeLink = { href:'#/', key:'home', label:'الرئيسية', icon:'⌂' };
   const groups = [
     { title:'الإدارة', items:[
-      { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👥' },
       (user.role === 'ADMIN' || user.role === 'AGENT') ? { href:'#/users', key:'users', label:tl('المعلمون'), icon:'👤' } : null,
+      { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👥' },
       { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
     ]},
     { title:'المتابعة', items:[
