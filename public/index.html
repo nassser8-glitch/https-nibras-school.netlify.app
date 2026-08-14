@@ -2671,22 +2671,7 @@ function renderDashboard(){
     </div>
   </div>`;
 
-  // شريط الإحصائيات (6 بطاقات)
-  const stat = (icon, color, val, lbl, sub, click) => `
-    <div class="dash-stat ${click ? 'clickable' : ''}" ${click ? `onclick="${click}"` : ''}>
-      <div class="dash-stat-circle" style="background:${color}">${icon}</div>
-      <p class="dash-stat-val">${val}</p>
-      <p class="dash-stat-lbl">${lbl}</p>
-      ${sub ? `<p class="dash-stat-sub">${sub}</p>` : ''}
-    </div>`;
-  const stats = `
-  <div class="dash-stats">
-    ${stat('👨‍🏫','linear-gradient(135deg,#8b5cf6,#6d28d9)',teachers.length,'المعلمون',tRate !== null ? '<span class="red">حضور ' + tRate + '%</span> <span class="muted">· غياب ' + absentTeachers.length + '</span>' : '—', canMgrT ? 'showTeacherAbsenceList()' : '')}
-    ${stat('👨‍🎓','linear-gradient(135deg,#1672c4,#0f4678)',students.length,'الطلاب',rate !== null ? '<span class="red">حضور ' + fmtRate(rate) + '</span> <span class="muted">· غياب ' + absent + '</span>' : '—','showTodayAttendance()')}
-    ${stat('❌','linear-gradient(135deg,#ef4444,#dc2626)',absent,'غائبون اليوم','اضغط للعرض','showAttendanceList(\'ABSENT\')')}
-    ${stat('⏰','linear-gradient(135deg,#f59e0b,#d97706)',late,'متأخرون اليوم','اضغط للعرض','showAttendanceList(\'LATE\')')}
-    ${stat('📨','linear-gradient(135deg,#06a6c7,#0e7490)',pendingTransfers,'تحويلات معلقة','بانتظار الاعتماد','showPendingTransfers()')}
-  </div>`;
+  // شريط الإحصائيات (6 بطاقات) — أُزيل: نسبة الحضور تُعرض بيانيًا في بطاقة الحضور
 
   // يحتاج إلى متابعتك
   const needs = [];
@@ -2708,24 +2693,10 @@ function renderDashboard(){
       <div class="dash-needs-num" style="color:#ef4444">${n.num}</div>
     </div>`).join('') : '<p class="muted small" style="margin:4px 0">كل الأمور تحت السيطرة — لا شيء ينتظر متابعتك الآن ✅</p>';
 
-  // نبراس يرى (آخر الحركة في النظام)
-  const typeIcon = t => { const x = activityTypes.find(v => v.value === t); return x ? x.icon : '🎉'; };
-  const stName = id => { const s = studentById(id); return s ? s.fullName : 'طالب'; };
-  const feed = [];
-  (d.activities||[]).forEach(a => feed.push({ ts:a.createdAt, icon:typeIcon(a.type), txt:escapeHtml(a.name), meta:'نشاط جديد · ' + fmtDateOnly(a.date), href:'#/activity/' + a.id }));
-  (d.transfers||[]).forEach(t => feed.push({ ts:t.createdAt, icon:'📨', txt:'تحويل: ' + escapeHtml(stName(t.studentId)), meta:'إلى ' + targetLabel(t.target) + ' · ' + fmtDateOnly(t.createdAt), href:'#/transfers' }));
-  (d.notes||[]).forEach(n => feed.push({ ts:n.createdAt, icon:((n.points??0) >= 0) ? '⭐' : '🔻', txt:'ملاحظة على ' + escapeHtml(stName(n.studentId)), meta:escapeHtml(n.description || n.category || '') + ' · ' + fmtDateOnly(n.createdAt), href:'#/notes' }));
-  feed.sort((a,b) => String(b.ts||'').localeCompare(String(a.ts||'')));
-  const visionHTML = feed.slice(0,6).map(f => `
-    <a class="dash-activity-item" href="${f.href}" style="text-decoration:none">
-      <div class="dash-activity-ico">${f.icon}</div>
-      <div style="min-width:0;flex:1">
-        <div class="dash-activity-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.txt}</div>
-        <div class="dash-activity-meta">${f.meta}</div>
-      </div>
-    </a>`).join('') || '<p class="muted small" style="margin:4px 0">لا يوجد نشاط حديث بعد</p>';
+  // نبراس يرى — أُزيل
 
   // الأنشطة القادمة
+  const typeIcon = t => { const x = activityTypes.find(v => v.value === t); return x ? x.icon : '🎉'; };
   const upcoming = (d.activities||[]).filter(a => String(a.date||'') >= today).sort((a,b) => String(a.date).localeCompare(String(b.date))).slice(0,4);
   const upcomingHTML = upcoming.length ? upcoming.map(a => `
     <a class="dash-activity-item" href="#/activity/${a.id}" style="text-decoration:none">
@@ -2820,13 +2791,6 @@ function renderDashboard(){
       </div>
       ${needsHTML}
     </div>
-    <div class="dash-panel">
-      <div class="dash-panel-head">
-        <p class="dash-panel-title">👁 نبراس يرى</p>
-        <span class="dash-panel-more" onclick="location.hash='#/reports'" style="cursor:pointer">التقارير</span>
-      </div>
-      ${visionHTML}
-    </div>
   </div>`;
 
   const bottom = `
@@ -2851,7 +2815,6 @@ function renderDashboard(){
   return `
   ${renderAdminMsgAlerts()}
   ${hero}
-  ${stats}
   ${grid2}
   ${bottom}
   ${isTeacher ? renderTeacherWeekTT(d) : ''}
