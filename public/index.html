@@ -2665,7 +2665,7 @@ function renderDashboard(){
       <div>
         <p class="dash-status-title" style="margin:0">${hasFollowups ? 'هناك أمور بانتظار متابعتك' : 'المدرسة مستقرة اليوم'}</p>
         <p class="dash-status-sub">${hasFollowups
-          ? (pendingTransfers>0 ? pendingTransfers + ' تحويل معلق' : '') + (absentTeachers.length>0 ? (pendingTransfers>0 ? ' · ' : '') + absentTeachers.length + ' معلم غائب' : '') + (newMaintenance>0 ? ' · ' + newMaintenance + ' بلاغ صيانة' : '') + (partPending>0 ? ' · ' + partPending + ' طلب مشاركة' : '')
+          ? (pendingTransfers>0 ? pendingTransfers + ' تحويل معلق' : '') + (absentTeachers.length>0 ? (pendingTransfers>0 ? ' · ' : '') + absentTeachers.length + ' معلم غائب' : '') + (partPending>0 ? ((pendingTransfers>0||absentTeachers.length>0) ? ' · ' : '') + partPending + ' طلب مشاركة' : '')
           : 'لا توجد تحويلات معلقة أو غياب أو متابعات اليوم'}</p>
       </div>
     </div>
