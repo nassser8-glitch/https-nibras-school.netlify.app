@@ -2808,13 +2808,14 @@ function renderDashboard(){
     </div>
     <div class="dash-mid">
       ${leadersHTML}
+      ${isTeacher ? renderTeacherWeekTT(d, true) : `
       <div class="dash-panel">
         <div class="dash-panel-head">
           <p class="dash-panel-title">📌 يحتاج إلى متابعتك</p>
           <span class="dash-panel-more" onclick="showPendingTransfers()" style="cursor:pointer">عرض التفاصيل</span>
         </div>
         ${needsHTML}
-      </div>
+      </div>`}
     </div>
   </div>`;
 
@@ -2823,7 +2824,6 @@ function renderDashboard(){
   ${hero}
   ${attPanel}
   ${bottom}
-  ${isTeacher ? renderTeacherWeekTT(d) : ''}
   ${isTeacher && myClasses.length ? `
   <h2 class="section-title">📊 ${tl('إحصائيات فصولي')}</h2>
   <div class="grid grid-6">${myClassCards}</div>
@@ -5133,13 +5133,13 @@ const TT_SUBJECT_GROUPS = [
   { stage:'أخرى', subs:['المكتبة','النشاط الطلابي','التوجيه الطلابي','الإدارة','ريادة الأعمال','الإذاعة المدرسية','الأندية المدرسية'] }
 ];
 /* عرض جدول المعلم يوم بيوم — زر لكل يوم ويظهر حصص اليوم المختار فقط */
-function renderTeacherWeekTT(d){
+function renderTeacherWeekTT(d, compact){
   const user = currentUser();
   if(!user || user.role !== 'TEACHER') return '';
   const tt = (d.timetable || {})[user.id] || {};
   if(!timetableDay || !TIMETABLE_DAYS.some(x => x.key === timetableDay)) timetableDay = (TIMETABLE_DAYS.find(x => x.dow === new Date().getDay()) || TIMETABLE_DAYS[0]).key;
   const todayDow = new Date().getDay();
-  const tabs = TIMETABLE_DAYS.map(day => `<button class="tt-tab ${day.key === timetableDay ? 'active' : ''}" onclick="setTimetableDay('${day.key}')" style="padding:6px 12px;font-size:12px">${day.dow === todayDow ? '📌 ' : ''}${day.label}</button>`).join('');
+  const tabs = TIMETABLE_DAYS.map(day => `<button class="tt-tab ${day.key === timetableDay ? 'active' : ''}" onclick="setTimetableDay('${day.key}')" style="padding:5px 10px;font-size:11.5px">${day.dow === todayDow ? '📌 ' : ''}${day.label}</button>`).join('');
   const sel = TIMETABLE_DAYS.find(x => x.key === timetableDay);
   const cells = tt[timetableDay] || {};
   const periods = Object.keys(cells).map(Number).sort((a,b) => a - b);
@@ -5148,12 +5148,27 @@ function renderTeacherWeekTT(d){
     const c = cells[p];
     const cls = d.classes.find(x => x.id === c.classId);
     return `
-    <div style="border:1px solid var(--border-color,#eef2f7);border-radius:10px;padding:8px 6px;text-align:center;min-width:0">
-      <div style="font-size:10px;color:#9ca3af;font-weight:700;margin-bottom:5px">الحصة ${TIMETABLE_PERIOD_NAMES[p-1]}</div>
-      <div style="font-size:12px;font-weight:800;color:var(--primary,#0f4f88);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.subject || '—')}</div>
-      <div class="muted" style="font-size:9px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cls ? escapeHtml(classLabel(cls)) : ''}</div>
+    <div style="border:1px solid var(--border-color,#eef2f7);border-radius:10px;padding:7px 5px;text-align:center;min-width:0">
+      <div style="font-size:9.5px;color:#9ca3af;font-weight:700;margin-bottom:4px">الحصة ${TIMETABLE_PERIOD_NAMES[p-1]}</div>
+      <div style="font-size:11.5px;font-weight:800;color:var(--primary,#0f4f88);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.subject || '—')}</div>
+      <div class="muted" style="font-size:8.5px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cls ? escapeHtml(classLabel(cls)) : ''}</div>
     </div>`;
   }).join('');
+  if(compact) return `
+  <div class="dash-panel">
+    <div class="dash-panel-head">
+      <p class="dash-panel-title">🗓 ${tl('جدولي')}</p>
+      <span class="dash-panel-more" onclick="location.hash='#/timetable'" style="cursor:pointer">الكل</span>
+    </div>
+    <div class="tt-tabs" style="margin-bottom:6px">${tabs}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 2px">
+      <span style="font-size:12px;font-weight:800;color:#374151">${sel.label}</span>
+      <span style="font-size:10.5px;font-weight:700;color:#9ca3af">${count ? count + (count === 1 ? ' حصة' : ' حصص') : 'لا توجد حصص'}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:6px;margin-top:4px">
+      ${cols || '<p class="muted small" style="margin:4px 0">لا توجد حصص لهذا اليوم</p>'}
+    </div>
+  </div>`;
   return `
   <h2 class="section-title">🗓 ${tl('جدولي — الأسبوع')}</h2>
   <div class="card" style="padding:12px">
