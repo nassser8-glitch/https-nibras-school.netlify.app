@@ -2671,8 +2671,8 @@ function renderDashboard(){
     </div>`;
   const stats = `
   <div class="dash-stats">
-    ${stat('👨‍🎓','linear-gradient(135deg,#1672c4,#0f4678)',students.length,'الطلاب',rate !== null ? '<span class="red">حضور ' + fmtRate(rate) + '</span>' : '—','showTodayAttendance()')}
     ${stat('👨‍🏫','linear-gradient(135deg,#8b5cf6,#6d28d9)',teachers.length,'المعلمون',tRate !== null ? '<span class="red">حضور ' + tRate + '%</span>' : '—', canMgrT ? 'showTeacherAbsenceList()' : '')}
+    ${stat('👨‍🎓','linear-gradient(135deg,#1672c4,#0f4678)',students.length,'الطلاب',rate !== null ? '<span class="red">حضور ' + fmtRate(rate) + '</span>' : '—','showTodayAttendance()')}
     ${stat('❌','linear-gradient(135deg,#ef4444,#dc2626)',absent,'غائبون اليوم','اضغط للعرض','showAttendanceList(\'ABSENT\')')}
     ${stat('⏰','linear-gradient(135deg,#f59e0b,#d97706)',late,'متأخرون اليوم','اضغط للعرض','showAttendanceList(\'LATE\')')}
     ${stat('📨','linear-gradient(135deg,#06a6c7,#0e7490)',pendingTransfers,'تحويلات معلقة','بانتظار الاعتماد','showPendingTransfers()')}
@@ -2777,11 +2777,11 @@ function renderDashboard(){
       </div>
       <div style="padding:0 12px 12px">
         <div class="dash-tabs">
-          <button class="dash-tab active" data-tab="students" onclick="switchLeadersTab('students')">الطلاب</button>
-          <button class="dash-tab" data-tab="teachers" onclick="switchLeadersTab('teachers')">المعلمون</button>
+          <button class="dash-tab active" data-tab="teachers" onclick="switchLeadersTab('teachers')">المعلمون</button>
+          <button class="dash-tab" data-tab="students" onclick="switchLeadersTab('students')">الطلاب</button>
         </div>
-        <div class="dash-leader-pane" data-tab="students" style="margin-top:10px">${stLeaders}</div>
-        <div class="dash-leader-pane" data-tab="teachers" style="margin-top:10px;display:none">${tLeaders}</div>
+        <div class="dash-leader-pane" data-tab="teachers" style="margin-top:10px">${tLeaders}</div>
+        <div class="dash-leader-pane" data-tab="students" style="margin-top:10px;display:none">${stLeaders}</div>
       </div>
     </div>`;
 
