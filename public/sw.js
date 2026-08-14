@@ -1,11 +1,13 @@
 /* نبراس — Service Worker للتثبيت والعمل دون اتصال */
-const CACHE_NAME = 'nibras-v8';
+const CACHE_NAME = 'nibras-v9';
 const CORE_ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './icon-180.png',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './logo.jpg'
 ];
 
 self.addEventListener('install', (event) => {

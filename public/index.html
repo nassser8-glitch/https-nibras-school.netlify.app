@@ -8,19 +8,20 @@
   All rights reserved. Do not copy, redistribute, or reuse without written permission.
 -->
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#0f4f88" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" href="icon-192.png" type="image/png" />
-<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="apple-touch-icon" href="icon-180.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="نبراس" />
 <title>المدرسة السعودية في إسلام آباد - نظام إدارة المدرسة</title>
 <script src="vendor/xlsx.full.min.js"></script>
 <style>
   * { box-sizing: border-box; }
-  body { margin:0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background:linear-gradient(180deg,#f7f9fc 0%,#edf3fa 100%); background-attachment:fixed; color:#1f2937; direction: rtl; }
+  body { margin:0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background:linear-gradient(180deg,#f7f9fc 0%,#edf3fa 100%); background-attachment:fixed; color:#1f2937; direction: rtl; padding-bottom:env(safe-area-inset-bottom); }
   a { text-decoration:none; color:inherit; }
   .muted { color:#6b7280; }
   .small { font-size:12px; }
@@ -141,7 +142,7 @@
   .del-btn { font-size:12px; color:#ef4444; background:none; border:none; cursor:pointer; }
   .del-btn:hover { color:#b91c1c; text-decoration:underline; }
   .layout { display:flex; min-height:100vh; flex-direction:column; }
-  .topbar { position:sticky; top:0; z-index:950; background:linear-gradient(180deg,var(--primary-light,#eef7ff) 0%,#ffffff 60%); border-bottom:1px solid var(--border-color,#e0edf7); box-shadow:0 2px 10px rgba(15,79,136,.06); }
+  .topbar { position:sticky; top:0; z-index:950; background:linear-gradient(180deg,var(--primary-light,#eef7ff) 0%,#ffffff 60%); border-bottom:1px solid var(--border-color,#e0edf7); box-shadow:0 2px 10px rgba(15,79,136,.06); padding-top:env(safe-area-inset-top); }
   .topbar-inner { max-width:1180px; margin:0 auto; padding:8px 16px 10px; }
   .topbar-row { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
   .topbar-brand { display:flex; align-items:center; gap:10px; }
@@ -305,6 +306,8 @@
   .announce-dash .scroll-text { display:inline-block; white-space:nowrap; animation: scrollAnnounce 14s linear infinite; }
   @keyframes scrollAnnounce { 0%{transform:translateX(-120%)} 100%{transform:translateX(120%)} }
   .login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(#eef7ff,#fff); padding:16px; }
+  .install-hint { position:fixed; bottom:max(env(safe-area-inset-bottom),10px); left:50%; transform:translateX(-50%); z-index:2000; background:#0f4f88; color:#fff; border-radius:12px; padding:10px 14px; font-size:13px; box-shadow:0 6px 20px rgba(15,79,136,.35); display:flex; align-items:center; gap:10px; max-width:94%; }
+  .install-hint .close { background:transparent; color:#cfe4ff; border:none; font-size:14px; cursor:pointer; padding:2px 6px; }
   .login-card { width:100%; max-width:360px; text-align:center; }
   .school-logo { width:86px; height:86px; border-radius:50%; object-fit:cover; border:2px solid var(--primary,#0f4f88); background:#fff; margin:0 auto 10px; box-shadow:0 2px 10px rgba(15,79,136,.15); }
   .login-card h1 { color:#0f4f88; font-size:26px; margin:0 0 4px; }
@@ -6147,6 +6150,20 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     navigator.serviceWorker.register('sw.js').catch(function(){});
   });
 }
+/* لافتة تثبيت مخصصة لأجهزة iPhone (سفاري) — تظهر مرة واحدة خارج وضع التطبيق */
+function maybeShowInstallHint(){
+  try{
+    if(localStorage.getItem('nibrasInstallHintDismissed')) return;
+    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if(!isIOS || window.navigator.standalone === true) return;
+    if(!document.body){ setTimeout(maybeShowInstallHint, 300); return; }
+    var d = document.createElement('div');
+    d.className = 'install-hint';
+    d.innerHTML = '<span>📲 للتثبيت على جهازك: زر المشاركة ← «إضافة إلى الشاشة الرئيسية»</span><button class="close" title="إغلاق" onclick="this.parentNode.remove();try{localStorage.setItem(\'nibrasInstallHintDismissed\',\'1\')}catch(e){}">✕</button>';
+    document.body.appendChild(d);
+  }catch(e){}
+}
+setTimeout(maybeShowInstallHint, 1500);
 </script>
 </body>
 </html>
