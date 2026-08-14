@@ -2683,16 +2683,16 @@ function renderDashboard(){
   // شريط الإحصائيات (6 بطاقات) — أُزيل: نسبة الحضور تُعرض بيانيًا في بطاقة الحضور
 
   // يحتاج إلى متابعتك
+  // يحتاج إلى متابعتك — الأولوية: الصيانة الطارئة ← غياب المعلمين ← الطلاب (3 عناصر فقط)
   const needs = [];
-  if(pendingTransfers>0) needs.push({ icon:'📨', color:'#f5f3ff', name:'تحويلات معلّقة', meta:'طلبات بانتظار الاعتماد', num:pendingTransfers, click:'showPendingTransfers()' });
+  if(urgentMaint>0) needs.push({ icon:'🛠️', color:'#fef2f2', name:'صيانة طارئة', meta:urgentMaint + ' بلاغ بانتظار المعالجة', num:urgentMaint, click:"location.hash='#/maintenance'" });
   if(absentTeachers.length>0) needs.push({ icon:'🚫', color:'#fef2f2', name:'غياب المعلمين اليوم', meta:absentTeachers.map(t => firstNameOf(t.name)).join('، '), num:absentTeachers.length, click:'showTeacherAbsenceList()' });
-  if(lateTeachers.length>0) needs.push({ icon:'⏰', color:'#fffbeb', name:'تأخر المعلمين اليوم', meta:'وصلوا بعد موعد الدوام', num:lateTeachers.length, click:'showTeacherLateList()' });
-  if(newMaintenance>0) needs.push({ icon:'🛠️', color:'#fffbeb', name:'بلاغات صيانة جديدة', meta:'تحتاج إلى معالجة', num:newMaintenance, click:"location.hash='#/maintenance'" });
-  if(partPending>0) needs.push({ icon:'✋', color:'#eff6ff', name:'طلبات مشاركة في أنشطة', meta:'بانتظار الموافقة', num:partPending, click:"location.hash='#/activities'" });
   if(absent>0) needs.push({ icon:'❌', color:'#fef2f2', name:'غائبون اليوم', meta:'من الطلاب', num:absent, click:"showAttendanceList('ABSENT')" });
-  if(late>0) needs.push({ icon:'⏰', color:'#fffbeb', name:'متأخرون اليوم', meta:'من الطلاب', num:late, click:"showAttendanceList('LATE')" });
-  needs.sort((a,b) => b.num - a.num);
-  const needsHTML = needs.length ? needs.slice(0,6).map(n => `
+  if(needs.length < 3 && late>0) needs.push({ icon:'⏰', color:'#fffbeb', name:'متأخرون اليوم', meta:'من الطلاب', num:late, click:"showAttendanceList('LATE')" });
+  if(needs.length < 3 && lateTeachers.length>0) needs.push({ icon:'⏰', color:'#fffbeb', name:'تأخر المعلمين اليوم', meta:'وصلوا بعد موعد الدوام', num:lateTeachers.length, click:'showTeacherLateList()' });
+  if(needs.length < 3 && partPending>0) needs.push({ icon:'✋', color:'#eff6ff', name:'طلبات مشاركة في أنشطة', meta:'بانتظار الموافقة', num:partPending, click:"location.hash='#/activities'" });
+  if(needs.length < 3 && pendingTransfers>0) needs.push({ icon:'📨', color:'#f5f3ff', name:'تحويلات معلّقة', meta:'طلبات بانتظار الاعتماد', num:pendingTransfers, click:'showPendingTransfers()' });
+  const needsHTML = needs.length ? needs.slice(0,3).map(n => `
     <div class="dash-needs-item" onclick="${n.click}">
       <div class="dash-needs-ico" style="background:${n.color}">${n.icon}</div>
       <div class="dash-needs-txt">
