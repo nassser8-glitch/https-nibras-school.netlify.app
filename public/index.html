@@ -375,15 +375,22 @@
   .topbar-search input::placeholder { color:#9fb0c1; }
   .layout .topbar .notif-btn { width:40px; height:40px; border-radius:12px; border:1px solid var(--line); background:#fff; display:inline-flex; align-items:center; justify-content:center; padding:0; font-size:16px; }
   .layout .sidebar { width:250px; background:linear-gradient(180deg,#123f6c 0%,#0d3154 100%); border-left:none; }
-  .sidebar-brand { padding:18px 16px 14px; display:flex; align-items:center; gap:10px; border-bottom:1px solid rgba(255,255,255,.10); }
-  .sidebar-brand-logo { width:42px; height:42px; border-radius:12px; background:rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; font-size:20px; color:#fff; flex-shrink:0; }
-  .sidebar-brand-title { font-size:16px; font-weight:800; color:#fff; letter-spacing:.5px; }
-  .sidebar-brand-sub { font-size:9px; color:rgba(255,255,255,.55); font-weight:700; letter-spacing:1.5px; }
-  .layout .sidebar nav { padding:12px 10px; }
-  .layout .sidebar .nav-link { color:rgba(255,255,255,.82); border-radius:10px; padding:9px 12px; font-size:13.5px; display:flex; align-items:center; gap:8px; white-space:nowrap; }
-  .layout .sidebar .nav-link:hover { background:rgba(255,255,255,.08); color:#fff; }
-  .layout .sidebar .nav-link.active { background:linear-gradient(135deg,var(--blue),#0f5fae); color:#fff; box-shadow:0 4px 12px -4px rgba(22,114,196,.55); }
+  .brand { text-align:center; padding:20px 10px 18px; border-bottom:1px solid rgba(255,255,255,.15); }
+  .brand-mark { width:58px; height:58px; margin:0 auto 8px; border-radius:18px; background:rgba(255,255,255,.10); display:flex; align-items:center; justify-content:center; font-size:30px; }
+  .brand h1 { margin:0; font-size:22px; font-weight:700; color:#fff; }
+  .brand small { display:block; margin-top:3px; font-size:10px; letter-spacing:1.5px; opacity:.75; color:#fff; }
+  .layout .sidebar nav.menu { padding:12px 10px; display:flex; flex-direction:column; gap:5px; }
+  .layout .sidebar .nav-link { display:flex; align-items:center; gap:12px; min-height:44px; padding:10px 13px; border-radius:10px; color:rgba(255,255,255,.90); font-size:14px; font-weight:500; white-space:nowrap; }
+  .layout .sidebar .nav-link:hover { background:rgba(255,255,255,.10); color:#fff; transform:translateX(-2px); }
+  .layout .sidebar .nav-link.active { background:#2377bf; color:#fff; font-weight:700; box-shadow:0 4px 12px rgba(0,0,0,.14); }
+  .menu-icon { width:24px; min-width:24px; display:flex; align-items:center; justify-content:center; font-size:18px; }
+  .group-title { color:rgba(255,255,255,.55); font-size:11px; font-weight:700; padding:13px 13px 2px; }
   .layout .sidebar .nav-link .msg-badge { background:#ef4444; margin-inline-start:auto; }
+  .profile { display:flex; align-items:center; gap:10px; padding:11px; margin:14px 4px 2px; border:1px solid rgba(255,255,255,.35); border-radius:11px; background:rgba(255,255,255,.04); }
+  .avatar { width:42px; height:42px; min-width:42px; border-radius:50%; background:#fff; color:#60758a; display:flex; align-items:center; justify-content:center; font-size:20px; }
+  .profile-info { min-width:0; }
+  .profile-info strong { display:block; font-size:13px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .profile-info span { display:block; margin-top:2px; font-size:11px; color:rgba(255,255,255,.70); }
   .layout .sidebar-widgets { border-top:1px solid rgba(255,255,255,.10); }
   .layout .sidebar-widgets .info-card { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.10); border-top:2px solid var(--blue); color:#fff; }
   .layout .sidebar-widgets .msg-day-center { border-top:1px dashed rgba(255,255,255,.15); }
@@ -1970,25 +1977,36 @@ function renderLayout(user, hash){
   const school = getActiveSchool();
   const schoolName = schoolNames[school] || '';
 
-  const links = [
-    { href:'#/', key:'home', label:'الرئيسية', icon:'🏠' },
-    { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👨‍🎓' },
-    { href:'#/attendance', key:'attendance', label:'الحضور', icon:'✅' },
-    { href:'#/notes', key:'notes', label:'الملاحظات', icon:'⭐' },
-    { href:'#/memo', key:'memo', label:'المفكرة والتذكير', icon:'📒' },
-    { href:'#/transfers', key:'transfers', label:'التحويلات', icon:'📨' },
-    { href:'#/reports', key:'reports', label:'التقارير', icon:'📄' },
-    { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
-    { href:'#/maintenance', key:'maintenance', label:'الصيانة', icon:'🔧' },
+  const homeLink = { href:'#/', key:'home', label:'الرئيسية', icon:'⌂' };
+  const groups = [
+    { title:'الإدارة', items:[
+      { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👥' },
+      (user.role === 'ADMIN' || user.role === 'AGENT') ? { href:'#/users', key:'users', label:tl('المعلمون'), icon:'👤' } : null,
+      { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
+    ]},
+    { title:'المتابعة', items:[
+      { href:'#/attendance', key:'attendance', label:'الحضور والغياب', icon:'✓' },
+      { href:'#/notes', key:'notes', label:'الملاحظات', icon:'★' },
+      { href:'#/transfers', key:'transfers', label:'التحويلات', icon:'↔' },
+      { href:'#/reports', key:'reports', label:'التقارير', icon:'▥' },
+    ]},
+    { title:'المدرسة', items:[
+      (user.role !== 'STUDENT') ? { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉', badge: user.role === 'AGENT' ? pendingPartRequests() : 0 } : null,
+      { href:'#/memo', key:'memo', label:'المفكرة والتذكير', icon:'📒' },
+      { href:'#/maintenance', key:'maintenance', label:'الصيانة', icon:'🔧' },
+      (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR') ? { href:'#/guide-msgs', key:'guide-msgs', label:'رسائل المعلمين', icon:'💬', badge: msgMonitorBadge(user) } : null,
+    ]},
+    { title:'النظام', items:[
+      (user.role === 'TEACHER') ? { href:'#/timetable', key:'timetable', label:tl('جدولي'), icon:'🗓' } : null,
+      (user.role === 'TEACHER') ? { href:'#/account', key:'account', label:'حسابي', icon:'⚙️' } : null,
+      { href:'#/settings', key:'settings', label:'الإعدادات', icon:'⚙️' },
+      { href:'#/about', key:'about', label:'حول نبراس', icon:'ⓘ' },
+    ]},
   ];
-  if(user.role === 'TEACHER') links.push({ href:'#/timetable', key:'timetable', label:tl('جدولي'), icon:'🗓' });
-  if(user.role === 'TEACHER') links.push({ href:'#/account', key:'account', label:'حسابي', icon:'⚙️' });
-  if(user.role === 'ADMIN' || user.role === 'AGENT') links.push({ href:'#/users', key:'users', label:tl('المعلمون'), icon:'👤' });
-  if(user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'TEACHER' || user.role === 'COUNSELOR') links.push({ href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉', badge: user.role === 'AGENT' ? pendingPartRequests() : 0 });
-  if(user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR') links.push({ href:'#/guide-msgs', key:'guide-msgs', label:tl('رسائل للمعلمين'), icon:'💬', badge: msgMonitorBadge(user) });
-  links.push({ href:'#/about', key:'about', label:'حول التطبيق', icon:'ℹ️' });
-
-  const nav = links.map(l => `<a href="${l.href}" class="nav-link ${page===l.key?'active':''}">${l.icon} ${l.label}${l.badge ? `<span class="msg-badge">${l.badge}</span>` : ''}</a>`).join('');
+  const linkItem = l => `<a href="${l.href}" class="nav-link ${page===l.key?'active':''}"><span class="menu-icon">${l.icon}</span><span>${l.label}</span>${l.badge ? `<span class="msg-badge">${l.badge}</span>` : ''}</a>`;
+  const nav = linkItem(homeLink) + groups.map(g =>
+    `<div class="group-title">${g.title}</div>` + g.items.filter(Boolean).map(linkItem).join('')
+  ).join('');
 
   const schoolNow = getActiveSchool();
   const announceSender = localStorage.getItem(ANNOUNCEMENT_SENDER_KEY(schoolNow));
@@ -2058,18 +2076,23 @@ function renderLayout(user, hash){
     <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
     <div class="layout-body">
       <aside class="sidebar" id="sidebar">
-        <div class="sidebar-brand">
-          <div class="sidebar-brand-logo">🏫</div>
-          <div>
-            <div class="sidebar-brand-title">نبراس</div>
-            <div class="sidebar-brand-sub">NIBRAS SCHOOL</div>
-          </div>
+        <div class="brand">
+          <div class="brand-mark">🏫</div>
+          <h1>نبراس</h1>
+          <small>NIBRAS SCHOOL</small>
         </div>
-        <nav>${nav}</nav>
+        <nav class="menu">${nav}</nav>
         <div class="sidebar-widgets">
           ${msgTodayWidget}
           <div id="weatherBox"></div>
           ${(user.role === 'ADMIN' || user.role === 'AGENT') ? '<div id="presentNowBox"></div>' : ''}
+        </div>
+        <div class="profile">
+          <div class="avatar">${user.role === 'ADMIN' ? '👤' : (getUserSchool() === 'GIRLS' ? '👩' : '👨')}</div>
+          <div class="profile-info">
+            <strong>${escapeHtml(user.name)}</strong>
+            <span>${roleLabel(user.role)}</span>
+          </div>
         </div>
       </aside>
       <main class="main">
