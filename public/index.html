@@ -943,6 +943,7 @@ async function login(login, password){
         return { ok:true };
       }
       if(r.status === 429) return { ok:false, error:'rate_limited' };
+      if(r.status === 403 && r.j && r.j.error === 'not_granted') return { ok:false, error:'not_granted' };
       return { ok:false };
     }catch(e){}
     return { ok:false };
@@ -1166,7 +1167,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 /* ============ تسجيل الدخول ============ */
 function quickAccountRows(){
-  // في وضع الخادم: لا توجد كلمات مرور في كود المتصفح أبدًا — تُجلب الحسابات من الخادم (انظر populateServerAccounts)
+  // في وضع الخادم: لا توجد كلمات مرور في كود المتصفح أبدًا — بيانات الدخول تُسلَّم من إدارة المدرسة
   if(__serverEnabled()) return [];
   const seen = {}, out = [];
   ['BOYS','GIRLS'].forEach(school => {
@@ -1195,24 +1196,19 @@ function renderLogin(){
     ? 'نظام إدارة المدرسة — دخول آمن عبر الخادم'
     : 'نظام إدارة المدرسة (نسخة محلية/تجريبية)';
   if(__serverEnabled()){
-    setTimeout(populateServerAccounts, 0);
     return `
     <div class="login-wrap">
       <div class="card login-card">
         <h1>المدرسة السعودية في إسلام آباد</h1>
         <p class="muted">${hint}</p>
         <div id="loginError" class="error-box" style="display:none"></div>
-        <label>البريد الإلكتروني</label>
-        <input id="loginEmail" class="input" type="email" placeholder="admin@nibras.local" autocomplete="username" />
+        <label>اسم المستخدم (أو البريد الإلكتروني)</label>
+        <input id="loginEmail" class="input" type="text" placeholder="مثال: abdelwasea" autocomplete="username" />
         <label>كلمة المرور</label>
         <input id="loginPassword" class="input" type="password" placeholder="••••••••" autocomplete="current-password" />
         <button class="btn-primary full" style="margin-top:18px" onclick="handleLogin()">تسجيل الدخول</button>
         <p style="margin:8px 0 0;text-align:center"><button class="btn-secondary" style="padding:6px 12px;font-size:12px" onclick="openForgotModal()">نسيت كلمة المرور؟</button></p>
-        <p class="muted" style="font-size:11px;margin-top:10px;text-align:center">أول دخول: تُعرض كلمة مرور مؤقتة مرة واحدة في سطر أوامر الخادم، ثم يُطلب منك تعيين بريدك الحقيقي وكلمة مرور قوية جديدة.</p>
-      </div>
-      <div class="card login-card" style="margin-top:14px;max-width:520px;overflow:auto">
-        <h3 style="margin:0 0 10px;font-size:15px">🔑 حسابات المدرسة — اختر اسم المستخدم ثم أدخل كلمة المرور</h3>
-        <div id="quickAccountsList"><p class="muted" style="text-align:center;margin:6px 0">جارٍ تحميل الحسابات…</p></div>
+        <p class="muted" style="font-size:11px;margin-top:10px;text-align:center">أول دخول: يُطلب منك تعيين بريدك الحقيقي وكلمة مرور قوية جديدة قبل استخدام النظام. بيانات الدخول تُسلَّم من إدارة المدرسة.</p>
       </div>
     </div>`;
   }
@@ -1241,31 +1237,7 @@ function renderLogin(){
       <h3 style="margin:0 0 10px;font-size:15px">🔑 حسابات جاهزة للدخول — اضغط "دخول سريع"</h3>
       <table class="data-table"><thead><tr><th>الدور</th><th>البريد</th><th>كلمة المرور</th><th></th></tr></thead><tbody>${quickRows}</tbody></table>
     </div>
-  </div>`;
-}
-async function populateServerAccounts(){
-  const el = document.getElementById('quickAccountsList');
-  if(!el) return;
-  let rows = [];
-  try{
-    const r = await fetch('/api/auth/accounts');
-    if(r.ok) rows = (await r.json()).accounts || [];
-  }catch(e){}
-  if(!rows.length){
-    el.innerHTML = '<p class="muted" style="text-align:center;margin:6px 0">لا توجد حسابات بعد — عند أول تشغيل للخادم يُنشأ حساب المدير تلقائيًا.</p>';
-    return;
-  }
-  const prio = r => ({ ADMIN:1, AGENT:2, COUNSELOR:3, ADMINISTRATIVE:4 }[r] || 9);
-  rows.sort((a,b) => (prio(a.role)-prio(b.role)) || (a.name||'').localeCompare(b.name||'','ar'));
-  el.innerHTML = `
-    <table class="data-table"><thead><tr><th>الدور</th><th>اسم المستخدم</th><th></th></tr></thead><tbody>
-    ${rows.map(a => `<tr>
-      <td>${escapeHtml((roleLabels[a.role]||a.role) + ' — ' + (a.name||a.username||a.email))}</td>
-      <td style="direction:ltr">${escapeHtml(a.username || a.email)}</td>
-      <td><button class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="fillLoginEmail('${escapeHtml(a.username || a.email).replace(/'/g,"\\'")}')">تعبئة</button></td>
-    </tr>`).join('')}
-    </tbody></table>
-    <p class="muted" style="font-size:11px;margin:8px 0 0;text-align:center">كلمات المرور لا تُعرض في هذه الصفحة إطلاقًا.</p>`;
+   </div>`;
 }
 function fillLoginEmail(email){
   const em = document.getElementById('loginEmail');
@@ -1297,7 +1269,7 @@ async function handleLogin(){
       location.hash = '#/';
       renderApp();
     } else {
-      if(el){ el.style.display='block'; el.textContent = (res && res.error === 'rate_limited') ? 'محاولات فاشلة كثيرة — أعد المحاولة بعد 15 دقيقة' : 'اسم المستخدم أو كلمة المرور غير صحيحة'; }
+      if(el){ el.style.display='block'; el.textContent = (res && res.error === 'rate_limited') ? 'محاولات فاشلة كثيرة — أعد المحاولة بعد 15 دقيقة' : (res && res.error === 'not_granted') ? 'حسابك غير مُفعَّل بعد — تواصل مع مدير النظام لتفعيل بيانات دخولك.' : 'اسم المستخدم أو كلمة المرور غير صحيحة'; }
     }
   }finally{
     __loginBusy = false;
