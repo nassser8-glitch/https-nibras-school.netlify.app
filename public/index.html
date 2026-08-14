@@ -4816,12 +4816,9 @@ function deleteUser(id){
 /* ============ صفحة متابعة المعلم (المدير فقط) ============ */
 const SCHOOL_START_MIN = 7*60 + 30; // بداية الدوام 07:30
 function localDateKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-// أيام الدراسة: الاثنين-الجمعة فقط (الأحد والسبت عطلة)
+// أيام الدراسة: يُسمح بالتسجيل في كل أيام الأسبوع (أُزيل حظر العطلة لتمكين التسجيل يوم السبت والأحد)
 function isSchoolDay(dateStr){
-  const d = new Date(String(dateStr) + 'T12:00:00');
-  if(isNaN(d)) return false;
-  const dow = d.getDay();
-  return dow !== 0 && dow !== 6;
+  return true;
 }
 function teacherStats(u){
   const now = new Date();
