@@ -2746,7 +2746,7 @@ function renderDashboard(){
     <div class="att-group">
       <p class="att-group-title">${title}</p>
       <div class="att-flex">
-        <div class="att-pct" onclick="${click}" title="عرض التفاصيل"><b>${pct}%</b><span>حضور</span></div>
+        <div class="att-pct" onclick="${click}" title="عرض التفاصيل"><b>${pct}</b><span>حضور</span></div>
         <div class="dash-donut" style="background:${donutBg}">
           <div class="dash-donut-center"><b>${total}</b><span>مسجّل اليوم</span></div>
         </div>
@@ -2759,10 +2759,9 @@ function renderDashboard(){
     </div>`;
   };
   const tPresent = teachers.length - absentTeachers.length - lateTeachers.length;
-  const sAttTotal = present + absent + late;
-  const sPct = sAttTotal ? Math.round(present/sAttTotal*100) : 0;
-  const tAttTotal = tPresent + absentTeachers.length + lateTeachers.length;
-  const tPct = tAttTotal ? Math.round(tPresent/tAttTotal*100) : 0;
+  const sPct = fmtRate(rate);
+  const tRateAll = teachers.length ? Math.round(tPresent/teachers.length*100*10)/10 : null;
+  const tPct = fmtRate(tRateAll);
   const donutHTML = `
     <div class="att-card">
       ${attGroup('👨‍🎓 حضور الطلاب', present, absent, late, sPct, 'showTodayAttendance()')}
