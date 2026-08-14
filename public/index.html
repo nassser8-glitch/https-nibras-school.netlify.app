@@ -1285,10 +1285,10 @@ function openForgotModal(){
     <div class="modal-box" style="max-width:440px">
       <div class="modal-head"><h3>استعادة كلمة المرور</h3><button class="modal-close" onclick="closeDetails()">✕</button></div>
       <div id="forgotBody">
-        <p class="muted" style="margin:0 0 12px">أدخل بريدك الإلكتروني وسنعرض لك رمز استعادة (صالح 10 دقائق) لتغيير كلمة المرور.</p>
+        <p class="muted" style="margin:0 0 12px">أدخل اسم المستخدم (الأفضل) أو البريد الإلكتروني، وسنعرض لك رمز استعادة (صالح 10 دقائق) لتغيير كلمة المرور.</p>
         <div id="forgotError" class="error-box" style="display:none"></div>
-        <label>البريد الإلكتروني</label>
-        <input id="forgotEmail" class="input" type="email" placeholder="wakil@nibras.local" style="direction:ltr;text-align:left" />
+        <label>اسم المستخدم أو البريد الإلكتروني</label>
+        <input id="forgotEmail" class="input" type="text" placeholder="مثال: admin أو admin@nibras.local" style="direction:ltr;text-align:left" />
         <button class="btn-primary full" style="margin-top:14px" onclick="forgotRequestCode()">طلب رمز الاستعادة</button>
       </div>
     </div>`;
@@ -1343,7 +1343,7 @@ async function forgotRequestCode(){
       return;
     }
     el.style.display='block';
-    if(r.j && r.j.error === 'not_found') el.textContent='لا يوجد حساب نشط بهذا البريد';
+    if(r.j && r.j.error === 'not_found') el.textContent='لا يوجد حساب نشط بهذا الاسم أو البريد';
     else if(r.j && r.j.error === 'rate_limited') el.textContent='طلبات كثيرة — أعد المحاولة بعد 15 دقيقة';
     else el.textContent='تعذر طلب الرمز — أعد المحاولة';
   }finally{
@@ -1368,7 +1368,7 @@ async function forgotReset(){
       const msg = document.createElement('div');
       msg.className = 'card';
       msg.style.cssText = 'margin-top:14px;border-color:#bbf7d0;background:#f0fdf4;color:#166534';
-      msg.textContent = 'تم تغيير كلمة المرور بنجاح — سجّل الدخول الآن بالبريد وكلمة المرور الجديدة.';
+      msg.textContent = 'تم تغيير كلمة المرور بنجاح — سجّل الدخول الآن باسم المستخدم وكلمة المرور الجديدة.';
       if(card && card.parentElement) card.parentElement.insertBefore(msg, card.nextSibling);
       return;
     }

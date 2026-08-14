@@ -388,9 +388,12 @@ const RESET_CODE_TTL_MS = 10 * 60 * 1000;
 app.post('/api/auth/forgot-password', (req, res) => {
   (async () => {
     if (rateLimit('forgot', 5, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
-    const email = String(req.body && req.body.email || '').trim().toLowerCase();
-    if (!email) return res.status(400).json({ error: 'missing' });
-    const candidates = await db.usersByEmail(email);
+    const login = String(req.body && (req.body.email || req.body.login) || '').trim().toLowerCase();
+    if (!login) return res.status(400).json({ error: 'missing' });
+    // الدخول بالاسم أو البريد: الاسم فريد فلا لبس في تحديد الحساب المستهدف (البريد قد يتكرر)
+    let candidates;
+    if (login.includes('@')) candidates = await db.usersByEmail(login);
+    else { const single = await db.userByUsername(login); candidates = single ? [single] : []; }
     if (!candidates.length) return res.status(404).json({ error: 'not_found' });
     const active = candidates.filter(c => c.active);
     if (!active.length) return res.status(404).json({ error: 'not_found' });
@@ -416,11 +419,13 @@ app.post('/api/auth/forgot-password', (req, res) => {
 app.post('/api/auth/recover-password', (req, res) => {
   (async () => {
     if (rateLimit('recover', 8, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
-    const email = String(req.body && req.body.email || '').trim().toLowerCase();
+    const login = String(req.body && (req.body.email || req.body.login) || '').trim().toLowerCase();
     const code = String(req.body && req.body.code || '').trim();
     const pw = String(req.body && req.body.newPassword || '');
-    if (!email || !code || !pw) return res.status(400).json({ error: 'missing' });
-    const candidates = await db.usersByEmail(email);
+    if (!login || !code || !pw) return res.status(400).json({ error: 'missing' });
+    let candidates;
+    if (login.includes('@')) candidates = await db.usersByEmail(login);
+    else { const single = await db.userByUsername(login); candidates = single ? [single] : []; }
     let u = candidates.find(c => c.active && c.data && String(c.data.resetCode) === code);
     if (!u) return res.status(400).json({ error: 'bad_code' });
     const exp = u.data && u.data.resetExpires;
