@@ -2739,6 +2739,14 @@ function renderDashboard(){
       ${attGroup('👨‍🏫 حضور المعلمين', tPresent, absentTeachers.length, lateTeachers.length, tPct, canMgrT ? 'showTeacherAbsenceList()' : 'showTodayAttendance()')}
       <button class="att-report-btn" onclick="showTodayAttendance()"><span>عرض تقرير الحضور</span><span>←</span></button>
     </div>`;
+  const attPanel = `
+    <div class="dash-panel">
+      <div class="dash-panel-head">
+        <p class="dash-panel-title">✅ الحضور اليوم</p>
+        <span class="dash-panel-more" onclick="showTodayAttendance()" style="cursor:pointer">التفاصيل</span>
+      </div>
+      ${donutHTML}
+    </div>`;
 
   // لوحة الأوائل — المراحل (ابتدائي/متوسط/ثانوي)
   const ptsMap = studentPointsMap();
@@ -2800,19 +2808,13 @@ function renderDashboard(){
       </div>
       ${upcomingHTML}
     </div>
-    <div class="dash-panel">
-      <div class="dash-panel-head">
-        <p class="dash-panel-title">✅ الحضور اليوم</p>
-        <span class="dash-panel-more" onclick="showTodayAttendance()" style="cursor:pointer">التفاصيل</span>
-      </div>
-      ${donutHTML}
-    </div>
     ${leadersHTML}
   </div>`;
 
   return `
   ${renderAdminMsgAlerts()}
   ${hero}
+  ${attPanel}
   ${grid2}
   ${bottom}
   ${isTeacher ? renderTeacherWeekTT(d) : ''}
