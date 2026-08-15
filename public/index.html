@@ -2080,6 +2080,7 @@ function renderLayout(user, hash){
             <div style="text-align:left">
               <div class="topbar-user-name">${escapeHtml(user.name)}</div>
               <div class="topbar-user-role">${roleLabel(user.role)}</div>
+              ${schoolWeekHTML(user)}
             </div>
             ${user.role==='ADMIN' ? `<button class="btn-secondary" style="padding:7px 12px" onclick="switchSchool()">🔀 تبديل القسم</button>` : ''}
             <button class="btn-secondary" style="padding:7px 12px" onclick="logout()">🚪 خروج</button>
@@ -4819,6 +4820,26 @@ function localDateKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padS
 // أيام الدراسة: يُسمح بالتسجيل في كل أيام الأسبوع (أُزيل حظر العطلة لتمكين التسجيل يوم السبت والأحد)
 function isSchoolDay(dateStr){
   return true;
+}
+/* ============ الأسبوع الدراسي: 0 عند عودة الموظفين ← 1..10 ← إجازة الخريف ← 11..18 ← إجازة منتصف العام ============ */
+function schoolWeekInfo(){
+  const now = new Date();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  mon.setHours(0,0,0,0);
+  const offset = Math.floor((now - mon) / (7*24*3600*1000));
+  if(offset <= 0) return { label:'الأسبوع 0 — عودة الموظفين', kind:'week' };
+  if(offset <= 10) return { label:'الأسبوع ' + offset, kind:'week' };
+  if(offset === 11) return { label:'إجازة الخريف', kind:'break' };
+  if(offset <= 19) return { label:'الأسبوع ' + (offset - 1), kind:'week' };
+  if(offset === 20) return { label:'إجازة منتصف العام', kind:'break' };
+  return { label:'الأسبوع ' + (offset - 2), kind:'week' };
+}
+function schoolWeekHTML(user){
+  if(!user || user.role !== 'ADMIN') return '';
+  const w = schoolWeekInfo();
+  const color = w.kind === 'break' ? '#d97706' : '#0f4f88';
+  return `<div style="font-size:11px;font-weight:800;color:${color};margin-top:2px">🗓 ${w.label}</div>`;
 }
 function schoolDaysInRange(from, to){
   if(!from || !to) return 0;
