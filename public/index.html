@@ -396,7 +396,7 @@
   .layout .sidebar-widgets .msg-static { color:#eaf2fb; font-size:12px; line-height:1.5; margin-top:1px; }
   .layout .sidebar-widgets #weatherBox { margin-top:0; }
   .layout .sidebar-widgets .msg-sender { color:rgba(255,255,255,.55); }
-  .layout .sidebar-widgets .muted { color:rgba(255,255,255,.55); }
+  .layout .sidebar-widgets .muted { color:rgba(255,255,255,.80); font-weight:600; }
 
   /* بطاقات لوحة المدير */
   .dash-hero { display:grid; grid-template-columns:1.6fr 1fr; gap:12px; margin-bottom:14px; }
@@ -3420,10 +3420,10 @@ function renderWeather(){
       el.innerHTML = frame(`
         <span style="font-size:26px">${icon}</span>
         <div>
-          <div style="font-weight:800;font-size:19px;color:var(--primary,#0f4f88)">${t}°C</div>
-          <div class="muted" style="font-size:11px">${label} — إسلام آباد</div>
+          <div style="font-weight:800;font-size:19px;color:#eaf2fb">${t}°C</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.80)">${label} — إسلام آباد</div>
         </div>
-        <span class="muted small" style="font-size:10.5px">💨 ${Math.round(cw.windspeed)} كم/س</span>`);
+        <span style="font-size:10.5px;color:rgba(255,255,255,.80)">💨 ${Math.round(cw.windspeed)} كم/س</span>`);
       clockTick();
     })
     .catch(() => { el.innerHTML = frame('<p class="muted small" style="margin:0">🌤 تعذر تحميل الطقس — تحقق من الاتصال بالإنترنت</p>'); });
@@ -3465,8 +3465,8 @@ function updatePresentNow(){
   el.innerHTML = `
     <div class="info-card" onclick="showPresentNow()" style="cursor:pointer" title="اضغط لعرض أسماء المتواجدين الآن">
       <div class="muted small" style="font-size:10.5px">🧑‍🏫 المتواجدون الآن — ${schoolLabel}</div>
-      <div style="font-size:22px;font-weight:900;color:#16a34a;line-height:1.1">${info.n}</div>
-      <div style="font-size:11px;color:#166534">${teacherWord}</div>
+      <div style="font-size:22px;font-weight:900;color:#4ade80;line-height:1.1">${info.n}</div>
+      <div style="font-size:11px;color:#86efac">${teacherWord}</div>
     </div>`;
 }
 function showPresentNow(){
