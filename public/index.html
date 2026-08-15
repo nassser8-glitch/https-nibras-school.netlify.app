@@ -2431,8 +2431,8 @@ function renderGuideMsgs(){
   const msgSources = isAdmin ? ['BOYS','GIRLS'] : [active];
   const all = msgSources.map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s }))).flat();
   // المدير يرى جميع الرسائل المرسلة للمعلمين (من أي مرسل)، وغيره يرى رسائله فقط
-  const msgs = all.filter(m => isAdmin || m.senderId === user.id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  const transIn = all.filter(m => m.senderRole === 'TRANSFER' && m.teacherId === user.id && !m.dismissed).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const msgs = all.filter(m => (isAdmin ? (m.senderRole !== 'TRANSFER' || adminSeesTransferMsg(m)) : m.senderId === user.id)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const transIn = all.filter(m => m.senderRole === 'TRANSFER' && m.teacherId === user.id && !m.dismissed && (isAdmin ? adminSeesTransferMsg(m) : true)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   const schoolBadge = (s) => `<span class="badge ${s === 'BOYS' ? 'badge-boys' : 'badge-girls'}" style="margin-left:6px">${campusLabels[s] || s}</span>`;
   const targetOpts = isAdmin
     ? [`<option value="${active}:ALL">${tl('جميع المعلمين')} (${campusLabels[active]})</option>`]
@@ -2520,7 +2520,7 @@ function renderAdminMsgAlerts(){
   const combinedMsgs = (dismissed) => {
     if(isAdmin){
       return ['BOYS','GIRLS'].map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s })))
-        .flat().filter(m => m.senderRole === 'TRANSFER' && !m.dismissed)
+        .flat().filter(m => m.senderRole === 'TRANSFER' && !m.dismissed && adminSeesTransferMsg(m))
         .sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
     }
     let arr = adminMsgsFor(user.id).filter(m => !m.dismissed);
@@ -3008,6 +3008,57 @@ function showTodayAttendance(){
 }
 
 /* ============ قائمة التحويلات المعلّقة (عند الضغط على البطاقة) ============ */
+/* عين متابعة حساب وكيل/موجه/مساعد إداري: يعرض تحويلاته وإشعاراته الموجهة إليه */
+function openRoleInbox(uid){
+  const me = currentUser();
+  if(!me || me.role !== 'ADMIN') return;
+  const d = loadDB();
+  const u = d.users.find(x => x.id === uid);
+  if(!u) return;
+  const sources = ['BOYS','GIRLS'].map(s => ({ school: s, d: loadSchoolDB(s) }));
+  const pending = [];
+  const msgs = [];
+  sources.forEach(({ school, d }) => {
+    d.transfers.filter(t => t.status === 'PENDING' && transferForMe(t) && (t.target === u.role || t.createdBy === u.id)).forEach(t => pending.push({ t, school, d }));
+    loadAdminMsgsFor(school).filter(m => m.senderRole === 'TRANSFER' && m.teacherId === uid && !m.dismissed).forEach(m => msgs.push({ m, school }));
+  });
+  pending.sort((a,b) => (b.t.createdAt||'').localeCompare(a.t.createdAt||''));
+  msgs.sort((a,b) => (b.m.createdAt||'').localeCompare(a.m.createdAt||''));
+  const priorityColor = { LOW:'#6b7280', MEDIUM:'#1d4ed8', HIGH:'#d97706', URGENT:'#dc2626' };
+  const schoolBadge = (school) => `<span class="badge ${school === 'BOYS' ? 'badge-boys' : 'badge-girls'}" style="margin-left:6px">${campusLabels[school] || school}</span>`;
+  const pendRows = pending.length === 0 ? `<tr><td colspan="4" style="text-align:center;padding:18px;color:#9ca3af">لا توجد تحويلات معلّقة</td></tr>` :
+    pending.map(({ t, school, d }) => {
+      const ss = studentIdsOf(t).map(id => d.students.find(st => st.id === id)).filter(Boolean);
+      const nameCell = ss.length ? ss.map(s => studentNameLink(s, s ? (studentPointsMap()[s.id] || 0) : undefined)).join('<br>') : '<span class="muted">—</span>';
+      return `<tr>
+        <td style="font-weight:600">${schoolBadge(school)}${nameCell}</td>
+        <td>${targetLabel(t.target)}</td>
+        <td style="color:${priorityColor[t.priority]};font-weight:600">${priorityLabels[t.priority]}</td>
+        <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.reason)}</td>
+      </tr>`;
+    }).join('');
+  const msgRows = msgs.length === 0 ? `<tr><td colspan="3" style="text-align:center;padding:18px;color:#9ca3af">لا توجد إشعارات تحويل واردة لهذا الحساب</td></tr>` :
+    msgs.map(({ m, school }) => `<tr>
+      <td>${schoolBadge(school)}</td>
+      <td style="white-space:pre-wrap">${escapeHtml(m.text)}</td>
+      <td>${fmtTime(m.createdAt)}</td>
+    </tr>`).join('');
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.onclick = (e) => { if(e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="card" style="width:min(720px,100%);max-height:86vh;overflow:auto;padding:20px">
+      <div class="header-row">
+        <h3 style="margin:0">👁 متابعة: ${escapeHtml(u.name)} <span class="muted small">(${roleLabel(u.role)})</span></h3>
+        <button class="btn-secondary" onclick="this.closest('.card').parentElement.remove()">✕ إغلاق</button>
+      </div>
+      <h4 style="margin:14px 0 6px">📨 تحويلات معلّقة موجهة لهذا الحساب</h4>
+      <table class="data-table" style="margin-top:8px"><thead><tr><th>الطالب</th><th>إلى</th><th>الأولوية</th><th>السبب</th></tr></thead><tbody>${pendRows}</tbody></table>
+      <h4 style="margin:18px 0 6px">🔔 إشعارات التحويل الواردة إليه</h4>
+      <table class="data-table" style="margin-top:8px"><thead><tr><th>القسم</th><th>الرسالة</th><th>التاريخ</th></tr></thead><tbody>${msgRows}</tbody></table>
+    </div>`;
+  document.body.appendChild(overlay);
+}
 function showPendingTransfers(){
   const user = currentUser();
   const isAdmin = user?.role === 'ADMIN';
@@ -4427,7 +4478,7 @@ function notifyTransferReceivers(d, tr){
   const isGirls = getActiveSchool() === 'GIRLS';
   const studentLabel = isGirls ? 'الطالبات' : 'الطلاب';
   const text = `📨 تحويل ${studentLabel}: ${sName} — إلى: ${targetLabel(tr.target)} — السبب: ${tr.reason}`;
-  d.users.filter(u => u.active && (u.role === tr.target || u.role === 'ADMIN')).forEach(r => {
+  d.users.filter(u => u.active && u.role === tr.target).forEach(r => {
     arr.push({
       id: uid(), teacherId: r.id, teacherName: r.name,
       text, createdAt: new Date().toISOString(), read:false, dismissed:false, views:0,
@@ -4437,10 +4488,22 @@ function notifyTransferReceivers(d, tr){
   saveAdminMsgs(arr);
 }
 /* من يرى التحويل؟ — كل شخص يرى تحويله فقط، والمدير يشاهد الجميع (قراءة فقط) */
+/* هل يرى المدير إشعار التحويل؟ — يرى فقط ما وُجّه إليه فعليًا (إلى: المدير) أو تحويلًا أنشأه بنفسه */
+function adminSeesTransferMsg(m){
+  const me = currentUser();
+  if(m.senderRole !== 'TRANSFER') return true;
+  const school = m._school || getActiveSchool();
+  try {
+    const d = loadSchoolDB(school);
+    const t = d.transfers.find(x => x.id === m.transferId);
+    if(!t) return false;
+    return t.target === 'ADMIN' || t.createdBy === me?.id;
+  } catch(e){ return false; }
+}
 function transferForMe(t){
   const u = currentUser();
   if(!u) return false;
-  if(u.role === 'ADMIN') return true;
+  if(u.role === 'ADMIN') return t.target === 'ADMIN' || t.createdBy === u.id;
   if(u.role === 'AGENT' || u.role === 'COUNSELOR') return t.target === u.role || t.createdBy === u.id;
   const visible = new Set(getVisibleStudents().map(s => s.id));
   return t.createdBy === u.id || studentIdsOf(t).some(id => visible.has(id));
@@ -4653,7 +4716,9 @@ function renderUsers(){
     const isSelf = u.id === currentUser().id;
     const nameCell = u.role === 'TEACHER'
       ? `<a href="#/teacher/${u.id}" style="font-weight:700;color:#2563eb;text-decoration:none;cursor:pointer" title="${tl('متابعة المعلم ورسائله')}">${escapeHtml(u.name)} 👁</a>`
-      : `<span style="font-weight:600">${escapeHtml(u.name)}</span>`;
+      : (u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE')
+        ? `<span style="font-weight:600">${escapeHtml(u.name)} <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="openRoleInbox('${u.id}')" title="${tl('متابعة هذا الحساب: تحويلاته وإشعاراته')}">👁</button></span>`
+        : `<span style="font-weight:600">${escapeHtml(u.name)}</span>`;
     const authCell = u.role === 'TEACHER'
       ? `<div style="font-size:12px;line-height:1.7">
           ${u.email ? `<span style="display:block;direction:ltr">📧 ${escapeHtml(u.email)}</span>` : '<span style="display:block;color:#9ca3af">📧 لا يوجد بريد</span>'}
