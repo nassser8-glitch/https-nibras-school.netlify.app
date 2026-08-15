@@ -1864,7 +1864,7 @@ function renderSchoolSelect(){
   function panelHtml(school, data){
     if(!data) return '';
     const isBoys = school === 'BOYS';
-    const label = isBoys ? 'بنين' : 'بنات';
+    const label = isBoys ? 'البنين' : 'البنات';
     const icon = isBoys ? '👦' : '👧';
     const cls = isBoys ? 'boys' : 'girls';
     const attRate = (data.present + data.absent) > 0 ? Math.round(data.present / (data.present + data.absent) * 100) : 0;
