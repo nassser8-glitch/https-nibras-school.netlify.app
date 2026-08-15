@@ -2006,6 +2006,7 @@ function renderAbout(){
     هذا التطبيق ملكية خاصة لصاحبه، ولا يجوز نسخه أو توزيعه أو إعادة استخدامه أو بيعه دون إذن كتابي مسبق.</p>
     <div class="actions" style="margin-top:12px">
       <button class="btn-primary" onclick="location.hash='#/'">عودة للرئيسية</button>
+      <button class="btn-secondary" onclick="doInstallApp()">📲 إضافة إلى الشاشة الرئيسية</button>
     </div>
   </div>`;
 }
@@ -6840,13 +6841,24 @@ function renderSettings(){
 
   const directMsgCard = '';
 
+  const installCard = `
+  <div class="card" style="max-width:600px">
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">📲 إضافة التطبيق إلى الشاشة الرئيسية</div>
+    <div style="font-size:12.5px;color:#6b7280;margin-bottom:12px">ثبّت نظام نبراس على جهازك لتفتحه كتطبيق مستقل بأيقونة خاصة — يعمل بسرعة حتى دون اتصال.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <button class="btn-primary" onclick="doInstallApp()">⬇ تثبيت التطبيق الآن</button>
+      <button class="btn-secondary" onclick="openInstallGuide()">📖 دليل التثبيت خطوة بخطوة</button>
+    </div>
+  </div>`;
+
   return `
   <div class="header-row"><h1 class="page-title">رسالة اليوم — ${schoolNames[school]||''}</h1></div>
   ${currentCard}
   ${editorCard}
   ${suggestCard}
   ${adminInboxCard}
-  ${directMsgCard}`;
+  ${directMsgCard}
+  ${installCard}`;
 }
 /* اقتراحات رسالة اليوم: المعلم/الوكيل يقترحون → المدير يوافق → تظهر للجميع */
 function suggestionsKey(school){ return 'nibras_' + (school || getActiveSchool()) + '_suggestions_v1'; }
@@ -6962,9 +6974,43 @@ function doInstallApp(){
     __deferredInstallPrompt.userChoice.then(function(){ __deferredInstallPrompt = null; });
   } else {
     var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    if(isIOS){ alert('للتثبيت: افتح زر «مشاركة» ⬆ في المتصفح ثم اختر «إضافة إلى الشاشة الرئيسية».'); }
+    if(isIOS){ openInstallGuide(); }
     else { alert('لا يمكن التثبيت من هذا المتصفح — استخدم Google Chrome أو Edge على الجوال.'); }
   }
+}
+function openInstallGuide(){
+  if(!document.body){ setTimeout(openInstallGuide, 300); return; }
+  removeInstallHint();
+  var ov = document.querySelector('.modal-overlay');
+  if(ov) ov.remove();
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.alignItems = 'center';
+  var step = function(n, t, d){ return '<div style="display:flex;gap:12px;align-items:flex-start;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px"><div style="width:30px;height:30px;min-width:30px;border-radius:50%;background:linear-gradient(135deg,#0f4f88,#1d7fd6);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:14px">'+n+'</div><div><div style="font-weight:700;font-size:13.5px;color:#111827">'+t+'</div><div style="font-size:12.5px;color:#6b7280;margin-top:3px;line-height:1.6">'+d+'</div></div></div>'; };
+  var html = '';
+  if(isIOS){
+    html = '<div class="modal-head"><h3>📲 إضافة نبراس إلى شاشة الآيفون</h3><button class="modal-close" onclick="closeInstallGuide()">✕</button></div>' +
+      '<div style="display:flex;flex-direction:column;gap:10px">' +
+      step('1', 'اضغط زر «مشاركة» ⬆', 'في المتصفح (سفاري) أسفل الشاشة تجد زر المشاركة على شكل مربع مع سهم لأعلى — اضغط عليه.') +
+      step('2', 'اختر «إضافة إلى الشاشة الرئيسية»', 'من القائمة المنبثقة ابحث عن خيار «إضافة إلى الشاشة الرئيسية» (Add to Home Screen) واضغط عليه.') +
+      step('3', 'اضغط «إضافة»', 'سيُطلب منك تأكيد الاسم — اضغط «إضافة» أعلى اليمين، وستجد الأيقونة على شاشتك الرئيسية.') +
+      '</div>';
+  } else {
+    html = '<div class="modal-head"><h3>📲 تثبيت نبراس على جهازك</h3><button class="modal-close" onclick="closeInstallGuide()">✕</button></div>' +
+      '<div style="display:flex;flex-direction:column;gap:10px">' +
+      step('1', 'اضغط زر «تثبيت» أدناه', 'سيعرض المتصفح نافذة تأكيد التثبيت.') +
+      step('2', 'اضغط «تثبيت» في النافذة', 'ستضاف أيقونة نبراس إلى الشاشة الرئيسية.') +
+      '<button class="btn-primary" style="margin-top:4px" onclick="doInstallApp()">⬇ تثبيت التطبيق الآن</button>' +
+      '</div>';
+  }
+  overlay.innerHTML = '<div class="modal-box" style="max-width:460px">' + html + '</div>';
+  overlay.onclick = function(e){ if(e.target === overlay) closeInstallGuide(); };
+  document.body.appendChild(overlay);
+}
+function closeInstallGuide(){
+  var ov = document.querySelector('.modal-overlay');
+  if(ov) ov.remove();
 }
 function maybeShowInstallHint(force){
   try{
@@ -6983,7 +7029,7 @@ function maybeShowInstallHint(force){
     var tip = isIOS
       ? 'اضغط زر «مشاركة» ⬆ في المتصفح ثم «إضافة إلى الشاشة الرئيسية»'
       : 'ثبّت التطبيق على جهازك لفتحه من الشاشة الرئيسية';
-    d.innerHTML = '<span style="font-size:20px">📲</span><span>' + tip + '</span><button class="btn-primary" style="padding:6px 14px;font-size:13px;flex-shrink:0" onclick="doInstallApp()">' + (isIOS ? 'كيف أثبّت؟' : 'تثبيت') + '</button><button class="close" title="إغلاق" onclick="dismissInstallHint()">✕</button>';
+    d.innerHTML = '<span style="font-size:20px">📲</span><span>' + tip + '</span><button class="btn-primary" style="padding:6px 14px;font-size:13px;flex-shrink:0" onclick="' + (isIOS ? 'openInstallGuide()' : 'doInstallApp()') + '">' + (isIOS ? 'كيف أثبّت؟' : 'تثبيت') + '</button><button class="close" title="إغلاق" onclick="dismissInstallHint()">✕</button>';
     document.body.appendChild(d);
   }catch(e){}
 }
