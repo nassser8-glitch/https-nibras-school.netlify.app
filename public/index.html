@@ -814,6 +814,7 @@ const feminineLabels = {
   'مشاركات المعلم':'مشاركات المعلمة',
   'مشارك':'مشاركة',
   'الأنشطة المشارك فيها':'الأنشطة المشارك فيها',
+  'تقرير تفاعل المعلمين':'تقرير تفاعل المعلمات',
   'لا توجد رسائل مرسلة لهذا المعلم بعد.':'لا توجد رسائل مرسلة لهذه المعلمة بعد.',
   'رسالة مباشرة إلى معلم':'رسالة مباشرة إلى معلمة',
   'اكتب رسالتك — ستظهر للمعلم بالأحمر أعلى صفحته مباشرة...':'اكتب رسالتك — ستظهر للمعلمة بالأحمر أعلى صفحتها مباشرة...',
@@ -6490,13 +6491,14 @@ function removeParticipant(id, pid){
 }
 
 /* ============ التقارير ============ */
-let reportState = { type:'attendance', classId:'', from:'', to:'', view:'table', rows:null };
+let reportState = { type:'attendance', classId:'', from:'', to:'', view:'table', rows:null, period:'month' };
 const reportTypes = [
   { value:'attendance', label:'تقرير الحضور', adminOnly:true }, { value:'absence', label:'تقرير الغياب', adminOnly:true }, { value:'late', label:'تقرير التأخر', adminOnly:true },
   { value:'notes', label:'تقرير الملاحظات' }, { value:'transfers', label:'تقرير التحويلات' }, { value:'class_summary', label:'تقرير الفصول' },
   { value:'messages', label:'تقرير الرسائل', adminOnly:true },
   { value:'activities', label:'تقرير الأنشطة والمشاركين', adminOnly:true },
   { value:'maintenance', label:'تقرير الصيانة', adminOnly:true },
+  { value:'teacher_engagement', label:'تقرير تفاعل المعلمين', adminOnly:true },
 ];
 const reportViews = [
   { value:'table', label:'📋 جدول' }, { value:'bars', label:'📊 سلالم (أعمدة)' }, { value:'pie', label:'🍩 دائرة' },
@@ -6507,17 +6509,24 @@ function renderReports(){
   const isAdmin = isManager(currentUser());
   const types = reportTypes.filter(t => !t.adminOnly || isAdmin);
   if(!isAdmin && reportTypes.find(t => t.value === reportState.type)?.adminOnly) reportState.type = types[0].value;
+  const isEng = reportState.type === 'teacher_engagement';
+  const periodOptions = [
+    { value:'day', label:'اليوم' }, { value:'week', label:'هذا الأسبوع' }, { value:'month', label:'هذا الشهر' },
+    { value:'term', label:'هذا الفصل' }, { value:'year', label:'منذ بداية العام' },
+  ];
   return `
   <h1 class="page-title">التقارير</h1>
   <div class="card mb form-inline">
     <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">نوع التقرير</label>
-      <select id="rType" class="input" style="min-width:170px" onchange="reportState.type=this.value" data-tip="اختر نوع التقرير المطلوب: تقرير الحضور، الغياب، أو التأخر">${types.map(t=>`<option value="${t.value}" ${t.value===reportState.type?'selected':''}>${t.label}</option>`).join('')}</select></div>
+      <select id="rType" class="input" style="min-width:170px" onchange="reportState.type=this.value;reportState.rows=null;reportState.period='month'" data-tip="اختر نوع التقرير المطلوب">${types.map(t=>`<option value="${t.value}" ${t.value===reportState.type?'selected':''}>${t.label}</option>`).join('')}</select></div>
+    ${isEng ? `<div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفترة</label>
+      <select id="rPeriod" class="input" style="min-width:170px" onchange="reportState.period=this.value" data-tip="اختر الفترة الزمنية لقياس تفاعل المعلمين — يُحسب النشاط الفعلي داخل النظام (الغياب والملاحظات والتحويلات والأنشطة والفيديوهات)">${periodOptions.map(p=>`<option value="${p.value}" ${p.value===reportState.period?'selected':''}>${p.label}</option>`).join('')}</select></div>` : `
     <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفصل (اختياري)</label>
       <select id="rClassId" class="input" style="min-width:170px" onchange="reportState.classId=this.value" data-tip="اختر فصلًا محددًا لعرض التقرير له فقط، أو اترك (كل الفصول) لعرض شامل"><option value="">كل الفصول</option>${classes.map(c=>`<option value="${c.id}" ${c.id===reportState.classId?'selected':''}>${escapeHtml(classLabel(c))}</option>`).join('')}</select></div>
     <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">من تاريخ</label><input type="date" id="rFrom" class="input" value="${reportState.from}" onchange="reportState.from=this.value" data-tip="بداية الفترة الزمنية المشمولة في التقرير" /></div>
-    <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">إلى تاريخ</label><input type="date" id="rTo" class="input" value="${reportState.to}" onchange="reportState.to=this.value" data-tip="نهاية الفترة الزمنية المشمولة في التقرير" /></div>
-    <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">طريقة العرض</label>
-      <select id="rView" class="input" style="min-width:150px" onchange="reportState.view=this.value" data-tip="طريقة عرض نتائج التقرير: جدول تفصيلي، أعمدة، أو دائرة بيانية">${reportViews.map(v=>`<option value="${v.value}" ${v.value===reportState.view?'selected':''}>${v.label}</option>`).join('')}</select></div>
+    <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">إلى تاريخ</label><input type="date" id="rTo" class="input" value="${reportState.to}" onchange="reportState.to=this.value" data-tip="نهاية الفترة الزمنية المشمولة في التقرير" /></div>`}
+    ${isEng ? '' : `<div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">طريقة العرض</label>
+      <select id="rView" class="input" style="min-width:150px" onchange="reportState.view=this.value" data-tip="طريقة عرض نتائج التقرير: جدول تفصيلي، أعمدة، أو دائرة بيانية">${reportViews.map(v=>`<option value="${v.value}" ${v.value===reportState.view?'selected':''}>${v.label}</option>`).join('')}</select></div>`}
     <button class="btn-secondary" onclick="previewReport()">🔍 عرض</button>
     <button class="btn-primary" onclick="exportReport()">⬇ تصدير Excel</button>
   </div>
@@ -6605,8 +6614,45 @@ function computeReportRows(){
         'المبلِّغ': m.createdByName || '—',
         'الوصف': m.description || '—'
       }));
+  } else if(type === 'teacher_engagement'){
+    const pr = engagementPeriodRange(reportState.period);
+    const eIn = ds => (!pr.from || ds >= pr.from) && (!pr.to || ds <= pr.to);
+    const teachers = d.users.filter(u => u.role === 'TEACHER' && u.active).sort((a,b) => String(a.name).localeCompare(String(b.name),'ar'));
+    rows = teachers.map(tc => {
+      const id = tc.id;
+      const att = d.attendance.filter(a => a.createdBy === id && eIn(a.date)).length;
+      const notes = d.notes.filter(n => n.createdBy === id && eIn(n.createdAt.slice(0,10))).length;
+      const trans = d.transfers.filter(t => t.createdBy === id && eIn(t.createdAt.slice(0,10))).length;
+      const actsCreated = (d.activities || []).filter(a => a.createdBy === id && eIn((a.createdAt || '').slice(0,10))).length;
+      const actsJoined = (d.activities || []).filter(a => (a.participants || []).includes(id) && eIn(a.date)).length;
+      const vids = (d.videos || []).filter(v => v.createdBy === id && eIn((v.createdAt || '').slice(0,10))).length;
+      const esc = (d.escapeAlerts || []).filter(e => e.teacherId === id && eIn((e.createdAt || '').slice(0,10))).length;
+      const total = att + notes*2 + trans*2 + actsCreated*3 + actsJoined*2 + vids + esc*2;
+      return { 'المعلم': tc.name, 'الحضور المسجل': att, 'الملاحظات': notes, 'التحويلات': trans, 'أنشطة منشأة': actsCreated, 'مشاركة أنشطة': actsJoined, 'فيديوهات': vids, 'تنبيهات هروب': esc, 'إجمالي التفاعل': total };
+    }).sort((a,b) => b['إجمالي التفاعل'] - a['إجمالي التفاعل'] || String(a['المعلم']).localeCompare(String(b['المعلم']),'ar'));
   }
   return rows;
+}
+function engagementPeriodRange(period){
+  const now = new Date();
+  const today = localDateKey(now);
+  const y = now.getFullYear(), m = now.getMonth();
+  if(period === 'day') return { from: today, to: today };
+  if(period === 'week'){
+    const mon = new Date(now);
+    mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    return { from: localDateKey(mon), to: today };
+  }
+  if(period === 'month') return { from: y + '-' + String(m+1).padStart(2,'0') + '-01', to: today };
+  if(period === 'term'){
+    let from;
+    if(m >= 8) from = y + '-09-01';                 // الفصل الأول: سبتمبر–نوفمبر
+    else if(m === 11) from = y + '-12-01';          // الفصل الثاني: ديسمبر–فبراير
+    else if(m <= 1) from = (y-1) + '-12-01';        // يناير–فبراير: بداية الفصل الثاني
+    else from = y + '-03-01';                       // الفصل الثالث: مارس–يونيو
+    return { from, to: today };
+  }
+  return { from: (m >= 8 ? y : y-1) + '-09-01', to: today }; // من بداية العام الدراسي (سبتمبر)
 }
 function renderReportTable(rows){
   if(rows.length === 0) return `<div class="card" style="text-align:center;padding:32px;color:#9ca3af">لا توجد بيانات مطابقة</div>`;
@@ -6622,6 +6668,9 @@ function buildChartData(type, rows){
   }
   if(type === 'activities'){
     return rows.map(r => ({ label: r['المشارك'], value: parseInt(r['عدد الأنشطة المشارك فيها']) || 0 }));
+  }
+  if(type === 'teacher_engagement'){
+    return rows.map(r => ({ label: r['المعلم'], value: parseInt(r['إجمالي التفاعل']) || 0, unit:'' }));
   }
   if(type === 'notes'){
     const sums = {};
@@ -6677,9 +6726,26 @@ function renderPie(data){
   </div></div>`;
 }
 function renderReportResult(rows){
+  if(reportState.type === 'teacher_engagement') return renderColumns(buildChartData(reportState.type, rows));
   if(reportState.view === 'bars') return renderBars(buildChartData(reportState.type, rows));
   if(reportState.view === 'pie') return renderPie(buildChartData(reportState.type, rows));
   return renderReportTable(rows);
+}
+function renderColumns(data){
+  if(data.length === 0) return '<p class="muted small">لا توجد بيانات</p>';
+  const max = Math.max(...data.map(d => d.value), 1);
+  return `<div class="card"><div style="display:flex;align-items:flex-end;gap:8px;height:260px;padding:16px 12px 0;overflow-x:auto;direction:rtl">
+    ${data.map((d,i) => {
+      const h = Math.round(d.value / max * 100);
+      const color = d.color || chartColors[i % chartColors.length];
+      return `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:52px;flex:1">
+        <div style="font-size:12px;font-weight:800;color:#16a34a;margin-bottom:4px">${d.value}</div>
+        <div title="${escapeHtml(d.label)} — ${d.value}" style="width:80%;height:${h}%;min-height:2px;background:${color};border-radius:6px 6px 0 0"></div>
+        <div style="font-size:11px;color:#374151;margin-top:6px;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(d.label)}">${escapeHtml(d.label)}</div>
+      </div>`;
+    }).join('')}
+  </div></div>`;
 }
 function previewReport(){
   reportState.rows = computeReportRows();
@@ -6690,7 +6756,7 @@ function exportReport(){
   if(rows.length === 0){ alert('لا توجد بيانات للتصدير'); return; }
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
-  const title = reportTypes.find(t => t.value===reportState.type)?.label || 'تقرير';
+  const title = tl(reportTypes.find(t => t.value===reportState.type)?.label || 'تقرير');
   XLSX.utils.book_append_sheet(wb, ws, title.slice(0,30));
   XLSX.writeFile(wb, title + '.xlsx');
 }
