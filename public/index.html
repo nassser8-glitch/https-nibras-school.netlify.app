@@ -6636,7 +6636,7 @@ function computeReportRows(){
       const notes = d.notes.filter(n => n.createdBy === id && eIn(n.createdAt.slice(0,10))).length;
       const trans = d.transfers.filter(t => t.createdBy === id && eIn(t.createdAt.slice(0,10))).length;
       const actsCreated = (d.activities || []).filter(a => a.createdBy === id && eIn((a.createdAt || '').slice(0,10))).length;
-      const actsJoined = (d.activities || []).filter(a => isActivityParticipant(a, id) && eIn(a.date)).length;
+      const actsJoined = (d.activities || []).filter(a => isActivityParticipant(a, id) && eIn((a.createdAt || '').slice(0,10))).length;
       const vids = (d.videos || []).filter(v => v.createdBy === id && eIn((v.createdAt || '').slice(0,10))).length;
       const esc = (d.escapeAlerts || []).filter(e => e.teacherId === id && eIn((e.createdAt || '').slice(0,10))).length;
       const total = att + notes*2 + trans*2 + actsCreated*3 + actsJoined*2 + vids + esc*2;
