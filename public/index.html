@@ -2080,7 +2080,6 @@ function renderLayout(user, hash){
             <div style="text-align:left">
               <div class="topbar-user-name">${escapeHtml(user.name)}</div>
               <div class="topbar-user-role">${roleLabel(user.role)}</div>
-              ${schoolWeekHTML(user)}
             </div>
             ${user.role==='ADMIN' ? `<button class="btn-secondary" style="padding:7px 12px" onclick="switchSchool()">🔀 تبديل القسم</button>` : ''}
             <button class="btn-secondary" style="padding:7px 12px" onclick="logout()">🚪 خروج</button>
@@ -2664,6 +2663,7 @@ function renderDashboard(){
       <div>
         <p class="dash-greet-title">${greetWord} ${escapeHtml(firstName)} 🌟</p>
         <p class="dash-greet-sub">بسم الله — نبدأ يومنا بالتوفيق والنجاح</p>
+        ${user.role === 'ADMIN' ? `<div style="margin-top:6px">${schoolWeekHTML(user)}</div>` : ''}
       </div>
     </div>
     ${(user.role === 'ADMIN' || user.role === 'AGENT') ? `
