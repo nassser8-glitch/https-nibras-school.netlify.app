@@ -6934,20 +6934,58 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     navigator.serviceWorker.register('sw.js').catch(function(){});
   });
 }
-/* لافتة تثبيت مخصصة لأجهزة iPhone (سفاري) — تظهر مرة واحدة خارج وضع التطبيق */
-function maybeShowInstallHint(){
-  try{
-    if(localStorage.getItem('nibrasInstallHintDismissed')) return;
+/* ============ لافتة تثبيت التطبيق على الجوال ============ */
+var __deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault();
+  __deferredInstallPrompt = e;
+  maybeShowInstallHint(true);
+});
+window.addEventListener('appinstalled', function(){
+  __deferredInstallPrompt = null;
+  removeInstallHint();
+  try{ localStorage.setItem('nibrasInstallHintDismissed', '1'); }catch(err){}
+});
+function removeInstallHint(){
+  var el = document.getElementById('installHintBar');
+  if(el && el.parentNode) el.parentNode.removeChild(el);
+}
+function dismissInstallHint(){
+  removeInstallHint();
+  try{ localStorage.setItem('nibrasInstallHintDismissed', '1'); }catch(err){}
+}
+function doInstallApp(){
+  if(__deferredInstallPrompt){
+    __deferredInstallPrompt.prompt();
+    __deferredInstallPrompt.userChoice.then(function(){ __deferredInstallPrompt = null; });
+  } else {
     var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    if(!isIOS || window.navigator.standalone === true) return;
-    if(!document.body){ setTimeout(maybeShowInstallHint, 300); return; }
+    if(isIOS){ alert('للتثبيت: افتح زر «مشاركة» ⬆ في المتصفح ثم اختر «إضافة إلى الشاشة الرئيسية».'); }
+    else { alert('لا يمكن التثبيت من هذا المتصفح — استخدم Google Chrome أو Edge على الجوال.'); }
+  }
+}
+function maybeShowInstallHint(force){
+  try{
+    if(!force && localStorage.getItem('nibrasInstallHintDismissed')) return;
+    var standalone = window.navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    if(standalone) return;
+    if(!document.body){ setTimeout(function(){ maybeShowInstallHint(force); }, 300); return; }
+    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    var isAndroid = /Android/.test(navigator.userAgent);
+    var canInstall = __deferredInstallPrompt || isIOS || isAndroid;
+    if(!canInstall) return;
+    removeInstallHint();
     var d = document.createElement('div');
+    d.id = 'installHintBar';
     d.className = 'install-hint';
-    d.innerHTML = '<span>📲 للتثبيت على جهازك: زر المشاركة ← «إضافة إلى الشاشة الرئيسية»</span><button class="close" title="إغلاق" onclick="this.parentNode.remove();try{localStorage.setItem(\'nibrasInstallHintDismissed\',\'1\')}catch(e){}">✕</button>';
+    var tip = isIOS
+      ? 'اضغط زر «مشاركة» ⬆ في المتصفح ثم «إضافة إلى الشاشة الرئيسية»'
+      : 'ثبّت التطبيق على جهازك لفتحه من الشاشة الرئيسية';
+    d.innerHTML = '<span style="font-size:20px">📲</span><span>' + tip + '</span><button class="btn-primary" style="padding:6px 14px;font-size:13px;flex-shrink:0" onclick="doInstallApp()">' + (isIOS ? 'كيف أثبّت؟' : 'تثبيت') + '</button><button class="close" title="إغلاق" onclick="dismissInstallHint()">✕</button>';
     document.body.appendChild(d);
   }catch(e){}
 }
-setTimeout(maybeShowInstallHint, 1500);
+setTimeout(function(){ maybeShowInstallHint(false); }, 1200);
 </script>
 </body>
 </html>
