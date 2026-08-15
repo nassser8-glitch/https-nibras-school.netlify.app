@@ -261,6 +261,8 @@
   .abs-pop-exc:hover { background:#dbeafe; }
   .abs-pop-esc { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; margin-bottom:4px; }
   .abs-pop-esc:hover { background:#fee2e2; }
+  .abs-pop-nor { background:#f9fafb; color:#374151; border:1px solid #e5e7eb; margin-bottom:4px; }
+  .abs-pop-nor:hover { background:#f3f4f6; }
   .abs-pop-hint { font-size:10.5px; color:#9ca3af; text-align:center; border-top:1px dashed #e5e7eb; padding-top:6px; }
   .abs-type-badge { display:inline-block; font-size:10px; font-weight:800; border-radius:999px; padding:1px 8px; margin-right:6px; vertical-align:middle; }
   .abs-type-badge.exc { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
@@ -4283,6 +4285,7 @@ function openAbsentPopup(ev, sid){
     <div class="abs-pop-title">اختر نوع الغياب</div>
     <div class="abs-pop-opt abs-pop-exc" onclick="chooseAbsentType('${sid}','EXCUSED')">🔵 مستأذن</div>
     <div class="abs-pop-opt abs-pop-esc" onclick="chooseAbsentType('${sid}','ESCAPE')">🔴 هارب من الحصة</div>
+    <div class="abs-pop-opt abs-pop-nor" onclick="setNormalAbsence('${sid}')">⚪ غياب عادي</div>
     <div class="abs-pop-hint">بدون اختيار = غياب عادي من بداية اليوم</div>`;
   document.body.appendChild(pop);
   const pw = pop.offsetWidth, ph = pop.offsetHeight;
@@ -4317,6 +4320,7 @@ function closeAbsentPopupEsc(e){
   }
 }
 function setNormalAbsence(sid){
+  closeAbsentPopup();
   if(attendanceState.absenceType) delete attendanceState.absenceType[sid];
   attendanceState.draft[sid] = 'ABSENT';
   rerenderAttendance();
