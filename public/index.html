@@ -2907,7 +2907,7 @@ function renderDashActivities(d, isAdmin){
   const acts = (d.activities || []).slice().sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,3);
   const card = a => {
     const t = activityTypes.find(x => x.value === a.type) || activityTypes[activityTypes.length-1];
-    const n = (a.participants || []).length;
+    const n = activityPartIds(a).length;
     return `<div class="card" style="cursor:pointer" onclick="location.hash='#/activity/${a.id}'" title="فتح النشاط وتسجيل المشاركين">
       <div style="display:flex;align-items:center;gap:10px">
         <span style="font-size:22px">${t.icon}</span>
@@ -5254,7 +5254,7 @@ function buildTeacherDetail(type, teacherId){
     rows = list.length ? list.map(n => { const s = d.students.find(x => x.id === n.studentId); const nm = s ? s.fullName : '—'; const ic = n.type === 'POSITIVE' ? '⭐' : '⚠️'; return dlRow(`${ic} ${escapeHtml(nm)}`, `${escapeHtml(n.text || '')} · ${fmtTime(n.createdAt)}`); }).join('') : DL_EMPTY;
   } else if(type === 'ACTIVITIES'){
     title = tl('الأنشطة المشارك فيها');
-    const list = (d.activities || []).filter(a => (a.participants || []).includes(teacherId)).sort((a,b) => String(b.date).localeCompare(String(a.date)));
+    const list = (d.activities || []).filter(a => isActivityParticipant(a, teacherId)).sort((a,b) => String(b.date).localeCompare(String(a.date)));
     rows = list.length ? list.map(a => {
       const t = activityTypes.find(x => x.value === a.type);
       const req = (a.requests || []).find(r => r.teacherId === teacherId && r.status === 'APPROVED');
@@ -5292,14 +5292,14 @@ function renderTeacherPage(teacherId){
   const st = teacherStats(user);
   const assigned = d.classes.filter(c => (c.teacherIds||[]).includes(user.id));
   const acts = d.activities || [];
-  const actPartic = acts.filter(a => (a.participants || []).includes(user.id));
+  const actPartic = acts.filter(a => isActivityParticipant(a, user.id));
   const actReqs = acts.flatMap(a => (a.requests || []).filter(r => r.teacherId === user.id).map(r => ({ a, r })));
   const actCount = actPartic.length;
   const actPending = actReqs.filter(x => x.r.status === 'PENDING').length;
   const actRejected = actReqs.filter(x => x.r.status === 'REJECTED').length;
   const partRows = acts.map(a => {
     const req = (a.requests || []).find(r => r.teacherId === user.id);
-    const participated = (a.participants || []).includes(user.id);
+    const participated = isActivityParticipant(a, user.id);
     if(!participated && !req) return null;
     const t = activityTypes.find(x => x.value === a.type);
     const icon = t ? t.icon : '🎉';
@@ -6319,9 +6319,9 @@ function renderActivityDetail(id){
   const canRequestPart = isTeacher || isCounselor;
   const isMgr = isAdm || isAgent;
   const t = activityTypes.find(x => x.value === a.type) || activityTypes[activityTypes.length-1];
-  const parts = (a.participants || []).map(pid => userById(pid)).filter(Boolean);
+  const parts = activityPartIds(a).map(pid => userById(pid)).filter(Boolean);
   const teachers = d.users.filter(u => (u.role === 'TEACHER' || u.role === 'COUNSELOR') && u.active).sort((x,y) => String(x.name).localeCompare(String(y.name)));
-  const notAdded = teachers.filter(tc => !(a.participants || []).includes(tc.id));
+  const notAdded = teachers.filter(tc => !activityPartIds(a).includes(tc.id));
   const reqs = (a.requests || []).slice().sort((x,y) => String(y.createdAt||'').localeCompare(String(x.createdAt||'')));
   const partRows = parts.length ? parts.map(p => `
     <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
@@ -6489,6 +6489,18 @@ function removeParticipant(id, pid){
   saveDB(d);
   renderApp();
 }
+// هل المعلم مشارك فعليًا في النشاط؟ (مضاف ضمن المشاركين، أو طلبه معتمد)
+function isActivityParticipant(a, id){
+  if(!a) return false;
+  if((a.participants || []).includes(id)) return true;
+  return (a.requests || []).some(r => r.teacherId === id && r.status === 'APPROVED');
+}
+// قائمة المشاركين الفعليين: من أُضيف مباشرة + من اعتُمد طلبهم
+function activityPartIds(a){
+  const ids = new Set(a.participants || []);
+  (a.requests || []).forEach(r => { if(r.status === 'APPROVED') ids.add(r.teacherId); });
+  return [...ids];
+}
 
 /* ============ التقارير ============ */
 let reportState = { type:'attendance', classId:'', from:'', to:'', view:'table', rows:null, period:'month' };
@@ -6594,7 +6606,7 @@ function computeReportRows(){
     const total = inActs.length;
     const teachers = d.users.filter(u => (u.role === 'TEACHER' || u.role === 'COUNSELOR') && u.active).sort((a,b) => String(a.name).localeCompare(String(b.name)));
     rows = teachers.map(tc => {
-      const mine = inActs.filter(a => (a.participants || []).includes(tc.id));
+      const mine = inActs.filter(a => isActivityParticipant(a, tc.id));
       const pct = total ? Math.round(mine.length / total * 100) : 0;
       return { 'المشارك': tc.name, 'عدد الأنشطة المشارك فيها': mine.length, 'الأنشطة المشارك فيها': mine.length ? mine.map(a => a.name).join('، ') : '—', 'إجمالي الأنشطة': total, 'نسبة المشاركة': pct + '%' };
     }).sort((a,b) => (parseInt(b['عدد الأنشطة المشارك فيها'])||0) - (parseInt(a['عدد الأنشطة المشارك فيها'])||0));
@@ -6624,7 +6636,7 @@ function computeReportRows(){
       const notes = d.notes.filter(n => n.createdBy === id && eIn(n.createdAt.slice(0,10))).length;
       const trans = d.transfers.filter(t => t.createdBy === id && eIn(t.createdAt.slice(0,10))).length;
       const actsCreated = (d.activities || []).filter(a => a.createdBy === id && eIn((a.createdAt || '').slice(0,10))).length;
-      const actsJoined = (d.activities || []).filter(a => (a.participants || []).includes(id) && eIn(a.date)).length;
+      const actsJoined = (d.activities || []).filter(a => isActivityParticipant(a, id) && eIn(a.date)).length;
       const vids = (d.videos || []).filter(v => v.createdBy === id && eIn((v.createdAt || '').slice(0,10))).length;
       const esc = (d.escapeAlerts || []).filter(e => e.teacherId === id && eIn((e.createdAt || '').slice(0,10))).length;
       const total = att + notes*2 + trans*2 + actsCreated*3 + actsJoined*2 + vids + esc*2;
