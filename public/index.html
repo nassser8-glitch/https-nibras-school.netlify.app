@@ -4151,13 +4151,14 @@ function renderAttendance(){
   /* إذا كان الكشف يحتوي غيابًا سجّله معلم سابق (في حصة سابقة) نعرض رسالة تثبيت نفس الغياب أو إضافة غياب جديد */
   if(!isTeachers && attendanceState.classId && !attendanceState.absencePrompted){
     const me = currentUser();
-    const savedAbsentCount = students.filter(s => {
+    const savedAbsent = students.filter(s => {
       const rec = d.attendance.find(a => a.studentId === s.id && a.date === attendanceState.date);
       return rec && rec.status === 'ABSENT' && rec.createdBy !== (me && me.id);
-    }).length;
-    if(savedAbsentCount > 0){
+    });
+    if(savedAbsent.length > 0){
       attendanceState.absencePrompted = true;
-      setTimeout(() => showSavedAbsencePrompt(savedAbsentCount), 0);
+      const names = savedAbsent.map(s => s.fullName || s.name);
+      setTimeout(() => showSavedAbsencePrompt(savedAbsent.length, names), 0);
     }
   }
 
@@ -4241,15 +4242,19 @@ function rerenderAttendance(){
   if(page) page.innerHTML = renderAttendance();
 }
 /* رسالة «تم إدخال الغياب»: تظهر عندما يفتح معلم كشفًا سُجّل غيابه مسبقًا (في حصة سابقة) — يؤكد نفس الغياب أو يضيف غيابًا جديدًا */
-function showSavedAbsencePrompt(count){
+function showSavedAbsencePrompt(count, names){
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'savedAbsOverlay';
+  const listHtml = (names && names.length) ? `<div style="max-height:180px;overflow-y:auto;text-align:right;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;margin:8px 0 12px;font-size:13px;line-height:1.8">
+    ${names.map(n => `✕ ${escapeHtml(n)}`).join('<br>')}
+  </div>` : '';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:440px;text-align:center">
       <div class="modal-head" style="justify-content:center"><h3 style="font-size:18px">✅ تم إدخال الغياب</h3><button class="modal-close" onclick="closeSavedAbsencePrompt()">✕</button></div>
-      <p style="margin:4px 0 6px;font-size:15px;color:#374151">سُجِّل غياب <b style="color:#dc2626">${count}</b> ${count === 1 ? 'طالب' : 'طلاب'} في هذا الكشف مسبقًا.</p>
-      <p style="margin:0 0 16px;font-size:13.5px;color:#6b7280">هل تريد تثبيت نفس الغياب أم إضافة غياب جديد؟</p>
+      <p style="margin:4px 0 6px;font-size:15px;color:#374151">سُجِّل غياب <b style="color:#dc2626">${count}</b> ${count === 1 ? 'طالب' : 'طلاب'} في هذا الكشف مسبقًا:</p>
+      ${listHtml}
+      <p style="margin:0 0 16px;font-size:13.5px;color:#6b7280">تأكد من الأسماء ثم اختر: تثبيت نفس الغياب أم إضافة غياب جديد؟</p>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
         <button class="btn-primary" style="min-width:150px" onclick="confirmSameAbsence()">✓ تثبيت نفس الغياب</button>
         <button class="btn-secondary" style="min-width:150px" onclick="addNewAbsence()">＋ إضافة غياب جديد</button>
