@@ -5976,7 +5976,7 @@ function maintAction(id, action){
   else if(action === 'approve'){ if(!maintCanDecide(user)) return; r.status = 'معتمد'; r.approvedAt = todayStr(); r.approvedBy = user.id; r.rejectReason = undefined; }
   else if(action === 'reject'){ if(!maintCanDecide(user)) return; const why = prompt('سبب الرفض:'); if(why === null) return; r.status = 'مرفوض'; r.rejectReason = String(why).trim(); r.rejectedAt = todayStr(); r.rejectedBy = user.id; }
   else if(action === 'start'){ if(!maintCanFollow(user)) return; r.status = 'قيد التنفيذ'; r.startedAt = todayStr(); }
-  else if(action === 'complete'){ if(!maintCanFollow(user)) return; const raw = prompt('تكلفة الصيانة (بالريال):', '0'); if(raw === null) return; r.cost = Math.max(0, Number(String(raw).replace(/,/g, '')) || 0); r.status = 'مكتمل'; r.completedAt = todayStr(); }
+  else if(action === 'complete'){ if(!maintCanFollow(user)) return; const raw = prompt('تكلفة الصيانة (بالروبية):', '0'); if(raw === null) return; r.cost = Math.max(0, Number(String(raw).replace(/,/g, '')) || 0); r.status = 'مكتمل'; r.completedAt = todayStr(); }
   else return;
   saveDB(d);
   renderApp();
@@ -6057,7 +6057,7 @@ function renderMaintenance(){
             <td>${escapeHtml(r.category || '')}</td>
             <td>${maintPriorityBadge(r.priority)}</td>
             <td>${maintStatusBadge(r.status)}</td>
-            <td>${maintCost(r)} ريال</td>
+            <td>${maintCost(r)} روبية</td>
             <td>${by ? escapeHtml(by.name) : '—'}</td>
             <td><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-start;align-items:center"><button class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="viewMaintReport('${r.id}')">عرض</button>${maintActionsFor(r, user)}</div></td>
           </tr>`;
@@ -6076,7 +6076,7 @@ function renderMaintenance(){
     ${stat('جديدة', statusCount('جديد'), MAINT_STATUS_COLORS['جديد'])}
     ${stat('بانتظار اعتماد الوكيل', statusCount('بانتظار اعتماد الوكيل'), MAINT_STATUS_COLORS['بانتظار اعتماد الوكيل'])}
     ${stat('قيد التنفيذ', statusCount('قيد التنفيذ'), MAINT_STATUS_COLORS['قيد التنفيذ'])}
-    ${stat('إجمالي التكلفة', totalCost.toLocaleString('ar-SA') + ' ريال', '#047857')}
+    ${stat('إجمالي التكلفة', totalCost.toLocaleString('ar-SA') + ' روبية', '#047857')}
   </div>` : ''}
   ${filterRow}
   ${table}`;
@@ -6102,7 +6102,7 @@ function viewMaintReport(id){
     dlRow('نوع الطلب', r.type + (r.device ? ' — ' + r.device : '') + (r.inkType ? ' — حبر ' + r.inkType : '')),
     dlRow('التصنيف', r.category || ''),
     dlRow('الأولوية', r.priority || ''),
-    dlRow('الحالة', r.status + (r.cost ? ' — التكلفة ' + maintCost(r) + ' ريال' : '')),
+    dlRow('الحالة', r.status + (r.cost ? ' — التكلفة ' + maintCost(r) + ' روبية' : '')),
     dlRow('بواسطة', by ? by.name : '—'),
     dlRow('الوصف', r.description || '')
   ].join('');
@@ -6621,7 +6621,7 @@ function computeReportRows(){
         'التصنيف': m.category || '—',
         'الأولوية': m.priority || '—',
         'الحالة': m.status || '—',
-        'التكلفة': Number(m.cost || 0).toLocaleString('ar-SA') + ' ريال',
+        'التكلفة': Number(m.cost || 0).toLocaleString('ar-SA') + ' روبية',
         'المبلِّغ': m.createdByName || '—',
         'الوصف': m.description || '—'
       }));
