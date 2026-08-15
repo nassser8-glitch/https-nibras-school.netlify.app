@@ -772,7 +772,7 @@ function attendancePoints(status){
   if(status === 'LATE') return -1;   // التأخر
   return 0;
 }
-const schoolNames = { BOYS:'مدرسة البنين', GIRLS:'مدرسة البنات' };
+const schoolNames = { BOYS:'قسم البنين', GIRLS:'قسم البنات' };
 
 const feminineLabels = {
   'الطلاب':'الطالبات', 'طالب':'طالبة', 'الطالب':'الطالبة',
@@ -1878,7 +1878,7 @@ function renderSchoolSelect(){
           <div style="flex:1;min-width:0">
             <div class="school-panel-header" style="margin-bottom:8px">
               <span class="school-panel-icon">${icon}</span>
-              <h2 class="school-panel-title" style="font-size:17px">مدرسة ${label}</h2>
+              <h2 class="school-panel-title" style="font-size:17px">قسم ${label}</h2>
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:4px 8px;font-size:12px;color:#6b7280">
               <span><span style="color:#16a34a;font-weight:600">${data.present}</span> حاضر</span>
@@ -1894,7 +1894,7 @@ function renderSchoolSelect(){
           <div class="school-stat-box"><span class="num">${data.teachers}</span><span class="lbl">${tls('المعلمون')}</span></div>
           <div class="school-stat-box"><span class="num">${data.pendingTransfers}</span><span class="lbl">التحويلات</span></div>
         </div>
-        <button class="school-enter-btn">دخول إلى مدرسة ${label}</button>
+        <button class="school-enter-btn">دخول إلى قسم ${label}</button>
       </div>`;
   }
 
