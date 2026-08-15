@@ -253,6 +253,18 @@
   @keyframes marqueeBar { 0%,100%{transform:translateX(0)} 50%{transform:translateX(-90px)} }
   .notice-bar { background:linear-gradient(135deg,var(--primary,#0f4f88),var(--accent,#1d7fd6)); color:#fff; border-radius:10px; overflow:hidden; padding:9px 0; margin-bottom:12px; box-shadow:0 2px 12px rgba(0,0,0,.15); }
   .notice-bar .line { display:inline-block; white-space:nowrap; font-size:14px; font-weight:800; padding:0 16px; animation:marqueeBar 10s ease-in-out infinite; }
+  .abs-popup { position:fixed; z-index:9999; background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.22); padding:10px; min-width:200px; }
+  .abs-pop-title { font-size:12px; font-weight:800; color:#374151; margin-bottom:8px; text-align:center; }
+  .abs-pop-opt { cursor:pointer; font-size:13px; font-weight:700; padding:9px 12px; border-radius:8px; margin-bottom:6px; transition:.15s; }
+  .abs-pop-opt:hover { transform:translateY(-1px); }
+  .abs-pop-exc { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+  .abs-pop-exc:hover { background:#dbeafe; }
+  .abs-pop-esc { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; margin-bottom:4px; }
+  .abs-pop-esc:hover { background:#fee2e2; }
+  .abs-pop-hint { font-size:10.5px; color:#9ca3af; text-align:center; border-top:1px dashed #e5e7eb; padding-top:6px; }
+  .abs-type-badge { display:inline-block; font-size:10px; font-weight:800; border-radius:999px; padding:1px 8px; margin-right:6px; vertical-align:middle; }
+  .abs-type-badge.exc { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+  .abs-type-badge.esc { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; animation:msgPulse 1.2s infinite; }
 
   @media (max-width:900px) {
     .main { padding:14px; }
@@ -2472,6 +2484,15 @@ function checkMsgBeep(){
   const msgs = adminMsgsFor(user.id).filter(m => !m.dismissed && !m.revealed && m.senderRole !== 'TRANSFER');
   if(msgs.length){
     try { playMsgAlert(); }catch(e){}
+    return;
+  }
+  // تنبيه هروب من الحصة (من قاعدة البيانات المتزامنة) — يقرع الجرس للوكيل على أي جهاز
+  if(user.role === 'AGENT'){
+    try{
+      const d = loadDB();
+      const pending = (d.escapeAlerts||[]).some(a => a.date === todayStr() && a.type === 'ESCAPE' && !a.dismissed);
+      if(pending){ try { playMsgAlert(); }catch(e){} }
+    }catch(e){}
   }
 }
 function startMsgBeepLoop(){
@@ -2555,16 +2576,17 @@ function renderAdminMsgAlerts(){
   return `
   <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
     ${msgs.map(m => {
-      // المدير: أحمر — الوكيل/الوكيلة: برتقالي — الموجه/الموجهة: أخضر — تحويل: بنفسجي
+      // المدير: أحمر — الوكيل/الوكيلة: برتقالي — الموجه/الموجهة: أخضر — تحويل: بنفسجي — هروب من الحصة: أحمر مع جرس
       const fromTransfer = m.senderRole === 'TRANSFER';
       const fromCounselor = m.senderRole === 'COUNSELOR';
       const fromAgent = m.senderRole === 'AGENT';
-      const col = fromTransfer ? '#7c3aed' : (fromCounselor ? '#16a34a' : (fromAgent ? '#ea580c' : '#dc2626'));
-      const colDark = fromTransfer ? '#6d28d9' : (fromCounselor ? '#15803d' : (fromAgent ? '#c2410c' : '#b91c1c'));
-      const colText = fromTransfer ? '#4c1d95' : (fromCounselor ? '#14532d' : (fromAgent ? '#9a3412' : '#7f1d1d'));
-      const bg = fromTransfer ? 'linear-gradient(135deg,#f5f3ff,#ede9fe)' : (fromCounselor ? 'linear-gradient(135deg,#f0fdf4,#dcfce7)' : (fromAgent ? 'linear-gradient(135deg,#fff7ed,#ffedd5)' : 'linear-gradient(135deg,#fef2f2,#fee2e2)'));
-      const senderLabel = fromTransfer ? '📨 إشعار تحويل' : (fromCounselor ? ('💬 رسالة من ' + tl(targetLabels.COUNSELOR)) : (fromAgent ? ('🚨 رسالة من ' + tl(targetLabels.AGENT)) : '🚨 رسالة مهمة من المدير'));
-      const badgeLabel = fromTransfer ? (m._school ? (m._school === 'BOYS' ? 'تحويل بنين' : 'تحويل بنات') : 'تحويل') : (fromCounselor ? tl(targetLabels.COUNSELOR) : (fromAgent ? tl(targetLabels.AGENT) : 'مهمة'));
+      const fromEscape = m.senderRole === 'ESCAPE';
+      const col = fromEscape ? '#dc2626' : (fromTransfer ? '#7c3aed' : (fromCounselor ? '#16a34a' : (fromAgent ? '#ea580c' : '#dc2626')));
+      const colDark = fromEscape ? '#991b1b' : (fromTransfer ? '#6d28d9' : (fromCounselor ? '#15803d' : (fromAgent ? '#c2410c' : '#b91c1c')));
+      const colText = fromEscape ? '#7f1d1d' : (fromTransfer ? '#4c1d95' : (fromCounselor ? '#14532d' : (fromAgent ? '#9a3412' : '#7f1d1d')));
+      const bg = fromEscape ? 'linear-gradient(135deg,#fef2f2,#fecaca)' : (fromTransfer ? 'linear-gradient(135deg,#f5f3ff,#ede9fe)' : (fromCounselor ? 'linear-gradient(135deg,#f0fdf4,#dcfce7)' : (fromAgent ? 'linear-gradient(135deg,#fff7ed,#ffedd5)' : 'linear-gradient(135deg,#fef2f2,#fee2e2)')));
+      const senderLabel = fromEscape ? '🔔 تنبيه هروب من الحصة' : (fromTransfer ? '📨 إشعار تحويل' : (fromCounselor ? ('💬 رسالة من ' + tl(targetLabels.COUNSELOR)) : (fromAgent ? ('🚨 رسالة من ' + tl(targetLabels.AGENT)) : '🚨 رسالة مهمة من المدير')));
+      const badgeLabel = fromEscape ? 'عاجل' : (fromTransfer ? (m._school ? (m._school === 'BOYS' ? 'تحويل بنين' : 'تحويل بنات') : 'تحويل') : (fromCounselor ? tl(targetLabels.COUNSELOR) : (fromAgent ? tl(targetLabels.AGENT) : 'مهمة')));
       if(!m.revealed && !(user.role === 'ADMIN' && m.senderRole === 'TRANSFER')){
         return `
         <div style="flex:${flexW(m)} 1 0;min-width:200px;background:${bg};border:2px solid ${col};border-radius:12px;padding:10px 12px;box-shadow:0 2px 10px rgba(220,38,38,.2);animation:msgPulse 1.5s infinite;display:flex;flex-direction:column">
@@ -2590,6 +2612,39 @@ function renderAdminMsgAlerts(){
 
 /* ============ لوحة التحكم ============ */
 function fmtRate(r){ return r === null ? '—' : (Math.round(r*10)/10) + '%'; }
+/* تنبيه هروب من الحصة: بطاقة حمراء نابضة تظهر للوكيل/المدير فور حدوثها (من قاعدة البيانات المتزامنة) */
+function renderEscapeAlerts(){
+  const user = currentUser();
+  if(!user || (user.role !== 'AGENT' && user.role !== 'ADMIN')) return '';
+  const d = loadDB();
+  const today = todayStr();
+  const alerts = (d.escapeAlerts||[]).filter(a => a.date === today && a.type === 'ESCAPE' && !a.dismissed).sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  if(alerts.length === 0) return '';
+  return `
+  <div style="margin-bottom:14px">
+    ${alerts.map(a => {
+      const s = studentById(a.studentId);
+      const sName = escapeHtml(a.studentName || s?.fullName || s?.name || 'طالب');
+      const clsTxt = escapeHtml(a.className || (s?.classId ? classLabel(classById(s.classId)) : ''));
+      return `
+      <div style="display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#fef2f2,#fecaca);border:2px solid #dc2626;border-radius:12px;padding:10px 14px;box-shadow:0 2px 10px rgba(220,38,38,.25);animation:msgPulse 1.5s infinite;margin-bottom:8px">
+        <div style="font-size:22px">🚨🔔</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:900;color:#b91c1c">هروب من الحصة: ${sName} ${clsTxt ? '— ' + clsTxt : ''}</div>
+          <div style="font-size:11px;color:#7f1d1d;margin-top:2px">سجّله ${escapeHtml(a.teacherName || '—')} · 🕐 ${fmtTime(a.createdAt)}</div>
+        </div>
+        <button class="btn-primary" style="background:#dc2626;border-color:#dc2626;padding:6px 12px;font-size:12px;flex-shrink:0" onclick="dismissEscapeAlert('${a.id}')">✓ تابعته</button>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function dismissEscapeAlert(id){
+  const d = loadDB();
+  const a = (d.escapeAlerts||[]).find(x => x.id === id);
+  if(a) a.dismissed = true;
+  saveDB(d);
+  renderApp();
+}
 function renderDashboard(){
   const d = loadDB();
   const user = currentUser();
@@ -2830,6 +2885,7 @@ function renderDashboard(){
   </div>`;
 
   return `
+  ${renderEscapeAlerts()}
   ${renderAdminMsgAlerts()}
   ${hero}
   ${attPanel}
@@ -2978,16 +3034,19 @@ function showTodayAttendance(){
   recs.sort((a,b) => (order[a.status]||0) - (order[b.status]||0));
   const ptsMapAttList = studentPointsMap();
   const statusBadge = { PRESENT:['حاضر','#16a34a'], LATE:['متأخر','#d97706'], ABSENT:['غائب','#dc2626'] };
+  const absTypeLabel = t => t === 'EXCUSED' ? 'مستأذن' : (t === 'ESCAPE' ? 'هارب من الحصة' : 'غائب');
+  const absTypeColor = t => t === 'EXCUSED' ? '#1d4ed8' : (t === 'ESCAPE' ? '#b91c1c' : '#dc2626');
   const rows = recs.length === 0 ? `<tr><td colspan="4" style="text-align:center;padding:20px;color:#9ca3af">لا يوجد حضور مسجل اليوم</td></tr>` :
     recs.map(a => {
       const s = studentById(a.studentId);
       const cls = s?.classId ? classById(s.classId) : null;
-      const [label, color] = statusBadge[a.status] || ['—','#6b7280'];
+      const isAbs = a.status === 'ABSENT';
+      const [label, color] = isAbs ? [absTypeLabel(a.absenceType), absTypeColor(a.absenceType)] : (statusBadge[a.status] || ['—','#6b7280']);
       return `<tr>
         <td>${studentNameLink(s, s ? (ptsMapAttList[s.id] || 0) : undefined)}</td>
         <td>${escapeHtml(s?.studentNo || '—')}</td>
         <td>${cls ? escapeHtml(classLabel(cls)) : '—'}</td>
-        <td style="font-weight:800;color:${color}">${label}</td>
+        <td style="font-weight:800;color:${color}">${label}${isAbs && a.absenceType ? (a.absenceType === 'EXCUSED' ? ' 🔵' : ' 🚨') : ''}</td>
       </tr>`;
     }).join('');
   const overlay = document.createElement('div');
@@ -3106,16 +3165,19 @@ function showAttendanceList(status){
   const today = todayStr();
   const recs = d.attendance.filter(a => a.date === today && a.status === status && visibleIds.has(a.studentId));
   const isAbsent = status === 'ABSENT';
+  const absTypeLabel = t => t === 'EXCUSED' ? 'مستأذن' : (t === 'ESCAPE' ? 'هارب من الحصة' : 'غائب');
   const ptsMapAttList = studentPointsMap();
   const rows = recs.length === 0 ? `<tr><td colspan="4" style="text-align:center;padding:20px;color:#9ca3af">لا يوجد ${isAbsent ? 'غائبون' : 'متأخرون'} اليوم</td></tr>` :
     recs.map(a => {
       const s = studentById(a.studentId);
       const cls = s?.classId ? classById(s.classId) : null;
+      const stLabel = isAbsent ? absTypeLabel(a.absenceType) : 'متأخر';
+      const stColor = isAbsent ? (a.absenceType === 'EXCUSED' ? '#1d4ed8' : (a.absenceType === 'ESCAPE' ? '#b91c1c' : '#dc2626')) : '#d97706';
       return `<tr>
         <td>${studentNameLink(s, s ? (ptsMapAttList[s.id] || 0) : undefined)}</td>
         <td>${escapeHtml(s?.studentNo || '—')}</td>
         <td>${cls ? escapeHtml(classLabel(cls)) : '—'}</td>
-        <td style="font-weight:800;color:${isAbsent ? '#dc2626' : '#d97706'}">${isAbsent ? 'غائب' : 'متأخر'}</td>
+        <td style="font-weight:800;color:${stColor}">${stLabel}${isAbsent && a.absenceType ? (a.absenceType === 'EXCUSED' ? ' 🔵' : ' 🚨') : ''}</td>
       </tr>`;
     }).join('');
   const overlay = document.createElement('div');
@@ -4045,7 +4107,7 @@ function importStudents(evt){
 }
 
 /* ============ الحضور ============ */
-let attendanceState = { classId:null, date: todayStr(), draft:{}, sLateType:{}, sLateMin:{}, tDraft:{}, tLateType:{}, tLateMin:{} };
+let attendanceState = { classId:null, date: todayStr(), draft:{}, absenceType:{}, sLateType:{}, sLateMin:{}, tDraft:{}, tLateType:{}, tLateMin:{} };
 function renderAttendance(){
   const d = loadDB();
   const classes = getClassesSorted();
@@ -4062,12 +4124,14 @@ function renderAttendance(){
     : [];
 
   attendanceState.draft = attendanceState.draft || {};
+  attendanceState.absenceType = attendanceState.absenceType || {};
   attendanceState.sLateType = attendanceState.sLateType || {};
   attendanceState.sLateMin = attendanceState.sLateMin || {};
   students.forEach(s => {
     if(attendanceState.draft[s.id] == null){
       const rec = d.attendance.find(a => a.studentId === s.id && a.date === attendanceState.date);
       attendanceState.draft[s.id] = rec ? rec.status : 'PRESENT';
+      if(rec && rec.absenceType) attendanceState.absenceType[s.id] = rec.absenceType;
     }
     if(attendanceState.sLateType[s.id] == null) attendanceState.sLateType[s.id] = (s.lateType && s.lateType[attendanceState.date]) || 'MORNING';
   });
@@ -4097,10 +4161,12 @@ function renderAttendance(){
       const typedMins = (attendanceState.sLateMin && attendanceState.sLateMin[s.id] != null) ? attendanceState.sLateMin[s.id] : savedMins;
       const sType = attendanceState.sLateType[s.id] || 'MORNING';
       const hide = isLateRow ? '' : 'display:none;';
+      const sAbsType = (attendanceState.draft[s.id] === 'ABSENT' && attendanceState.absenceType && attendanceState.absenceType[s.id]) || '';
+      const absBadge = sAbsType === 'EXCUSED' ? `<span class="abs-type-badge exc" title="غياب بإذن">مستأذن</span>` : (sAbsType === 'ESCAPE' ? `<span class="abs-type-badge esc" title="هرب من الحصة">هارب من الحصة</span>` : '');
       return `<tr>
-      <td style="font-weight:600">${studentNameLink(s, ptsMapAtt[s.id] || 0)}</td>
+      <td style="font-weight:600">${studentNameLink(s, ptsMapAtt[s.id] || 0)} ${absBadge}</td>
       <td>${escapeHtml(s.studentNo)}</td>
-      ${['PRESENT','ABSENT','LATE'].map(opt => `<td><input type="radio" name="att-${s.id}" data-status="${opt}" ${attendanceState.draft[s.id]===opt?'checked':''} onchange="setAttendanceStatus('${s.id}','${opt}')" /></td>`).join('')}
+      ${['PRESENT','ABSENT','LATE'].map(opt => `<td><input type="radio" name="att-${s.id}" data-status="${opt}" ${attendanceState.draft[s.id]===opt?'checked':''} onchange="setAttendanceStatus('${s.id}','${opt}')" ${opt==='ABSENT' ? `onclick="event.preventDefault(); openAbsentPopup(event,'${s.id}')" title="اضغط لاختيار نوع الغياب (مستأذن / هارب / عادي)"` : ''} /></td>`).join('')}
       <td style="text-align:center;white-space:nowrap">
         <select id="stLatType-${s.id}" onchange="attendanceState.sLateType['${s.id}']=this.value" style="width:112px;font-size:12px;padding:3px 4px;border:1px solid #d1d5db;border-radius:6px;${hide}" title="نوع التأخر">
           ${typeOpts.map(([v,l]) => `<option value="${v}" ${sType===v?'selected':''}>${l}</option>`).join('')}
@@ -4133,14 +4199,14 @@ function renderAttendance(){
   <div class="card mb form-inline">
     <div>
       <label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفصل</label>
-      <select id="attClassId" class="input" style="min-width:240px" onchange="attendanceState.classId=this.value; attendanceState.draft={}; attendanceState.sLateType={}; attendanceState.sLateMin={}; attendanceState.tDraft={}; attendanceState.tLateType={}; attendanceState.tLateMin={}; rerenderAttendance();" data-tip="اختر من تريد تسجيل حضوره: (المعلمون) جميعهم مرة واحدة، أو فصل دراسي محدد من الطلاب">
+      <select id="attClassId" class="input" style="min-width:240px" onchange="attendanceState.classId=this.value; attendanceState.draft={}; attendanceState.absenceType={}; attendanceState.sLateType={}; attendanceState.sLateMin={}; attendanceState.tDraft={}; attendanceState.tLateType={}; attendanceState.tLateMin={}; rerenderAttendance();" data-tip="اختر من تريد تسجيل حضوره: (المعلمون) جميعهم مرة واحدة، أو فصل دراسي محدد من الطلاب">
         ${canManageTeachers(currentUser()) ? `<option value="TEACHERS" ${attendanceState.classId==='TEACHERS'?'selected':''}>${teacherEmoji()} ${tl('المعلمون')}</option>` : ''}
         ${classes.map(c => `<option value="${c.id}" ${c.id===attendanceState.classId?'selected':''}>${escapeHtml(classLabel(c))}</option>`).join('')}
       </select>
     </div>
     <div>
       <label class="small" style="display:block;font-weight:600;margin-bottom:4px">التاريخ</label>
-      <input type="date" class="input" value="${attendanceState.date}" onchange="attendanceState.date=this.value; attendanceState.draft={}; attendanceState.sLateType={}; attendanceState.sLateMin={}; attendanceState.tDraft={}; attendanceState.tLateType={}; attendanceState.tLateMin={}; rerenderAttendance();" data-tip="تاريخ اليوم الذي تُسجَّل له الحضور — يُسمح بالتسجيل لأيام الدراسة (الاثنين إلى الجمعة) فقط" />
+      <input type="date" class="input" value="${attendanceState.date}" onchange="attendanceState.date=this.value; attendanceState.draft={}; attendanceState.absenceType={}; attendanceState.sLateType={}; attendanceState.sLateMin={}; attendanceState.tDraft={}; attendanceState.tLateType={}; attendanceState.tLateMin={}; rerenderAttendance();" data-tip="تاريخ اليوم الذي تُسجَّل له الحضور — يُسمح بالتسجيل لأيام الدراسة (الاثنين إلى الجمعة) فقط" />
     </div>
     <button class="btn-secondary" onclick="markAllPresent()">☑ الجميع حاضر</button>
     <div style="flex:1"></div>
@@ -4194,6 +4260,7 @@ function setAttendanceStatus(studentId, status){
     attendanceState.sLateMin[inp.id.slice(9)] = inp.value;
   });
   attendanceState.draft[studentId] = status;
+  if(status !== 'ABSENT' && attendanceState.absenceType) delete attendanceState.absenceType[studentId];
   rerenderAttendance();
 }
 function setTeacherAttendanceStatus(teacherId, status){
@@ -4203,9 +4270,108 @@ function setTeacherAttendanceStatus(teacherId, status){
   attendanceState.tDraft[teacherId] = status;
   rerenderAttendance();
 }
+/* نافذة نوع الغياب: تظهر بجانب زر «غائب» — مستأذن / هارب من الحصة / غياب عادي (بدون اختيار) */
+let __absPopupEl = null, __absPopupSid = null;
+function openAbsentPopup(ev, sid){
+  ev.preventDefault();
+  ev.stopPropagation();
+  closeAbsentPopup();
+  const rect = ev.currentTarget.getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.className = 'abs-popup';
+  pop.innerHTML = `
+    <div class="abs-pop-title">اختر نوع الغياب</div>
+    <div class="abs-pop-opt abs-pop-exc" onclick="chooseAbsentType('${sid}','EXCUSED')">🔵 مستأذن</div>
+    <div class="abs-pop-opt abs-pop-esc" onclick="chooseAbsentType('${sid}','ESCAPE')">🔴 هارب من الحصة</div>
+    <div class="abs-pop-hint">بدون اختيار = غياب عادي من بداية اليوم</div>`;
+  document.body.appendChild(pop);
+  const pw = pop.offsetWidth, ph = pop.offsetHeight;
+  let x = rect.right - pw;
+  if(x < 6) x = 6;
+  if(x + pw > innerWidth - 6) x = innerWidth - pw - 6;
+  let y = rect.bottom + 6;
+  if(y + ph > innerHeight - 6) y = rect.top - ph - 6;
+  if(y < 6) y = 6;
+  pop.style.left = x + 'px';
+  pop.style.top = y + 'px';
+  __absPopupEl = pop;
+  __absPopupSid = sid;
+  setTimeout(() => document.addEventListener('mousedown', closeAbsentPopupOutside), 0);
+  document.addEventListener('keydown', closeAbsentPopupEsc);
+}
+function closeAbsentPopupOutside(e){
+  const pop = __absPopupEl;
+  if(!pop) return;
+  if(pop.contains(e.target)) return;
+  const sid = __absPopupSid;
+  const isRadio = e.target && e.target.tagName === 'INPUT' && e.target.type === 'radio';
+  closeAbsentPopup();
+  // إذا ضغط على زر/راديو آخر فلن نعيد الرسم هنا (يأخذ الراديو الجديد القرار)، وإلا غياب عادي تلقائي
+  if(sid && !isRadio) setNormalAbsence(sid);
+}
+function closeAbsentPopupEsc(e){
+  if(e.key === 'Escape'){
+    const sid = __absPopupSid;
+    closeAbsentPopup();
+    if(sid) setNormalAbsence(sid);
+  }
+}
+function setNormalAbsence(sid){
+  if(attendanceState.absenceType) delete attendanceState.absenceType[sid];
+  attendanceState.draft[sid] = 'ABSENT';
+  rerenderAttendance();
+}
+function closeAbsentPopup(){
+  if(__absPopupEl){
+    __absPopupEl.remove();
+    __absPopupEl = null;
+  }
+  __absPopupSid = null;
+  document.removeEventListener('mousedown', closeAbsentPopupOutside);
+  document.removeEventListener('keydown', closeAbsentPopupEsc);
+}
+function chooseAbsentType(sid, type){
+  closeAbsentPopup();
+  attendanceState.absenceType = attendanceState.absenceType || {};
+  attendanceState.absenceType[sid] = type;
+  attendanceState.draft[sid] = 'ABSENT';
+  if(type === 'ESCAPE') notifyAgentEscape(sid);
+  rerenderAttendance();
+}
+function notifyAgentEscape(sid){
+  try{
+    const d = loadDB();
+    const s = studentById(sid);
+    if(!s) return;
+    const sName = s.fullName || s.name;
+    const cls = s.classId ? classById(s.classId) : null;
+    const clsLabelTxt = cls ? classLabel(cls) : '';
+    const me = currentUser();
+    const agents = d.users.filter(u => u.active && u.role === 'AGENT');
+    const arr = loadAdminMsgs();
+    const text = '🚨 هروب من الحصة: ' + sName + (clsLabelTxt ? ' — ' + clsLabelTxt : '') + (me ? ' (سجّله ' + me.name + ')' : '');
+    agents.forEach(a => {
+      arr.push({ id: uid(), teacherId: a.id, teacherName: a.name, text, createdAt: new Date().toISOString(), read:false, dismissed:false, revealed:true, views:0, senderRole:'ESCAPE', senderName: me?.name, senderId: me?.id });
+    });
+    saveAdminMsgs(arr);
+    // تنبيه مشترك في قاعدة البيانات (متزامن عبر الخادم) ليصل الوكيل على أي جهاز
+    d.escapeAlerts = Array.isArray(d.escapeAlerts) ? d.escapeAlerts : [];
+    if(!d.escapeAlerts.some(e => e.date === todayStr() && e.studentId === sid && e.type === 'ESCAPE')){
+      d.escapeAlerts.push({ id: uid(), studentId: sid, studentName: sName, className: clsLabelTxt, date: todayStr(), type: 'ESCAPE', teacherId: me?.id, teacherName: me?.name, createdAt: new Date().toISOString(), dismissed:false });
+      saveDB(d);
+    }
+    // إصدار صوت الجرس فورًا مع بقاء تنبيه أحمر نابض للوكيل
+    if(agents.length){
+      startMsgBeepLoop();
+      try { playMsgAlert(); }catch(e){}
+      renderApp();
+    }
+  }catch(e){}
+}
 function markAllPresent(){
   Object.keys(attendanceState.draft).forEach(id => attendanceState.draft[id] = 'PRESENT');
   Object.keys(attendanceState.tDraft||{}).forEach(id => attendanceState.tDraft[id] = 'PRESENT');
+  attendanceState.absenceType = {};
   document.querySelectorAll('#attTableBody input[type="radio"]').forEach(inp => { if(inp.dataset.status === 'PRESENT') inp.checked = true; });
   refreshAttendanceSummary();
 }
@@ -4218,8 +4384,9 @@ function saveAttendance(){
   Object.entries(attendanceState.draft).forEach(([studentId, status]) => {
     let rec = d.attendance.find(a => a.studentId === studentId && a.date === attendanceState.date);
     const realClassId = studentById(studentId)?.classId || attendanceState.classId;
-    if(rec){ rec.status = status; rec.classId = realClassId; rec.createdBy = currentUser()?.id || rec.createdBy; }
-    else { d.attendance.push({ id:uid(), studentId, classId:realClassId, date:attendanceState.date, status, createdBy: currentUser()?.id }); }
+    const at = (status === 'ABSENT' && attendanceState.absenceType && attendanceState.absenceType[studentId]) || undefined;
+    if(rec){ rec.status = status; rec.classId = realClassId; rec.absenceType = at; rec.createdBy = currentUser()?.id || rec.createdBy; }
+    else { d.attendance.push({ id:uid(), studentId, classId:realClassId, date:attendanceState.date, status, absenceType: at, createdBy: currentUser()?.id }); }
     const st = d.students.find(x => x.id === studentId);
     if(st){
       st.lateMinutes = st.lateMinutes || {};
@@ -4259,6 +4426,7 @@ function saveAttendance(){
   });
   saveDB(d);
   attendanceState.draft = {};
+  attendanceState.absenceType = {};
   attendanceState.sLateMin = {};
   attendanceState.sLateType = {};
   attendanceState.tDraft = {};
