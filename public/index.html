@@ -6349,7 +6349,7 @@ function renderSettings(){
   const isAdmin = user?.role === 'ADMIN';
   const announcement = localStorage.getItem(ANNOUNCEMENT_KEY(school)) || 'الصلاة على النبي';
   const suggSender = localStorage.getItem(ANNOUNCEMENT_SENDER_KEY(school));
-  const suggestions = loadSuggestions();
+  const suggestions = loadSuggestionsAll();
 
   const currentCard = `
   <div class="card" style="max-width:600px">
@@ -6393,7 +6393,7 @@ function renderSettings(){
       : pendingSugs.map(s => `
         <div style="padding:8px 10px;border:1px solid #fcd34d;border-radius:10px;margin-bottom:6px;background:#fffbeb">
           <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
-            <span style="font-size:12px;font-weight:700">${escapeHtml(s.authorName)} <span style="color:#6b7280;font-weight:400">(${roleLabel(s.authorRole)})</span></span>
+            <span style="font-size:12px;font-weight:700">${escapeHtml(s.authorName)} <span style="color:#6b7280;font-weight:400">(${roleLabel(s.authorRole)})</span> <span class="school-badge ${(s._school||getActiveSchool()).toLowerCase()}">${campusLabels[s._school||getActiveSchool()]}</span></span>
             <span style="font-size:11px;color:#6b7280">🕐 ${fmtTime(s.createdAt)} — ${s.words} كلمة</span>
           </div>
           <div style="font-size:14px;line-height:1.8;margin-top:6px;padding:8px 10px;background:#fff;border:1px dashed #fcd34d;border-radius:8px">${escapeHtml(s.text)}</div>
@@ -6405,7 +6405,7 @@ function renderSettings(){
     ${historySugs.length ? `
     <div style="font-size:13px;font-weight:700;margin-top:14px">🕓 سجل القرارات</div>
     ${historySugs.map(s => `
-      <div style="font-size:12px;color:#6b7280;padding:4px 0;border-bottom:1px dashed #e5e7eb">${s.status === 'APPROVED' ? '✅' : '❌'} <b>${escapeHtml(s.authorName)}</b> — ${escapeHtml(String(s.text).slice(0,60))}${String(s.text).length>60?'…':''}</div>`).join('')}` : ''}
+      <div style="font-size:12px;color:#6b7280;padding:4px 0;border-bottom:1px dashed #e5e7eb">${s.status === 'APPROVED' ? '✅' : '❌'} <b>${escapeHtml(s.authorName)}</b> <span class="school-badge ${(s._school||getActiveSchool()).toLowerCase()}">${campusLabels[s._school||getActiveSchool()]}</span> — ${escapeHtml(String(s.text).slice(0,60))}${String(s.text).length>60?'…':''}</div>`).join('')}` : ''}
   </div>` : '';
 
   const directMsgCard = '';
@@ -6419,13 +6419,24 @@ function renderSettings(){
   ${directMsgCard}`;
 }
 /* اقتراحات رسالة اليوم: المعلم/الوكيل يقترحون → المدير يوافق → تظهر للجميع */
-function suggestionsKey(){ return 'nibras_' + getActiveSchool() + '_suggestions_v1'; }
-function loadSuggestions(){
+function suggestionsKey(school){ return 'nibras_' + (school || getActiveSchool()) + '_suggestions_v1'; }
+function loadSuggestions(school){
   let arr = [];
-  try { arr = JSON.parse(localStorage.getItem(suggestionsKey()) || '[]'); } catch(e){ arr = []; }
+  try { arr = JSON.parse(localStorage.getItem(suggestionsKey(school)) || '[]'); } catch(e){ arr = []; }
   return Array.isArray(arr) ? arr : [];
 }
-function saveSuggestions(arr){ localStorage.setItem(suggestionsKey(), JSON.stringify(arr)); }
+// المدير يرى اقتراحات القسمين معًا (بنين وبنات)، وغيره يرى اقتراحات قسمه فقط
+function loadSuggestionsAll(){
+  const u = currentUser();
+  if(u && u.role === 'ADMIN'){
+    return [
+      ...loadSuggestions('BOYS').map(s => ({ ...s, _school:'BOYS' })),
+      ...loadSuggestions('GIRLS').map(s => ({ ...s, _school:'GIRLS' })),
+    ];
+  }
+  return loadSuggestions().map(s => ({ ...s, _school: getActiveSchool() }));
+}
+function saveSuggestions(arr, school){ localStorage.setItem(suggestionsKey(school || getActiveSchool()), JSON.stringify(arr)); }
 function wordCount(text){ return String(text||'').trim().split(/\s+/).filter(Boolean).length; }
 function updateSugCount(){
   const el = document.getElementById('sugText');
@@ -6449,27 +6460,28 @@ function suggestAnnouncement(){
   alert('تم إرسال اقتراحك إلى المدير للموافقة عليه ✅');
 }
 function approveSuggestion(id){
-  const school = getActiveSchool();
-  const arr = loadSuggestions();
-  const s = arr.find(x => x.id === id);
+  const s = loadSuggestionsAll().find(x => x.id === id);
   if(!s || s.status !== 'PENDING') return;
   if(!confirm('اعتماد هذه العبارة كرسالة اليوم؟')) return;
+  const school = s._school || getActiveSchool();
   localStorage.setItem(ANNOUNCEMENT_KEY(school), s.text);
   localStorage.setItem(ANNOUNCEMENT_SENDER_KEY(school), s.authorName + ' (' + roleLabel(s.authorRole) + ')');
-  s.status = 'APPROVED';
-  s.approvedAt = new Date().toISOString();
-  saveSuggestions(arr);
+  const arr = loadSuggestions(school);
+  const t = arr.find(x => x.id === id);
+  if(t){ t.status = 'APPROVED'; t.approvedAt = new Date().toISOString(); }
+  saveSuggestions(arr, school);
   renderApp();
   alert('تم اعتماد العبارة وستظهر في رسالة اليوم للجميع ✅');
 }
 function rejectSuggestion(id){
-  const arr = loadSuggestions();
-  const s = arr.find(x => x.id === id);
+  const s = loadSuggestionsAll().find(x => x.id === id);
   if(!s || s.status !== 'PENDING') return;
   if(!confirm('رفض هذا الاقتراح؟')) return;
-  s.status = 'REJECTED';
-  s.rejectedAt = new Date().toISOString();
-  saveSuggestions(arr);
+  const school = s._school || getActiveSchool();
+  const arr = loadSuggestions(school);
+  const t = arr.find(x => x.id === id);
+  if(t){ t.status = 'REJECTED'; t.rejectedAt = new Date().toISOString(); }
+  saveSuggestions(arr, school);
   renderApp();
 }
 function fmtTime(iso){
