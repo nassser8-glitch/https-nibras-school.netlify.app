@@ -110,6 +110,7 @@
   .form-grid-4 { display:grid; grid-template-columns: repeat(4,1fr); gap:12px; margin-bottom:12px; }
   .form-grid-5 { display:grid; grid-template-columns: repeat(5,1fr); gap:12px; margin-bottom:12px; }
   .form-grid-3 { display:grid; grid-template-columns: repeat(3,1fr); gap:12px; margin-bottom:10px; }
+  .student-multi-box { border:1px solid var(--border-color,#e0edf7); border-radius:10px; padding:8px 10px; max-height:190px; overflow-y:auto; background:#fff; }
   @media (max-width: 900px) { .form-grid-4, .form-grid-5, .form-grid-3 { grid-template-columns: 1fr; } }
   .form-inline { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; }
   textarea.input { resize:vertical; font-family:inherit; }
@@ -1775,15 +1776,21 @@ function copyBoysToGirls(){
     ...a, id: uid(), studentId: nameMap[a.studentId].newId
   }));
 
-  girlsDB.notes = boysDB.notes.filter(n => nameMap[n.studentId]).map(n => ({
-    ...n, id: uid(), studentId: nameMap[n.studentId].newId,
-    description: feminizeText(n.description), createdAt: new Date().toISOString()
-  }));
+  girlsDB.notes = boysDB.notes.filter(n => studentIdsOf(n).some(id => nameMap[id])).map(n => {
+    const mapped = studentIdsOf(n).map(id => nameMap[id] ? nameMap[id].newId : null).filter(Boolean);
+    return {
+      ...n, id: uid(), studentId: mapped[0], studentIds: mapped,
+      description: feminizeText(n.description), createdAt: new Date().toISOString()
+    };
+  });
 
-  girlsDB.transfers = boysDB.transfers.filter(t => nameMap[t.studentId]).map(t => ({
-    ...t, id: uid(), studentId: nameMap[t.studentId].newId,
-    reason: feminizeText(t.reason), createdAt: new Date().toISOString()
-  }));
+  girlsDB.transfers = boysDB.transfers.filter(t => studentIdsOf(t).some(id => nameMap[id])).map(t => {
+    const mapped = studentIdsOf(t).map(id => nameMap[id] ? nameMap[id].newId : null).filter(Boolean);
+    return {
+      ...t, id: uid(), studentId: mapped[0], studentIds: mapped,
+      reason: feminizeText(t.reason), createdAt: new Date().toISOString()
+    };
+  });
 
   girlsDB.users = boysDB.users.map(u => ({
     ...u, id: uid(), name: feminizeName(u.name), email: u.email
@@ -3011,11 +3018,12 @@ function showPendingTransfers(){
   const priorityColor = { LOW:'#6b7280', MEDIUM:'#1d4ed8', HIGH:'#d97706', URGENT:'#dc2626' };
   const rows = recs.length === 0 ? `<tr><td colspan="5" style="text-align:center;padding:20px;color:#9ca3af">لا توجد تحويلات معلّقة اليوم</td></tr>` :
     recs.map(({ t, school, d }) => {
-      const s = d.students.find(st => st.id === t.studentId);
-      const cls = s?.classId ? d.classes.find(c => c.id === s.classId) : null;
+      const ss = studentIdsOf(t).map(id => d.students.find(st => st.id === id)).filter(Boolean);
+      const cls = (ss[0]?.classId) ? d.classes.find(c => c.id === ss[0].classId) : null;
       const badge = isAdmin ? `<span class="badge ${school === 'BOYS' ? 'badge-boys' : 'badge-girls'}" style="margin-left:6px">${campusLabels[school] || school}</span>` : '';
+      const nameCell = ss.length ? ss.map(s => studentNameLink(s, s ? (studentPointsMap()[s.id] || 0) : undefined)).join('<br>') : '<span class="muted">—</span>';
       return `<tr>
-        <td style="font-weight:600">${badge}${studentNameLink(s, s ? (studentPointsMap()[s.id] || 0) : undefined)}</td>
+        <td style="font-weight:600">${badge}${nameCell}</td>
         <td>${cls ? escapeHtml(classLabel(cls)) : '—'}</td>
         <td>${targetLabel(t.target)}</td>
         <td style="color:${priorityColor[t.priority]};font-weight:600">${priorityLabels[t.priority]}</td>
@@ -3740,6 +3748,20 @@ function fillStudentSelect(classSelectId, studentSelectId){
   sel.innerHTML = '<option value="">اختر الطالب</option>' + students.map(s=>`<option value="${s.id}">${escapeHtml(s.fullName)} (${escapeHtml(s.studentNo)})</option>`).join('');
   sel.disabled = !classId;
 }
+/* السجلات متعددة الطلاب: studentIds مصفوفة + studentId أول طالب للتوافق مع النسخ السابقة */
+function studentIdsOf(rec){
+  return (rec && Array.isArray(rec.studentIds) && rec.studentIds.length) ? rec.studentIds : (rec && rec.studentId ? [rec.studentId] : []);
+}
+function fillStudentMulti(classSelectId, listId, prefix){
+  const classId = document.getElementById(classSelectId).value;
+  const box = document.getElementById(listId);
+  const d = loadDB();
+  const students = d.students.filter(s => s.active && s.classId === classId).sort((a,b)=>a.fullName.localeCompare(b.fullName,'ar'));
+  box.innerHTML = classId ? (students.length ? students.map(s => `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;cursor:pointer;font-size:13px;background:var(--bg-subtle,#f9fafb);margin:3px 0"><input type="checkbox" class="${prefix}-stu-cb" value="${s.id}"> <span>${escapeHtml(s.fullName)} (${escapeHtml(s.studentNo)})</span></label>`).join('') : '<div class="muted small" style="padding:4px 0">لا يوجد طلاب في هذا الفصل</div>') : '<div class="muted small" style="padding:4px 0">اختر الفصل أولًا</div>';
+}
+function getCheckedStudentIds(prefix){
+  return Array.from(document.querySelectorAll('.' + prefix + '-stu-cb:checked')).map(c => c.value);
+}
 function addStudent(){
   const fullName = document.getElementById('sFullName').value.trim();
   const studentNo = document.getElementById('sStudentNo').value.trim();
@@ -4223,8 +4245,8 @@ function renderNotes(){
   <div class="header-row"><h1 class="page-title">الملاحظات</h1><button class="btn-primary" onclick="toggleEl('noteForm')">+ إضافة ملاحظة</button></div>
   <div id="noteForm" class="card mb" style="display:none">
     <div class="form-grid-3">
-      <select id="nClassId" class="input" onchange="fillStudentSelect('nClassId','nStudentId')" data-tip="اختر الفصل الذي ينتمي إليه الطالب أولًا ليظهر في قائمة الطلاب"><option value="">اختر الفصل</option>${getClassesSorted().map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
-      <select id="nStudentId" class="input" disabled data-tip="اختر الطالب الذي ستُسجَّل عليه الملاحظة — تظهر القائمة بعد اختيار الفصل"><option value="">اختر الفصل أولًا</option></select>
+      <select id="nClassId" class="input" onchange="fillStudentMulti('nClassId','nStudentList','n')" data-tip="اختر الفصل الذي ينتمي إليه الطلاب أولًا لتظهر قائمة الطلاب"><option value="">اختر الفصل</option>${getClassesSorted().map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
+      <div id="nStudentList" class="student-multi-box" data-tip="اختر طالبًا أو أكثر لتسجيل الملاحظة عليهم جميعًا"><div class="muted small" style="padding:4px 0">اختر الفصل أولًا</div></div>
       <div style="display:flex;gap:8px">
         <button type="button" id="nTypePos" class="toggle-btn active" style="flex:1" onclick="setNoteType('POSITIVE')">🟢 إيجابية</button>
         <button type="button" id="nTypeNeg" class="toggle-btn" style="flex:1" onclick="setNoteType('NEGATIVE')">🔴 سلبية</button>
@@ -4268,10 +4290,10 @@ function updateNoteCategoryUI(){
   if(ptsEl){ ptsEl.textContent = (pts>0?'+':'')+pts; ptsEl.style.color = pts>=0 ? '#16a34a' : '#dc2626'; }
 }
 function addNote(){
-  const studentId = document.getElementById('nStudentId').value;
+  const ids = getCheckedStudentIds('n');
   let category = document.getElementById('nCategory').value;
   const description = document.getElementById('nDescription').value.trim();
-  if(!studentId){ alert('اختر الطالب'); return; }
+  if(!ids.length){ alert('اختر طالبًا واحدًا على الأقل'); return; }
   if(category === 'أخرى'){
     const otherVal = document.getElementById('nOther').value.trim();
     if(!otherVal){ alert('اكتب المخالفة أو الملاحظة في خانة "أخرى"'); return; }
@@ -4283,7 +4305,10 @@ function addNote(){
   try {
     const d = loadDB();
     const points = notePoints(noteType, category);
-    d.notes.push({ id:uid(), studentId, type:noteType, category, description, points, createdBy: currentUser().id, createdAt: new Date().toISOString() });
+    const batchId = uid();
+    ids.forEach(sid => {
+      d.notes.push({ id:uid(), studentId:sid, type:noteType, category, description, points, createdBy: currentUser().id, createdAt: new Date().toISOString(), batchId });
+    });
     saveDB(d);
   } finally {
     savingNote = false;
@@ -4320,9 +4345,10 @@ function renderTransfers(){
 
   const rows = all.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">لا توجد تحويلات بعد</td></tr>` :
     all.map(({ t, school, d, pts }) => {
-      const s = d.students.find(st => st.id === t.studentId);
+      const ss = studentIdsOf(t).map(id => d.students.find(st => st.id === id)).filter(Boolean);
+      const nameCell = ss.length ? ss.map(s => studentNameLink(s, s ? (pts[s.id] || 0) : undefined)).join('<br>') : '<span class="muted">—</span>';
       return `<tr>
-        <td style="font-weight:600">${isAdmin ? schoolBadge(school) : ''}${studentNameLink(s, s ? (pts[s.id] || 0) : undefined)}</td>
+        <td style="font-weight:600">${isAdmin ? schoolBadge(school) : ''}${nameCell}</td>
         <td>${targetLabel(t.target)}</td>
         <td style="color:${priorityColor[t.priority]};font-weight:600">${priorityLabels[t.priority]}</td>
         <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.reason)}</td>
@@ -4336,8 +4362,8 @@ function renderTransfers(){
   <div class="header-row"><h1 class="page-title">التحويلات</h1><button class="btn-primary" onclick="toggleEl('transferForm')">+ تحويل طالب</button></div>
   <div id="transferForm" class="card mb" style="display:none">
     <div class="form-grid-3">
-      <select id="tClassId" class="input" onchange="fillStudentSelect('tClassId','tStudentId')" data-tip="اختر الفصل الذي يدرس فيه الطالب المطلوب تحويله"><option value="">اختر الفصل</option>${getClassesSorted().map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
-      <select id="tStudentId" class="input" disabled data-tip="اختر الطالب المطلوب تحويله — تظهر القائمة بعد اختيار الفصل"><option value="">اختر الفصل أولًا</option></select>
+      <select id="tClassId" class="input" onchange="fillStudentMulti('tClassId','tStudentList','t')" data-tip="اختر الفصل الذي يدرس فيه الطلاب المطلوب تحويلهم"><option value="">اختر الفصل</option>${getClassesSorted().map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
+      <div id="tStudentList" class="student-multi-box" data-tip="اختر طالبًا أو أكثر للتحويل دفعة واحدة — يُنشأ طلب واحد للجميع"><div class="muted small" style="padding:4px 0">اختر الفصل أولًا</div></div>
       <select id="tTarget" class="input" data-tip="إلى من يُرسَل طلب التحويل للمراجعة والاعتماد (الوكيل، الموجه الطلابي، أو المدير)">${Object.entries(targetLabels).map(([v,l])=>`<option value="${v}">إلى: ${targetLabel(v)}</option>`).join('')}</select>
     </div>
     <select id="tPriority" class="input" style="margin:12px 0" data-tip="أولوية الطلب من حيث السرعة: منخفضة، متوسطة، مرتفعة، أو عاجلة">${Object.entries(priorityLabels).map(([v,l])=>`<option value="${v}" ${v==='MEDIUM'?'selected':''}>الأولوية: ${l}</option>`).join('')}</select>
@@ -4362,11 +4388,11 @@ function updateReasonUI(){
   if(comment) comment.style.display = val==='تحرير' ? '' : 'none';
 }
 function addTransfer(){
-  const studentId = document.getElementById('tStudentId').value;
+  const ids = getCheckedStudentIds('t');
   const target = document.getElementById('tTarget').value;
   const priority = document.getElementById('tPriority').value;
   let reason = document.getElementById('tReason').value;
-  if(!studentId){ alert('اختر الطالب'); return; }
+  if(!ids.length){ alert('اختر طالبًا واحدًا على الأقل'); return; }
   if(reason === 'أخرى'){
     const otherVal = document.getElementById('tOther').value.trim();
     if(!otherVal){ alert('اكتب سبب التحويل في خانة "أخرى"'); return; }
@@ -4378,13 +4404,15 @@ function addTransfer(){
     reason = freeVal;
   }
   const d = loadDB();
-  const tr = { id:uid(), studentId, target, priority, reason, status:'PENDING', createdBy: currentUser().id, createdAt: new Date().toISOString() };
+  const tr = { id:uid(), studentIds:ids, studentId:ids[0], target, priority, reason, status:'PENDING', createdBy: currentUser().id, createdAt: new Date().toISOString() };
   d.transfers.push(tr);
-  // خصم نقاط تلقائي حسب سبب التحويل (عند التحويل للوكيل أو المدير أو الموجه الطلابي)
+  // خصم نقاط تلقائي حسب سبب التحويل (عند التحويل للوكيل أو المدير أو الموجه الطلابي) — لكل طالب مخصومة
   const ded = transferDeductionMap[reason] != null ? transferDeductionMap[reason] : -3;
   if(ded !== 0){
     tr.deductedPoints = ded;
-    d.notes.push({ id:uid(), studentId, type:'NEGATIVE', category: reason, description: 'تحويل إلى ' + targetLabel(target) + ' (خصم تلقائي)', points: ded, createdBy: currentUser().id, createdAt: new Date().toISOString(), transferId: tr.id });
+    ids.forEach(sid => {
+      d.notes.push({ id:uid(), studentId:sid, type:'NEGATIVE', category: reason, description: 'تحويل إلى ' + targetLabel(target) + ' (خصم تلقائي)', points: ded, createdBy: currentUser().id, createdAt: new Date().toISOString(), transferId: tr.id, batchId: tr.id });
+    });
   }
   saveDB(d);
   notifyTransferReceivers(d, tr);
@@ -4393,10 +4421,11 @@ function addTransfer(){
 function notifyTransferReceivers(d, tr){
   const me = currentUser();
   const arr = loadAdminMsgs();
-  const s = studentById(tr.studentId);
-  const sName = s ? s.fullName : 'طالب/طالبة';
+  const ids = studentIdsOf(tr);
+  const sNames = ids.map(id => { const s = studentById(id); return s ? s.fullName : 'طالب/طالبة'; });
+  const sName = sNames.join('، ');
   const isGirls = getActiveSchool() === 'GIRLS';
-  const studentLabel = isGirls ? 'الطالبة' : 'الطالب';
+  const studentLabel = isGirls ? 'الطالبات' : 'الطلاب';
   const text = `📨 تحويل ${studentLabel}: ${sName} — إلى: ${targetLabel(tr.target)} — السبب: ${tr.reason}`;
   d.users.filter(u => u.active && (u.role === tr.target || u.role === 'ADMIN')).forEach(r => {
     arr.push({
@@ -4414,14 +4443,13 @@ function transferForMe(t){
   if(u.role === 'ADMIN') return true;
   if(u.role === 'AGENT' || u.role === 'COUNSELOR') return t.target === u.role || t.createdBy === u.id;
   const visible = new Set(getVisibleStudents().map(s => s.id));
-  return t.createdBy === u.id || visible.has(t.studentId);
+  return t.createdBy === u.id || studentIdsOf(t).some(id => visible.has(id));
 }
 function openTransferSolve(id){
   const d = loadDB();
   const t = d.transfers.find(x => x.id === id);
   if(!t) return;
-  const s = studentById(t.studentId);
-  const sName = s ? s.fullName : '—';
+  const sNames = studentIdsOf(t).map(id => { const s = studentById(id); return s ? s.fullName : '—'; }).join('، ');
   const isGirls = getActiveSchool() === 'GIRLS';
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -4429,7 +4457,7 @@ function openTransferSolve(id){
     <div class="modal-box">
       <div class="modal-head"><h3>حل المشكلة</h3><button class="modal-close" onclick="closeDetails()">✕</button></div>
       <div style="padding:4px 2px 12px">
-        <p style="font-weight:700">${escapeHtml(sName)}</p>
+        <p style="font-weight:700">${escapeHtml(sNames)}</p>
         <p class="muted small" style="margin-top:4px">إلى: ${targetLabel(t.target)} — السبب: ${escapeHtml(t.reason)}</p>
         <label style="display:block;font-weight:600;margin:12px 0 6px">✍️ ${isGirls ? 'كيف كان الحل؟' : 'كيف كان الحل؟'}</label>
         <textarea id="trSolveText" class="input" style="width:100%;min-height:90px;resize:vertical;padding:12px;font-size:14px" maxlength="500" placeholder="اكتب وصف الحل الذي تم — يطّلع عليه ${isGirls ? 'المعلمة' : 'المعلم'} فورًا..." data-tip="اكتب تفاصيل الحل الذي اتخذته لمعالجة حالة التحويل"></textarea>
@@ -4951,7 +4979,7 @@ function buildTeacherDetail(type, teacherId){
     title = 'طلبات التحويل';
     const stMap = { PENDING:'قيد المراجعة', APPROVED:'معتمد', REJECTED:'مرفوض' };
     const list = d.transfers.filter(t => t.createdBy === teacherId).sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-    rows = list.length ? list.map(t => { const s = d.students.find(x => x.id === t.studentId); const nm = s ? s.fullName : '—'; const fc = d.classes.find(x => x.id === t.fromClassId); const tc = d.classes.find(x => x.id === t.toClassId); return dlRow(`${escapeHtml(nm)}`, `${classLabel(fc)} ← ${classLabel(tc)} · ${stMap[t.status] || t.status} · ${fmtTime(t.createdAt)}`); }).join('') : DL_EMPTY;
+    rows = list.length ? list.map(t => { const ss = studentIdsOf(t).map(id => d.students.find(x => x.id === id)).filter(Boolean); const nm = ss.length ? ss.map(s => s.fullName).join('، ') : '—'; const fc = d.classes.find(x => x.id === t.fromClassId); const tc = d.classes.find(x => x.id === t.toClassId); return dlRow(`${escapeHtml(nm)}`, `${classLabel(fc)} ← ${classLabel(tc)} · ${stMap[t.status] || t.status} · ${fmtTime(t.createdAt)}`); }).join('') : DL_EMPTY;
   }
   return { title, html: rows };
 }
@@ -6243,10 +6271,10 @@ function computeReportRows(){
         return { 'التاريخ':n.createdAt.slice(0,10), 'الطالب':s?.fullName||'—', 'النوع':noteTypeLabels[n.type], 'الفئة':n.category, 'الوصف':n.description, 'بواسطة':by?.name||'—', 'النقاط':(pts>0?'+':'')+pts }; });
   } else if(type === 'transfers'){
     rows = d.transfers
-      .filter(t => { const s = studentById(t.studentId); return canSeeStudent(t.studentId) && (!classId || s?.classId===classId) && (!from && !to || inRange(t.createdAt.slice(0,10))); })
+      .filter(t => { const ss = studentIdsOf(t).map(id => studentById(id)).filter(Boolean); return ss.some(s => canSeeStudent(s.id) && (!classId || s?.classId===classId)) && (!from && !to || inRange(t.createdAt.slice(0,10))); })
       .sort((a,b) => b.createdAt.localeCompare(a.createdAt))
-      .map(t => { const s = studentById(t.studentId); const by = userById(t.createdBy);
-        return { 'التاريخ':t.createdAt.slice(0,10), 'الطالب':s?.fullName||'—', 'إلى':targetLabel(t.target), 'الأولوية':priorityLabels[t.priority], 'السبب':t.reason, 'الحالة': t.status==='PENDING'?'قيد المتابعة':'تم الحل', 'بواسطة':by?.name||'—' }; });
+      .map(t => { const ss = studentIdsOf(t).map(id => studentById(id)).filter(Boolean); const by = userById(t.createdBy);
+        return { 'التاريخ':t.createdAt.slice(0,10), 'الطالب': ss.map(s=>s?.fullName||'—').join('، ') || '—', 'إلى':targetLabel(t.target), 'الأولوية':priorityLabels[t.priority], 'السبب':t.reason, 'الحالة': t.status==='PENDING'?'قيد المتابعة':'تم الحل', 'بواسطة':by?.name||'—' }; });
   } else if(type === 'class_summary'){
     const classes = d.classes.filter(c => canSeeClass(c.id) && (!classId || c.id===classId));
     rows = classes.map(c => {
