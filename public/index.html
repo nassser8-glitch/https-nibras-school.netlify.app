@@ -783,10 +783,16 @@ function notePoints(type, category){
   if(notePointsMap[category] != null) return notePointsMap[category];
   return type === 'POSITIVE' ? 2 : -3; // لأخرى وتحرير
 }
-// خصم نقاط تلقائي حسب حالة الحضور
-function attendancePoints(status){
+// خصم نقاط تلقائي حسب حالة الحضور (يتزايد مع دقائق التأخر)
+function attendancePoints(status, lateMins){
   if(status === 'ABSENT') return -2; // الغياب
-  if(status === 'LATE') return -1;   // التأخر
+  if(status === 'LATE'){
+    var m = parseInt(lateMins, 10) || 0;
+    if(m <= 15) return -1;
+    if(m <= 30) return -2;
+    if(m <= 60) return -3;
+    return -4;
+  }
   return 0;
 }
 const schoolNames = { BOYS:'قسم البنين', GIRLS:'قسم البنات' };
@@ -3739,8 +3745,8 @@ function pointItems(d){
     items.push({ studentId:n.studentId, type:n.type, category:n.category, description:n.description, points:(n.points ?? notePoints(n.type, n.category)), createdBy:n.createdBy, createdAt:n.createdAt, kind:'note' });
   });
   d.attendance.forEach(a => {
-    const pts = attendancePoints(a.status);
-    if(pts !== 0) items.push({ studentId:a.studentId, type:'NEGATIVE', category:a.status==='ABSENT'?'الغياب':'التأخر', description:'حسب سجل الحضور ('+a.date+')', points:pts, createdBy:a.createdBy, createdAt:a.date+'T00:00:00.000Z', kind:'att' });
+    const pts = attendancePoints(a.status, a.lateMinutes);
+    if(pts !== 0) items.push({ studentId:a.studentId, type:'NEGATIVE', category:a.status==='ABSENT'?'الغياب':'التأخر', description:'حسب سجل الحضور ('+a.date+')' + (a.lateMinutes ? ' — ' + a.lateMinutes + ' دقيقة' : ''), points:pts, createdBy:a.createdBy, createdAt:a.date+'T00:00:00.000Z', kind:'att' });
   });
   const attKeys = new Set(d.attendance.map(a => a.studentId + '|' + a.date + '|' + a.status));
   return items.filter(it => {
@@ -4432,12 +4438,12 @@ function saveAttendance(){
     alert('أيام الدراسة من الاثنين إلى الجمعة فقط — لا يمكن تسجيل حضور في العطلة (الأحد/السبت)');
     return;
   }
+  let lateCount = 0, latePoints = 0;
   Object.entries(attendanceState.draft).forEach(([studentId, status]) => {
     let rec = d.attendance.find(a => a.studentId === studentId && a.date === attendanceState.date);
     const realClassId = studentById(studentId)?.classId || attendanceState.classId;
     const at = (status === 'ABSENT' && attendanceState.absenceType && attendanceState.absenceType[studentId]) || undefined;
-    if(rec){ rec.status = status; rec.classId = realClassId; rec.absenceType = at; rec.createdBy = currentUser()?.id || rec.createdBy; }
-    else { d.attendance.push({ id:uid(), studentId, classId:realClassId, date:attendanceState.date, status, absenceType: at, createdBy: currentUser()?.id }); }
+    let lateMins = 0;
     const st = d.students.find(x => x.id === studentId);
     if(st){
       st.lateMinutes = st.lateMinutes || {};
@@ -4446,13 +4452,19 @@ function saveAttendance(){
       if(status === 'LATE'){
         const minsEl = document.getElementById('stLatMin-' + studentId);
         const mins = parseInt((minsEl && minsEl.value) || '0', 10);
-        st.lateMinutes[date] = isNaN(mins) || mins < 0 ? 0 : mins;
+        lateMins = isNaN(mins) || mins < 0 ? 0 : mins;
+        st.lateMinutes[date] = lateMins;
         const typeEl = document.getElementById('stLatType-' + studentId);
         const stType = typeEl && typeEl.value ? typeEl.value : (attendanceState.sLateType && attendanceState.sLateType[studentId]);
         st.lateType[date] = (stType === 'MORNING' || stType === 'CLASS' || stType === 'EARLY_LEAVE') ? stType : 'MORNING';
+        lateCount++; latePoints += attendancePoints('LATE', lateMins);
       }
       else { delete st.lateMinutes[date]; delete st.lateType[date]; }
     }
+    const attObj = { id:uid(), studentId, classId:realClassId, date:attendanceState.date, status, absenceType: at, createdBy: currentUser()?.id };
+    if(status === 'LATE' && lateMins > 0) attObj.lateMinutes = lateMins;
+    if(rec){ rec.status = status; rec.classId = realClassId; rec.absenceType = at; rec.createdBy = currentUser()?.id || rec.createdBy; if(status === 'LATE' && lateMins > 0) rec.lateMinutes = lateMins; else delete rec.lateMinutes; }
+    else { d.attendance.push(attObj); }
   });
   Object.entries(attendanceState.tDraft || {}).forEach(([teacherId, status]) => {
     const u = d.users.find(x => x.id === teacherId);
@@ -4484,7 +4496,12 @@ function saveAttendance(){
   attendanceState.tLateMin = {};
   attendanceState.tLateType = {};
   const msg = document.getElementById('attSaveMsg');
-  if(msg){ msg.style.color = '#16a34a'; msg.textContent = 'تم حفظ الحضور بنجاح'; }
+  if(msg){
+    let txt = 'تم حفظ الحضور بنجاح';
+    if(lateCount > 0) txt += ' — تأخر ' + lateCount + ' طالب (خصم ' + latePoints + ' نقطة)';
+    if(lateCount > 0) msg.style.color = '#dc2626'; else { msg.style.color = '#16a34a'; }
+    msg.textContent = txt;
+  }
 }
 
 /* ============ الملاحظات ============ */
