@@ -1310,42 +1310,12 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* ============ تسجيل الدخول ============ */
-function quickAccountRows(){
-  // في وضع الخادم: لا توجد كلمات مرور في كود المتصفح أبدًا — بيانات الدخول تُسلَّم من إدارة المدرسة
-  if(__serverEnabled()) return [];
-  const seen = {}, out = [];
-  ['BOYS','GIRLS'].forEach(school => {
-    let d;
-    try{ d = loadDBFor(school); }catch(e){ return; }
-    (d && d.users || []).forEach(u => {
-      if(!u || !u.password || seen[u.email]) return;
-      seen[u.email] = 1;
-      out.push({ u, school });
-    });
-  });
-  // أولوية العرض: المدير، الوكيلة، الموجهة، الوكيل، الموجه، المساعد الإداري، ثم المعلمون
-  const prio = o => {
-    if(o.u.role === 'ADMIN') return 1;
-    if(o.u.role === 'AGENT') return o.school === 'GIRLS' ? 2 : 4;
-    if(o.u.role === 'COUNSELOR') return o.school === 'GIRLS' ? 3 : 5;
-    if(o.u.role === 'ADMINISTRATIVE') return 6;
-    return 10;
-  };
-  out.sort((a,b) => (prio(a)-prio(b)) || a.u.name.localeCompare(b.u.name,'ar'));
-  return out.map(o => [(roleLabels[o.u.role] || o.u.role) + ' — ' + (o.u.name || o.u.email), o.u.email, o.u.password]);
-}
 function renderLogin(){
   ensureDefaultAccounts();
   const hint = __serverEnabled()
     ? 'نظام إدارة المدرسة — دخول آمن عبر الخادم'
     : 'نظام إدارة المدرسة (نسخة محلية/تجريبية)';
   if(__serverEnabled()){
-    const qRows = QUICK_SERVER_ACCOUNTS.map(a => `
-      <tr>
-        <td>${a[0]}</td>
-        <td style="direction:ltr">${a[1]}</td>
-        <td><button class="btn-primary" style="padding:4px 10px;font-size:12px" onclick="quickLoginServer('${a[1]}')">دخول سريع</button></td>
-      </tr>`).join('');
     return `
     <div class="login-wrap">
       <div class="card login-card">
@@ -1361,20 +1331,9 @@ function renderLogin(){
         <p style="margin:8px 0 0;text-align:center"><button class="btn-secondary" style="padding:6px 12px;font-size:12px" onclick="openForgotModal()">نسيت كلمة المرور؟</button></p>
         <p class="muted" style="font-size:11px;margin-top:10px;text-align:center">أول دخول: يُطلب منك تعيين بريدك الحقيقي وكلمة مرور قوية جديدة قبل استخدام النظام. بيانات الدخول تُسلَّم من إدارة المدرسة.</p>
       </div>
-      <div class="card login-card" style="margin-top:14px;max-width:520px;overflow:auto">
-        <h3 style="margin:0 0 10px;font-size:15px">🔑 دخول سريع للتجربة — اضغط الحساب للدخول مباشرة</h3>
-        <table class="data-table"><thead><tr><th>الدور</th><th>اسم المستخدم</th><th></th></tr></thead><tbody>${qRows}</tbody></table>
-        <p class="muted" style="font-size:11px;margin-top:8px;text-align:center">وضع تجريبي مؤقت لمراجعة المدير — يُزال بعد اكتمال التجربة.</p>
-      </div>
+      
     </div>`;
   }
-  const quickRows = quickAccountRows().map(a => `
-    <tr>
-      <td>${a[0]}</td>
-      <td style="direction:ltr">${a[1]}</td>
-      <td style="direction:ltr">${a[2]}</td>
-      <td><button class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="quickLogin('${a[1]}','${a[2]}')">دخول سريع</button></td>
-    </tr>`).join('');
   return `
   <div class="login-wrap">
     <div class="card login-card">
@@ -1390,10 +1349,6 @@ function renderLogin(){
       ${__serverEnabled() ? `<p style="margin:8px 0 0;text-align:center"><button class="btn-secondary" style="padding:6px 12px;font-size:12px" onclick="openForgotModal()">نسيت كلمة المرور؟</button></p>` : ''}
       <p class="muted" style="font-size:11px;margin-top:10px;text-align:center">أول دخول: يُطلب منك تعيين بريدك الحقيقي وكلمة مرور قوية جديدة قبل استخدام النظام.</p>
     </div>
-    <div class="card login-card" style="margin-top:14px;max-width:520px;overflow:auto">
-      <h3 style="margin:0 0 10px;font-size:15px">🔑 حسابات جاهزة للدخول — اضغط "دخول سريع"</h3>
-      <table class="data-table"><thead><tr><th>الدور</th><th>البريد</th><th>كلمة المرور</th><th></th></tr></thead><tbody>${quickRows}</tbody></table>
-    </div>
    </div>`;
 }
 function fillLoginEmail(email){
@@ -1401,49 +1356,6 @@ function fillLoginEmail(email){
   const pw = document.getElementById('loginPassword');
   if(em){ em.value = email; }
   if(pw) pw.focus();
-}
-// حسابات الدخول السريع المؤقت للتجربة (يُحذف هذا القسم بعد تجربة المدير)
-const QUICK_SERVER_ACCOUNTS = [
-  ['👨‍💼 مدير النظام', 'admin'],
-  ['🧑‍💼 وكيل البنين — بخيت', 'wakil'],
-  ['👩‍💼 وكيلة البنات — باسمه', 'wakilah'],
-  ['🛠️ مساعد إداري بنين', 'adminassist'],
-  ['🛠️ مساعدة إدارية بنات', 'adminassistgirls'],
-  ['👨‍🏫 معلم — تركي حمدان عايد العنزي', 'turki'],
-  ['👩‍🏫 معلمة — الشيماء سامي محمد العجمي', 'alshaima'],
-];
-async function quickLoginServer(username){
-  if(__loginBusy) return;
-  __loginBusy = true;
-  const el = document.getElementById('loginError');
-  if(el) el.style.display = 'none';
-  try{
-    const r = await __api('POST', 'quick-login', { login: username });
-    if(r.status === 200 && r.j && r.j.user){
-      __sessionUser = r.j.user;
-      __mirrorSet(r.j.user);
-      if(r.j.user.role === 'ADMIN'){
-        localStorage.removeItem(SCHOOL_KEY);
-      } else {
-        localStorage.setItem(SCHOOL_KEY, r.j.user.school);
-      }
-      await syncPullAll();
-      location.hash = '#/';
-      renderApp();
-      return;
-    }
-    if(el){ el.style.display='block'; el.textContent = 'تعذر الدخول السريع — جرّب الدخول العادي بالاسم وكلمة المرور.'; }
-  }finally{
-    __loginBusy = false;
-  }
-}
-function quickLogin(email, password){
-  if(__serverEnabled()){ fillLoginEmail(email); return; }
-  const em = document.getElementById('loginEmail');
-  const pw = document.getElementById('loginPassword');
-  if(em) em.value = email;
-  if(pw) pw.value = password;
-  handleLogin();
 }
 let __loginBusy = false;
 async function handleLogin(){

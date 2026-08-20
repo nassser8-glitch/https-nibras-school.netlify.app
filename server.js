@@ -320,38 +320,7 @@ app.post('/api/auth/login', (req, res) => {
   })().catch(fail(res));
 });
 
-/* ============ دخول سريع للتجربة (مؤقت — يُحذف بعد تجربة المدير) ============ */
-// يسمح بدخول فوري بلا كلمة مرور لحسابات العرض المحددة فقط (المدير، الوكيلان،
-// المساعدان الإداريان، معلم، معلمة). لا يُستخدم في الوضع النهائي — يُحذف
-// هذا القسم بالكامل بعد اكتمال تجربة المدير (راجع: مفتاح إلغاء التجربة).
-const QUICK_LOGIN_ALLOW = ['admin', 'wakil', 'wakilah', 'adminassist', 'adminassistgirls', 'turki', 'alshaima'];
-app.post('/api/auth/quick-login', (req, res) => {
-  (async () => {
-    if (rateLimit('quicklogin', 30, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
-    const login = String(req.body && req.body.login || '').trim().toLowerCase();
-    if (!QUICK_LOGIN_ALLOW.includes(login)) return res.status(403).json({ error: 'forbidden' });
-    const single = await db.userByUsername(login);
-    const u = single && single.active ? single : null;
-    if (!u) return res.status(404).json({ error: 'not_found' });
-    // إنشاء جلسة كاملة مثل الدخول العادي (السماح للعرض يتجاوز قيد granted مؤقتًا)
-    const token = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const nowMs = Date.now();
-    const lastLoginIso = new Date(nowMs).toISOString();
-    const hist = Array.isArray(u.data.loginHistory) ? u.data.loginHistory.slice(-299) : [];
-    hist.push(lastLoginIso);
-    const loginCount = (u.data.loginCount || 0) + 1;
-    const row = await db.finalizeLogin(
-      u.id, u.school, tokenHash, SESSION_TTL_MS, req.ip, (req.headers['user-agent'] || '').slice(0, 250),
-      Object.assign({}, u.data, { lastLogin: lastLoginIso, loginCount, loginHistory: hist }),
-      loginCount, lastLoginIso, hist);
-    req._sessionToken = token;
-    res.setHeader('Set-Cookie', cookieOpts(req));
-    const user = sendUser(u, row || { created_at: lastLoginIso, expires_at: new Date(nowMs + SESSION_TTL_MS).toISOString() });
-    user.firstLogin = false; // تجربة فورية: لا يطلب تغيير كلمة المرور (لا يُعدَّل في قاعدة البيانات)
-    res.json({ ok: true, user });
-  })().catch(fail(res));
-});
+/* ============ الدخول السريع أُلغي ============ */
 
 app.post('/api/auth/logout', requireAuth, (req, res) => {
   db.deleteSession(req._tokenHash).catch(() => {});
