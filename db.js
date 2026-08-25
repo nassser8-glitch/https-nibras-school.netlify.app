@@ -22,7 +22,7 @@ async function initSchema() {
         email         TEXT NOT NULL,
         username      TEXT,
         password_hash TEXT NOT NULL,
-        role          TEXT NOT NULL CHECK (role IN ('ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE')),
+        role          TEXT NOT NULL CHECK (role IN ('ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE','STUDENT')),
         active        BOOLEAN NOT NULL DEFAULT true,
         first_login   BOOLEAN NOT NULL DEFAULT false,
         granted       BOOLEAN NOT NULL DEFAULT false,
@@ -30,7 +30,8 @@ async function initSchema() {
         created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
       )`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_username_key ON users(username)`);
-    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS granted BOOLEAN NOT NULL DEFAULT false`);
+    await client.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
+    await client.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE','STUDENT'))`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS sessions (
         token_hash TEXT PRIMARY KEY,
