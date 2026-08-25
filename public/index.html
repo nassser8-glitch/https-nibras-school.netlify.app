@@ -3816,15 +3816,15 @@ function generateUsername(fullName){
 async function setStudentCreds(studentId, studentName){
   const input = prompt('اسم المستخدم للطالب "' + studentName + '" (اتركه فارغاً للتصدير تلقائياً):');
   if(input === null) return;
-  const password = prompt('الرقم السري للطالب "' + studentName + '" (6 أحرف على الأقل):');
-  if(!password || password.length < 6){ alert('الرقم السري يجب أن يكون 6 أحرف على الأقل'); return; }
+  const password = prompt('الرقم السري للطالب "' + studentName + '" (8 أحرف على الأقل):');
+  if(!password || password.length < 8){ alert('الرقم السري يجب أن يكون 8 أحرف على الأقل'); return; }
   const username = input.trim() || generateUsername(studentName);
-  const r = await __api('POST', 'students/create', { name: studentName, username, password, studentId });
+  const r = await __api('POST', 'admin/create-user', { name: studentName, username, password, role: 'STUDENT', studentId, email: '' });
   if(!r || r.status !== 200 || !r.j || !r.j.ok){
     alert(r?.j?.error === 'username_exists' ? 'اسم المستخدم مستخدم مسبقًا' : 'تعذر إنشاء الحساب: ' + (r?.j?.error || 'خطأ'));
     return;
   }
-  alert('تم إنشاء حساب الطالب: ' + username);
+  alert('تم إنشاء حساب الطالب: ' + (r.j.user && r.j.user.username));
   renderApp();
 }
 async function addStudent(){
@@ -3842,7 +3842,7 @@ async function addStudent(){
   const newId = uid();
   const username = inputUsername || generateUsername(fullName);
   if(__serverEnabled() && inputPassword){
-    const r = await __api('POST', 'students/create', { name: fullName, username, password: inputPassword });
+    const r = await __api('POST', 'admin/create-user', { name: fullName, username, password: inputPassword, role: 'STUDENT', studentId: newId, email: '' });
     if(!r || r.status !== 200 || !r.j || !r.j.ok){
       alert(r?.j?.error === 'username_exists' ? 'اسم المستخدم مستخدم مسبقًا' : 'تعذر إنشاء حساب الطالب');
       return;

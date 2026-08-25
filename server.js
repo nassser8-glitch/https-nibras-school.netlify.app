@@ -322,25 +322,6 @@ app.post('/api/auth/login', (req, res) => {
 
 /* ============ الدخول السريع أُلغي ============ */
 
-app.post('/api/students/create', requireAuth, (req, res) => {
-  (async () => {
-    if (!['ADMIN', 'AGENT'].includes(req.session.role)) return res.status(403).json({ error: 'forbidden' });
-    const { name, username, password, studentId } = req.body || {};
-    if (!name || !username || !password) return res.status(400).json({ error: 'missing_fields' });
-    const cleanUsername = String(username).trim().toLowerCase();
-    const cleanName = String(name).trim();
-    const cleanPassword = String(password);
-    if (cleanPassword.length < 6) return res.status(400).json({ error: 'password_too_short' });
-    const existing = await db.userByUsername(cleanUsername);
-    if (existing) return res.status(409).json({ error: 'username_exists' });
-    const hash = await bcrypt.hash(cleanPassword, 10);
-    const id = studentId || ('id_' + crypto.randomBytes(8).toString('hex'));
-    const school = req.session.school || 'BOYS';
-    await db.insertUser({ id, school, name: cleanName, email: '', username: cleanUsername, password_hash: hash, role: 'STUDENT', active: true, first_login: false, granted: true, data: {} });
-    res.json({ ok: true, id, username: cleanUsername });
-  })().catch(fail(res));
-});
-
 app.post('/api/auth/logout', requireAuth, (req, res) => {
   db.deleteSession(req._tokenHash).catch(() => {});
   res.clearCookie(SESSION_COOKIE, { path: '/', httpOnly: true, sameSite: 'strict' });
@@ -471,8 +452,8 @@ function canManageUsers(user, targetSchool) {
   return false;
 }
 function validRoleFor(actor, role) {
-  if (actor.role === 'ADMIN') return ['ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE'].includes(role);
-  return ['COUNSELOR','TEACHER'].includes(role); // الوكيل لا ينشئ مديرًا أو وكيلًا
+  if (actor.role === 'ADMIN') return ['ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE','STUDENT'].includes(role);
+  return ['COUNSELOR','TEACHER'].includes(role);
 }
 
 app.post('/api/auth/admin/create-user', requireAuth, (req, res) => {
@@ -484,13 +465,18 @@ app.post('/api/auth/admin/create-user', requireAuth, (req, res) => {
     const email = String(req.body && req.body.email || '').trim().toLowerCase();
     const pw = String(req.body && req.body.password || '');
     const role = String(req.body && req.body.role || '').toUpperCase();
-    if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !PASSWORD_RE.test(pw) || !validRoleFor(req.session, role))
+    const isStudent = role === 'STUDENT';
+    const studentId = req.body && req.body.studentId;
+    if (!name || !PASSWORD_RE.test(pw) || !validRoleFor(req.session, role))
       return res.status(400).json({ error: 'invalid', min: PASSWORD_MIN });
+    if (!isStudent && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+      return res.status(400).json({ error: 'invalid_email' });
     const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
-    const id = 'id_' + crypto.randomBytes(6).toString('hex');
+    const id = studentId || ('id_' + crypto.randomBytes(6).toString('hex'));
     const preferred = String(req.body && req.body.username || '').trim();
-    const username = await db.generateUsername(name, preferred || email.split('@')[0]);
-    await db.insertUser({ id, school, name, email, username, password_hash: hash, role, active: true, first_login: true, granted: true, data: {} });
+    const username = await db.generateUsername(name, preferred || (isStudent ? name.replace(/\s+/g, '') : email.split('@')[0]));
+    const finalEmail = isStudent ? (email || (username + '@nibras.school')) : email;
+    await db.insertUser({ id, school, name, email: finalEmail, username, password_hash: hash, role, active: true, first_login: true, granted: true, data: {} });
     const created = await db.userById(id);
     await appendSchoolUser(school, sendUser(created));
     res.json({ ok: true, user: sendUser(created) });
