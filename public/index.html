@@ -3698,22 +3698,29 @@ function sortStudentsForView(students){
 }
 function renderStudentBody(students){
   if(studentsView !== 'all') students = students.filter(s => s.classId === studentsView);
-  if(students.length === 0) return `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">لا يوجد طلاب</td></tr>`;
+  if(students.length === 0) return `<tr><td colspan="8" style="text-align:center;padding:24px;color:#9ca3af">لا يوجد طلاب</td></tr>`;
   const isGirls = getActiveSchool() === 'GIRLS';
   const isAdmin = currentUser()?.role === 'ADMIN';
   const moveFn = isGirls ? 'moveOneBoy' : 'moveOneGirl';
   const moveLabel = isGirls ? '🚹 بنين' : '🚺 بنات';
   const ptsMap = studentPointsMap();
+  const dUsers = loadDB().users || [];
   return students.map(s => {
     const cls = s.classId ? classById(s.classId) : null;
     const grade = cls ? gradeById(cls.gradeId) : null;
     const pts = ptsMap[s.id] || 0;
+    const su = dUsers.find(u => u.id === s.id && u.role === 'STUDENT');
+    const hasAccount = !!su;
     return `<tr data-name="${escapeHtml(s.fullName.toLowerCase())}" data-no="${escapeHtml(String(s.studentNo).toLowerCase())}">
       <td style="font-weight:600;color:#1f2937">${studentNameLink(s)}</td>
       <td>${escapeHtml(s.studentNo)}</td>
       <td>${grade ? escapeHtml(grade.name) : '—'}</td>
       <td>${cls ? escapeHtml(cls.name) : '—'}</td>
       <td style="font-weight:800;color:${pts>=0?'#16a34a':'#dc2626'}" title="مجموع النقاط (ثواب/عقاب)">${pts>0?'+':''}${pts}</td>
+      <td style="font-size:12px">${hasAccount ? '<span style="color:var(--green)">✓ ' + escapeHtml(su.username) + '</span>' : '<span style="color:#9ca3af">—</span>'}</td>
+      <td>
+        ${isAdmin ? (hasAccount ? `<span style="color:#9ca3af;font-size:12px">تم التعيين</span>` : `<button class="btn-secondary" style="padding:2px 8px;font-size:11px" onclick="setStudentCreds('${s.id}','${escapeHtml(s.fullName)}')">🔑 تعيين</button>`) : ''}
+      </td>
       <td>
         ${isAdmin ? `<button class="del-btn" onclick="deleteStudent('${s.id}')">🗑 حذف</button>
         <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="${moveFn}('${s.id}')">${moveLabel}</button>` : ''}
@@ -3765,7 +3772,7 @@ function renderStudents(){
   <div class="card mb"><input id="studentSearch" class="input" style="max-width:280px" placeholder="بحث بالاسم أو الرقم..." oninput="filterStudentsTable()" /></div>
   <div class="card table-card">
     <table class="data-table">
-      <thead><tr><th>الاسم</th><th>الرقم</th><th>الصف</th><th>الفصل</th><th>النقاط</th><th></th></tr></thead>
+      <thead><tr><th>الاسم</th><th>الرقم</th><th>الصف</th><th>الفصل</th><th>النقاط</th><th>اسم المستخدم</th><th>الحساب</th><th></th></tr></thead>
       <tbody id="studentsTableBody">${renderStudentBody(sortStudentsForView(students))}</tbody>
     </table>
   </div>`;
@@ -3805,6 +3812,20 @@ function generateUsername(fullName){
   const base = parts.slice(0,2).map(w => w[0] || '').join('').replace(/[\u0600-\u06FF]/g, c => c).toLowerCase();
   const clean = (base || 'user').replace(/[^a-z0-9\u0600-\u06FF]/g, '') || 'user';
   return clean + Math.floor(Math.random()*900+100);
+}
+async function setStudentCreds(studentId, studentName){
+  const input = prompt('اسم المستخدم للطالب "' + studentName + '" (اتركه فارغاً للتصدير تلقائياً):');
+  if(input === null) return;
+  const password = prompt('الرقم السري للطالب "' + studentName + '" (6 أحرف على الأقل):');
+  if(!password || password.length < 6){ alert('الرقم السري يجب أن يكون 6 أحرف على الأقل'); return; }
+  const username = input.trim() || generateUsername(studentName);
+  const r = await __api('POST', 'students/create', { name: studentName, username, password });
+  if(!r || r.status !== 200 || !r.j || !r.j.ok){
+    alert(r?.j?.error === 'username_exists' ? 'اسم المستخدم مستخدم مسبقًا' : 'تعذر إنشاء الحساب: ' + (r?.j?.error || 'خطأ'));
+    return;
+  }
+  alert('تم إنشاء حساب الطالب: ' + username);
+  renderApp();
 }
 async function addStudent(){
   const fullName = document.getElementById('sFullName').value.trim();
