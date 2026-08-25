@@ -2590,6 +2590,8 @@ function renderStudentDashboard(){
   const classLabel = grade ? grade.name + ' — الفصل ' + cls.name : '—';
   const assignments = (d.assignments||[]).filter(a => myStudent && a.classId === myStudent.classId);
   const recentAssignments = assignments.slice(-8).reverse();
+  const myNotes = (d.notes||[]).slice().filter(n => n.studentId === user.id).slice(-6).reverse();
+  const myTransfers = (d.transfers||[]).slice().filter(t => studentIdsOf(t).includes(user.id)).slice(-4).reverse();
   const attRecs = (d.attendance||[]).slice(-30);
   let present = 0, absent = 0;
   attRecs.forEach(day => {
@@ -2658,9 +2660,36 @@ function renderStudentDashboard(){
         <span style="font-size:11px;color:var(--muted);white-space:nowrap">${a.date || ''}</span>
       </div>`).join('')}
     </div>
-    <div class="dash-panel" style="min-width:220px;max-width:280px;text-align:center">
-      <div class="dash-panel-title" style="margin-bottom:10px">🌤 الطقس</div>
-      <div id="weatherBox"></div>
+    <div class="dash-panel" style="min-width:220px;max-width:280px">
+      <div class="dash-panel-head">
+        <div class="dash-panel-title">★ ملاحظاتي</div>
+        <a href="#/notes" class="dash-panel-more">عرض الكل ←</a>
+      </div>
+      ${myNotes.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:12px">لا توجد ملاحظات بعد</p>' :
+      myNotes.map(n => `<div style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--line)">
+        <span style="font-size:16px">${n.type==='POSITIVE'?'🟢':'🔴'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:12px">${escapeHtml(n.category)}</div>
+          <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.description ? escapeHtml(n.description) : '—'}</div>
+        </div>
+        <span style="font-size:12px;font-weight:700;color:${n.type==='POSITIVE'?'#16a34a':'#dc2626'};white-space:nowrap">${(n.points ?? 0) > 0 ? '+' : ''}${n.points ?? 0}</span>
+      </div>`).join('')}
+      <div style="border-top:2px dashed var(--line,#e5e7eb);margin:8px 0"></div>
+      <div class="dash-panel-head" style="margin-top:4px">
+        <div class="dash-panel-title">↔ تحويلاتي</div>
+        <a href="#/transfers" class="dash-panel-more">عرض الكل ←</a>
+      </div>
+      ${myTransfers.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:12px">لا توجد تحويلات</p>' :
+      myTransfers.map(t => {
+        const st = t.status === 'PENDING' ? '<span style="color:#d97706;font-size:11px">⏳ قيد المتابعة</span>' : '<span style="color:#16a34a;font-size:11px">✅ تم الحل</span>';
+        return `<div style="padding:8px;border-bottom:1px solid var(--line)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:600;font-size:12px">${escapeHtml(t.reason || '')}</span>
+            ${st}
+          </div>
+          <div style="font-size:11px;color:var(--muted)">${t.createdAt ? new Date(t.createdAt).toLocaleDateString('ar-SA') : ''}${t.deductedPoints ? ' · خصم ' + t.deductedPoints + ' نقطة' : ''}</div>
+        </div>`;
+      }).join('')}
     </div>
   </div>`;
 }
