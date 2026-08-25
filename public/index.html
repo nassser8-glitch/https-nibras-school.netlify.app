@@ -3719,7 +3719,7 @@ function renderStudentBody(students){
       <td style="font-weight:800;color:${pts>=0?'#16a34a':'#dc2626'}" title="مجموع النقاط (ثواب/عقاب)">${pts>0?'+':''}${pts}</td>
       <td style="font-size:12px">${hasAccount ? '<span style="color:var(--green)">✓ ' + escapeHtml(su.username) + '</span>' : '<span style="color:#9ca3af">—</span>'}</td>
       <td>
-        ${isAdmin ? (hasAccount ? `<span style="color:#9ca3af;font-size:12px">تم التعيين</span>` : `<button class="btn-secondary" style="padding:2px 8px;font-size:11px" onclick="setStudentCreds('${s.id}','${escapeHtml(s.fullName)}')">🔑 تعيين</button>`) : ''}
+        ${isAdmin ? (hasAccount ? `<button class="btn-secondary" style="padding:2px 8px;font-size:11px" onclick="resetStudentPassword('${s.id}','${escapeHtml(s.fullName)}')">🔄 إعادة تعيين</button>` : `<button class="btn-secondary" style="padding:2px 8px;font-size:11px" onclick="setStudentCreds('${s.id}','${escapeHtml(s.fullName)}')">🔑 تعيين</button>`) : ''}
       </td>
       <td>
         ${isAdmin ? `<button class="del-btn" onclick="deleteStudent('${s.id}')">🗑 حذف</button>
@@ -3755,20 +3755,40 @@ function renderStudents(){
     <button class="btn-primary" onclick="addStudent()">حفظ</button>
   </div>
   <div id="studentCredsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
-    <div style="background:#fff;border-radius:14px;padding:28px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.25)">
-      <h3 style="margin:0 0 4px;font-size:18px;color:#1f2937">تعيين حساب الطالب</h3>
-      <p id="scStudentName" style="margin:0 0 16px;color:#6b7280;font-size:14px"></p>
-      <input type="hidden" id="scStudentId" />
-      <label style="display:block;margin-bottom:12px;font-size:13px;font-weight:600;color:#374151">اسم المستخدم
-        <input id="scUsername" class="input" style="width:100%;margin-top:4px" placeholder="اسم المستخدم" />
-      </label>
-      <label style="display:block;margin-bottom:16px;font-size:13px;font-weight:600;color:#374151">الرقم السري (8 أحرف على الأقل)
-        <input id="scPassword" class="input" type="password" style="width:100%;margin-top:4px" placeholder="كلمة المرور" />
-      </label>
-      <p id="scErr" style="color:#dc2626;font-size:13px;margin:0 0 12px;min-height:18px"></p>
-      <div style="display:flex;gap:10px;justify-content:flex-end">
-        <button class="btn-secondary" onclick="closeStudentCreds()">إلغاء</button>
-        <button class="btn-primary" onclick="saveStudentCreds()">💾 حفظ الحساب</button>
+    <div style="background:#fff;border-radius:14px;padding:28px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+      <div id="scForm">
+        <h3 style="margin:0 0 4px;font-size:18px;color:#1f2937">تعيين حساب الطالب</h3>
+        <p id="scStudentName" style="margin:0 0 16px;color:#6b7280;font-size:14px"></p>
+        <input type="hidden" id="scStudentId" />
+        <label style="display:block;margin-bottom:12px;font-size:13px;font-weight:600;color:#374151">اسم المستخدم
+          <input id="scUsername" class="input" style="width:100%;margin-top:4px" placeholder="اسم المستخدم" />
+        </label>
+        <label style="display:block;margin-bottom:16px;font-size:13px;font-weight:600;color:#374151">الرقم السري (8 أحرف على الأقل)
+          <input id="scPassword" class="input" type="password" style="width:100%;margin-top:4px" placeholder="كلمة المرور" />
+        </label>
+        <p id="scErr" style="color:#dc2626;font-size:13px;margin:0 0 12px;min-height:18px"></p>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn-secondary" onclick="closeStudentCreds()">إلغاء</button>
+          <button class="btn-primary" onclick="saveStudentCreds()">💾 حفظ الحساب</button>
+        </div>
+      </div>
+      <div id="scResult" style="display:none">
+        <h3 style="margin:0 0 12px;font-size:18px;color:#16a34a">✅ تم إنشاء الحساب</h3>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;margin-bottom:14px">
+          <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#374151">اسم المستخدم:</p>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <input id="scResUser" class="input" readonly style="flex:1;background:#fff;font-weight:700;direction:ltr" />
+            <button class="btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('scResUser').value);this.textContent='✅ نُسخ'" style="white-space:nowrap;padding:6px 10px;font-size:12px">📋 نسخ</button>
+          </div>
+          <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#374151">كلمة المرور:</p>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input id="scResPass" class="input" readonly style="flex:1;background:#fff;font-weight:700;direction:ltr" />
+            <button class="btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('scResPass').value);this.textContent='✅ نُسخ'" style="white-space:nowrap;padding:6px 10px;font-size:12px">📋 نسخ</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn-primary" onclick="closeStudentCreds()">تم</button>
+        </div>
       </div>
     </div>
   </div>
@@ -3835,6 +3855,8 @@ async function setStudentCreds(studentId, studentName){
   const box = document.getElementById('studentCredsModal');
   if(!box) return;
   box.style.display = 'flex';
+  document.getElementById('scForm').style.display = '';
+  document.getElementById('scResult').style.display = 'none';
   document.getElementById('scStudentId').value = studentId;
   document.getElementById('scStudentName').textContent = studentName;
   document.getElementById('scUsername').value = generateUsername(studentName);
@@ -3854,9 +3876,30 @@ async function saveStudentCreds(){
     errEl.textContent = r?.j?.error === 'username_exists' ? 'اسم المستخدم مستخدم مسبقًا' : 'تعذر إنشاء الحساب: ' + (r?.j?.error || 'خطأ');
     return;
   }
-  closeStudentCreds();
-  alert('تم إنشاء حساب الطالب: ' + (r.j.user && r.j.user.username));
-  renderApp();
+  document.getElementById('scForm').style.display = 'none';
+  document.getElementById('scResult').style.display = '';
+  document.getElementById('scResUser').value = r.j.user ? r.j.user.username : username;
+  document.getElementById('scResPass').value = password;
+  await __refreshSchool(getActiveSchool());
+}
+async function resetStudentPassword(studentId, studentName){
+  if(!confirm('إعادة تعيين كلمة المرور للطالب "' + studentName + '"؟')) return;
+  const r = await __api('POST', 'admin/reset-password', { userId: studentId });
+  if(r.status === 200 && r.j && r.j.ok){
+    await __refreshSchool(getActiveSchool());
+    const d = loadDB();
+    const su = (d.users||[]).find(u => u.id === studentId);
+    const box = document.getElementById('studentCredsModal');
+    box.style.display = 'flex';
+    document.getElementById('scForm').style.display = 'none';
+    document.getElementById('scResult').style.display = '';
+    document.getElementById('scStudentName').textContent = studentName;
+    document.getElementById('scResUser').value = su ? su.username : '';
+    document.getElementById('scResPass').value = r.j.tempPassword || '';
+    renderApp();
+  } else {
+    alert('تعذر إعادة التعيين');
+  }
 }
 async function addStudent(){
   const fullName = document.getElementById('sFullName').value.trim();
