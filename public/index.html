@@ -1944,6 +1944,7 @@ function renderLayout(user, hash){
       { href:'#/notes', key:'notes', label:'الملاحظات', icon:'★' },
       { href:'#/transfers', key:'transfers', label:'التحويلات', icon:'↔' },
       { href:'#/reports', key:'reports', label:'التقارير', icon:'▥' },
+      (user.role === 'TEACHER') ? { href:'#/assignments', key:'assignments', label:'التكليفات', icon:'📝' } : null,
     ]},
     { title:'المدرسة', items:[
       (user.role !== 'STUDENT') ? { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉', badge: user.role === 'AGENT' ? pendingPartRequests() : 0 } : null,
@@ -1987,6 +1988,7 @@ function renderLayout(user, hash){
   else if(page === 'maintenance' && user.role !== 'STUDENT') pageHtml = renderMaintenance();
   else if(page === 'users' && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderUsers();
   else if(page === 'timetable' && user.role === 'TEACHER') pageHtml = renderTimetable();
+  else if(page === 'assignments' && user.role === 'TEACHER') pageHtml = renderAssignments();
   else if(page === 'account' && user.role === 'TEACHER') pageHtml = renderAccount();
   else if(page === 'activities' && user.role !== 'STUDENT') pageHtml = renderActivities();
   else if(page.startsWith('activity/') && user.role !== 'STUDENT') pageHtml = renderActivityDetail(page.split('/')[1]);
@@ -5603,6 +5605,129 @@ function mirrorTtDelete(teacherEmail, day, period){
   if(!u || !od.timetable || !od.timetable[u.id] || !od.timetable[u.id][day]) return;
   delete od.timetable[u.id][day][period];
   localStorage.setItem(dbKeyFor(other), JSON.stringify(od));
+}
+
+/* ============ التكليفات ============ */
+function getTeacherSubjects(user, d){
+  const tt = (d.timetable || {})[user.id] || {};
+  const map = {};
+  Object.values(tt).forEach(day => {
+    Object.values(day).forEach(cell => {
+      if(cell && cell.subject && cell.classId){
+        const cls = d.classes.find(c => c.id === cell.classId);
+        if(cls){
+          const key = cell.classId + '|' + cell.subject;
+          if(!map[key]) map[key] = { classId: cell.classId, subject: cell.subject, className: cls.name, gradeId: cls.gradeId };
+        }
+      }
+    });
+  });
+  return Object.values(map);
+}
+function renderAssignments(){
+  const user = currentUser();
+  if(!user || user.role !== 'TEACHER') return '<h1 class="page-title">غير متاح</h1>';
+  const d = loadDB();
+  const params = new URLSearchParams((location.hash.split('?')[1]||''));
+  const step = params.get('step') || 'class';
+  const classId = params.get('cid') || '';
+  const subject = decodeURIComponent(params.get('sub') || '');
+  const subjects = getTeacherSubjects(user, d);
+  const myClassIds = [...new Set(subjects.map(s => s.classId))];
+  const gradeById = g => (d.grades||[]).find(x => x.id === g);
+  const classLabel = c => { const g = gradeById(c.gradeId); return (g ? g.name + ' — ' : '') + 'الفصل ' + c.name; };
+
+  if(step === 'class'){
+    if(!myClassIds.length) return `<div class="page-title">التكليفات</div><div class="card" style="text-align:center;padding:40px"><p>لا توجد مواد مسندة لك بعد.</p><p class="muted">أضف جدول الحصص أولاً من صفحة "جدولي"</p></div>`;
+    const cards = myClassIds.map(cid => {
+      const cls = d.classes.find(c => c.id === cid);
+      if(!cls) return '';
+      const subCount = subjects.filter(s => s.classId === cid).length;
+      return `<div class="card" style="cursor:pointer;padding:18px;margin-bottom:10px" onclick="location.hash='#/assignments?step=subject&cid=${cid}'">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:28px">🏫</span>
+          <div><div style="font-weight:bold;font-size:16px">${escapeHtml(classLabel(cls))}</div><div class="muted small">${subCount} مادة</div></div>
+          <span style="margin-right:auto;font-size:18px">◀</span>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="page-title">📝 التكليفات</div><p class="muted" style="margin-bottom:14px">اختر فصلاً</p>${cards}`;
+  }
+
+  if(step === 'subject'){
+    const clsSubjects = subjects.filter(s => s.classId === classId);
+    const cls = d.classes.find(c => c.id === classId);
+    if(!clsSubjects.length) return `<div class="page-title">التكليفات</div><div class="card" style="text-align:center;padding:30px"><p>لا توجد مواد مسجلة لهذا الفصل.</p><a href="#/assignments" class="btn-secondary" style="margin-top:10px">رجوع</a></div>`;
+    const cards = clsSubjects.map(s => {
+      const enc = encodeURIComponent(s.subject);
+      return `<div class="card" style="cursor:pointer;padding:18px;margin-bottom:10px" onclick="location.hash='#/assignments?step=type&cid=${classId}&sub=${enc}'">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:28px">📚</span>
+          <div><div style="font-weight:bold;font-size:16px">${escapeHtml(s.subject)}</div><div class="muted small">${escapeHtml(classLabel(cls))}</div></div>
+          <span style="margin-right:auto;font-size:18px">◀</span>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="page-title">📝 التكليفات</div><a href="#/assignments" style="font-size:13px">← الرجوع للفصول</a><p class="muted" style="margin:8px 0 14px">اختر مادة</p>${cards}`;
+  }
+
+  if(step === 'type'){
+    const enc = encodeURIComponent(subject);
+    const types = [
+      { key:'واجب', icon:'📋', color:'var(--primary)' },
+      { key:'مشروع', icon:'🎨', color:'#e67e22' },
+      { key:'حفظ', icon:'📖', color:'var(--green)' },
+      { key:'أخرى', icon:'📌', color:'#8e44ad' }
+    ];
+    const cards = types.map(t => {
+      return `<div class="card" style="cursor:pointer;padding:18px;margin-bottom:10px;border-right:4px solid ${t.color}" onclick="location.hash='#/assignments?step=form&cid=${classId}&sub=${enc}&type=${encodeURIComponent(t.key)}'">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:28px">${t.icon}</span>
+          <div style="font-weight:bold;font-size:16px">${t.key}</div>
+          <span style="margin-right:auto;font-size:18px">◀</span>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="page-title">📝 التكليفات</div><a href="#/assignments?step=subject&cid=${classId}" style="font-size:13px">← الرجوع للمواد</a><p class="muted" style="margin:8px 0 14px">${escapeHtml(subject)} — اختر نوع التكليف</p>${cards}`;
+  }
+
+  if(step === 'form'){
+    const assignmentType = decodeURIComponent(params.get('type') || 'واجب');
+    const cls = d.classes.find(c => c.id === classId);
+    return `<div class="page-title">📝 تسجيل تكليف</div>
+    <a href="#/assignments?step=type&cid=${classId}&sub=${encodeURIComponent(subject)}" style="font-size:13px">← الرجوع لأنواع التكليف</a>
+    <div class="card" style="padding:24px;margin-top:14px">
+      <div style="display:grid;gap:14px">
+        <div><label style="font-weight:bold">المادة</label><div class="muted">${escapeHtml(subject)}</div></div>
+        <div><label style="font-weight:bold">الفصل</label><div class="muted">${cls ? escapeHtml(classLabel(cls)) : '—'}</div></div>
+        <div><label style="font-weight:bold">نوع التكليف</label><div class="muted">${escapeHtml(assignmentType)}</div></div>
+        <div><label style="font-weight:bold">عنوان التكليف</label><input id="assTitle" class="input" placeholder="مثال: تمارين صفحة 45" /></div>
+        <div><label style="font-weight:bold">الوصف (اختياري)</label><textarea id="assDesc" class="input" rows="3" placeholder="تفاصيل إضافية..."></textarea></div>
+        <div><label style="font-weight:bold">التاريخ</label><input id="assDate" class="input" type="date" value="${new Date().toISOString().slice(0,10)}" /></div>
+        <button class="btn-primary full" onclick="saveAssignment()">💾 حفظ التكليف</button>
+      </div>
+    </div>`;
+  }
+
+  return renderAssignments();
+}
+function saveAssignment(){
+  const user = currentUser();
+  if(!user) return;
+  const d = loadDB();
+  const params = new URLSearchParams((location.hash.split('?')[1]||''));
+  const title = (document.getElementById('assTitle')||{}).value||'';
+  const desc = (document.getElementById('assDesc')||{}).value||'';
+  const date = (document.getElementById('assDate')||{}).value||'';
+  const subject = decodeURIComponent(params.get('sub')||'');
+  const classId = params.get('cid')||'';
+  const type = decodeURIComponent(params.get('type')||'واجب');
+  if(!title){ alert('اكتب عنوان التكليف'); return; }
+  d.assignments = d.assignments || [];
+  d.assignments.push({ id: uid(), teacherId: user.id, classId, subject, type, title, desc, date, created: Date.now() });
+  saveDB(d);
+  alert('✅ تم حفظ التكليف');
+  location.hash = '#/assignments?step=type&cid=' + classId + '&sub=' + encodeURIComponent(subject);
 }
 
 function renderActivities(){
