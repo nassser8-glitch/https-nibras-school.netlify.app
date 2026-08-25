@@ -3754,6 +3754,24 @@ function renderStudents(){
     ${__serverEnabled() ? '<input id="sPassword" class="input" type="password" placeholder="الرقم السري للطالب" data-tip="كلمة مرور الطالب — يستطيع تغييرها لاحقاً" />' : ''}
     <button class="btn-primary" onclick="addStudent()">حفظ</button>
   </div>
+  <div id="studentCredsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:#fff;border-radius:14px;padding:28px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+      <h3 style="margin:0 0 4px;font-size:18px;color:#1f2937">تعيين حساب الطالب</h3>
+      <p id="scStudentName" style="margin:0 0 16px;color:#6b7280;font-size:14px"></p>
+      <input type="hidden" id="scStudentId" />
+      <label style="display:block;margin-bottom:12px;font-size:13px;font-weight:600;color:#374151">اسم المستخدم
+        <input id="scUsername" class="input" style="width:100%;margin-top:4px" placeholder="اسم المستخدم" />
+      </label>
+      <label style="display:block;margin-bottom:16px;font-size:13px;font-weight:600;color:#374151">الرقم السري (8 أحرف على الأقل)
+        <input id="scPassword" class="input" type="password" style="width:100%;margin-top:4px" placeholder="كلمة المرور" />
+      </label>
+      <p id="scErr" style="color:#dc2626;font-size:13px;margin:0 0 12px;min-height:18px"></p>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn-secondary" onclick="closeStudentCreds()">إلغاء</button>
+        <button class="btn-primary" onclick="saveStudentCreds()">💾 حفظ الحساب</button>
+      </div>
+    </div>
+  </div>
   <div id="importResult"></div>
   <div class="card mb" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
     <label style="display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px">🏫 ${tl('الفصل')}:
@@ -3814,16 +3832,29 @@ function generateUsername(fullName){
   return clean + Math.floor(Math.random()*900+100);
 }
 async function setStudentCreds(studentId, studentName){
-  const input = prompt('اسم المستخدم للطالب "' + studentName + '" (اتركه فارغاً للتصدير تلقائياً):');
-  if(input === null) return;
-  const password = prompt('الرقم السري للطالب "' + studentName + '" (8 أحرف على الأقل):');
-  if(!password || password.length < 8){ alert('الرقم السري يجب أن يكون 8 أحرف على الأقل'); return; }
-  const username = input.trim() || generateUsername(studentName);
+  const box = document.getElementById('studentCredsModal');
+  if(!box) return;
+  box.style.display = 'flex';
+  document.getElementById('scStudentId').value = studentId;
+  document.getElementById('scStudentName').textContent = studentName;
+  document.getElementById('scUsername').value = generateUsername(studentName);
+  document.getElementById('scPassword').value = '';
+  document.getElementById('scErr').textContent = '';
+}
+function closeStudentCreds(){ document.getElementById('studentCredsModal').style.display = 'none'; }
+async function saveStudentCreds(){
+  const studentId = document.getElementById('scStudentId').value;
+  const studentName = document.getElementById('scStudentName').textContent;
+  const username = document.getElementById('scUsername').value.trim() || generateUsername(studentName);
+  const password = document.getElementById('scPassword').value;
+  const errEl = document.getElementById('scErr');
+  if(!password || password.length < 8){ errEl.textContent = 'الرقم السري يجب أن يكون 8 أحرف على الأقل'; return; }
   const r = await __api('POST', 'admin/create-user', { name: studentName, username, password, role: 'STUDENT', studentId, email: '' });
   if(!r || r.status !== 200 || !r.j || !r.j.ok){
-    alert(r?.j?.error === 'username_exists' ? 'اسم المستخدم مستخدم مسبقًا' : 'تعذر إنشاء الحساب: ' + (r?.j?.error || 'خطأ'));
+    errEl.textContent = r?.j?.error === 'username_exists' ? 'اسم المستخدم مستخدم مسبقًا' : 'تعذر إنشاء الحساب: ' + (r?.j?.error || 'خطأ');
     return;
   }
+  closeStudentCreds();
   alert('تم إنشاء حساب الطالب: ' + (r.j.user && r.j.user.username));
   renderApp();
 }
