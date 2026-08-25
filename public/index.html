@@ -1933,11 +1933,6 @@ function renderLayout(user, hash){
   const homeLink = { href:'#/', key:'home', label:'الرئيسية', icon:'⌂' };
   const isStudent = user.role === 'STUDENT';
   const groups = isStudent ? [
-    { title:'طلبي', items:[
-      { href:'#/assignments', key:'assignments', label:'التكليفات', icon:'📝' },
-      { href:'#/notes', key:'notes', label:'الملاحظات', icon:'★' },
-      { href:'#/transfers', key:'transfers', label:'التحويلات', icon:'↔' },
-    ]},
     { title:'النظام', items:[
       { href:'#/settings', key:'settings', label:'الإعدادات', icon:'⚙️' },
       { href:'#/about', key:'about', label:'حول نبراس', icon:'ⓘ' },
