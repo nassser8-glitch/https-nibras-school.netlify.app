@@ -325,7 +325,7 @@ app.post('/api/auth/login', (req, res) => {
 app.post('/api/students/create', requireAuth, (req, res) => {
   (async () => {
     if (!['ADMIN', 'AGENT'].includes(req.session.role)) return res.status(403).json({ error: 'forbidden' });
-    const { name, username, password } = req.body || {};
+    const { name, username, password, studentId } = req.body || {};
     if (!name || !username || !password) return res.status(400).json({ error: 'missing_fields' });
     const cleanUsername = String(username).trim().toLowerCase();
     const cleanName = String(name).trim();
@@ -334,9 +334,9 @@ app.post('/api/students/create', requireAuth, (req, res) => {
     const existing = await db.userByUsername(cleanUsername);
     if (existing) return res.status(409).json({ error: 'username_exists' });
     const hash = await bcrypt.hash(cleanPassword, 10);
-    const id = 'id_' + crypto.randomBytes(8).toString('hex');
+    const id = studentId || ('id_' + crypto.randomBytes(8).toString('hex'));
     const school = req.session.school || 'BOYS';
-    await db.insertUser({ id, school, name: cleanName, email: '', username: cleanUsername, password_hash: hash, role: 'STUDENT', active: true, first_login: false, granted: false, data: {} });
+    await db.insertUser({ id, school, name: cleanName, email: '', username: cleanUsername, password_hash: hash, role: 'STUDENT', active: true, first_login: false, granted: true, data: {} });
     res.json({ ok: true, id, username: cleanUsername });
   })().catch(fail(res));
 });

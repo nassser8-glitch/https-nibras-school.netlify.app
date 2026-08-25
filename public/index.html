@@ -3819,7 +3819,7 @@ async function setStudentCreds(studentId, studentName){
   const password = prompt('الرقم السري للطالب "' + studentName + '" (6 أحرف على الأقل):');
   if(!password || password.length < 6){ alert('الرقم السري يجب أن يكون 6 أحرف على الأقل'); return; }
   const username = input.trim() || generateUsername(studentName);
-  const r = await __api('POST', 'students/create', { name: studentName, username, password });
+  const r = await __api('POST', 'students/create', { name: studentName, username, password, studentId });
   if(!r || r.status !== 200 || !r.j || !r.j.ok){
     alert(r?.j?.error === 'username_exists' ? 'اسم المستخدم مستخدم مسبقًا' : 'تعذر إنشاء الحساب: ' + (r?.j?.error || 'خطأ'));
     return;
