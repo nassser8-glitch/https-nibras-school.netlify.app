@@ -2607,8 +2607,8 @@ function renderStudentDashboard(){
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${escapeHtml(classLabel)}</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:14px">
       <div style="display:flex;flex-direction:column;align-items:center;padding:0 28px">
-        <div style="width:150px;height:150px;border-radius:50%;background:conic-gradient(#16a34a 0deg ${posDeg}deg, #dc2626 ${posDeg}deg ${posDeg + negDeg}deg, #e5e7eb ${posDeg + negDeg}deg 360deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.12)">
-          <div style="width:116px;height:116px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 1px 4px rgba(0,0,0,.06)">
+        <div style="width:180px;height:180px;border-radius:50%;background:conic-gradient(#16a34a 0deg ${posDeg}deg, #dc2626 ${posDeg}deg ${posDeg + negDeg}deg, #e5e7eb ${posDeg + negDeg}deg 360deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.12)">
+          <div style="width:140px;height:140px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 1px 4px rgba(0,0,0,.06)">
             <span style="font-size:32px;font-weight:800;color:${pts >= 0 ? '#16a34a' : '#dc2626'}">${pts > 0 ? '+' : ''}${pts}</span>
             <span style="font-size:12px;color:var(--muted);font-weight:600">نقطة</span>
           </div>
@@ -2619,10 +2619,10 @@ function renderStudentDashboard(){
           <span style="font-size:14px;font-weight:700;color:#dc2626">${sp.neg}</span>
         </div>
       </div>
-      <div style="width:1px;height:130px;background:linear-gradient(to bottom,transparent,#d1d5db,transparent);flex-shrink:0"></div>
+      <div style="width:1px;height:160px;background:linear-gradient(to bottom,transparent,#d1d5db,transparent);flex-shrink:0"></div>
       <div style="display:flex;flex-direction:column;align-items:center;padding:0 28px">
-        <div style="position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center">
-          <svg viewBox="0 0 36 36" style="width:150px;height:150px;transform:rotate(-90deg)">
+        <div style="position:relative;width:180px;height:180px;display:flex;align-items:center;justify-content:center">
+          <svg viewBox="0 0 36 36" style="width:180px;height:180px;transform:rotate(-90deg)">
             <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3" />
             <circle cx="18" cy="18" r="15.9" fill="none" stroke="#dc2626" stroke-width="3" stroke-dasharray="${total > 0 ? Math.round(absent/total*100) : 0} 100" stroke-linecap="round" />
           </svg>
