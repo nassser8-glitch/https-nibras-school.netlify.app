@@ -2608,40 +2608,37 @@ function renderStudentDashboard(){
   <div class="dash-panel" style="text-align:center;padding:24px;margin-bottom:14px;background:linear-gradient(135deg,var(--primary-light,#eef7ff),#fff);border:2px solid var(--border-color,#e0edf7)">
     <div style="font-size:14px;font-weight:700;color:var(--muted);margin-bottom:4px">مرحباً، ${escapeHtml(user.name || 'طالب')}</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${escapeHtml(classLabel)}</div>
-    <div style="width:140px;height:140px;border-radius:50%;background:conic-gradient(#16a34a 0deg ${posDeg}deg, #dc2626 ${posDeg}deg ${posDeg + negDeg}deg, #e5e7eb ${posDeg + negDeg}deg 360deg);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.12)">
-      <div style="width:108px;height:108px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 1px 4px rgba(0,0,0,.06)">
-        <span style="font-size:28px;font-weight:800;color:${pts >= 0 ? '#16a34a' : '#dc2626'}">${pts > 0 ? '+' : ''}${pts}</span>
-        <span style="font-size:10px;color:var(--muted);font-weight:600">نقطة</span>
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:14px">
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:6px 14px;text-align:center;min-width:80px">
-        <div style="font-size:18px;font-weight:800;color:#16a34a">+${sp.pos}</div>
-        <div style="font-size:10px;color:var(--muted)">إيجابية</div>
-      </div>
-      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:6px 14px;text-align:center;min-width:80px">
-        <div style="font-size:18px;font-weight:800;color:#dc2626">${sp.neg}</div>
-        <div style="font-size:10px;color:var(--muted)">سلبية</div>
-      </div>
-    </div>
-    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;align-items:center">
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 18px;text-align:center">
-        <div style="font-size:20px;font-weight:800;color:#16a34a">${attPct}%</div>
-        <div style="font-size:11px;color:var(--muted)">الحضور</div>
-      </div>
-      <div style="position:relative;width:80px;height:80px;flex-shrink:0">
-        <svg viewBox="0 0 36 36" style="transform:rotate(-90deg)">
-          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3" />
-          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#dc2626" stroke-width="3" stroke-dasharray="${total > 0 ? Math.round(absent/total*100) : 0} 100" stroke-linecap="round" />
-        </svg>
-        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
-          <span style="font-size:16px;font-weight:800;color:#dc2626">${absent}</span>
-          <span style="font-size:8px;color:var(--muted)">غياب</span>
+    <div style="display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:14px">
+      <div style="display:flex;flex-direction:column;align-items:center;padding:0 24px">
+        <div style="width:110px;height:110px;border-radius:50%;background:conic-gradient(#16a34a 0deg ${posDeg}deg, #dc2626 ${posDeg}deg ${posDeg + negDeg}deg, #e5e7eb ${posDeg + negDeg}deg 360deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.12)">
+          <div style="width:84px;height:84px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 1px 4px rgba(0,0,0,.06)">
+            <span style="font-size:24px;font-weight:800;color:${pts >= 0 ? '#16a34a' : '#dc2626'}">${pts > 0 ? '+' : ''}${pts}</span>
+            <span style="font-size:10px;color:var(--muted);font-weight:600">نقطة</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <span style="font-size:12px;font-weight:700;color:#16a34a">+${sp.pos}</span>
+          <span style="font-size:12px;color:#d1d5db">|</span>
+          <span style="font-size:12px;font-weight:700;color:#dc2626">${sp.neg}</span>
         </div>
       </div>
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 18px;text-align:center">
-        <div style="font-size:20px;font-weight:800;color:#1d4ed8">${present}</div>
-        <div style="font-size:11px;color:var(--muted)">حاضر</div>
+      <div style="width:1px;height:100px;background:linear-gradient(to bottom,transparent,#d1d5db,transparent);flex-shrink:0"></div>
+      <div style="display:flex;flex-direction:column;align-items:center;padding:0 24px">
+        <div style="position:relative;width:110px;height:110px;display:flex;align-items:center;justify-content:center">
+          <svg viewBox="0 0 36 36" style="width:110px;height:110px;transform:rotate(-90deg)">
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3" />
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#dc2626" stroke-width="3" stroke-dasharray="${total > 0 ? Math.round(absent/total*100) : 0} 100" stroke-linecap="round" />
+          </svg>
+          <div style="position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center">
+            <span style="font-size:24px;font-weight:800;color:#dc2626">${absent}</span>
+            <span style="font-size:10px;color:var(--muted);font-weight:600">غياب</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <span style="font-size:12px;font-weight:700;color:#16a34a">${attPct}% حضور</span>
+          <span style="font-size:12px;color:#d1d5db">|</span>
+          <span style="font-size:12px;font-weight:700;color:#1d4ed8">${present} حاضر</span>
+        </div>
       </div>
     </div>
   </div>
