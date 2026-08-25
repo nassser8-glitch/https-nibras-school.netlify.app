@@ -2581,8 +2581,9 @@ function renderStudentDashboard(){
   const d = loadDB();
   const user = currentUser();
   if(!user || user.role !== 'STUDENT') return renderDashboard();
-  const ptsMap = studentPointsMap();
-  const pts = ptsMap[user.id] || 0;
+  const split = studentPointsSplit();
+  const sp = split[user.id] || {pos:0, neg:0};
+  const pts = (sp.pos || 0) + (sp.neg || 0);
   const myStudent = (d.students||[]).find(s => s.id === user.id);
   const cls = myStudent && myStudent.classId ? (d.classes||[]).find(c => c.id === myStudent.classId) : null;
   const grade = cls ? (d.grades||[]).find(g => g.id === cls.gradeId) : null;
@@ -2600,29 +2601,47 @@ function renderStudentDashboard(){
   });
   const total = present + absent;
   const attPct = total > 0 ? Math.round((present/total)*100) : 0;
-  const msgMarquee = (localStorage.getItem(ANNOUNCEMENT_KEY(getActiveSchool()))||'الصلاة على النبي').split('\n').filter(Boolean).join(' • ');
+  const maxPts = Math.max(sp.pos, Math.abs(sp.neg), 1);
+  const posDeg = Math.round((sp.pos / maxPts) * 180);
+  const negDeg = Math.round((Math.abs(sp.neg) / maxPts) * 180);
   return `
   <div class="dash-panel" style="text-align:center;padding:24px;margin-bottom:14px;background:linear-gradient(135deg,var(--primary-light,#eef7ff),#fff);border:2px solid var(--border-color,#e0edf7)">
     <div style="font-size:14px;font-weight:700;color:var(--muted);margin-bottom:4px">مرحباً، ${escapeHtml(user.name || 'طالب')}</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${escapeHtml(classLabel)}</div>
-    <div style="width:130px;height:130px;border-radius:50%;background:conic-gradient(${pts >= 0 ? '#16a34a' : '#dc2626'} ${Math.min(Math.max(Math.abs(pts) * 4, 8), 360)}deg, #e5e7eb 0deg);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(22,163,74,.18)">
-      <div style="width:100px;height:100px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 1px 4px rgba(0,0,0,.06)">
-        <span style="font-size:32px;font-weight:800;color:${pts >= 0 ? '#16a34a' : '#dc2626'}">${pts > 0 ? '+' : ''}${pts}</span>
-        <span style="font-size:11px;color:var(--muted);font-weight:600">نقطة</span>
+    <div style="width:140px;height:140px;border-radius:50%;background:conic-gradient(#16a34a 0deg ${posDeg}deg, #dc2626 ${posDeg}deg ${posDeg + negDeg}deg, #e5e7eb ${posDeg + negDeg}deg 360deg);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.12)">
+      <div style="width:108px;height:108px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 1px 4px rgba(0,0,0,.06)">
+        <span style="font-size:28px;font-weight:800;color:${pts >= 0 ? '#16a34a' : '#dc2626'}">${pts > 0 ? '+' : ''}${pts}</span>
+        <span style="font-size:10px;color:var(--muted);font-weight:600">نقطة</span>
       </div>
     </div>
-    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:14px">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:6px 14px;text-align:center;min-width:80px">
+        <div style="font-size:18px;font-weight:800;color:#16a34a">+${sp.pos}</div>
+        <div style="font-size:10px;color:var(--muted)">إيجابية</div>
+      </div>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:6px 14px;text-align:center;min-width:80px">
+        <div style="font-size:18px;font-weight:800;color:#dc2626">${sp.neg}</div>
+        <div style="font-size:10px;color:var(--muted)">سلبية</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;align-items:center">
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 18px;text-align:center">
         <div style="font-size:20px;font-weight:800;color:#16a34a">${attPct}%</div>
         <div style="font-size:11px;color:var(--muted)">الحضور</div>
       </div>
+      <div style="position:relative;width:80px;height:80px;flex-shrink:0">
+        <svg viewBox="0 0 36 36" style="transform:rotate(-90deg)">
+          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3" />
+          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#dc2626" stroke-width="3" stroke-dasharray="${total > 0 ? Math.round(absent/total*100) : 0} 100" stroke-linecap="round" />
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <span style="font-size:16px;font-weight:800;color:#dc2626">${absent}</span>
+          <span style="font-size:8px;color:var(--muted)">غياب</span>
+        </div>
+      </div>
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 18px;text-align:center">
         <div style="font-size:20px;font-weight:800;color:#1d4ed8">${present}</div>
         <div style="font-size:11px;color:var(--muted)">حاضر</div>
-      </div>
-      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px 18px;text-align:center">
-        <div style="font-size:20px;font-weight:800;color:#dc2626">${absent}</div>
-        <div style="font-size:11px;color:var(--muted)">غائب</div>
       </div>
     </div>
   </div>
@@ -2642,10 +2661,9 @@ function renderStudentDashboard(){
         <span style="font-size:11px;color:var(--muted);white-space:nowrap">${a.date || ''}</span>
       </div>`).join('')}
     </div>
-    <div class="dash-panel" style="min-width:220px;max-width:280px">
-      <div class="dash-panel-title" style="margin-bottom:10px">📢 رسالة اليوم</div>
-      <div style="font-size:13px;font-weight:700;line-height:1.8;color:var(--primary,#0f4f88);text-align:center;word-break:break-word;padding:8px">${escapeHtml(msgMarquee)}</div>
-      <div id="weatherBox" style="margin-top:10px"></div>
+    <div class="dash-panel" style="min-width:220px;max-width:280px;text-align:center">
+      <div class="dash-panel-title" style="margin-bottom:10px">🌤 الطقس</div>
+      <div id="weatherBox"></div>
     </div>
   </div>`;
 }
@@ -3761,6 +3779,15 @@ function studentPointsMap(){
   });
   return m;
 }
+function studentPointsSplit(){
+  const m = {};
+  pointItems(loadDB()).forEach(it => {
+    if(!m[it.studentId]) m[it.studentId] = {pos:0, neg:0};
+    if(it.points > 0) m[it.studentId].pos += it.points;
+    else m[it.studentId].neg += it.points;
+  });
+  return m;
+}
 let studentsView = 'all';
 let studentsSort = 'kashaf';
 function setStudentsView(v){ studentsView = v; renderApp(); }
@@ -4620,18 +4647,24 @@ function saveAttendance(){
 /* ============ الملاحظات ============ */
 function renderNotes(){
   const d = loadDB();
-  const students = getVisibleStudents();
   const user = currentUser();
   const isAdmin = user?.role === 'ADMIN';
-  const visibleIds = new Set(students.map(s => s.id));
-  const notes = d.notes.slice().reverse().filter(n => visibleIds.has(n.studentId));
+  const isStudent = user?.role === 'STUDENT';
+  let notes;
+  if(isStudent){
+    notes = d.notes.slice().reverse().filter(n => n.studentId === user.id);
+  } else {
+    const students = getVisibleStudents();
+    const visibleIds = new Set(students.map(s => s.id));
+    notes = d.notes.slice().reverse().filter(n => visibleIds.has(n.studentId));
+  }
   const ptsMapNotes = studentPointsMap();
   const rows = notes.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">لا توجد ملاحظات بعد</td></tr>` :
     notes.map(n => {
       const s = studentById(n.studentId); const by = userById(n.createdBy);
       const pts = n.points ?? notePoints(n.type, n.category);
       return `<tr>
-        <td style="font-weight:600">${studentNameLink(s, s ? (ptsMapNotes[s.id] || 0) : undefined)}</td>
+        <td style="font-weight:600">${isStudent ? '' : studentNameLink(s, s ? (ptsMapNotes[s.id] || 0) : undefined)}</td>
         <td style="color:${n.type==='POSITIVE'?'#16a34a':'#dc2626'}">${n.type==='POSITIVE'?'🟢 إيجابية':'🔴 سلبية'}</td>
         <td>${escapeHtml(n.category)}</td>
         <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.description ? escapeHtml(n.description) : '—'}</td>
@@ -4642,8 +4675,8 @@ function renderNotes(){
     }).join('');
 
   return `
-  <div class="header-row"><h1 class="page-title">الملاحظات</h1><button class="btn-primary" onclick="toggleEl('noteForm')">+ إضافة ملاحظة</button></div>
-  <div id="noteForm" class="card mb" style="display:none">
+  <div class="header-row"><h1 class="page-title">${isStudent ? 'ملاحظاتي' : 'الملاحظات'}</h1>${isStudent ? '' : '<button class="btn-primary" onclick="toggleEl(\'noteForm\')">+ إضافة ملاحظة</button>'}</div>
+  ${isStudent ? '' : `<div id="noteForm" class="card mb" style="display:none">
     <div class="form-grid-3">
       <select id="nClassId" class="input" onchange="fillStudentMulti('nClassId','nStudentList','n')" data-tip="اختر الفصل الذي ينتمي إليه الطلاب أولًا لتظهر قائمة الطلاب"><option value="">اختر الفصل</option>${getClassesSorted().map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
       <div id="nStudentList" class="student-multi-box" data-tip="اختر طالبًا أو أكثر لتسجيل الملاحظة عليهم جميعًا"><div class="muted small" style="padding:4px 0">اختر الفصل أولًا</div></div>
@@ -4660,7 +4693,7 @@ function renderNotes(){
     <div id="nFreeHint" class="card mb" style="display:none;background:#fffbeb;border:1px solid #fde68a;padding:10px;font-size:13px">✍️ اكتب تعليقك الحر في خانة الوصف أدناه</div>
     <textarea id="nDescription" class="input" rows="3" placeholder="وصف الملاحظة (اختياري للخيارات الجاهزة، مطلوب لتحرير)" style="margin-bottom:12px" data-tip="وصف تفصيلي اختياري للملاحظة — يُضاف كتعليق توضيحي على السجل"></textarea>
     <button class="btn-primary" onclick="addNote()">حفظ</button>
-  </div>
+  </div>`}
   <div class="card table-card">
     <table class="data-table"><thead><tr><th>الطالب</th><th>النوع</th><th>الفئة</th><th>الوصف</th><th>بواسطة</th><th>التاريخ</th><th>النقاط</th></tr></thead>
     <tbody>${rows}</tbody></table>
@@ -4721,8 +4754,8 @@ function addNote(){
 function renderTransfers(){
   const user = currentUser();
   const isAdmin = user?.role === 'ADMIN';
+  const isStudent = user?.role === 'STUDENT';
   const active = getActiveSchool();
-  // المدير يرى تحويلات القسمين (بنين وبنات) معًا، وغيره يرى تحويلات قسمه فقط
   const sources = [{ school: active, d: loadDB() }];
   if(isAdmin && active){
     const other = active === 'BOYS' ? 'GIRLS' : 'BOYS';
@@ -4738,6 +4771,10 @@ function renderTransfers(){
     const pts = {};
     pointItems(d).forEach(it => { pts[it.studentId] = (pts[it.studentId]||0) + it.points; });
     d.transfers.slice().reverse().forEach(t => {
+      if(isStudent){
+        const ids = studentIdsOf(t);
+        if(!ids.includes(user.id)) return;
+      }
       if(transferForMe(t)) all.push({ t, school, d, pts });
     });
   });
@@ -4759,8 +4796,8 @@ function renderTransfers(){
     }).join('');
 
   return `
-  <div class="header-row"><h1 class="page-title">التحويلات</h1><button class="btn-primary" onclick="toggleEl('transferForm')">+ تحويل طالب</button></div>
-  <div id="transferForm" class="card mb" style="display:none">
+  <div class="header-row"><h1 class="page-title">${isStudent ? 'تحويلاتي' : 'التحويلات'}</h1>${isStudent ? '' : '<button class="btn-primary" onclick="toggleEl(\'transferForm\')">+ تحويل طالب</button>'}</div>
+  ${isStudent ? '' : `<div id="transferForm" class="card mb" style="display:none">
     <div class="form-grid-3">
       <select id="tClassId" class="input" onchange="fillStudentMulti('tClassId','tStudentList','t')" data-tip="اختر الفصل الذي يدرس فيه الطلاب المطلوب تحويلهم"><option value="">اختر الفصل</option>${getClassesSorted().map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
       <div id="tStudentList" class="student-multi-box" data-tip="اختر طالبًا أو أكثر للتحويل دفعة واحدة — يُنشأ طلب واحد للجميع"><div class="muted small" style="padding:4px 0">اختر الفصل أولًا</div></div>
@@ -4772,7 +4809,7 @@ function renderTransfers(){
     <div id="tFreeHint" class="card mb" style="display:none;background:#fffbeb;border:1px solid #fde68a;padding:10px;font-size:13px">✍️ اكتب سبب التحويل حرًا في الخانة أدناه</div>
     <textarea id="tReasonComment" class="input" rows="3" style="display:none;margin-bottom:12px" placeholder="اكتب سبب التحويل هنا..." data-tip="اشرح سبب التحويل بتفصيل أكبر — يظهر لجهة المراجعة عند معالجة الطلب"></textarea>
     <button class="btn-primary" onclick="addTransfer()">إرسال</button>
-  </div>
+  </div>`}
   <div class="card table-card">
     <table class="data-table"><thead><tr><th>الطالب</th><th>إلى</th><th>الأولوية</th><th>السبب</th><th>خصم النقاط</th><th>الحالة</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table>
