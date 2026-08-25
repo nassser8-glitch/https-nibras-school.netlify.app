@@ -476,7 +476,7 @@ app.post('/api/auth/admin/create-user', requireAuth, (req, res) => {
     const preferred = String(req.body && req.body.username || '').trim();
     const username = await db.generateUsername(name, preferred || (isStudent ? name.replace(/\s+/g, '') : email.split('@')[0]));
     const finalEmail = isStudent ? (email || (username + '@nibras.school')) : email;
-    await db.insertUser({ id, school, name, email: finalEmail, username, password_hash: hash, role, active: true, first_login: true, granted: true, data: {} });
+    await db.insertUser({ id, school, name, email: finalEmail, username, password_hash: hash, role, active: true, first_login: !isStudent, granted: true, data: {} });
     const created = await db.userById(id);
     await appendSchoolUser(school, sendUser(created));
     res.json({ ok: true, user: sendUser(created) });

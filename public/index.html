@@ -1254,27 +1254,25 @@ function renderApp(){
   if(!user){ app.innerHTML = renderLogin(); return; }
   if(hash === '#/login'){ location.hash = '#/'; return; }
   if(!localStorage.getItem(SCHOOL_KEY)){
-    // أول دخول لأي مستخدم: تعيين كلمة مرور قوية قبل استخدام النظام
-    if(user.firstLogin){
+    if(user.firstLogin && user.role !== 'STUDENT'){
       const us = getUserSchool() || 'BOYS';
       setActiveSchool(us);
       renderApp();
       return;
     }
-    // الكل ما عدا المدير يدخل مباشرةً إلى مدرسته دون واجهة (بنين/بنات)
     if(user.role !== 'ADMIN'){
       const us = getUserSchool();
       if(us){ setActiveSchool(us); renderApp(); return; }
     }
     app.innerHTML = renderSchoolSelect(); return;
   }
-  // أول دخول لأي مستخدم: تعيين كلمة مرور قوية قبل استخدام النظام
-  if(user.firstLogin){
+  // أول دخول لأي مستخدم: تعيين كلمة مرور قوية قبل استخدام النظام (الطلاب يستثنون)
+  if(user.firstLogin && user.role !== 'STUDENT'){
     if(hash !== '#/first-login') location.hash = '#/first-login';
     app.innerHTML = renderFirstLogin(user);
     return;
   }
-  if(hash === '#/first-login'){
+  if(hash === '#/first-login' && user.role !== 'STUDENT'){
     app.innerHTML = renderFirstLogin(user);
     return;
   }
