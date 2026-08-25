@@ -1931,7 +1931,18 @@ function renderLayout(user, hash){
   const schoolName = schoolNames[school] || '';
 
   const homeLink = { href:'#/', key:'home', label:'الرئيسية', icon:'⌂' };
-  const groups = [
+  const isStudent = user.role === 'STUDENT';
+  const groups = isStudent ? [
+    { title:'طلبي', items:[
+      { href:'#/assignments', key:'assignments', label:'التكليفات', icon:'📝' },
+      { href:'#/notes', key:'notes', label:'الملاحظات', icon:'★' },
+      { href:'#/transfers', key:'transfers', label:'التحويلات', icon:'↔' },
+    ]},
+    { title:'النظام', items:[
+      { href:'#/settings', key:'settings', label:'الإعدادات', icon:'⚙️' },
+      { href:'#/about', key:'about', label:'حول نبراس', icon:'ⓘ' },
+    ]},
+  ] : [
     { title:'الإدارة', items:[
       (user.role === 'ADMIN' || user.role === 'AGENT') ? { href:'#/users', key:'users', label:tl('المعلمون'), icon:'👤' } : null,
       { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👥' },
@@ -1974,7 +1985,7 @@ function renderLayout(user, hash){
     </div>`;
 
   let pageHtml = '';
-  if(page === 'home') pageHtml = renderDashboard();
+  if(page === 'home') pageHtml = (user.role === 'STUDENT') ? renderStudentDashboard() : renderDashboard();
   else if(page === 'students') pageHtml = renderStudents();
   else if(page === 'attendance') pageHtml = renderAttendance();
   else if(page === 'notes') pageHtml = renderNotes();
@@ -2565,6 +2576,78 @@ function dismissEscapeAlert(id){
   if(a) a.dismissed = true;
   saveDB(d);
   renderApp();
+}
+function renderStudentDashboard(){
+  const d = loadDB();
+  const user = currentUser();
+  if(!user || user.role !== 'STUDENT') return renderDashboard();
+  const ptsMap = studentPointsMap();
+  const pts = ptsMap[user.id] || 0;
+  const myStudent = (d.students||[]).find(s => s.id === user.id);
+  const cls = myStudent && myStudent.classId ? (d.classes||[]).find(c => c.id === myStudent.classId) : null;
+  const grade = cls ? (d.grades||[]).find(g => g.id === cls.gradeId) : null;
+  const classLabel = grade ? grade.name + ' — الفصل ' + cls.name : '—';
+  const assignments = (d.assignments||[]).filter(a => myStudent && a.classId === myStudent.classId);
+  const recentAssignments = assignments.slice(-8).reverse();
+  const attRecs = (d.attendance||[]).slice(-30);
+  let present = 0, absent = 0;
+  attRecs.forEach(day => {
+    const rec = (day.students||[]).find(s => s.studentId === user.id);
+    if(rec){
+      if(rec.status === 'present') present++;
+      else if(rec.status === 'absent') absent++;
+    }
+  });
+  const total = present + absent;
+  const attPct = total > 0 ? Math.round((present/total)*100) : 0;
+  const msgMarquee = (localStorage.getItem(ANNOUNCEMENT_KEY(getActiveSchool()))||'الصلاة على النبي').split('\n').filter(Boolean).join(' • ');
+  return `
+  <div class="dash-panel" style="text-align:center;padding:24px;margin-bottom:14px;background:linear-gradient(135deg,var(--primary-light,#eef7ff),#fff);border:2px solid var(--border-color,#e0edf7)">
+    <div style="font-size:14px;font-weight:700;color:var(--muted);margin-bottom:4px">مرحباً، ${escapeHtml(user.name || 'طالب')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${escapeHtml(classLabel)}</div>
+    <div style="width:130px;height:130px;border-radius:50%;background:conic-gradient(${pts >= 0 ? '#16a34a' : '#dc2626'} ${Math.min(Math.max(Math.abs(pts) * 4, 8), 360)}deg, #e5e7eb 0deg);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(22,163,74,.18)">
+      <div style="width:100px;height:100px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 1px 4px rgba(0,0,0,.06)">
+        <span style="font-size:32px;font-weight:800;color:${pts >= 0 ? '#16a34a' : '#dc2626'}">${pts > 0 ? '+' : ''}${pts}</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:600">نقطة</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 18px;text-align:center">
+        <div style="font-size:20px;font-weight:800;color:#16a34a">${attPct}%</div>
+        <div style="font-size:11px;color:var(--muted)">الحضور</div>
+      </div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 18px;text-align:center">
+        <div style="font-size:20px;font-weight:800;color:#1d4ed8">${present}</div>
+        <div style="font-size:11px;color:var(--muted)">حاضر</div>
+      </div>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px 18px;text-align:center">
+        <div style="font-size:20px;font-weight:800;color:#dc2626">${absent}</div>
+        <div style="font-size:11px;color:var(--muted)">غائب</div>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap">
+    <div class="dash-panel" style="flex:1;min-width:280px">
+      <div class="dash-panel-head">
+        <div class="dash-panel-title">📝 التكليفات</div>
+        <a href="#/assignments" class="dash-panel-more">عرض الكل ←</a>
+      </div>
+      ${recentAssignments.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:20px">لا توجد تكليفات بعد</p>' :
+      recentAssignments.map(a => `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--line)">
+        <span style="font-size:20px">📄</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:13px">${escapeHtml(a.title || 'تكليف')}</div>
+          <div style="font-size:11px;color:var(--muted)">${escapeHtml(a.subject || '')}</div>
+        </div>
+        <span style="font-size:11px;color:var(--muted);white-space:nowrap">${a.date || ''}</span>
+      </div>`).join('')}
+    </div>
+    <div class="dash-panel" style="min-width:220px;max-width:280px">
+      <div class="dash-panel-title" style="margin-bottom:10px">📢 رسالة اليوم</div>
+      <div style="font-size:13px;font-weight:700;line-height:1.8;color:var(--primary,#0f4f88);text-align:center;word-break:break-word;padding:8px">${escapeHtml(msgMarquee)}</div>
+      <div id="weatherBox" style="margin-top:10px"></div>
+    </div>
+  </div>`;
 }
 function renderDashboard(){
   const d = loadDB();
