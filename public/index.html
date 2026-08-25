@@ -3743,6 +3743,8 @@ function renderStudents(){
     <input id="sFullName" class="input" placeholder="الاسم الكامل" data-tip="أدخل الاسم الكامل للطالب كما سيظهر في كشوف الحضور والتقارير" />
     <input id="sStudentNo" class="input" placeholder="الرقم الأكاديمي" data-tip="رقم قيد الطالب أو رقمه الأكاديمي — يُستخدم للبحث في القائمة والتفريق بين الطلاب" />
     <select id="sClassId" class="input" data-tip="اختر الفصل الذي سينضم إليه الطالب، أو اتركه بدون فصل ليُسند لاحقًا"><option value="">بدون فصل</option>${classes.map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
+    ${__serverEnabled() ? '<input id="sUsername" class="input" placeholder="اسم المستخدم (يُولّد تلقائياً إن فُرغ)" data-tip="اسم المستخدم الذي سيدخل به الطالب — يمكن توليده تلقائياً من الاسم" />' : ''}
+    ${__serverEnabled() ? '<input id="sPassword" class="input" type="password" placeholder="الرقم السري للطالب" data-tip="كلمة مرور الطالب — يستطيع تغييرها لاحقاً" />' : ''}
     <button class="btn-primary" onclick="addStudent()">حفظ</button>
   </div>
   <div id="importResult"></div>
@@ -3798,14 +3800,34 @@ function fillStudentMulti(classSelectId, listId, prefix){
 function getCheckedStudentIds(prefix){
   return Array.from(document.querySelectorAll('.' + prefix + '-stu-cb:checked')).map(c => c.value);
 }
-function addStudent(){
+function generateUsername(fullName){
+  const parts = fullName.trim().split(/\s+/);
+  const base = parts.slice(0,2).map(w => w[0] || '').join('').replace(/[\u0600-\u06FF]/g, c => c).toLowerCase();
+  const clean = (base || 'user').replace(/[^a-z0-9\u0600-\u06FF]/g, '') || 'user';
+  return clean + Math.floor(Math.random()*900+100);
+}
+async function addStudent(){
   const fullName = document.getElementById('sFullName').value.trim();
   const studentNo = document.getElementById('sStudentNo').value.trim();
   const classId = document.getElementById('sClassId').value || null;
+  const sUsernameEl = document.getElementById('sUsername');
+  const sPasswordEl = document.getElementById('sPassword');
+  const inputUsername = sUsernameEl ? sUsernameEl.value.trim() : '';
+  const inputPassword = sPasswordEl ? sPasswordEl.value.trim() : '';
   if(!fullName || !studentNo){ alert('الاسم والرقم الأكاديمي مطلوبان'); return; }
+  if(__serverEnabled() && !inputPassword){ alert('ضع الرقم السري للطالب'); return; }
   const d = loadDB();
   if(d.students.some(s => s.studentNo === studentNo && s.active)){ alert('الرقم الأكاديمي مستخدم مسبقًا'); return; }
-  d.students.push({ id:uid(), fullName, studentNo, classId, guardianName:'', guardianPhone:'', active:true });
+  const newId = uid();
+  const username = inputUsername || generateUsername(fullName);
+  if(__serverEnabled() && inputPassword){
+    const r = await __api('POST', 'students/create', { name: fullName, username, password: inputPassword });
+    if(!r || r.status !== 200 || !r.j || !r.j.ok){
+      alert(r?.j?.error === 'username_exists' ? 'اسم المستخدم مستخدم مسبقًا' : 'تعذر إنشاء حساب الطالب');
+      return;
+    }
+  }
+  d.students.push({ id:newId, fullName, studentNo, classId, guardianName:'', guardianPhone:'', active:true });
   saveDB(d);
   renderApp();
 }

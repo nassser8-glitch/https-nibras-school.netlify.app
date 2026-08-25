@@ -322,6 +322,25 @@ app.post('/api/auth/login', (req, res) => {
 
 /* ============ الدخول السريع أُلغي ============ */
 
+app.post('/api/students/create', requireAuth, (req, res) => {
+  (async () => {
+    if (!['ADMIN', 'AGENT'].includes(req.session.role)) return res.status(403).json({ error: 'forbidden' });
+    const { name, username, password } = req.body || {};
+    if (!name || !username || !password) return res.status(400).json({ error: 'missing_fields' });
+    const cleanUsername = String(username).trim().toLowerCase();
+    const cleanName = String(name).trim();
+    const cleanPassword = String(password);
+    if (cleanPassword.length < 6) return res.status(400).json({ error: 'password_too_short' });
+    const existing = await db.userByUsername(cleanUsername);
+    if (existing) return res.status(409).json({ error: 'username_exists' });
+    const hash = await bcrypt.hash(cleanPassword, 10);
+    const id = 'id_' + crypto.randomBytes(8).toString('hex');
+    const school = req.session.school || 'BOYS';
+    await db.insertUser({ id, school, name: cleanName, email: '', username: cleanUsername, password_hash: hash, role: 'STUDENT', active: true, first_login: false, granted: false, data: {} });
+    res.json({ ok: true, id, username: cleanUsername });
+  })().catch(fail(res));
+});
+
 app.post('/api/auth/logout', requireAuth, (req, res) => {
   db.deleteSession(req._tokenHash).catch(() => {});
   res.clearCookie(SESSION_COOKIE, { path: '/', httpOnly: true, sameSite: 'strict' });
