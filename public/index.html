@@ -2575,6 +2575,18 @@ function dismissEscapeAlert(id){
   saveDB(d);
   renderApp();
 }
+function toggleAssignmentDone(aid){
+  const d = loadDB();
+  const user = currentUser();
+  if(!user) return;
+  const a = (d.assignments||[]).find(x => x.id === aid);
+  if(!a) return;
+  if(!a.completedBy) a.completedBy = [];
+  const idx = a.completedBy.indexOf(user.id);
+  if(idx >= 0) a.completedBy.splice(idx, 1); else a.completedBy.push(user.id);
+  saveDB(d);
+  renderApp();
+}
 function renderStudentDashboard(){
   const d = loadDB();
   const user = currentUser();
@@ -2588,6 +2600,15 @@ function renderStudentDashboard(){
   const classLabel = grade ? grade.name + ' — الفصل ' + cls.name : '—';
   const assignments = (d.assignments||[]).filter(a => myStudent && a.classId === myStudent.classId);
   const recentAssignments = assignments.slice(-8).reverse();
+  const assignmentTypes = ['واجب','مشروع','حفظ','أخرى'];
+  const typeColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
+  const typeIcons = { 'واجب':'📋', 'مشروع':'🎨', 'حفظ':'📖', 'أخرى':'📌' };
+  const typeStats = assignmentTypes.map(t => {
+    const all = assignments.filter(a => (a.type||'واجب') === t);
+    const done = all.filter(a => (a.completedBy||[]).includes(user.id));
+    return { type: t, total: all.length, done: done.length, todo: all.length - done.length, color: typeColors[t], icon: typeIcons[t] };
+  }).filter(s => s.total > 0);
+  const maxAss = Math.max(...typeStats.map(s => s.total), 1);
   const myNotes = (d.notes||[]).slice().filter(n => n.studentId === user.id).slice(-6).reverse();
   const myTransfers = (d.transfers||[]).slice().filter(t => studentIdsOf(t).includes(user.id)).slice(-4).reverse();
   const attRecs = (d.attendance||[]).slice(-30);
@@ -2645,6 +2666,37 @@ function renderStudentDashboard(){
       </div>
     </div>
   </div>
+  <div class="dash-panel" style="margin-bottom:14px;padding:16px 20px">
+    <div class="dash-panel-head" style="margin-bottom:12px">
+      <div class="dash-panel-title">📊 التكليفات حسب النوع</div>
+      <span style="font-size:12px;color:var(--muted)">${assignments.length} تكليف</span>
+    </div>
+    ${typeStats.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:12px">لا توجد تكليفات بعد</p>' :
+    `<div style="display:flex;flex-direction:column;gap:10px">
+      ${typeStats.map(s => `<div style="display:flex;align-items:center;gap:10px">
+        <span style="width:24px;text-align:center;font-size:18px">${s.icon}</span>
+        <span style="width:50px;font-size:13px;font-weight:600">${s.type}</span>
+        <div style="flex:1;height:28px;background:#f3f4f6;border-radius:14px;overflow:hidden;position:relative">
+          <div style="height:100%;width:${s.done > 0 ? Math.round(s.done/s.total*100) : 0}%;background:${s.color};border-radius:14px;transition:width .3s"></div>
+          <div style="height:100%;width:${s.todo > 0 ? Math.round(s.todo/s.total*100) : 0}%;background:${s.color}33;border-radius:0 14px 14px 0;margin-left:-1px;position:absolute;top:0;left:${s.done > 0 ? Math.round(s.done/s.total*100) : 0}%"></div>
+        </div>
+        <div style="display:flex;gap:6px;font-size:12px;white-space:nowrap">
+          <span style="font-weight:700;color:${s.color}">${s.done}/${s.total}</span>
+          <span style="color:var(--muted)">منجز</span>
+        </div>
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:16px;margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)">
+      <div style="display:flex;align-items:center;gap:4px;font-size:12px">
+        <span style="width:14px;height:10px;border-radius:5px;background:var(--primary);display:inline-block"></span>
+        <span style="color:var(--muted)">منجز</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:12px">
+        <span style="width:14px;height:10px;border-radius:5px;background:rgba(29,127,214,.2);display:inline-block"></span>
+        <span style="color:var(--muted)">غير منجز</span>
+      </div>
+    </div>`}
+  </div>
   <div style="display:flex;gap:12px;flex-wrap:wrap">
     <div class="dash-panel" style="flex:1;min-width:280px">
       <div class="dash-panel-head">
@@ -2652,14 +2704,16 @@ function renderStudentDashboard(){
         <a href="#/assignments" class="dash-panel-more">عرض الكل ←</a>
       </div>
       ${recentAssignments.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:20px">لا توجد تكليفات بعد</p>' :
-      recentAssignments.map(a => `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--line)">
-        <span style="font-size:20px">📄</span>
+      recentAssignments.map(a => {
+        const isDone = (a.completedBy||[]).includes(user.id);
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--line);${isDone ? 'opacity:.6' : ''}">
+        <span style="font-size:20px;cursor:pointer" onclick="toggleAssignmentDone('${a.id}')" title="${isDone ? 'إلغاء الإنجاز' : 'تحديد كمنجز'}">${isDone ? '✅' : '⬜'}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13px">${escapeHtml(a.title || 'تكليف')}</div>
-          <div style="font-size:11px;color:var(--muted)">${escapeHtml(a.subject || '')}</div>
+          <div style="font-weight:700;font-size:13px;${isDone ? 'text-decoration:line-through' : ''}">${escapeHtml(a.title || 'تكليف')}</div>
+          <div style="font-size:11px;color:var(--muted)">${escapeHtml(a.subject || '')} · ${a.type||'واجب'}</div>
         </div>
         <span style="font-size:11px;color:var(--muted);white-space:nowrap">${a.date || ''}</span>
-      </div>`).join('')}
+      </div>`}).join('')}
     </div>
     <div class="dash-panel" style="min-width:220px;max-width:280px">
       <div class="dash-panel-head">
