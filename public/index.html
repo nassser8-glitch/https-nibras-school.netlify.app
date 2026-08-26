@@ -5214,7 +5214,7 @@ function renderUsers(){
     <td>${roleLabel(u.role)}</td>
     <td>${authCell}</td>
     <td style="font-size:12px;color:#6b7280;max-width:200px">${u.role==='TEACHER'?assignedHtml:'—'}</td>
-    <td>${isSelf || !isAdmin ? '' : (u.role==='TEACHER' ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="moveOneTeacher('${u.id}')">↔️ نقل إلى ${moveLabel}</button> ` : '')}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="resetTeacherSecret('${u.id}')">🔄 إعادة تعيين كلمة المرور</button> ` : '')}${isSelf || !isAdmin ? '' : `<button class="del-btn" onclick="deleteUser('${u.id}')">🗑 حذف</button>`}</td>
+    <td>${isSelf || !isAdmin ? '' : `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="showTeacherCreds('${u.id}','${escapeHtml(u.name)}','${escapeHtml(u.username||'')}')" title="عرض بيانات الدخول">🔑 بيانات الدخول</button> `}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="moveOneTeacher('${u.id}')">↔️ نقل إلى ${moveLabel}</button> ` : '')}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="resetTeacherSecret('${u.id}')">🔄 إعادة تعيين</button> ` : '')}${isSelf || !isAdmin ? '' : `<button class="del-btn" onclick="deleteUser('${u.id}')">🗑 حذف</button>`}</td>
   </tr>`;
   }).join('');
   const teacherMsg = window.__teacherMsg;
@@ -5340,6 +5340,23 @@ async function addUser(){
   }finally{
     __userBusy = false;
   }
+}
+function showTeacherCreds(id, name, username){
+  const d = loadDB();
+  const u = (d.users||[]).find(x => x.id === id);
+  const hasAccount = !!u;
+  const pwd = hasAccount ? (u.password || '') : '—';
+  const isHashed = pwd.startsWith('$2');
+  const modal = document.getElementById('studentCredsModal');
+  if(!modal) return;
+  modal.style.display = 'flex';
+  const scForm = document.getElementById('scForm');
+  const scResult = document.getElementById('scResult');
+  scForm.style.display = 'none';
+  scResult.style.display = '';
+  document.getElementById('scStudentName').textContent = name;
+  document.getElementById('scResUser').value = hasAccount ? (u.username || '—') : 'لا يوجد حساب';
+  document.getElementById('scResPass').value = isHashed ? '🔒 مُشفّرة (لا يمكن عرضها)' : pwd;
 }
 async function resetTeacherSecret(id){
   const u = userById(id);
