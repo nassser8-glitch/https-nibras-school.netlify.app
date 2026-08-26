@@ -3836,8 +3836,10 @@ function renderCharts(d){
 /* ============ الطلاب ============ */
 // مصدر موحد لعناصر النقاط (ملاحظات + حضور) مع منع الازدواج:
 // إذا سُجّل غياب/تأخر في الحضور فتُهمل الملاحظة اليدوية لنفس اليوم حتى لا تُخصم مرتين
+const UNDONE_DEDUCTION = -4;
 function pointItems(d){
   const items = [];
+  const today = todayStr();
   d.notes.forEach(n => {
     items.push({ studentId:n.studentId, type:n.type, category:n.category, description:n.description, points:(n.points ?? notePoints(n.type, n.category)), createdBy:n.createdBy, createdAt:n.createdAt, kind:'note' });
   });
@@ -3845,13 +3847,25 @@ function pointItems(d){
     const pts = attendancePoints(a.status, a.lateMinutes);
     if(pts !== 0) items.push({ studentId:a.studentId, type:'NEGATIVE', category:a.status==='ABSENT'?'الغياب':'التأخر', description:'حسب سجل الحضور ('+a.date+')' + (a.lateMinutes ? ' — ' + a.lateMinutes + ' دقيقة' : ''), points:pts, createdBy:a.createdBy, createdAt:a.date+'T00:00:00.000Z', kind:'att' });
   });
+  (d.assignments||[]).forEach(a => {
+    if(!a.date || a.date > today) return;
+    (d.students||[]).forEach(s => {
+      if(!s.active || s.classId !== a.classId) return;
+      const completed = (a.completedBy||[]).includes(s.id);
+      if(completed) return;
+      const existingNote = d.notes.find(n => n.studentId === s.id && n.category === 'عدم إنجاز الواجب' && n.assignmentId === a.id);
+      if(!existingNote) items.push({ studentId:s.id, type:'NEGATIVE', category:'عدم إنجاز الواجب', description:'تكليف: ' + (a.title||'بدون عنوان') + ' (' + (a.date||'') + ')', points: UNDONE_DEDUCTION, createdBy:a.teacherId, createdAt:a.date+'T23:59:59.000Z', kind:'assign' });
+    });
+  });
   const attKeys = new Set(d.attendance.map(a => a.studentId + '|' + a.date + '|' + a.status));
+  const doneAssignKeys = new Set((d.assignments||[]).flatMap(a => (a.completedBy||[]).map(sid => sid + '|' + a.id)));
   return items.filter(it => {
     if(it.kind === 'note' && (it.category === 'الغياب' || it.category === 'التأخر')){
       const date = it.createdAt ? String(it.createdAt).slice(0,10) : '';
       const status = it.category === 'الغياب' ? 'ABSENT' : 'LATE';
       if(date && attKeys.has(it.studentId + '|' + date + '|' + status)) return false;
     }
+    if(it.kind === 'assign' && doneAssignKeys.has(it.studentId + '|' + (it.assignmentId||''))) return false;
     return true;
   });
 }
