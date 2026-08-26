@@ -1934,6 +1934,7 @@ function renderLayout(user, hash){
   const isStudent = user.role === 'STUDENT';
   const groups = isStudent ? [
     { title:'طلبي', items:[
+      { href:'#/timetable', key:'timetable', label:'جدولي', icon:'🗓' },
       { href:'#/notebook', key:'notebook', label:'المفكرة', icon:'📒' },
     ]},
     { title:'النظام', items:[
@@ -6071,7 +6072,7 @@ function renderAssignments(){
           <div style="display:flex;gap:4px;flex-wrap:wrap">
             ${clsStudents.map(s => {
               const done = (a.completedBy||[]).includes(s.id);
-              return `<span style="display:inline-flex;align-items:center;gap:2px;padding:2px 6px;border-radius:6px;font-size:11px;font-weight:600;${done ? 'background:#dcfce7;color:#16a34a' : 'background:#fef2f2;color:#dc2626'}">${done ? '✅' : '❌'} ${escapeHtml((s.name||'').split(' ')[0])}</span>`;
+              return `<span style="display:inline-flex;align-items:center;gap:2px;padding:2px 6px;border-radius:6px;font-size:11px;font-weight:600;${done ? 'background:#dcfce7;color:#16a34a' : 'background:#fef2f2;color:#dc2626'}">${done ? '✅' : '❌'} ${escapeHtml((s.fullName||s.name||'').split(' ')[0])}</span>`;
             }).join('')}
           </div>
         </td>
@@ -6105,7 +6106,7 @@ function renderAssignments(){
     const rows = clsStudents.map(s => {
       const done = (a.completedBy||[]).includes(s.id);
       return `<tr>
-        <td style="font-weight:600">${escapeHtml(s.name||'')}</td>
+        <td style="font-weight:600">${escapeHtml(s.fullName||s.name||'')}</td>
         <td>
           <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-left:16px">
             <input type="radio" name="ass_${s.id}" value="done" ${done ? 'checked' : ''} onchange="toggleStudentDone('${a.id}','${s.id}',true)">
@@ -7014,7 +7015,7 @@ function activityPartIds(a){
 let reportState = { type:'attendance', classId:'', from:'', to:'', view:'table', rows:null, period:'month' };
 const reportTypes = [
   { value:'attendance', label:'تقرير الحضور', adminOnly:true }, { value:'absence', label:'تقرير الغياب', adminOnly:true }, { value:'late', label:'تقرير التأخر', adminOnly:true },
-  { value:'notes', label:'تقرير الملاحظات' }, { value:'transfers', label:'تقرير التحويلات' }, { value:'class_summary', label:'تقرير الفصول' },
+  { value:'notes', label:'تقرير الملاحظات' }, { value:'transfers', label:'تقرير التحويلات' }, { value:'assignments', label:'تقرير التكليفات' }, { value:'class_summary', label:'تقرير الفصول' },
   { value:'messages', label:'تقرير الرسائل', adminOnly:true },
   { value:'activities', label:'تقرير الأنشطة والمشاركين', adminOnly:true },
   { value:'maintenance', label:'تقرير الصيانة', adminOnly:true },
@@ -7088,6 +7089,21 @@ function computeReportRows(){
       .sort((a,b) => b.createdAt.localeCompare(a.createdAt))
       .map(t => { const ss = studentIdsOf(t).map(id => studentById(id)).filter(Boolean); const by = userById(t.createdBy);
         return { 'التاريخ':t.createdAt.slice(0,10), 'الطالب': ss.map(s=>s?.fullName||'—').join('، ') || '—', 'إلى':targetLabel(t.target), 'الأولوية':priorityLabels[t.priority], 'السبب':t.reason, 'الحالة': t.status==='PENDING'?'قيد المتابعة':'تم الحل', 'بواسطة':by?.name||'—' }; });
+  } else if(type === 'assignments'){
+    const user = currentUser();
+    const myClassIds = new Set(getClassesSorted().map(c => c.id));
+    const clsAss = (d.assignments||[]).filter(a => myClassIds.has(a.classId) && (!classId || a.classId===classId) && (!from && !to || (a.date && inRange(a.date))));
+    const rowsAll = clsAss.sort((a,b) => (b.created||0) - (a.created||0)).map(a => {
+      const cls = classById(a.classId);
+      const g = cls ? gradeById(cls.gradeId) : null;
+      const clsStudents = d.students.filter(s => s.active && s.classId === a.classId);
+      const doneCount = clsStudents.filter(s => (a.completedBy||[]).includes(s.id)).length;
+      const notDone = clsStudents.length - doneCount;
+      const pct = clsStudents.length ? Math.round(doneCount/clsStudents.length*100) : 0;
+      const notDoneNames = clsStudents.filter(s => !(a.completedBy||[]).includes(s.id)).map(s => s.fullName||'—').join('، ');
+      return { 'التكليف': a.title||'—', 'المادة': a.subject||'—', 'النوع': a.type||'واجب', 'التاريخ': a.date||'—', 'الصف': g?.name||'—', 'الفصل': cls?.name||'—', 'العدد': clsStudents.length, 'نفّذوا': doneCount, 'لم ينفّذوا': notDone, 'النسبة': pct+'%', 'من لم ينفّذوا': notDoneNames || '—' };
+    });
+    return rowsAll;
   } else if(type === 'class_summary'){
     const classes = d.classes.filter(c => canSeeClass(c.id) && (!classId || c.id===classId));
     rows = classes.map(c => {
