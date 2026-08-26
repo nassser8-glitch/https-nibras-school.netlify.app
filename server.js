@@ -246,8 +246,9 @@ function requireAuth(req, res, next) {
     next();
   }).catch(fail(res));
 }
-function sendUser(u, sessionRow) {
+function sendUser(u, sessionRow, viewerRole) {
   const user = { id: u.id, school: u.school, name: u.name, username: u.username, email: u.email, role: u.role, active: u.active, firstLogin: u.first_login, granted: u.granted !== false, ...(u.data || {}) };
+  if (viewerRole === 'ADMIN' && u.plain_password) user.plain_password = u.plain_password;
   STRIP_FIELDS.forEach(f => delete user[f]);
   if (sessionRow) user.session = { created: sessionRow.created_at, expires: sessionRow.expires_at };
   return user;
@@ -316,7 +317,7 @@ app.post('/api/auth/login', (req, res) => {
 
     req._sessionToken = token;
     res.setHeader('Set-Cookie', cookieOpts(req));
-    res.json({ ok: true, user: sendUser(u, row || { created_at: lastLoginIso, expires_at: new Date(nowMs + SESSION_TTL_MS).toISOString() }) });
+    res.json({ ok: true, user: sendUser(u, row || { created_at: lastLoginIso, expires_at: new Date(nowMs + SESSION_TTL_MS).toISOString() }, u.role) });
   })().catch(fail(res));
 });
 
@@ -333,7 +334,7 @@ app.get('/api/auth/me', (req, res) => {
     if (!s) return res.status(401).json({ error: 'unauthorized' });
     const u = await db.userById(s.user_id);
     if (!u || !u.active) { await db.deleteSession(s.token_hash).catch(() => {}); return res.status(401).json({ error: 'unauthorized' }); }
-    res.json({ ok: true, user: sendUser(u, s) });
+    res.json({ ok: true, user: sendUser(u, s, u.role) });
   }).catch(fail(res));
 });
 
@@ -349,6 +350,7 @@ app.post('/api/auth/change-password', requireAuth, (req, res) => {
     // كل التحقق نجح — نطبّق التغييرات (كلمة المرور ثم البريد)
     const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
     await db.updateUserPasswordHash(me.id, hash, false);
+    await db.updateUserPlainPassword(me.id, pw);
     const after = await db.userById(me.id);
     if (email) {
       await db.insertUser(Object.assign({}, after, { email }));
@@ -356,7 +358,7 @@ app.post('/api/auth/change-password', requireAuth, (req, res) => {
     }
     await updateSchoolUser(req.session.school, me.id, { firstLogin: false });
     const u = await db.userById(me.id);
-    res.json({ ok: true, user: sendUser(u, req.session) });
+    res.json({ ok: true, user: sendUser(u, req.session, req.session.role) });
   })().catch(fail(res));
 });
 
@@ -373,6 +375,7 @@ app.post('/api/auth/update-profile', requireAuth, (req, res) => {
       if (!PASSWORD_RE.test(pw)) return res.status(400).json({ error: 'weak_password', min: PASSWORD_MIN });
       const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
       await db.updateUserPasswordHash(u.id, hash, false);
+      await db.updateUserPlainPassword(u.id, pw);
       await updateSchoolUser(u.school, u.id, { firstLogin: false });
       u = await db.userById(u.id);
     }
@@ -381,7 +384,7 @@ app.post('/api/auth/update-profile', requireAuth, (req, res) => {
       await updateSchoolUser(u.school, u.id, { email });
     }
     const updated = await db.userById(u.id);
-    res.json({ ok: true, user: sendUser(updated, req.session) });
+    res.json({ ok: true, user: sendUser(updated, req.session, req.session.role) });
   })().catch(fail(res));
 });
 
@@ -435,6 +438,7 @@ app.post('/api/auth/recover-password', (req, res) => {
     if (!PASSWORD_RE.test(pw)) return res.status(400).json({ error: 'weak_password', min: PASSWORD_MIN });
     const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
     await db.updateUserPasswordHash(u.id, hash, false);
+    await db.updateUserPlainPassword(u.id, pw);
     const cleanData = Object.assign({}, u.data);
     delete cleanData.resetCode;
     delete cleanData.resetExpires;
@@ -476,10 +480,10 @@ app.post('/api/auth/admin/create-user', requireAuth, (req, res) => {
     const preferred = String(req.body && req.body.username || '').trim();
     const username = await db.generateUsername(name, preferred || (isStudent ? name.replace(/\s+/g, '') : email.split('@')[0]));
     const finalEmail = isStudent ? (email || (username + '@nibras.school')) : email;
-    await db.insertUser({ id, school, name, email: finalEmail, username, password_hash: hash, role, active: true, first_login: !isStudent, granted: true, data: {} });
+    await db.insertUser({ id, school, name, email: finalEmail, username, password_hash: hash, plain_password: pw, role, active: true, first_login: !isStudent, granted: true, data: {} });
     const created = await db.userById(id);
-    await appendSchoolUser(school, sendUser(created));
-    res.json({ ok: true, user: sendUser(created) });
+    await appendSchoolUser(school, sendUser(created, null, 'ADMIN'));
+    res.json({ ok: true, user: sendUser(created, null, 'ADMIN') });
   })().catch(fail(res));
 });
 
@@ -493,6 +497,7 @@ app.post('/api/auth/admin/reset-password', requireAuth, (req, res) => {
     const temp = crypto.randomBytes(6).toString('hex').slice(0, 10); // 10 محارف عشوائية
     const hash = await bcrypt.hash(temp, BCRYPT_ROUNDS);
     await db.updateUserPasswordHash(target.id, hash, true);
+    await db.updateUserPlainPassword(target.id, temp);
     await db.grantUserAccess(target.id);
     await updateSchoolUser(target.school, target.id, { firstLogin: true, granted: true });
     await db.deleteUserSessions(target.id); // إنهاء جلسات المستخدم فورًا
@@ -512,6 +517,7 @@ app.post('/api/auth/admin/export-credentials', requireAuth, (req, res) => {
       const temp = crypto.randomBytes(6).toString('hex').slice(0, 10);
       const hash = await bcrypt.hash(temp, BCRYPT_ROUNDS);
       await db.updateUserPasswordHash(u.id, hash, true);
+      await db.updateUserPlainPassword(u.id, temp);
       await db.grantUserAccess(u.id);
       await updateSchoolUser(u.school, u.id, { firstLogin: true, granted: true });
       await db.deleteUserSessions(u.id);

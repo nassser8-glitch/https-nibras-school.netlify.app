@@ -5190,7 +5190,7 @@ function generateDefaultStructure(){
 function renderUsers(){
   const d = loadDB();
   const isAdmin = currentUser()?.role === 'ADMIN';
-  const users = d.users.filter(u => u.active);
+  const users = d.users.filter(u => u.active && u.role !== 'STUDENT');
   const rows = users.map(u => {
     const assigned = d.classes.filter(c => (c.teacherIds||[]).includes(u.id));
     const assignedHtml = assigned.length ? assigned.map(c => classLabel(c)).join('، ') : '—';
@@ -5345,7 +5345,7 @@ function showTeacherCreds(id, name, username){
   const d = loadDB();
   const u = (d.users||[]).find(x => x.id === id);
   const hasAccount = !!u;
-  const pwd = hasAccount ? (u.password || '') : '—';
+  const pwd = hasAccount ? (u.plain_password || u.password || '') : '—';
   const isHashed = pwd.startsWith('$2');
   const modal = document.getElementById('studentCredsModal');
   if(!modal) return;
@@ -5356,7 +5356,7 @@ function showTeacherCreds(id, name, username){
   scResult.style.display = '';
   document.getElementById('scStudentName').textContent = name;
   document.getElementById('scResUser').value = hasAccount ? (u.username || '—') : 'لا يوجد حساب';
-  document.getElementById('scResPass').value = isHashed ? '🔒 مُشفّرة (لا يمكن عرضها)' : pwd;
+  document.getElementById('scResPass').value = isHashed ? '🔒 مُشفّرة (لا يمكن عرضها)' : (pwd || '—');
 }
 async function resetTeacherSecret(id){
   const u = userById(id);
@@ -6056,7 +6056,7 @@ function renderAssignments(){
       const todoCount = clsStudents.length - doneCount;
       const pct = clsStudents.length ? Math.round(doneCount/clsStudents.length*100) : 0;
       return `<tr>
-        <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${typeColors[a.type]||'#888'};margin-left:4px;vertical-align:middle"></span>${escapeHtml(a.title||'')}</td>
+        <td><a href="#/assignments?step=detail&cid=${classId}&sub=${encodeURIComponent(a.subject||'')}&aid=${a.id}" style="text-decoration:none;color:#2563eb;cursor:pointer"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${typeColors[a.type]||'#888'};margin-left:4px;vertical-align:middle"></span>${escapeHtml(a.title||'')}</a></td>
         <td>${escapeHtml(a.subject||'')}</td>
         <td>${escapeHtml(a.type||'واجب')}</td>
         <td>${a.date||''}</td>
@@ -6086,6 +6086,46 @@ function renderAssignments(){
     </div>`;
   }
 
+  if(step === 'detail'){
+    const assignmentId = params.get('aid')||'';
+    const cls = d.classes.find(c => c.id === classId);
+    const clsStudents = (d.students||[]).filter(s => s.active && s.classId === classId);
+    const a = (d.assignments||[]).find(x => x.id === assignmentId);
+    if(!a) return `<div class="page-title">التكليف غير موجود</div><a href="#/assignments?step=list&cid=${classId}" style="font-size:13px">← الرجوع</a>`;
+    const doneCount = clsStudents.filter(s => (a.completedBy||[]).includes(s.id)).length;
+    const pct = clsStudents.length ? Math.round(doneCount/clsStudents.length*100) : 0;
+    const typeColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
+    const rows = clsStudents.map(s => {
+      const done = (a.completedBy||[]).includes(s.id);
+      return `<tr>
+        <td style="font-weight:600">${escapeHtml(s.name||'')}</td>
+        <td>
+          <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-left:16px">
+            <input type="radio" name="ass_${s.id}" value="done" ${done ? 'checked' : ''} onchange="toggleStudentDone('${a.id}','${s.id}',true)">
+            <span style="color:#16a34a;font-weight:600">✅ حل الواجب</span>
+          </label>
+          <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+            <input type="radio" name="ass_${s.id}" value="undone" ${!done ? 'checked' : ''} onchange="toggleStudentDone('${a.id}','${s.id}',false)">
+            <span style="color:#dc2626;font-weight:600">❌ لم يحل</span>
+          </label>
+        </td>
+      </tr>`;
+    }).join('');
+    return `<div class="page-title">📝 ${escapeHtml(a.title||'')}</div>
+    <a href="#/assignments?step=list&cid=${classId}" style="font-size:13px">← الرجوع لقائمة التكليفات</a>
+    <div style="margin:10px 0;font-size:13px;color:#6b7280">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${typeColors[a.type]||'#888'};margin-left:4px"></span>
+      ${escapeHtml(a.subject||'')} — ${escapeHtml(a.type||'')} — ${a.date||''}
+      <span style="margin-right:14px;font-weight:700;color:${pct>=75?'#16a34a':pct>=50?'#d97706':'#dc2626'}">${doneCount}/${clsStudents.length} (${pct}%)</span>
+    </div>
+    <div class="card table-card" style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>الطالب</th><th>الحالة</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }
+
   if(step === 'form'){
     const assignmentType = decodeURIComponent(params.get('type') || 'واجب');
     const cls = d.classes.find(c => c.id === classId);
@@ -6106,6 +6146,17 @@ function renderAssignments(){
 
   return renderAssignments();
 }
+function toggleStudentDone(aid, sid, isDone){
+  const d = loadDB();
+  const a = (d.assignments||[]).find(x => x.id === aid);
+  if(!a) return;
+  if(!a.completedBy) a.completedBy = [];
+  const idx = a.completedBy.indexOf(sid);
+  if(isDone && idx < 0) a.completedBy.push(sid);
+  if(!isDone && idx >= 0) a.completedBy.splice(idx, 1);
+  saveDB(d);
+  renderApp();
+}
 function saveAssignment(){
   const user = currentUser();
   if(!user) return;
@@ -6119,7 +6170,8 @@ function saveAssignment(){
   const type = decodeURIComponent(params.get('type')||'واجب');
   if(!title){ alert('اكتب عنوان التكليف'); return; }
   d.assignments = d.assignments || [];
-  d.assignments.push({ id: uid(), teacherId: user.id, classId, subject, type, title, desc, date, created: Date.now() });
+  const clsStudents = (d.students||[]).filter(s => s.active && s.classId === classId).map(s => s.id);
+  d.assignments.push({ id: uid(), teacherId: user.id, classId, subject, type, title, desc, date, created: Date.now(), completedBy: clsStudents.slice() });
   saveDB(d);
   alert('✅ تم حفظ التكليف');
   location.hash = '#/assignments?step=type&cid=' + classId + '&sub=' + encodeURIComponent(subject);

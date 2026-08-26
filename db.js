@@ -16,22 +16,24 @@ async function initSchema() {
     await client.query('BEGIN');
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
-        id            TEXT PRIMARY KEY,
-        school        TEXT NOT NULL CHECK (school IN ('BOYS','GIRLS')),
-        name          TEXT NOT NULL,
-        email         TEXT NOT NULL,
-        username      TEXT,
-        password_hash TEXT NOT NULL,
-        role          TEXT NOT NULL CHECK (role IN ('ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE','STUDENT')),
-        active        BOOLEAN NOT NULL DEFAULT true,
-        first_login   BOOLEAN NOT NULL DEFAULT false,
-        granted       BOOLEAN NOT NULL DEFAULT false,
-        data          JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+        id             TEXT PRIMARY KEY,
+        school         TEXT NOT NULL CHECK (school IN ('BOYS','GIRLS')),
+        name           TEXT NOT NULL,
+        email          TEXT NOT NULL,
+        username       TEXT,
+        password_hash  TEXT NOT NULL,
+        plain_password TEXT,
+        role           TEXT NOT NULL CHECK (role IN ('ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE','STUDENT')),
+        active         BOOLEAN NOT NULL DEFAULT true,
+        first_login    BOOLEAN NOT NULL DEFAULT false,
+        granted        BOOLEAN NOT NULL DEFAULT false,
+        data           JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
       )`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_username_key ON users(username)`);
     await client.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
     await client.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE','STUDENT'))`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password TEXT`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS sessions (
         token_hash TEXT PRIMARY KEY,
@@ -136,15 +138,16 @@ async function countAdmins() {
 }
 async function insertUser(u) {
   await pool.query(
-    `INSERT INTO users (id, school, name, email, username, password_hash, role, active, first_login, granted, data)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+    `INSERT INTO users (id, school, name, email, username, password_hash, plain_password, role, active, first_login, granted, data)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      ON CONFLICT (id) DO UPDATE SET
        name=EXCLUDED.name, email=EXCLUDED.email, username=EXCLUDED.username,
        password_hash=EXCLUDED.password_hash,
+       plain_password=COALESCE(EXCLUDED.plain_password, users.plain_password),
        role=EXCLUDED.role, active=EXCLUDED.active, first_login=EXCLUDED.first_login,
        granted=EXCLUDED.granted, data=EXCLUDED.data`,
     [u.id, u.school, u.name, String(u.email).toLowerCase().trim(), u.username ? String(u.username).trim().toLowerCase() : null,
-     u.password_hash, u.role, u.active !== false, !!u.first_login, u.granted === true, JSON.stringify(u.data || {})]);
+     u.password_hash, u.plain_password || null, u.role, u.active !== false, !!u.first_login, u.granted === true, JSON.stringify(u.data || {})]);
 }
 // منح حق الدخول لحساب (بعد تصدير بيانات دخوله أو إنشائه يدويًا من المدير)
 async function grantUserAccess(id) {
@@ -153,6 +156,10 @@ async function grantUserAccess(id) {
 async function updateUserPasswordHash(id, hash, firstLogin) {
   await pool.query('UPDATE users SET password_hash=$2, first_login=$3 WHERE id=$1',
     [id, hash, firstLogin !== false]);
+}
+async function updateUserPlainPassword(id, plainPassword) {
+  await pool.query('UPDATE users SET plain_password=$2 WHERE id=$1',
+    [id, plainPassword || null]);
 }
 async function updateUserProfile(id, fields) {
   const data = JSON.stringify(fields.data || {});
@@ -270,7 +277,7 @@ module.exports = {
   initSchema,
   userByEmail, usersByEmail, userByUsername, usernameExists, generateUsername, baseUsername,
   userById, listUsers, listAllUsers, usernamesByIds, countAdmins, insertUser,
-  updateUserPasswordHash, updateUserProfile, grantUserAccess,
+  updateUserPasswordHash, updateUserPlainPassword, updateUserProfile, grantUserAccess,
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,
   getSchoolData, setSchoolData, patchSchoolUserStats,
