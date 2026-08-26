@@ -1933,6 +1933,9 @@ function renderLayout(user, hash){
   const homeLink = { href:'#/', key:'home', label:'الرئيسية', icon:'⌂' };
   const isStudent = user.role === 'STUDENT';
   const groups = isStudent ? [
+    { title:'طلبي', items:[
+      { href:'#/notebook', key:'notebook', label:'المفكرة', icon:'📒' },
+    ]},
     { title:'النظام', items:[
       { href:'#/settings', key:'settings', label:'الإعدادات', icon:'⚙️' },
       { href:'#/about', key:'about', label:'حول نبراس', icon:'ⓘ' },
@@ -1999,6 +2002,7 @@ function renderLayout(user, hash){
   else if(page.startsWith('teacher/') && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderTeacherPage(page.split('/')[1]);
   else if(page === 'guide-msgs' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR')) pageHtml = renderGuideMsgs();
   else if(page === 'settings') pageHtml = renderSettings();
+  else if(page === 'notebook') pageHtml = renderNotebookPage();
   else if(page === 'about') pageHtml = renderAbout();
   else pageHtml = renderDashboard();
 
@@ -2588,15 +2592,16 @@ function renderStudentDashboard(){
   const myNotes = (d.notes||[]).slice().filter(n => n.studentId === user.id).slice(-6).reverse();
   const myTransfers = (d.transfers||[]).slice().filter(t => studentIdsOf(t).includes(user.id)).slice(-4).reverse();
   const attRecs = (d.attendance||[]).slice(-30);
-  let present = 0, absent = 0;
+  let present = 0, absent = 0, late = 0;
   attRecs.forEach(day => {
     const rec = (day.students||[]).find(s => s.studentId === user.id);
     if(rec){
       if(rec.status === 'present') present++;
       else if(rec.status === 'absent') absent++;
+      else if(rec.status === 'late') late++;
     }
   });
-  const total = present + absent;
+  const total = present + absent + late;
   const attPct = total > 0 ? Math.round((present/total)*100) : 0;
   const maxPts = Math.max(sp.pos, Math.abs(sp.neg), 1);
   const posDeg = Math.round((sp.pos / maxPts) * 180);
@@ -2624,17 +2629,19 @@ function renderStudentDashboard(){
         <div style="position:relative;width:210px;height:210px;display:flex;align-items:center;justify-content:center">
           <svg viewBox="0 0 36 36" style="width:210px;height:210px;transform:rotate(-90deg)">
             <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3" />
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#dc2626" stroke-width="3" stroke-dasharray="${total > 0 ? Math.round(absent/total*100) : 0} 100" stroke-linecap="round" />
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#dc2626" stroke-width="3" stroke-dasharray="${total > 0 ? Math.round(absent/total*100) : 0} ${total > 0 ? 100 - Math.round(absent/total*100) : 100}" stroke-linecap="round" />
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="${total > 0 ? Math.round(late/total*100) : 0} ${total > 0 ? 100 - Math.round(late/total*100) : 100}" stroke-dashoffset="${total > 0 ? -Math.round(absent/total*100) : 0}" stroke-linecap="round" />
           </svg>
           <div style="position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center">
             <span style="font-size:32px;font-weight:800;color:#dc2626">${absent}</span>
             <span style="font-size:12px;color:var(--muted);font-weight:600">غياب</span>
           </div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:10px">
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;justify-content:center">
           <span style="font-size:14px;font-weight:700;color:#16a34a">${attPct}% حضور</span>
           <span style="font-size:14px;color:#d1d5db">|</span>
           <span style="font-size:14px;font-weight:700;color:#1d4ed8">${present} حاضر</span>
+          ${late > 0 ? `<span style="font-size:14px;color:#d1d5db">|</span><span style="font-size:14px;font-weight:700;color:#d97706">${late} متأخر</span>` : ''}
         </div>
       </div>
     </div>
@@ -3448,6 +3455,9 @@ function renderNotebookSection(){
   </div>
   <h2 class="section-title">📚 مفكرتي (${arr.length})</h2>
   <div class="nb-grid">${cards}</div>`;
+}
+function renderNotebookPage(){
+  return `<div class="header-row"><h1 class="page-title">📒 مفكرتي</h1></div>` + renderNotebookSection();
 }
 function addMemo(){
   const text = (document.getElementById('memoText')?.value || '').trim();
