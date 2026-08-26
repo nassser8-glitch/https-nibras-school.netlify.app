@@ -3903,25 +3903,31 @@ function sortStudentsForView(students){
 }
 function renderStudentBody(students){
   if(studentsView !== 'all') students = students.filter(s => s.classId === studentsView);
-  if(students.length === 0) return `<tr><td colspan="8" style="text-align:center;padding:24px;color:#9ca3af">لا يوجد طلاب</td></tr>`;
+  if(students.length === 0) return `<tr><td colspan="9" style="text-align:center;padding:24px;color:#9ca3af">لا يوجد طلاب</td></tr>`;
   const isGirls = getActiveSchool() === 'GIRLS';
   const isAdmin = currentUser()?.role === 'ADMIN';
+  const isTeacher = currentUser()?.role === 'TEACHER';
   const moveFn = isGirls ? 'moveOneBoy' : 'moveOneGirl';
   const moveLabel = isGirls ? '🚹 بنين' : '🚺 بنات';
   const ptsMap = studentPointsMap();
   const dUsers = loadDB().users || [];
+  const dAssignments = loadDB().assignments || [];
   return students.map(s => {
     const cls = s.classId ? classById(s.classId) : null;
     const grade = cls ? gradeById(cls.gradeId) : null;
     const pts = ptsMap[s.id] || 0;
     const su = dUsers.find(u => u.id === s.id && u.role === 'STUDENT');
     const hasAccount = !!su;
+    const myAss = dAssignments.filter(a => a.classId === s.classId);
+    const doneCount = myAss.filter(a => (a.completedBy||[]).includes(s.id)).length;
+    const totalAss = myAss.length;
     return `<tr data-name="${escapeHtml(s.fullName.toLowerCase())}" data-no="${escapeHtml(String(s.studentNo).toLowerCase())}">
       <td style="font-weight:600;color:#1f2937">${studentNameLink(s)}</td>
       <td>${escapeHtml(s.studentNo)}</td>
       <td>${grade ? escapeHtml(grade.name) : '—'}</td>
       <td>${cls ? escapeHtml(cls.name) : '—'}</td>
       <td style="font-weight:800;color:${pts>=0?'#16a34a':'#dc2626'}" title="مجموع النقاط (ثواب/عقاب)">${pts>0?'+':''}${pts}</td>
+      ${isTeacher ? `<td style="font-size:12px;text-align:center"><span style="font-weight:700;color:${doneCount===totalAss&&totalAss>0?'#16a34a':doneCount>=totalAss*0.5?'#d97706':'#dc2626'}">${doneCount}/${totalAss}</span></td>` : ''}
       <td style="font-size:12px">${hasAccount ? '<span style="color:var(--green)">✓ ' + escapeHtml(su.username) + '</span>' : '<span style="color:#9ca3af">—</span>'}</td>
       <td>
         ${isAdmin ? (hasAccount ? `<button class="btn-secondary" style="padding:2px 8px;font-size:11px" onclick="resetStudentPassword('${s.id}','${escapeHtml(s.fullName)}')">🔄 إعادة تعيين</button>` : `<button class="btn-secondary" style="padding:2px 8px;font-size:11px" onclick="setStudentCreds('${s.id}','${escapeHtml(s.fullName)}')">🔑 تعيين</button>`) : ''}
@@ -3937,6 +3943,7 @@ function renderStudents(){
   const d = loadDB();
   const user = currentUser();
   const isAdmin = user?.role === 'ADMIN';
+  const isTeacher = user?.role === 'TEACHER';
   const canManage = isManager(user);
   const students = getVisibleStudents();
   const classes = getClassesSorted();
@@ -4015,7 +4022,7 @@ function renderStudents(){
   <div class="card mb"><input id="studentSearch" class="input" style="max-width:280px" placeholder="بحث بالاسم أو الرقم..." oninput="filterStudentsTable()" /></div>
   <div class="card table-card">
     <table class="data-table">
-      <thead><tr><th>الاسم</th><th>الرقم</th><th>الصف</th><th>الفصل</th><th>النقاط</th><th>اسم المستخدم</th><th>الحساب</th><th></th></tr></thead>
+      <thead><tr><th>الاسم</th><th>الرقم</th><th>الصف</th><th>الفصل</th><th>النقاط</th>${isTeacher?'<th>الواجبات</th>':''}<th>اسم المستخدم</th><th>الحساب</th><th></th></tr></thead>
       <tbody id="studentsTableBody">${renderStudentBody(sortStudentsForView(students))}</tbody>
     </table>
   </div>`;
@@ -4795,9 +4802,9 @@ function renderNotes(){
     <table class="data-table"><thead><tr><th>الطالب</th><th>النوع</th><th>الفئة</th><th>الوصف</th><th>بواسطة</th><th>التاريخ</th><th>النقاط</th></tr></thead>
     <tbody>${rows}</tbody></table>
   </div>
-  <hr style="margin:26px 0;border:none;border-top:1px dashed var(--border,#e5e7eb)">
+  ${isStudent ? `<hr style="margin:26px 0;border:none;border-top:1px dashed var(--border,#e5e7eb)">
   <h2 class="section-title">📒 مفكرتي الشخصية</h2>
-  ${renderNotebookSection()}`;
+  ${renderNotebookSection()}` : ''}`;
 }
 let noteType = 'POSITIVE';
 let savingNote = false;
