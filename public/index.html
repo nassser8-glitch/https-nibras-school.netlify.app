@@ -1994,7 +1994,7 @@ function renderLayout(user, hash){
   else if(page === 'videos') pageHtml = renderVideos();
   else if(page === 'maintenance' && user.role !== 'STUDENT') pageHtml = renderMaintenance();
   else if(page === 'users' && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderUsers();
-  else if(page === 'timetable' && user.role === 'TEACHER') pageHtml = renderTimetable();
+  else if(page === 'timetable' && (user.role === 'TEACHER' || user.role === 'STUDENT')) pageHtml = renderTimetable();
   else if(page === 'assignments' && user.role === 'TEACHER') pageHtml = renderAssignments();
   else if(page === 'account' && user.role === 'TEACHER') pageHtml = renderAccount();
   else if(page === 'activities' && user.role !== 'STUDENT') pageHtml = renderActivities();
@@ -5822,16 +5822,63 @@ let timetableDay = null;
 let ttEdit = null;
 function renderTimetable(){
   const user = currentUser();
-  if(!user || user.role !== 'TEACHER') return `<h1 class="page-title">غير متاح</h1>`;
+  if(!user) return `<h1 class="page-title">غير متاح</h1>`;
   const d = loadDB();
+  if(!timetableDay || !TIMETABLE_DAYS.some(x => x.key === timetableDay)) timetableDay = (TIMETABLE_DAYS.find(x => x.dow === new Date().getDay()) || TIMETABLE_DAYS[0]).key;
+  const tabs = TIMETABLE_DAYS.map(day => `<button class="tt-tab ${day.key===timetableDay?'active':''}" onclick="setTimetableDay('${day.key}')">${day.label}</button>`).join('');
+
+  if(user.role === 'STUDENT'){
+    const myStudent = (d.students||[]).find(s => s.id === user.id);
+    const myClassId = myStudent ? myStudent.classId : null;
+    const myClass = myClassId ? d.classes.find(c => c.id === myClassId) : null;
+    const teacherIds = myClass ? (myClass.teacherIds||[]) : [];
+    const grade = myClass ? gradeById(myClass.gradeId) : null;
+    const clsLabel = grade ? grade.name + ' — ' + myClass.name : '—';
+    const merged = {};
+    for(const tid of teacherIds){
+      const tCells = ((d.timetable||{})[tid] || {})[timetableDay] || {};
+      for(const [p, cell] of Object.entries(tCells)){
+        if(!merged[p]) merged[p] = cell;
+      }
+    }
+    if(!myClass){
+      return `<div class="header-row"><h1 class="page-title">🗓 جدولي</h1></div>
+      <div class="card" style="background:#fef3c7"><p class="muted" style="margin:0">⚠️ أنت غير مسند لأي فصل بعد.</p></div>`;
+    }
+    const rows = TIMETABLE_PERIOD_NAMES.map((name, i) => {
+      const p = i + 1;
+      const cell = merged[p];
+      if(cell){
+        const c = d.classes.find(x => x.id === cell.classId);
+        return `<div class="card tt-row">
+          <div class="tt-badge">الحصة ${name}</div>
+          <div class="tt-info">
+            <div class="tt-subject">${escapeHtml(cell.subject || '—')}</div>
+            <div class="muted small">${c ? escapeHtml(clsLabel) : '—'}</div>
+          </div>
+        </div>`;
+      }
+      return `<div class="card tt-row tt-empty">
+        <div class="tt-badge">الحصة ${name}</div>
+        <div class="tt-info"><span class="muted small">فارغة</span></div>
+      </div>`;
+    }).join('');
+    return `
+    <div class="header-row">
+      <h1 class="page-title">🗓 جدولي — ${escapeHtml(clsLabel)}</h1>
+      <a href="#/" class="btn-secondary" style="text-decoration:none">← العودة</a>
+    </div>
+    <div class="tt-tabs">${tabs}</div>
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px">${rows}</div>`;
+  }
+
+  if(user.role !== 'TEACHER') return `<h1 class="page-title">غير متاح</h1>`;
   const myClasses = d.classes.filter(c => (c.teacherIds||[]).includes(user.id)).sort((a,b) => {
     const ga = gradeById(a.gradeId), gb = gradeById(b.gradeId);
     return ((ga?.order??0) - (gb?.order??0)) || a.name.localeCompare(b.name,'ar');
   });
-  if(!timetableDay || !TIMETABLE_DAYS.some(x => x.key === timetableDay)) timetableDay = (TIMETABLE_DAYS.find(x => x.dow === new Date().getDay()) || TIMETABLE_DAYS[0]).key;
   const dayCells = (d.timetable || {})[user.id] ? ((d.timetable[user.id][timetableDay]) || {}) : {};
-  const tabs = TIMETABLE_DAYS.map(day => `<button class="tt-tab ${day.key===timetableDay?'active':''}" onclick="setTimetableDay('${day.key}')">${day.label}</button>`).join('');
-  const rows = TIMETABLE_PERIOD_NAMES.map((name, i) => {
+  const rows2 = TIMETABLE_PERIOD_NAMES.map((name, i) => {
     const p = i + 1;
     const cell = dayCells[p];
     if(cell){
@@ -5861,7 +5908,7 @@ function renderTimetable(){
   </div>
   ${myClasses.length ? `<p class="muted" style="margin:4px 0 14px">أدخل حصصك لكل يوم: المادة والفصل — يُعرض كل يوم على حدة</p>` : `<div class="card" style="margin:10px 0 14px;background:#fef3c7"><p class="muted" style="margin:0">⚠️ لا توجد فصول مسندة إليك بعد — راجع وكيل المدرسة لأسند فصلاً لك.</p></div>`}
   <div class="tt-tabs">${tabs}</div>
-  <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px">${rows}</div>
+  <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px">${rows2}</div>
   `;
 }
 function setTimetableDay(day){ timetableDay = day; renderApp(); }
