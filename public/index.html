@@ -5975,11 +5975,16 @@ function renderAssignments(){
       const cls = d.classes.find(c => c.id === cid);
       if(!cls) return '';
       const subCount = subjects.filter(s => s.classId === cid).length;
-      return `<div class="card" style="cursor:pointer;padding:18px;margin-bottom:10px" onclick="location.hash='#/assignments?step=subject&cid=${cid}'">
-        <div style="display:flex;align-items:center;gap:12px">
+      const assCount = (d.assignments||[]).filter(a => a.classId === cid).length;
+      return `<div class="card" style="padding:18px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="location.hash='#/assignments?step=subject&cid=${cid}'">
           <span style="font-size:28px">🏫</span>
-          <div><div style="font-weight:bold;font-size:16px">${escapeHtml(classLabel(cls))}</div><div class="muted small">${subCount} مادة</div></div>
+          <div><div style="font-weight:bold;font-size:16px">${escapeHtml(classLabel(cls))}</div><div class="muted small">${subCount} مادة · ${assCount} تكليف</div></div>
           <span style="margin-right:auto;font-size:18px">◀</span>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;border-top:1px solid var(--line);padding-top:10px">
+          <button class="btn-secondary" style="font-size:12px;padding:5px 12px" onclick="location.hash='#/assignments?step=list&cid=${cid}'">📋 قائمة التكليفات</button>
+          <button class="btn-secondary" style="font-size:12px;padding:5px 12px" onclick="location.hash='#/assignments?step=subject&cid=${cid}'">➕ تكليف جديد</button>
         </div>
       </div>`;
     }).join('');
@@ -6021,6 +6026,47 @@ function renderAssignments(){
       </div>`;
     }).join('');
     return `<div class="page-title">📝 التكليفات</div><a href="#/assignments?step=subject&cid=${classId}" style="font-size:13px">← الرجوع للمواد</a><p class="muted" style="margin:8px 0 14px">${escapeHtml(subject)} — اختر نوع التكليف</p>${cards}`;
+  }
+
+  if(step === 'list'){
+    const cls = d.classes.find(c => c.id === classId);
+    const clsStudents = (d.students||[]).filter(s => s.active && s.classId === classId);
+    const clsAssignments = (d.assignments||[]).filter(a => a.classId === classId).sort((a,b) => (b.created||0) - (a.created||0));
+    const typeColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
+    const rows = clsAssignments.length === 0 ? `<tr><td colspan="${Math.max(clsStudents.length+4,5)}" style="text-align:center;padding:24px;color:#9ca3af">لا توجد تكليفات لهذا الفصل</td></tr>` :
+    clsAssignments.map(a => {
+      const doneCount = clsStudents.filter(s => (a.completedBy||[]).includes(s.id)).length;
+      const todoCount = clsStudents.length - doneCount;
+      const pct = clsStudents.length ? Math.round(doneCount/clsStudents.length*100) : 0;
+      return `<tr>
+        <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${typeColors[a.type]||'#888'};margin-left:4px;vertical-align:middle"></span>${escapeHtml(a.title||'')}</td>
+        <td>${escapeHtml(a.subject||'')}</td>
+        <td>${escapeHtml(a.type||'واجب')}</td>
+        <td>${a.date||''}</td>
+        <td>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            ${clsStudents.map(s => {
+              const done = (a.completedBy||[]).includes(s.id);
+              return `<span style="display:inline-flex;align-items:center;gap:2px;padding:2px 6px;border-radius:6px;font-size:11px;font-weight:600;${done ? 'background:#dcfce7;color:#16a34a' : 'background:#fef2f2;color:#dc2626'}">${done ? '✅' : '❌'} ${escapeHtml((s.name||'').split(' ')[0])}</span>`;
+            }).join('')}
+          </div>
+        </td>
+        <td style="white-space:nowrap"><span style="color:${pct>=75?'#16a34a':pct>=50?'#d97706':'#dc2626'};font-weight:700">${doneCount}/${clsStudents.length}</span></td>
+      </tr>`;
+    }).join('');
+    return `<div class="page-title">📝 التكليفات — ${cls ? escapeHtml(classLabel(cls)) : ''}</div>
+    <a href="#/assignments" style="font-size:13px">← الرجوع للفصول</a>
+    <div style="margin:14px 0;display:flex;gap:8px;flex-wrap:wrap">
+      ${clsStudents.map(s => `<div style="display:flex;align-items:center;gap:4px;font-size:12px;padding:4px 10px;background:#f3f4f6;border-radius:8px">
+        <span style="font-weight:600">${escapeHtml(s.name||'')}</span>
+      </div>`).join('')}
+    </div>
+    <div class="card table-card" style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>التكليف</th><th>المادة</th><th>النوع</th><th>التاريخ</th><th>حالة الطلاب</th><th>نسبة الإنجاز</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
   }
 
   if(step === 'form'){
