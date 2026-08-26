@@ -2673,27 +2673,26 @@ function renderStudentDashboard(){
     </div>
     ${typeStats.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:12px">لا توجد تكليفات بعد</p>' :
     `<div style="display:flex;flex-direction:column;gap:10px">
-      ${typeStats.map(s => `<div style="display:flex;align-items:center;gap:10px">
+      ${typeStats.map(s => `<div style="display:flex;align-items:center;gap:8px">
         <span style="width:24px;text-align:center;font-size:18px">${s.icon}</span>
-        <span style="width:50px;font-size:13px;font-weight:600">${s.type}</span>
+        <span style="width:46px;font-size:12px;font-weight:600">${s.type}</span>
         <div style="flex:1;height:28px;background:#f3f4f6;border-radius:14px;overflow:hidden;position:relative">
           <div style="height:100%;width:${s.done > 0 ? Math.round(s.done/s.total*100) : 0}%;background:${s.color};border-radius:14px;transition:width .3s"></div>
-          <div style="height:100%;width:${s.todo > 0 ? Math.round(s.todo/s.total*100) : 0}%;background:${s.color}33;border-radius:0 14px 14px 0;margin-left:-1px;position:absolute;top:0;left:${s.done > 0 ? Math.round(s.done/s.total*100) : 0}%"></div>
         </div>
-        <div style="display:flex;gap:6px;font-size:12px;white-space:nowrap">
-          <span style="font-weight:700;color:${s.color}">${s.done}/${s.total}</span>
-          <span style="color:var(--muted)">منجز</span>
+        <div style="display:flex;gap:4px;font-size:11px;white-space:nowrap">
+          <span style="background:#dcfce7;color:#16a34a;padding:2px 7px;border-radius:8px;font-weight:700">نفذ ${s.done}</span>
+          <span style="background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:8px;font-weight:700">لم ينفذ ${s.todo}</span>
         </div>
       </div>`).join('')}
     </div>
     <div style="display:flex;gap:16px;margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)">
       <div style="display:flex;align-items:center;gap:4px;font-size:12px">
         <span style="width:14px;height:10px;border-radius:5px;background:var(--primary);display:inline-block"></span>
-        <span style="color:var(--muted)">منجز</span>
+        <span style="color:var(--muted)">نفذ</span>
       </div>
       <div style="display:flex;align-items:center;gap:4px;font-size:12px">
-        <span style="width:14px;height:10px;border-radius:5px;background:rgba(29,127,214,.2);display:inline-block"></span>
-        <span style="color:var(--muted)">غير منجز</span>
+        <span style="width:14px;height:10px;border-radius:5px;background:#dc2626;opacity:.3;display:inline-block"></span>
+        <span style="color:var(--muted)">لم ينفذ</span>
       </div>
     </div>`}
   </div>
