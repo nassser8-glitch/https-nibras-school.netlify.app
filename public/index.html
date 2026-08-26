@@ -1935,7 +1935,7 @@ function renderAbout(){
       <p style="font-size:13px;color:#6b7280;line-height:1.7">تظهر في صفحة الرئيسية ملخص شامل لابنك يشمل:</p>
       <ul style="font-size:13px;color:#6b7280;line-height:1.9;padding-right:20px;margin:4px 0">
         <li><b>النقاط السلوكية:</b> دائرة تبين النقاط الإيجابية والسلبية التي حصل عليها ابنك خلال الفصل الدراسي. النقاط الإيجابية باللون الأخضر والسلبية بالأحمر.</li>
-        <li><b>التكليفات:</b> قائمة بآخر التكليفات المدرسية التي أُعِيّنت لفصل ابنك — التكليف، المادة، النوع (واجب / مشروع / حفظ)، والتاريخ.</li>
+        <li><b>التكليفات:</b> قائمة بآخر التكليفات المدرسية التي أعطيت لفصل ابنك — التكليف، المادة، النوع (واجب / مشروع / حفظ)، والتاريخ.</li>
         <li><b>الملاحظات:</b> الملاحظات السلوكية والإدارية المسجلة للمعلم (إيجابية أو سلبية) مع النقاط المرفقة.</li>
         <li><b>التحويلات:</b> حالات التحويلات الإدارية إن وُجدت (قيد المتابعة أو تم الحل).</li>
         <li><b>الحضور والغياب:</b> نسبة الحضور والغياب والتأخر خلال آخر 30 يوماً.</li>
@@ -6434,162 +6434,176 @@ const STUDENT_ACTIVITY_TYPES = [
   { value:'organization', label:'تنظيم', icon:'📋', color:'#6366f1' },
   { value:'eboard', label:'مشاركة في اللوحة الإلكترونية', icon:'🖥️', color:'#06b6d4' },
 ];
-let studentActivityEditId = null;
-let studentActivityFormOpen = false;
+let saBase64 = null;
+let saParticipateId = null;
 function renderStudentActivities(){
   const d = loadDB();
   const user = currentUser();
   if(!user || user.role !== 'STUDENT') return '<h1 class="page-title">غير متاح</h1>';
-  const acts = (d.studentActivities||[]).filter(a => a.studentId === user.id).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+  const today = todayStr();
+  const allActs = (d.activities||[]).sort((a,b) => b.date.localeCompare(a.date));
+  const upcoming = allActs.filter(a => a.date >= today);
+  const past = allActs.filter(a => a.date < today);
+  const myParts = (d.studentActivities||[]).filter(a => a.studentId === user.id);
+  const partForAct = aid => myParts.find(p => p.activityId === aid);
   const typeOpts = STUDENT_ACTIVITY_TYPES.map(t => `<option value="${t.value}">${t.icon} ${t.label}</option>`).join('');
-  const openForm = studentActivityFormOpen; studentActivityFormOpen = false;
-  const typeRow = a => {
-    const t = STUDENT_ACTIVITY_TYPES.find(x => x.value === a.type) || STUDENT_ACTIVITY_TYPES[0];
-    const dateStr = a.createdAt ? new Date(a.createdAt).toLocaleDateString('ar-SA') : (a.date || '');
-    return `<div class="card" style="display:flex;gap:12px;align-items:flex-start;${studentActivityEditId===a.id ? 'border:2px solid var(--primary)' : ''}">
-      <span style="font-size:28px;flex-shrink:0;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:${t.color}20">${t.icon}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:14px">${escapeHtml(a.title || t.label)}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px">${t.label} · ${dateStr}</div>
-        ${a.description ? `<div style="font-size:13px;color:#6b7280;margin-top:4px;line-height:1.6">${escapeHtml(a.description)}</div>` : ''}
-        ${a.attachment ? `<div style="margin-top:8px"><img src="${a.attachment}" alt="مرفق" style="max-width:100%;max-height:220px;border-radius:10px;border:1px solid var(--line);cursor:pointer" onclick="window.open('${a.attachment}','_blank')" /></div>` : ''}
+  const renderAct = a => {
+    const t = activityTypes.find(x => x.value === a.type) || activityTypes[activityTypes.length-1];
+    const myPart = partForAct(a.id);
+    const partType = myPart ? STUDENT_ACTIVITY_TYPES.find(x => x.value === myPart.type) : null;
+    const partCount = myParts.filter(p => p.activityId === a.id).length;
+    return `<div class="card" style="border-right:4px solid ${t.color || 'var(--primary)'}">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <span style="font-size:30px;flex-shrink:0">${t.icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:15px">${escapeHtml(a.name)}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${t.label} · ${fmtDateOnly(a.date)}</div>
+          ${a.description ? `<div style="font-size:13px;color:#6b7280;margin-top:4px;line-height:1.6">${escapeHtml(a.description)}</div>` : ''}
+          ${myPart ? `
+            <div style="margin-top:10px;padding:10px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0">
+              <div style="font-weight:700;font-size:13px;color:#16a34a;margin-bottom:4px">✅ مشاركتك مسجّلة</div>
+              <div style="font-size:12px;color:#6b7280">${partType ? partType.icon + ' ' + partType.label : ''} · ${myPart.createdAt ? new Date(myPart.createdAt).toLocaleDateString('ar-SA') : ''}</div>
+              ${myPart.description ? `<div style="font-size:13px;color:#6b7280;margin-top:4px;line-height:1.6">${escapeHtml(myPart.description)}</div>` : ''}
+              ${myPart.attachment ? `<div style="margin-top:8px"><img src="${myPart.attachment}" alt="مرفق" style="max-width:100%;max-height:200px;border-radius:10px;border:1px solid var(--line);cursor:pointer" onclick="window.open('${myPart.attachment}','_blank')" /></div>` : ''}
+              <div style="margin-top:8px;display:flex;gap:6px">
+                <button class="btn-secondary" style="font-size:12px;padding:4px 12px" onclick="editStudentParticipation('${myPart.id}')">✏️ تعديل</button>
+                <button class="btn-secondary danger" style="font-size:12px;padding:4px 12px" onclick="deleteStudentParticipation('${myPart.id}')">🗑 حذف</button>
+              </div>
+            </div>
+          ` : `
+            <div style="margin-top:10px">
+              <button class="btn-primary" style="font-size:13px;padding:6px 18px" onclick="openParticipateForm('${a.id}')">🎯 شارك في هذا النشاط</button>
+            </div>
+          `}
+        </div>
       </div>
-      <div style="display:flex;gap:4px;flex-shrink:0">
-        <button class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="editStudentActivity('${a.id}')" title="تعديل">✏️</button>
-        <button class="btn-secondary danger" style="padding:4px 10px;font-size:12px" onclick="deleteStudentActivity('${a.id}')" title="حذف">🗑</button>
+    </div>`;
+  };
+  const actRow = a => {
+    const t = activityTypes.find(x => x.value === a.type) || activityTypes[activityTypes.length-1];
+    const myPart = partForAct(a.id);
+    const partType = myPart ? STUDENT_ACTIVITY_TYPES.find(x => x.value === myPart.type) : null;
+    return `<div class="card" style="border-right:4px solid ${t.color || 'var(--primary)'};opacity:.7">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <span style="font-size:28px;flex-shrink:0">${t.icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:14px">${escapeHtml(a.name)}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${t.label} · ${fmtDateOnly(a.date)}</div>
+          ${a.description ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">${escapeHtml(a.description)}</div>` : ''}
+          ${myPart ? `<div style="margin-top:6px;font-size:12px;color:#16a34a;font-weight:600">✅ شاركت: ${partType ? partType.icon + ' ' + partType.label : ''}</div>` : `<div style="margin-top:6px;font-size:12px;color:var(--muted)">لم تشارك</div>`}
+        </div>
       </div>
     </div>`;
   };
   return `
-  <div class="header-row"><h1 class="page-title">🎨 أنشطتي</h1><button class="btn-primary" onclick="openStudentActivityForm()">+ إضافة نشاط</button></div>
-  <div id="studentActivityForm" class="card mb" style="display:${openForm ? '' : 'none'}">
-    <div style="font-size:14px;font-weight:700;margin-bottom:10px">${studentActivityEditId ? '✏️ تعديل النشاط' : '➕ نشاط جديد'}</div>
-    <div class="form-grid-3">
-      <div>
-        <label class="small" style="display:block;font-weight:600;margin-bottom:4px">نوع النشاط</label>
-        <select id="saType" class="input" onchange="saTypeChanged()"><option value="">اختر النوع</option>${typeOpts}</select>
-      </div>
-      <div>
-        <label class="small" style="display:block;font-weight:600;margin-bottom:4px">العنوان</label>
-        <input id="saTitle" class="input" placeholder="مثال: مقال عن الأمل" />
-      </div>
-      <div>
-        <label class="small" style="display:block;font-weight:600;margin-bottom:4px">التاريخ</label>
-        <input type="date" id="saDate" class="input" value="${new Date().toISOString().slice(0,10)}" />
-      </div>
-    </div>
-    <div style="margin-top:10px">
-      <label class="small" style="display:block;font-weight:600;margin-bottom:4px">الوصف (اختياري)</label>
-      <textarea id="saDesc" class="input" rows="3" placeholder="اكتب تفاصيل نشاطك هنا..."></textarea>
-    </div>
-    <div style="margin-top:10px">
-      <label class="small" style="display:block;font-weight:600;margin-bottom:4px">📎 إرفاق صورة (اختياري)</label>
-      <div id="saUploadArea" style="border:2px dashed var(--line);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:all .2s" onclick="document.getElementById('saFile').click()" ondragover="event.preventDefault();this.style.borderColor='var(--primary)';this.style.background='var(--primary-light,#eef7ff)'" ondragleave="this.style.borderColor='var(--line)';this.style.background=''" ondrop="event.preventDefault();handleStudentActivityDrop(event)">
-        <div id="saUploadHint" style="color:var(--muted);font-size:13px">📷 اضغط هنا أو اسحب صورة للإرفاق<br><span style="font-size:11px">(JPG, PNG — حد أقصى 5 ميجا)</span></div>
-        <img id="saPreview" style="display:none;max-width:100%;max-height:180px;border-radius:10px;margin-top:4px" />
-      </div>
-      <input type="file" id="saFile" accept="image/*" style="display:none" onchange="previewStudentActivityFile(this)" />
-    </div>
-    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn-primary" onclick="saveStudentActivity()">💾 حفظ</button>
-      <button class="btn-secondary" onclick="closeStudentActivityForm()">إلغاء</button>
-    </div>
+  <div class="header-row"><h1 class="page-title">🎉 الأنشطة والفعاليات</h1></div>
+  ${saParticipateId ? renderParticipateModal(saParticipateId, d, user, typeOpts) : ''}
+  <h2 class="section-title">📅 أنشطة قادمة (${upcoming.length})</h2>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    ${upcoming.length ? upcoming.map(renderAct).join('') : '<div class="card" style="text-align:center;padding:24px"><p style="color:var(--muted)">لا توجد أنشطة قادمة</p></div>'}
   </div>
-  ${acts.length === 0 ? '<div class="card" style="text-align:center;padding:32px"><p style="color:var(--muted)">لا توجد أنشطة بعد — أضف نشاطك الأول من زر (+ إضافة نشاط)</p></div>' :
-  `<h2 class="section-title">📋 أنشطتي (${acts.length})</h2><div style="display:flex;flex-direction:column;gap:10px">${acts.map(typeRow).join('')}</div>`}`;
+  ${past.length ? `
+    <h2 class="section-title" style="margin-top:18px">🕘 أنشطة سابقة (${past.length})</h2>
+    <div style="display:flex;flex-direction:column;gap:8px">${past.map(actRow).join('')}</div>
+  ` : ''}`;
 }
-function saTypeChanged(){
-  const t = STUDENT_ACTIVITY_TYPES.find(x => x.value === document.getElementById('saType').value);
-  const title = document.getElementById('saTitle');
-  if(t && title && !title.value.trim()) title.value = t.label;
+function renderParticipateModal(actId, d, user, typeOpts){
+  const a = (d.activities||[]).find(x => x.id === actId);
+  if(!a) return '';
+  const existing = (d.studentActivities||[]).find(p => p.activityId === actId && p.studentId === user.id);
+  const t = activityTypes.find(x => x.value === a.type) || activityTypes[activityTypes.length-1];
+  return `<div class="modal-overlay" style="display:flex;align-items:center;justify-content:center;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,.5)" onclick="if(event.target===this)closeParticipateForm()">
+    <div class="modal-box" style="max-width:480px;width:95%;max-height:90vh;overflow-y:auto;background:#fff;border-radius:16px;padding:24px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <span style="font-size:28px">${t.icon}</span>
+        <div>
+          <div style="font-weight:700;font-size:16px">${escapeHtml(a.name)}</div>
+          <div style="font-size:12px;color:var(--muted)">${t.label} · ${fmtDateOnly(a.date)}</div>
+        </div>
+        <button onclick="closeParticipateForm()" style="margin-right:auto;background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)">✕</button>
+      </div>
+      <div style="font-size:13px;color:#6b7280;margin-bottom:14px">اختر نوع مشاركتك وأضف تفاصيل اختيارية</div>
+      <div>
+        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">نوع المشاركة <span style="color:red">*</span></label>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px" id="saTypeGrid">
+          ${STUDENT_ACTIVITY_TYPES.map(st => `
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid ${existing && existing.type===st.value ? st.color : 'var(--line)'};border-radius:10px;cursor:pointer;transition:all .15s;background:${existing && existing.type===st.value ? st.color+'10' : '#fff'}" onmouseenter="this.style.borderColor='${st.color}'" onmouseleave="if(!this.querySelector('input').checked){this.style.borderColor='var(--line)';this.style.background='#fff'}">
+              <input type="radio" name="saPartType" value="${st.value}" ${existing && existing.type===st.value ? 'checked' : ''} style="display:none" onchange="this.closest('label').style.borderColor='${st.color}';this.closest('label').style.background='${st.color}10';document.querySelectorAll('#saTypeGrid label').forEach(l=>{if(l!==this.closest('label')){l.style.borderColor='var(--line)';l.style.background='#fff'}})">
+              <span style="font-size:18px">${st.icon}</span>
+              <span style="font-size:13px;font-weight:600">${st.label}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">الوصف أو العنوان (اختياري)</label>
+        <textarea id="saPartDesc" class="input" rows="2" placeholder="مثال: مقال عن تأثير القرآن في حياتي">${existing && existing.description ? escapeHtml(existing.description) : ''}</textarea>
+      </div>
+      <div style="margin-top:14px">
+        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">📎 إرفاق صورة (اختياري)</label>
+        <div style="border:2px dashed var(--line);border-radius:12px;padding:20px;text-align:center;cursor:pointer" onclick="document.getElementById('saPartFile').click()" id="saPartUploadArea">
+          <div id="saPartUploadHint" style="color:var(--muted);font-size:13px">📷 اضغط هنا أو اسحب صورة<br><span style="font-size:11px">(JPG, PNG — حد أقصى 5 ميجا)</span></div>
+          ${existing && existing.attachment ? `<img id="saPartPreview" src="${existing.attachment}" style="max-width:100%;max-height:160px;border-radius:10px;margin-top:4px" />` : `<img id="saPartPreview" style="display:none;max-width:100%;max-height:160px;border-radius:10px;margin-top:4px" />`}
+        </div>
+        <input type="file" id="saPartFile" accept="image/*" style="display:none" onchange="previewSaPartFile(this)" />
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px">
+        <button class="btn-primary" onclick="saveParticipation('${actId}',${existing ? "'"+existing.id+"'" : 'null'})">💾 حفظ المشاركة</button>
+        <button class="btn-secondary" onclick="closeParticipateForm()">إلغاء</button>
+      </div>
+    </div>
+  </div>`;
 }
-function openStudentActivityForm(){
-  studentActivityEditId = null;
-  const f = document.getElementById('studentActivityForm');
-  if(f){ f.style.display=''; f.scrollIntoView({behavior:'smooth'}); }
+function openParticipateForm(actId){
+  saParticipateId = actId;
+  saBase64 = null;
+  renderApp();
 }
-function closeStudentActivityForm(){
-  studentActivityEditId = null;
-  const f = document.getElementById('studentActivityForm');
-  if(f) f.style.display = 'none';
-  const preview = document.getElementById('saPreview');
-  if(preview) preview.style.display = 'none';
-  const hint = document.getElementById('saUploadHint');
-  if(hint) hint.style.display = '';
-  const fileInput = document.getElementById('saFile');
-  if(fileInput) fileInput.value = '';
+function closeParticipateForm(){
+  saParticipateId = null;
+  saBase64 = null;
+  renderApp();
 }
-let saBase64 = null;
-function previewStudentActivityFile(input){
+function previewSaPartFile(input){
   const file = input.files[0];
   if(!file) return;
   if(file.size > 5*1024*1024){ alert('الحجم الأقصى 5 ميجا'); return; }
   const reader = new FileReader();
   reader.onload = e => {
     saBase64 = e.target.result;
-    const preview = document.getElementById('saPreview');
-    const hint = document.getElementById('saUploadHint');
+    const preview = document.getElementById('saPartPreview');
+    const hint = document.getElementById('saPartUploadHint');
     if(preview){ preview.src = saBase64; preview.style.display = ''; }
     if(hint) hint.style.display = 'none';
   };
   reader.readAsDataURL(file);
 }
-function handleStudentActivityDrop(e){
-  e.preventDefault();
-  const dt = e.dataTransfer;
-  if(dt.files && dt.files[0]){
-    const input = document.getElementById('saFile');
-    input.files = dt.files;
-    previewStudentActivityFile(input);
-  }
-}
-function saveStudentActivity(){
-  const type = document.getElementById('saType').value;
-  const title = document.getElementById('saTitle').value.trim();
-  const date = document.getElementById('saDate').value;
-  const desc = document.getElementById('saDesc').value.trim();
-  if(!type){ alert('اختر نوع النشاط'); return; }
-  if(!title){ alert('اكتب عنوان النشاط'); return; }
+function saveParticipation(actId, existingId){
+  const checked = document.querySelector('input[name="saPartType"]:checked');
+  if(!checked){ alert('اختر نوع المشاركة'); return; }
+  const desc = (document.getElementById('saPartDesc')||{}).value || '';
   const user = currentUser();
   if(!user) return;
   const d = loadDB();
   d.studentActivities = d.studentActivities || [];
-  if(studentActivityEditId){
-    const a = d.studentActivities.find(x => x.id === studentActivityEditId);
-    if(a){
-      a.type = type; a.title = title; a.date = date; a.description = desc;
-      if(saBase64) a.attachment = saBase64;
-    }
+  if(existingId){
+    const p = d.studentActivities.find(x => x.id === existingId);
+    if(p){ p.type = checked.value; p.description = desc; if(saBase64) p.attachment = saBase64; }
   } else {
-    d.studentActivities.push({ id: uid(), studentId: user.id, type, title, date, description: desc, attachment: saBase64 || null, createdAt: new Date().toISOString() });
+    d.studentActivities.push({ id: uid(), activityId: actId, studentId: user.id, type: checked.value, description: desc, attachment: saBase64 || null, createdAt: new Date().toISOString() });
   }
   saBase64 = null;
+  saParticipateId = null;
   saveDB(d);
-  closeStudentActivityForm();
   renderApp();
 }
-function editStudentActivity(id){
-  const d = loadDB();
-  const a = (d.studentActivities||[]).find(x => x.id === id);
-  if(!a) return;
-  studentActivityEditId = id;
-  const f = document.getElementById('studentActivityForm');
-  if(f) f.style.display = '';
-  document.getElementById('saType').value = a.type;
-  document.getElementById('saTitle').value = a.title || '';
-  document.getElementById('saDate').value = a.date || '';
-  document.getElementById('saDesc').value = a.description || '';
-  if(a.attachment){
-    const preview = document.getElementById('saPreview');
-    const hint = document.getElementById('saUploadHint');
-    if(preview){ preview.src = a.attachment; preview.style.display = ''; }
-    if(hint) hint.style.display = 'none';
-    saBase64 = a.attachment;
-  }
-  if(f) f.scrollIntoView({behavior:'smooth'});
+function editStudentParticipation(id){
+  saParticipateId = '__edit__' + id;
+  saBase64 = null;
+  renderApp();
 }
-function deleteStudentActivity(id){
-  if(!confirm('حذف هذا النشاط؟')) return;
+function deleteStudentParticipation(id){
+  if(!confirm('حذف مشاركتك؟')) return;
   const d = loadDB();
   d.studentActivities = (d.studentActivities||[]).filter(x => x.id !== id);
   saveDB(d);
