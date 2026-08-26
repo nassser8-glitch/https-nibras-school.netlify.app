@@ -2707,7 +2707,7 @@ function renderStudentDashboard(){
       recentAssignments.map(a => {
         const isDone = (a.completedBy||[]).includes(user.id);
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--line);${isDone ? 'opacity:.6' : ''}">
-        <span style="font-size:20px;cursor:pointer" onclick="toggleAssignmentDone('${a.id}')" title="${isDone ? 'إلغاء الإنجاز' : 'تحديد كمنجز'}">${isDone ? '✅' : '⬜'}</span>
+        <span style="font-size:20px" title="${isDone ? 'تم الإنجاز' : 'لم يُنجز'}">${isDone ? '✅' : '⬜'}</span>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:13px;${isDone ? 'text-decoration:line-through' : ''}">${escapeHtml(a.title || 'تكليف')}</div>
           <div style="font-size:11px;color:var(--muted)">${escapeHtml(a.subject || '')} · ${a.type||'واجب'}</div>
