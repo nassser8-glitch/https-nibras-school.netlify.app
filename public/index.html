@@ -2839,6 +2839,45 @@ function renderStudentDashboard(){
       </div>
     </div>`}
   </div>
+  <div class="dash-panel" style="margin-bottom:14px;padding:16px 20px;border-right:4px solid #2563eb">
+    <div class="dash-panel-head" style="margin-bottom:12px;">
+      <div class="dash-panel-title">🏆 أوائل فصلي</div>
+      <a href="#/student-leaders" class="dash-panel-more">عرض الكل ←</a>
+    </div>
+    ${(() => {
+      const sPtsMap = studentPointsMap();
+      const sMedals = ['🥇','🥈','🥉'];
+      const myStud = myStudent && myStudent.classId
+        ? (d.students||[]).filter(s => s.active && s.classId === myStudent.classId).map(s => ({ s, pts: sPtsMap[s.id] || 0 })).sort((a,b) => b.pts - a.pts || String(a.s.fullName||'').localeCompare(String(b.s.fullName||''),'ar'))
+        : [];
+      if(myStud.length === 0) return '<p style="color:var(--muted);text-align:center;padding:10px">لا توجد نقاط مسجلة في فصلك بعد</p>';
+      const myRank = myStud.findIndex(x => x.s.id === user.id) + 1;
+      return `
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        <div style="text-align:center;min-width:96px;padding:10px 16px;background:#eff6ff;border-radius:12px;border:1px solid #bfdbfe">
+          <div style="font-size:26px;font-weight:800;color:#2563eb">${myRank <= myStud.length ? myRank : '—'}</div>
+          <div style="font-size:11px;color:var(--muted);font-weight:600">ترتيبي في الفصل</div>
+        </div>
+        <div style="text-align:center;min-width:96px;padding:10px 16px;background:#ecfdf5;border-radius:12px;border:1px solid #a7f3d0">
+          <div style="font-size:26px;font-weight:800;color:#16a34a">+${sPtsMap[user.id] || 0}</div>
+          <div style="font-size:11px;color:var(--muted);font-weight:600">نقاطي</div>
+        </div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">أوائل الفصل</div>
+          ${myStud.slice(0,3).map((x,i) => {
+            const me = x.s.id === user.id;
+            return `<div class="dash-leader-row">
+              <span class="dash-leader-medal">${sMedals[i] || '•'}</span>
+              <div style="min-width:0;flex:1">
+                <div class="dash-leader-name">${escapeHtml(x.s.fullName || x.s.name || x.s.username || '')} ${me ? '<span style="font-size:10px;background:#2563eb;color:#fff;padding:1px 6px;border-radius:6px;margin:0 4px">أنت</span>' : ''}</div>
+              </div>
+              <span class="dash-leader-pts" style="color:#16a34a">+${x.pts}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    })()}
+  </div>
   <div style="display:flex;gap:12px;flex-wrap:wrap">
     <div class="dash-panel" style="flex:1;min-width:280px">
       <div class="dash-panel-head">
