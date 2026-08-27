@@ -5517,34 +5517,36 @@ function teacherStats(u){
   const now = new Date();
   const year = now.getFullYear(), month = now.getMonth();
   const logins = (u.loginHistory || []).map(iso => new Date(iso));
+  // السنة الدراسية: سبتمبر → يونيو
+  const yearStart = month >= 8 ? new Date(year, 8, 1) : new Date(year-1, 8, 1);
+  const yearEnd = month >= 8 ? new Date(year+1, 5, 30) : new Date(year, 5, 30);
+  const startKey = localDateKey(yearStart);
+  const endKey = localDateKey(yearEnd);
   let expected = 0;
-  const lastDay = new Date(year, month+1, 0).getDate();
-  for(let day=1; day<=lastDay; day++){
-    const dd = new Date(year, month, day);
-    if(dd.getDay() === 0 || dd.getDay() === 6) continue; // الدراسة الإثنين-الجمعة
-    if(dd > now) continue;
-    expected++;
+  const d2 = new Date(yearStart);
+  while(d2 <= yearEnd && d2 <= now){
+    if(d2.getDay() !== 0 && d2.getDay() !== 6) expected++;
+    d2.setDate(d2.getDate()+1);
   }
-  // الحضور كامل افتراضيًا، والغياب يُحسب فقط من أيام الغياب المسجلة يدويًا للمعلم
-  const monthKey = year+'-'+String(month+1).padStart(2,'0');
   const todayKey = localDateKey(now);
-  const absDates = (u.absences || []).filter(x => x.indexOf(monthKey) === 0 && x <= todayKey);
+  const absDates = (u.absences || []).filter(x => x >= startKey && x <= todayKey);
   const absent = absDates.length;
   const lateDaysSet = new Set(); let lateMin = 0, firstLoginToday = null;
   logins.forEach(d => {
-    if(d.getDay() === 0 || d.getDay() === 6) return; // لا تُحسب تسجيلات العطلة (الأحد/السبت)
+    if(d.getDay() === 0 || d.getDay() === 6) return;
+    const dk = localDateKey(d);
+    if(dk < startKey || dk > todayKey) return;
     const min = d.getHours()*60 + d.getMinutes();
     if(min > SCHOOL_START_MIN){
-      lateDaysSet.add(localDateKey(d));
+      lateDaysSet.add(dk);
       lateMin += min - SCHOOL_START_MIN;
     }
   });
   (u.markedLate || []).forEach(x => {
-    if(x.indexOf(monthKey) === 0 && x <= todayKey) lateDaysSet.add(x);
+    if(x >= startKey && x <= todayKey) lateDaysSet.add(x);
   });
-  // دقائق التأخير المدخلة يدويًا من شاشة الحضور (المدير/الوكيل)
   Object.entries(u.lateMinutes || {}).forEach(([date, mins]) => {
-    if(date.indexOf(monthKey) === 0 && date <= todayKey){ lateDaysSet.add(date); if(mins) lateMin += Number(mins); }
+    if(date >= startKey && date <= todayKey){ lateDaysSet.add(date); if(mins) lateMin += Number(mins); }
   });
   logins.forEach(d => {
     if(localDateKey(d) === localDateKey(now) && !firstLoginToday) firstLoginToday = d;
@@ -5576,14 +5578,21 @@ function buildTeacherDetail(type, teacherId){
     const list = d.classes.filter(c => (c.teacherIds || []).includes(teacherId));
     rows = list.length ? list.map(c => dlRow(classLabel(c), `${c.capacity ? c.capacity + ' طالب' : 'السعة غير محددة'}`)).join('') : DL_EMPTY;
   } else if(type === 'ABSENT'){
-    title = 'أيام الغياب (هذا الشهر)';
-    const list = (u.absences || []).filter(inMonth).sort();
+    title = 'أيام الغياب (هذا العام الدراسي)';
+    const list = (u.absences || []).filter(x => {
+      const yearStart = now.getMonth() >= 8 ? new Date(now.getFullYear(), 8, 1) : new Date(now.getFullYear()-1, 8, 1);
+      const startKey = localDateKey(yearStart);
+      return x >= startKey && x <= todayKey;
+    }).sort();
     rows = list.length ? list.map(x => dlRow(fmtDateOnly(x), 'يوم غياب')).join('') : DL_EMPTY;
   } else if(type === 'LATE'){
-    title = 'تفاصيل التأخر (هذا الشهر)';
+    title = 'تفاصيل التأخر (هذا العام الدراسي)';
+    const yearStart2 = now.getMonth() >= 8 ? new Date(now.getFullYear(), 8, 1) : new Date(now.getFullYear()-1, 8, 1);
+    const startKey2 = localDateKey(yearStart2);
+    const inYear = x => String(x) >= startKey2 && String(x) <= todayKey;
     const map = {};
-    (u.markedLate || []).filter(inMonth).forEach(x => { if(!(x in map)) map[x] = null; });
-    Object.entries(u.lateMinutes || {}).filter(([date]) => inMonth(date)).forEach(([date, mins]) => { map[date] = Number(mins) || null; });
+    (u.markedLate || []).filter(inYear).forEach(x => { if(!(x in map)) map[x] = null; });
+    Object.entries(u.lateMinutes || {}).filter(([date]) => inYear(date)).forEach(([date, mins]) => { map[date] = Number(mins) || null; });
     const list = Object.keys(map).sort();
     rows = list.length ? list.map(x => {
       const mins = map[x];
@@ -5591,8 +5600,11 @@ function buildTeacherDetail(type, teacherId){
       return dlRow(`${fmtDateOnly(x)} — ${mins != null ? mins + ' دقيقة' : 'بدون دقائق'}`, type);
     }).join('') : DL_EMPTY;
   } else if(type === 'LATEMIN'){
-    title = 'تفاصيل دقائق التأخير (هذا الشهر)';
-    const list = Object.entries(u.lateMinutes || {}).filter(([date]) => inMonth(date)).sort((a,b) => a[0].localeCompare(b[0]));
+    title = 'تفاصيل دقائق التأخير (هذا العام الدراسي)';
+    const yearStart3 = now.getMonth() >= 8 ? new Date(now.getFullYear(), 8, 1) : new Date(now.getFullYear()-1, 8, 1);
+    const startKey3 = localDateKey(yearStart3);
+    const inYear3 = x => String(x) >= startKey3 && String(x) <= todayKey;
+    const list = Object.entries(u.lateMinutes || {}).filter(([date]) => inYear3(date)).sort((a,b) => a[0].localeCompare(b[0]));
     rows = list.length ? list.map(([date, mins]) => dlRow(`${fmtDateOnly(date)} — ${mins} دقيقة`, LATE_TYPE_NAMES[u.lateType && u.lateType[date]] || 'متأخر')).join('') : DL_EMPTY;
   } else if(type === 'ATTCOUNT'){
     title = 'سجلات الحضور';
@@ -5674,10 +5686,10 @@ function renderTeacherPage(teacherId){
     ${stat('🕒', st.lastLogin ? fmtTime(st.lastLogin) : '—', 'آخر دخول', '#6b7280', 'LOGINS', 'اضغط لرؤية كل أوقات الدخول — وقت آخر تسجيل دخول للمعلم إلى الموقع')}
     ${stat('🏫', assigned.length, tl('الفصول') + ' المسندة', '#7c3aed', 'CLASSES', 'اضغط لرؤية قائمة الفصول المسندة لهذا المعلم')}
   </div>
-  <h2 class="section-title">⏱ الالتزام بالدوام (هذا الشهر)</h2>
+  <h2 class="section-title">⏱ الالتزام بالدوام (هذا العام الدراسي)</h2>
   <div class="grid grid-2">
-    ${stat('❌', st.absent, 'أيام الغياب', '#dc2626', 'ABSENT', 'اضغط لرؤية قائمة أيام الغياب — عدد أيام الدراسة التي سُجّل فيها غياب المعلم خلال هذا الشهر (من شاشة الحضور أو تسجيل الغياب)')}
-    ${stat('⏰', st.lateMin + ' دقيقة', 'التأخر', '#d97706', 'LATE', 'اضغط لرؤية تفاصيل دقائق التأخر لكل يوم — يشمل الأنواع الثلاثة: التأخر الصباحي، التأخر عن دخول الحصص، والخروج قبل نهاية الحصة خلال هذا الشهر', `${st.lateDays} يوم تأخر`)}
+    ${stat('❌', st.absent, 'أيام الغياب', '#dc2626', 'ABSENT', 'اضغط لرؤية قائمة أيام الغياب — عدد أيام الدراسة التي سُجّل فيها غياب المعلم خلال هذا العام الدراسي (من شاشة الحضور أو تسجيل الغياب)')}
+    ${stat('⏰', st.lateMin + ' دقيقة', 'التأخر', '#d97706', 'LATE', 'اضغط لرؤية تفاصيل دقائق التأخر لكل يوم — يشمل الأنواع الثلاثة: التأخر الصباحي، التأخر عن دخول الحصص، والخروج قبل نهاية الحصة خلال هذا العام الدراسي', `${st.lateDays} يوم تأخر`)}
   </div>
   <h2 class="section-title">🏆 ${tl('الأنشطة التي شارك فيها المعلم')}</h2>
   <div class="grid grid-3">
