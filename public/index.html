@@ -2132,6 +2132,7 @@ function renderLayout(user, hash){
   else if(page === 'users' && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderUsers();
   else if(page === 'timetable' && (user.role === 'TEACHER' || user.role === 'STUDENT')) pageHtml = renderTimetable();
   else if(page === 'assignments' && user.role === 'TEACHER') pageHtml = renderAssignments();
+  else if(page === 'assignments' && user.role === 'STUDENT') pageHtml = renderStudentAssignments();
   else if(page === 'account' && (user.role === 'TEACHER' || user.role === 'STUDENT')) pageHtml = renderAccount();
   else if(page === 'activities' && user.role !== 'STUDENT') pageHtml = renderActivities();
   else if(page === 'student-activities' && user.role === 'STUDENT') pageHtml = renderStudentActivities();
@@ -2886,6 +2887,51 @@ function renderStudentDashboard(){
       }).join('')}
     </div>
   </div>`;
+}
+function renderStudentAssignments(){
+  const d = loadDB();
+  const user = currentUser();
+  if(!user || user.role !== 'STUDENT') return '<h1 class="page-title">غير متاح</h1>';
+  const myStudent = (d.students||[]).find(s => s.id === user.id);
+  if(!myStudent) return '<h1 class="page-title">غير متاح</h1>';
+  const cls = myStudent.classId ? (d.classes||[]).find(c => c.id === myStudent.classId) : null;
+  const grade = cls ? (d.grades||[]).find(g => g.id === cls.gradeId) : null;
+  const classLabelTxt = (grade ? grade.name + ' — ' : '') + (cls ? 'الفصل ' + cls.name : '—');
+  const assignments = (d.assignments||[]).filter(a => a.classId === myStudent.classId).sort((a,b) => (b.created||0) - (a.created||0));
+  const typeIcons = { 'واجب':'📋', 'مشروع':'🎨', 'حفظ':'📖', 'أخرى':'📌' };
+  const typeColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
+  const total = assignments.length;
+  const done = assignments.filter(a => (a.completedBy||[]).includes(user.id)).length;
+  return `
+  <div class="header-row"><h1 class="page-title">📝 التكليفات</h1></div>
+  <div style="margin-bottom:14px;padding:12px 16px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:12px;border:1px solid #bfdbfe;font-size:13px;color:#1e40af">
+    🏫 ${escapeHtml(classLabelTxt)} <b>· ${total} تكليف</b> <b>· نفذت ${done}</b> <b>· متبقٍ ${total - done}</b>
+  </div>
+  ${assignments.length === 0 ? '<div class="card" style="text-align:center;padding:30px"><p style="color:var(--muted)">لا توجد تكليفات لهذا الفصل بعد</p></div>' : `
+  <div style="display:flex;flex-direction:column;gap:12px">
+    ${assignments.map(a => {
+      const doneByMe = (a.completedBy||[]).includes(user.id);
+      let subjectName = a.subject || '—';
+      try { const subj = (d.subjects||[]).find(x => x.id === a.subject); if(subj) subjectName = subj.name; } catch(e){}
+      return `
+      <div class="card" style="padding:14px 16px;border-right:4px solid ${typeColors[a.type||'واجب']}">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <div style="width:38px;height:38px;border-radius:10px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${typeIcons[a.type||'واجب']}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <div style="font-weight:700;font-size:14px">${escapeHtml(a.title || 'تكليف')}</div>
+              <span style="font-size:11px;white-space:nowrap;background:${typeColors[a.type||'واجب']}1a;color:${typeColors[a.type||'واجب']};padding:2px 8px;border-radius:8px;font-weight:700">${escapeHtml(a.type||'واجب')}</span>
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${escapeHtml(subjectName)}${a.date ? ' · ' + escapeHtml(a.date) : ''}</div>
+            ${a.desc ? `<div style="font-size:12px;color:#374151;margin-top:6px;white-space:pre-wrap">${escapeHtml(a.desc)}</div>` : ''}
+            <div style="margin-top:10px">
+              <button class="btn ${doneByMe ? 'btn-primary' : 'btn-secondary'}" style="font-size:12px;padding:6px 14px" onclick="toggleAssignmentDone('${a.id}')">${doneByMe ? '✅ نفذته — اضغط للإلغاء' : '⬜ لم أنفذه — اضغط لتأكيد التنفيذ'}</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`}`;
 }
 function renderDashboard(){
   const d = loadDB();
