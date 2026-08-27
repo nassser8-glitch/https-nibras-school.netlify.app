@@ -5701,19 +5701,21 @@ function localDateKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padS
 function isSchoolDay(dateStr){
   return true;
 }
-/* ============ الأسبوع الدراسي: 0 عند عودة الموظفين ← 1..10 ← إجازة الخريف ← 11..18 ← إجازة منتصف العام ============ */
+/* ============ الأسبوع الدراسي: يُحسب من بداية السنة الدراسية (1 سبتمبر)
+   الأسبوع الأول يبدأ بـ 1، وكل أسبوع (يوم الاثنين) يزداد الرقم: 1 ← 2 ← 3 ... ============ */
 function schoolWeekInfo(){
   const now = new Date();
-  const mon = new Date(now);
-  mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  mon.setHours(0,0,0,0);
-  const offset = Math.floor((now - mon) / (7*24*3600*1000));
-  if(offset <= 0) return { label:'الأسبوع 0 — عودة الموظفين', kind:'week' };
-  if(offset <= 10) return { label:'الأسبوع ' + offset, kind:'week' };
-  if(offset === 11) return { label:'إجازة الخريف', kind:'break' };
-  if(offset <= 19) return { label:'الأسبوع ' + (offset - 1), kind:'week' };
-  if(offset === 20) return { label:'إجازة منتصف العام', kind:'break' };
-  return { label:'الأسبوع ' + (offset - 2), kind:'week' };
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  // بداية السنة الدراسية: 1 سبتمبر (من السنة الحالية إن كان الشهر ≥ سبتمبر، وإلا من السنة السابقة)
+  const startY = (m >= 8 ? y : y - 1);
+  const start = new Date(startY, 8, 1); // 1 سبتمبر
+  const ms = now - start;
+  // قبل بداية السنة الدراسية (صيف): أسبوع تمهيدي
+  if(ms < 0) return { label:'الأسبوع التمهيدي', kind:'break' };
+  // عدد الأسابيع المنقضية + 1 (يبدأ من 1 ويزداد كل 7 أيام)
+  const weeks = Math.floor(ms / (7 * 24 * 3600 * 1000)) + 1;
+  return { label:'الأسبوع ' + weeks, kind:'week' };
 }
 function schoolWeekHTML(user){
   if(!user || user.role !== 'ADMIN') return '';
