@@ -5534,38 +5534,24 @@ function schoolDaysInRange(from, to){
 function teacherStats(u){
   const now = new Date();
   const year = now.getFullYear(), month = now.getMonth();
-  const logins = (u.loginHistory || []).map(iso => new Date(iso));
   // السنة الدراسية: سبتمبر → يونيو
   const yearStart = month >= 8 ? new Date(year, 8, 1) : new Date(year-1, 8, 1);
   const yearEnd = month >= 8 ? new Date(year+1, 5, 30) : new Date(year, 5, 30);
   const startKey = localDateKey(yearStart);
-  const endKey = localDateKey(yearEnd);
-  let expected = 0;
-  const d2 = new Date(yearStart);
-  while(d2 <= yearEnd && d2 <= now){
-    if(d2.getDay() !== 0 && d2.getDay() !== 6) expected++;
-    d2.setDate(d2.getDate()+1);
-  }
   const todayKey = localDateKey(now);
   const absDates = (u.absences || []).filter(x => x >= startKey && x <= todayKey);
   const absent = absDates.length;
   const lateDaysSet = new Set(); let lateMin = 0, firstLoginToday = null;
-  logins.forEach(d => {
-    if(d.getDay() === 0 || d.getDay() === 6) return;
-    const dk = localDateKey(d);
-    if(dk < startKey || dk > todayKey) return;
-    const min = d.getHours()*60 + d.getMinutes();
-    if(min > SCHOOL_START_MIN){
-      lateDaysSet.add(dk);
-      lateMin += min - SCHOOL_START_MIN;
-    }
-  });
+  // أيام التأخر المسجلة يدويًا من المدير/الوكيل
   (u.markedLate || []).forEach(x => {
     if(x >= startKey && x <= todayKey) lateDaysSet.add(x);
   });
+  // دقائق التأخر المدخلة يدويًا من شاشة الحضور
   Object.entries(u.lateMinutes || {}).forEach(([date, mins]) => {
     if(date >= startKey && date <= todayKey){ lateDaysSet.add(date); if(mins) lateMin += Number(mins); }
   });
+  // أول دخول اليوم
+  const logins = (u.loginHistory || []).map(iso => new Date(iso));
   logins.forEach(d => {
     if(localDateKey(d) === localDateKey(now) && !firstLoginToday) firstLoginToday = d;
   });
@@ -5573,7 +5559,7 @@ function teacherStats(u){
     loginCount: u.loginCount||0,
     lastLogin: u.lastLogin,
     firstLoginToday,
-    expected, absent, lateDays: lateDaysSet.size, lateMin,
+    absent, lateDays: lateDaysSet.size, lateMin,
     absDates,
   };
 }
