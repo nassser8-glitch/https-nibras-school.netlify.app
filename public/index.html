@@ -5566,8 +5566,13 @@ const dlRow = (head, sub) => `<li class="dl-item"><span>${head}</span>${sub ? `<
 function buildTeacherDetail(type, teacherId){
   const d = loadDB(); const u = userById(teacherId);
   if(!u || u.role !== 'TEACHER') return null;
-  const mp = localDateKey(new Date()).slice(0,7);
+  const now = new Date();
+  const todayKey = localDateKey(now);
+  const mp = localDateKey(now).slice(0,7);
   const inMonth = x => String(x).indexOf(mp) === 0;
+  const yearStart = now.getMonth() >= 8 ? new Date(now.getFullYear(), 8, 1) : new Date(now.getFullYear()-1, 8, 1);
+  const startKey = localDateKey(yearStart);
+  const inYear = x => String(x) >= startKey && String(x) <= todayKey;
   let title = '', rows = DL_EMPTY;
   if(type === 'LOGINS'){
     title = 'سجل الدخول';
@@ -5579,17 +5584,10 @@ function buildTeacherDetail(type, teacherId){
     rows = list.length ? list.map(c => dlRow(classLabel(c), `${c.capacity ? c.capacity + ' طالب' : 'السعة غير محددة'}`)).join('') : DL_EMPTY;
   } else if(type === 'ABSENT'){
     title = 'أيام الغياب (هذا العام الدراسي)';
-    const list = (u.absences || []).filter(x => {
-      const yearStart = now.getMonth() >= 8 ? new Date(now.getFullYear(), 8, 1) : new Date(now.getFullYear()-1, 8, 1);
-      const startKey = localDateKey(yearStart);
-      return x >= startKey && x <= todayKey;
-    }).sort();
+    const list = (u.absences || []).filter(x => inYear(x)).sort();
     rows = list.length ? list.map(x => dlRow(fmtDateOnly(x), 'يوم غياب')).join('') : DL_EMPTY;
   } else if(type === 'LATE'){
     title = 'تفاصيل التأخر (هذا العام الدراسي)';
-    const yearStart2 = now.getMonth() >= 8 ? new Date(now.getFullYear(), 8, 1) : new Date(now.getFullYear()-1, 8, 1);
-    const startKey2 = localDateKey(yearStart2);
-    const inYear = x => String(x) >= startKey2 && String(x) <= todayKey;
     const map = {};
     (u.markedLate || []).filter(inYear).forEach(x => { if(!(x in map)) map[x] = null; });
     Object.entries(u.lateMinutes || {}).filter(([date]) => inYear(date)).forEach(([date, mins]) => { map[date] = Number(mins) || null; });
@@ -5601,10 +5599,7 @@ function buildTeacherDetail(type, teacherId){
     }).join('') : DL_EMPTY;
   } else if(type === 'LATEMIN'){
     title = 'تفاصيل دقائق التأخير (هذا العام الدراسي)';
-    const yearStart3 = now.getMonth() >= 8 ? new Date(now.getFullYear(), 8, 1) : new Date(now.getFullYear()-1, 8, 1);
-    const startKey3 = localDateKey(yearStart3);
-    const inYear3 = x => String(x) >= startKey3 && String(x) <= todayKey;
-    const list = Object.entries(u.lateMinutes || {}).filter(([date]) => inYear3(date)).sort((a,b) => a[0].localeCompare(b[0]));
+    const list = Object.entries(u.lateMinutes || {}).filter(([date]) => inYear(date)).sort((a,b) => a[0].localeCompare(b[0]));
     rows = list.length ? list.map(([date, mins]) => dlRow(`${fmtDateOnly(date)} — ${mins} دقيقة`, LATE_TYPE_NAMES[u.lateType && u.lateType[date]] || 'متأخر')).join('') : DL_EMPTY;
   } else if(type === 'ATTCOUNT'){
     title = 'سجلات الحضور';
