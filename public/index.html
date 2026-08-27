@@ -2770,41 +2770,60 @@ function renderStudentDashboard(){
   const posDeg = Math.round((sp.pos / maxPts) * 180);
   const negDeg = Math.round((Math.abs(sp.neg) / maxPts) * 180);
   return `
-  <div class="dash-panel" style="text-align:center;padding:24px;margin-bottom:14px;background:linear-gradient(135deg,var(--primary-light,#eef7ff),#fff);border:2px solid var(--border-color,#e0edf7)">
-    <div style="font-size:14px;font-weight:700;color:var(--muted);margin-bottom:4px">مرحباً، ${escapeHtml(user.name || 'طالب')}</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${escapeHtml(classLabel)}</div>
-    <div style="display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:14px">
-      <div style="display:flex;flex-direction:column;align-items:center;padding:0 28px">
-        <div style="width:210px;height:210px;border-radius:50%;background:conic-gradient(#16a34a 0deg ${posDeg}deg, #dc2626 ${posDeg}deg ${posDeg + negDeg}deg, #e5e7eb ${posDeg + negDeg}deg 360deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.12)">
-          <div style="width:164px;height:164px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 1px 4px rgba(0,0,0,.06)">
-            <span style="font-size:32px;font-weight:800;color:${pts >= 0 ? '#16a34a' : '#dc2626'}">${pts > 0 ? '+' : ''}${pts}</span>
-            <span style="font-size:12px;color:var(--muted);font-weight:600">نقطة</span>
-          </div>
+  <div style="background:linear-gradient(135deg,#0f766e,#1d4ed8);border-radius:18px;padding:24px 22px;margin-bottom:16px;color:#fff;position:relative;overflow:hidden;box-shadow:0 10px 26px rgba(13,118,110,.22)">
+    <div style="position:absolute;top:-46px;right:-46px;width:190px;height:190px;border-radius:50%;background:rgba(255,255,255,.09)"></div>
+    <div style="position:absolute;bottom:-70px;left:10px;width:210px;height:210px;border-radius:50%;background:rgba(255,255,255,.07)"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;position:relative">
+      <div>
+        <div style="font-size:13px;font-weight:600;opacity:.9">مرحباً بك 👋</div>
+        <div style="font-size:25px;font-weight:800;margin:2px 0;letter-spacing:.5px">${escapeHtml(user.name || 'طالب')}</div>
+        <div style="font-size:13px;opacity:.95">🏫 ${escapeHtml(classLabel)}</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <div style="background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:14px;padding:10px 16px;text-align:center;min-width:96px">
+          <div style="font-size:22px;font-weight:800">${pts > 0 ? '+' : ''}${pts}</div>
+          <div style="font-size:11px;opacity:.92">نقاطي</div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:10px">
-          <span style="font-size:14px;font-weight:700;color:#16a34a">+${sp.pos}</span>
-          <span style="font-size:14px;color:#d1d5db">|</span>
-          <span style="font-size:14px;font-weight:700;color:#dc2626">${sp.neg}</span>
+        <div style="background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:14px;padding:10px 16px;text-align:center;min-width:96px">
+          <div style="font-size:22px;font-weight:800">${total > 0 ? attPct + '%' : '—'}</div>
+          <div style="font-size:11px;opacity:.92">نسبة الحضور</div>
         </div>
       </div>
-      <div style="width:1px;height:190px;background:linear-gradient(to bottom,transparent,#d1d5db,transparent);flex-shrink:0"></div>
-      <div style="display:flex;flex-direction:column;align-items:center;padding:0 28px">
-        <div style="position:relative;width:210px;height:210px;display:flex;align-items:center;justify-content:center">
-          <svg viewBox="0 0 36 36" style="width:210px;height:210px;transform:rotate(-90deg)">
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3" />
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#dc2626" stroke-width="3" stroke-dasharray="${total > 0 ? Math.round(absent/total*100) : 0} ${total > 0 ? 100 - Math.round(absent/total*100) : 100}" stroke-linecap="round" />
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="${total > 0 ? Math.round(late/total*100) : 0} ${total > 0 ? 100 - Math.round(late/total*100) : 100}" stroke-dashoffset="${total > 0 ? -Math.round(absent/total*100) : 0}" stroke-linecap="round" />
-          </svg>
-          <div style="position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center">
-            <span style="font-size:32px;font-weight:800;color:#dc2626">${absent}</span>
-            <span style="font-size:12px;color:var(--muted);font-weight:600">غياب</span>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-bottom:16px">
+    <div class="dash-panel" style="padding:16px 18px;border-radius:16px">
+      <div class="dash-panel-head" style="margin-bottom:8px"><div class="dash-panel-title">⭐ نقاطي</div></div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap">
+        <div style="width:132px;height:132px;border-radius:50%;background:conic-gradient(#16a34a 0deg ${posDeg}deg, #dc2626 ${posDeg}deg ${posDeg + negDeg}deg, #e5e7eb ${posDeg + negDeg}deg 360deg);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(0,0,0,.12)">
+          <div style="width:100px;height:100px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 1px 4px rgba(0,0,0,.05)">
+            <span style="font-size:26px;font-weight:800;color:${pts >= 0 ? '#16a34a' : '#dc2626'}">${pts > 0 ? '+' : ''}${pts}</span>
+            <span style="font-size:11px;color:var(--muted);font-weight:600">نقطة</span>
           </div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;justify-content:center">
-          <span style="font-size:14px;font-weight:700;color:#16a34a">${attPct}% حضور</span>
-          <span style="font-size:14px;color:#d1d5db">|</span>
-          <span style="font-size:14px;font-weight:700;color:#1d4ed8">${present} حاضر</span>
-          ${late > 0 ? `<span style="font-size:14px;color:#d1d5db">|</span><span style="font-size:14px;font-weight:700;color:#d97706">${late} متأخر</span>` : ''}
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:#ecfdf5;font-size:13px;font-weight:700;color:#16a34a">✅ الثواب <span style="flex:1"></span>+${sp.pos}</div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:#fef2f2;font-size:13px;font-weight:700;color:#dc2626">⚠️ العقاب <span style="flex:1"></span>${sp.neg}</div>
+        </div>
+      </div>
+    </div>
+    <div class="dash-panel" style="padding:16px 18px;border-radius:16px">
+      <div class="dash-panel-head" style="margin-bottom:8px"><div class="dash-panel-title">✅ حضوري</div></div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap">
+        <div style="position:relative;width:132px;height:132px;display:flex;align-items:center;justify-content:center">
+          <svg viewBox="0 0 36 36" style="width:132px;height:132px;transform:rotate(-90deg)">
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3.2" />
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#ef4444" stroke-width="3.2" stroke-dasharray="${total > 0 ? Math.round(absent/total*100) : 0} ${total > 0 ? 100 - Math.round(absent/total*100) : 100}" stroke-linecap="round" />
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f59e0b" stroke-width="3.2" stroke-dasharray="${total > 0 ? Math.round(late/total*100) : 0} ${total > 0 ? 100 - Math.round(late/total*100) : 100}" stroke-dashoffset="${total > 0 ? -Math.round(absent/total*100) : 0}" stroke-linecap="round" />
+          </svg>
+          <div style="position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center">
+            <span style="font-size:26px;font-weight:800;color:#ef4444">${absent}</span>
+            <span style="font-size:11px;color:var(--muted);font-weight:600">غياب</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:#dcfce7;font-size:13px;font-weight:700;color:#16a34a">✅ حاضر <span style="flex:1"></span>${present}</div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:#fef9c3;font-size:13px;font-weight:700;color:#b45309">🟡 متأخر <span style="flex:1"></span>${late}</div>
         </div>
       </div>
     </div>
@@ -2819,9 +2838,10 @@ function renderStudentDashboard(){
       ${typeStats.map(s => `<div style="display:flex;align-items:center;gap:8px">
         <span style="width:24px;text-align:center;font-size:18px">${s.icon}</span>
         <span style="width:46px;font-size:12px;font-weight:600">${s.type}</span>
-        <div style="flex:1;height:28px;background:#f3f4f6;border-radius:14px;overflow:hidden;position:relative">
-          <div style="height:100%;width:${s.done > 0 ? Math.round(s.done/s.total*100) : 0}%;background:${s.color};border-radius:14px;transition:width .3s"></div>
+        <div style="flex:1;height:11px;background:#f1f5f9;border-radius:10px;overflow:hidden;position:relative">
+          <div style="height:100%;width:${s.done > 0 ? Math.round(s.done/s.total*100) : 0}%;background:linear-gradient(90deg,${s.color},${s.color}cc);border-radius:10px;transition:width .3s"></div>
         </div>
+        <span style="font-size:11px;font-weight:800;color:${s.color};min-width:44px;text-align:center">${s.done > 0 ? Math.round(s.done/s.total*100) : 0}%</span>
         <div style="display:flex;gap:4px;font-size:11px;white-space:nowrap">
           <span style="background:#dcfce7;color:#16a34a;padding:2px 7px;border-radius:8px;font-weight:700">نفذ ${s.done}</span>
           <span style="background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:8px;font-weight:700">لم ينفذ ${s.todo}</span>
@@ -2839,11 +2859,12 @@ function renderStudentDashboard(){
       </div>
     </div>`}
   </div>
-  <div class="dash-panel" style="margin-bottom:14px;padding:16px 20px;border-right:4px solid #2563eb">
-    <div class="dash-panel-head" style="margin-bottom:12px;">
-      <div class="dash-panel-title">🏆 أوائل فصلي</div>
-      <a href="#/student-leaders" class="dash-panel-more">عرض الكل ←</a>
+  <div style="border-radius:18px;overflow:hidden;border:1px solid #e6edf5;margin-bottom:16px;background:#fff;box-shadow:0 4px 18px rgba(15,79,136,.08)">
+    <div style="background:linear-gradient(135deg,#2563eb,#0f766e);color:#fff;padding:13px 18px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-weight:800;font-size:15px">🏆 أوائل فصلي</div>
+      <a href="#/student-leaders" style="color:#fff;font-size:12px;font-weight:700;opacity:.95;text-decoration:none">عرض الكل ←</a>
     </div>
+    <div style="padding:16px 18px">
     ${(() => {
       const sPtsMap = studentPointsMap();
       const sMedals = ['🥇','🥈','🥉'];
@@ -2853,20 +2874,20 @@ function renderStudentDashboard(){
       if(myStud.length === 0) return '<p style="color:var(--muted);text-align:center;padding:10px">لا توجد نقاط مسجلة في فصلك بعد</p>';
       const myRank = myStud.findIndex(x => x.s.id === user.id) + 1;
       return `
-      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-        <div style="text-align:center;min-width:96px;padding:10px 16px;background:#eff6ff;border-radius:12px;border:1px solid #bfdbfe">
-          <div style="font-size:26px;font-weight:800;color:#2563eb">${myRank <= myStud.length ? myRank : '—'}</div>
-          <div style="font-size:11px;color:var(--muted);font-weight:600">ترتيبي في الفصل</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        <div style="text-align:center;flex:1;min-width:110px;padding:12px 10px;background:linear-gradient(135deg,#eff6ff,#ffffff);border-radius:14px;border:1px solid #dbeafe">
+          <div style="font-size:30px;font-weight:800;color:#2563eb">${myRank <= myStud.length ? myRank : '—'}</div>
+          <div style="font-size:11px;color:var(--muted);font-weight:600;margin-top:2px">ترتيبي في الفصل</div>
         </div>
-        <div style="text-align:center;min-width:96px;padding:10px 16px;background:#ecfdf5;border-radius:12px;border:1px solid #a7f3d0">
-          <div style="font-size:26px;font-weight:800;color:#16a34a">+${sPtsMap[user.id] || 0}</div>
-          <div style="font-size:11px;color:var(--muted);font-weight:600">نقاطي</div>
+        <div style="text-align:center;flex:1;min-width:110px;padding:12px 10px;background:linear-gradient(135deg,#ecfdf5,#ffffff);border-radius:14px;border:1px solid #a7f3d0">
+          <div style="font-size:30px;font-weight:800;color:#16a34a">+${sPtsMap[user.id] || 0}</div>
+          <div style="font-size:11px;color:var(--muted);font-weight:600;margin-top:2px">نقاطي في الفصل</div>
         </div>
-        <div style="flex:1;min-width:200px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">أوائل الفصل</div>
+        <div style="flex:1.6;min-width:200px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:700">الأوائل في فصلك</div>
           ${myStud.slice(0,3).map((x,i) => {
             const me = x.s.id === user.id;
-            return `<div class="dash-leader-row">
+            return `<div class="dash-leader-row" style="${me ? 'background:#eff6ff;border-radius:10px' : ''}">
               <span class="dash-leader-medal">${sMedals[i] || '•'}</span>
               <div style="min-width:0;flex:1">
                 <div class="dash-leader-name">${escapeHtml(x.s.fullName || x.s.name || x.s.username || '')} ${me ? '<span style="font-size:10px;background:#2563eb;color:#fff;padding:1px 6px;border-radius:6px;margin:0 4px">أنت</span>' : ''}</div>
@@ -2877,16 +2898,19 @@ function renderStudentDashboard(){
         </div>
       </div>`;
     })()}
+    </div>
   </div>
-  <div style="display:flex;gap:12px;flex-wrap:wrap">
-    <div class="dash-panel" style="flex:1;min-width:280px">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+    <div class="dash-panel" style="min-width:280px">
       <div class="dash-panel-head">
-        <div class="dash-panel-title">📝 التكليفات</div>
+        <div class="dash-panel-title"><span style="display:inline-flex;width:26px;height:26px;border-radius:8px;align-items:center;justify-content:center;background:#1d7fd6;color:#fff;margin-left:6px;font-size:14px">📝</span> التكليفات الأخيرة</div>
         <a href="#/assignments" class="dash-panel-more">عرض الكل ←</a>
       </div>
       ${recentAssignments.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:20px">لا توجد تكليفات بعد</p>' :
       recentAssignments.map(a => {
+        const ac = typeColors[a.type] || '#888';
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--line)">
+        <span style="width:9px;height:9px;border-radius:50%;background:${ac};flex-shrink:0"></span>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:13px">${escapeHtml(a.title || 'تكليف')}</div>
           <div style="font-size:11px;color:var(--muted)">${escapeHtml(a.subject || '')} · ${a.type||'واجب'}</div>
@@ -2894,9 +2918,9 @@ function renderStudentDashboard(){
         <span style="font-size:11px;color:var(--muted);white-space:nowrap">${a.date || ''}</span>
       </div>`}).join('')}
     </div>
-    <div class="dash-panel" style="min-width:220px;max-width:280px">
+    <div class="dash-panel" style="min-width:220px;max-width:340px">
       <div class="dash-panel-head">
-        <div class="dash-panel-title">★ ملاحظاتي</div>
+        <div class="dash-panel-title"><span style="display:inline-flex;width:26px;height:26px;border-radius:8px;align-items:center;justify-content:center;background:#f59e0b;color:#fff;margin-left:6px;font-size:14px">★</span> ملاحظاتي</div>
         <a href="#/notes" class="dash-panel-more">عرض الكل ←</a>
       </div>
       ${myNotes.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:12px">لا توجد ملاحظات بعد</p>' :
@@ -2910,7 +2934,7 @@ function renderStudentDashboard(){
       </div>`).join('')}
       <div style="border-top:2px dashed var(--line,#e5e7eb);margin:8px 0"></div>
       <div class="dash-panel-head" style="margin-top:4px">
-        <div class="dash-panel-title">↔ تحويلاتي</div>
+        <div class="dash-panel-title"><span style="display:inline-flex;width:26px;height:26px;border-radius:8px;align-items:center;justify-content:center;background:#8e44ad;color:#fff;margin-left:6px;font-size:14px">↔</span> تحويلاتي</div>
         <a href="#/transfers" class="dash-panel-more">عرض الكل ←</a>
       </div>
       ${myTransfers.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:12px">لا توجد تحويلات</p>' :
