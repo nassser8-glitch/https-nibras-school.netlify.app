@@ -3027,17 +3027,19 @@ function renderDashboard(){
     // الأصل الحضور: من لم يُسجَّل له غياب يُعتبر حاضرًا افتراضيًا
     const cp = Math.max(0, sts.length - ca - cl);
     const crate = sts.length ? cp / sts.length * 100 : null;
-    return `<div class="card class-mini" style="padding:12px;border-top:4px solid var(--accent,#1d7fd6)">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
-        <p class="muted" style="font-weight:700;font-size:13px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📚 ${escapeHtml(classLabel(c))}</p>
-        <p class="stat-value brand" style="font-size:20px;margin:0">${sts.length}</p>
+    return `<div class="card class-mini" style="padding:0;overflow:hidden;margin:0;border:1px solid #e6edf5;box-shadow:0 4px 14px rgba(15,79,136,.08);border-radius:14px">
+      <div style="background:linear-gradient(135deg,#0f766e,#1d4ed8);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:6px">
+        <span style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📚 ${escapeHtml(classLabel(c))}</span>
+        <span style="background:rgba(255,255,255,.22);border-radius:999px;padding:2px 10px;font-size:13px;font-weight:800;white-space:nowrap">${sts.length}</span>
       </div>
-      <p class="muted" style="font-size:11px;margin-top:2px">${tl('عدد الطلاب')}</p>
-      <div class="small" style="margin-top:6px;display:flex;flex-direction:column;gap:3px;font-size:11px">
-        <span>✅ ${tl('الحضور')}: <b>${cp}</b></span>
-        <span>❌ ${tl('الغياب')}: <b class="red">${ca}</b> &nbsp; ⏰ ${tl('التأخر')}: <b class="amber">${cl}</b></span>
-        <span class="muted">${tl('نسبة الحضور')}: <b class="red">${fmtRate(crate)}</b></span>
-        ${crate !== null ? `<div style="height:6px;border-radius:999px;background:#eef2f7;margin-top:4px;overflow:hidden"><div style="height:100%;width:${crate}%;background:${crate>=75?'#22c55e':(crate>=50?'#f59e0b':'#ef4444')};border-radius:999px"></div></div>` : ''}
+      <div style="padding:12px 14px">
+        <p class="muted" style="font-size:11px;margin:0 0 6px">${tl('عدد الطلاب')}</p>
+        <div class="small" style="display:flex;flex-direction:column;gap:5px;font-size:12px">
+          <span>✅ ${tl('الحضور')}: <b>${cp}</b></span>
+          <span>❌ ${tl('الغياب')}: <b class="red">${ca}</b> &nbsp; ⏰ ${tl('التأخر')}: <b class="amber">${cl}</b></span>
+          <span class="muted">${tl('نسبة الحضور')}: <b style="color:${crate==null?'#6b7280':(crate>=75?'#16a34a':(crate>=50?'#d97706':'#dc2626'))}">${fmtRate(crate)}</b></span>
+          ${crate !== null ? `<div style="height:8px;border-radius:999px;background:#eef2f7;margin-top:5px;overflow:hidden"><div style="height:100%;width:${crate}%;background:${crate>=75?'#22c55e':(crate>=50?'#f59e0b':'#ef4444')};border-radius:999px;transition:width .3s"></div></div>` : ''}
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -3243,28 +3245,28 @@ function renderDashboard(){
   ${isTeacher ? (() => {
     const tst = teacherStats(user);
     return `
-    <div style="margin:0 0 12px;border-radius:16px;padding:0;background:#fff;border:1px solid #eef2f7;box-shadow:0 2px 10px rgba(15,79,136,.06);overflow:hidden">
-      <div style="padding:18px 22px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #f1f5f9">
-        <div style="width:44px;height:44px;border-radius:12px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:22px">⏱</div>
+    <div style="margin:0 0 14px;border-radius:18px;padding:0;background:#fff;border:1px solid #e6edf5;box-shadow:0 6px 20px rgba(15,79,136,.08);overflow:hidden">
+      <div style="background:linear-gradient(135deg,#0f766e,#1d4ed8);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px">
+        <div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">⏱</div>
         <div style="flex:1">
-          <div style="font-weight:800;font-size:16px;color:#1f2937">الالتزام بالدوام (${new Date().getFullYear()})</div>
-          <div style="font-size:12px;color:#6b7280;margin-top:1px">السنة الدراسية الحالية</div>
+          <div style="font-weight:800;font-size:16px">الالتزام بالدوام (${new Date().getFullYear()})</div>
+          <div style="font-size:12px;opacity:.92">بطاقة تقييم حضورك في السنة الدراسية الحالية</div>
         </div>
       </div>
-      <div style="display:flex;gap:16px;padding:18px 16px;justify-content:center;align-items:flex-start">
-        <div style="flex:1;max-width:200px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:transform .15s" onclick="openTeacherDetail('ABSENT','${user.id}')" data-tip="اضغط لرؤية قائمة أيام الغياب" onmouseenter="this.style.transform='scale(1.03)'" onmouseleave="this.style.transform='scale(1)'">
-          <div style="width:96px;height:96px;border-radius:50%;background:#fef2f2;border:4px solid #fecaca;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(239,68,68,.18)">
-            <div style="font-size:32px;font-weight:900;color:#ef4444;line-height:1">${tst.absent}</div>
-            <div style="font-size:10px;color:#dc2626;margin-top:2px">يوم غياب</div>
+      <div style="display:flex;gap:16px;padding:20px 16px;justify-content:center;align-items:flex-start;flex-wrap:wrap">
+        <div style="flex:1;min-width:150px;max-width:210px;display:flex;flex-direction:column;align-items:center;gap:9px;cursor:pointer;transition:transform .15s" onclick="openTeacherDetail('ABSENT','${user.id}')" data-tip="اضغط لرؤية قائمة أيام الغياب" onmouseenter="this.style.transform='scale(1.03)'" onmouseleave="this.style.transform='scale(1)'">
+          <div style="width:104px;height:104px;border-radius:50%;background:linear-gradient(135deg,#fef2f2,#ffffff);border:5px solid #fecaca;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(239,68,68,.18)">
+            <div style="font-size:36px;font-weight:900;color:#ef4444;line-height:1">${tst.absent}</div>
+            <div style="font-size:11px;color:#dc2626;margin-top:2px">يوم غياب</div>
           </div>
-          <div style="font-size:13px;font-weight:700;color:#6b7280">❌ أيام الغياب</div>
+          <div style="font-size:13px;font-weight:700;color:#374151">❌ أيام الغياب</div>
         </div>
-        <div style="flex:1;max-width:200px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:transform .15s" onclick="openTeacherDetail('LATE','${user.id}')" data-tip="اضغط لرؤية تفاصيل التأخر" onmouseenter="this.style.transform='scale(1.03)'" onmouseleave="this.style.transform='scale(1)'">
-          <div style="width:96px;height:96px;border-radius:50%;background:#fffbeb;border:4px solid #fde68a;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(217,119,6,.18)">
-            <div style="font-size:32px;font-weight:900;color:#d97706;line-height:1">${tst.lateMin}</div>
-            <div style="font-size:10px;color:#b45309;margin-top:2px">دقيقة</div>
+        <div style="flex:1;min-width:150px;max-width:210px;display:flex;flex-direction:column;align-items:center;gap:9px;cursor:pointer;transition:transform .15s" onclick="openTeacherDetail('LATE','${user.id}')" data-tip="اضغط لرؤية تفاصيل التأخر" onmouseenter="this.style.transform='scale(1.03)'" onmouseleave="this.style.transform='scale(1)'">
+          <div style="width:104px;height:104px;border-radius:50%;background:linear-gradient(135deg,#fffbeb,#ffffff);border:5px solid #fde68a;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(217,119,6,.18)">
+            <div style="font-size:36px;font-weight:900;color:#d97706;line-height:1">${tst.lateMin}</div>
+            <div style="font-size:11px;color:#b45309;margin-top:2px">دقيقة</div>
           </div>
-          <div style="font-size:13px;font-weight:700;color:#6b7280">⏰ التأخر <span style="color:#b45309;font-weight:800">(${tst.lateDays} يوم)</span></div>
+          <div style="font-size:13px;font-weight:700;color:#374151">⏰ التأخر <span style="color:#b45309;font-weight:800">(${tst.lateDays} يوم)</span></div>
         </div>
       </div>
     </div>`;
