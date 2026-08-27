@@ -1559,6 +1559,28 @@ async function saveFirstLogin(){
 /* ============ صفحة الحساب ============ */
 function renderAccount(){
   const user = currentUser();
+  if(!user) return '';
+  if(user.role === 'STUDENT') return `
+  <div class="header-row"><h1 class="page-title">حسابي</h1></div>
+  <div class="card" style="max-width:480px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="width:56px;height:56px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;font-weight:700">${escapeHtml((user.name||'').charAt(0))}</div>
+      <div>
+        <div style="font-weight:700;font-size:16px">${escapeHtml(user.name||'')}</div>
+        <div style="font-size:13px;color:var(--muted)">${escapeHtml(user.username||'')}</div>
+      </div>
+    </div>
+    <div id="accMsg" class="error-box" style="display:none"></div>
+    <label>الاسم (ثابت)</label>
+    <input class="input" value="${escapeHtml(user.name)}" disabled />
+    <label>اسم المستخدم للدخول (ثابت)</label>
+    <input class="input" style="direction:ltr" value="${escapeHtml(user.username || '')}" disabled />
+    <label>كلمة المرور الجديدة (اختياري — اتركه فارغًا للإبقاء على الحالية، 8 أحرف على الأقل)</label>
+    <input id="accSec1" class="input" type="password" placeholder="••••••••" minlength="8" />
+    <label>تأكيد كلمة المرور الجديدة</label>
+    <input id="accSec2" class="input" type="password" placeholder="••••••••" minlength="8" />
+    <button class="btn-primary" style="margin-top:16px" onclick="saveAccount()">💾 حفظ التغييرات</button>
+  </div>`;
   return `
   <div class="header-row"><h1 class="page-title">حسابي</h1></div>
   <div class="card" style="max-width:480px">
@@ -1978,6 +2000,7 @@ function renderLayout(user, hash){
       { href:'#/student-activities', key:'student-activities', label:'أنشطتي', icon:'🎨' },
     ]},
     { title:'النظام', items:[
+      { href:'#/account', key:'account', label:'حسابي', icon:'⚙️' },
       { href:'#/about', key:'about', label:'حول نبراس', icon:'ⓘ' },
     ]},
   ] : [
@@ -2036,7 +2059,7 @@ function renderLayout(user, hash){
   else if(page === 'users' && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderUsers();
   else if(page === 'timetable' && (user.role === 'TEACHER' || user.role === 'STUDENT')) pageHtml = renderTimetable();
   else if(page === 'assignments' && user.role === 'TEACHER') pageHtml = renderAssignments();
-  else if(page === 'account' && user.role === 'TEACHER') pageHtml = renderAccount();
+  else if(page === 'account' && (user.role === 'TEACHER' || user.role === 'STUDENT')) pageHtml = renderAccount();
   else if(page === 'activities' && user.role !== 'STUDENT') pageHtml = renderActivities();
   else if(page === 'student-activities' && user.role === 'STUDENT') pageHtml = renderStudentActivities();
   else if(page.startsWith('activity/') && user.role !== 'STUDENT') pageHtml = renderActivityDetail(page.split('/')[1]);
@@ -2083,7 +2106,7 @@ function renderLayout(user, hash){
       <aside class="sidebar" id="sidebar">
         <nav class="menu">${nav}</nav>
         <div class="sidebar-widgets">
-          ${msgTodayWidget}
+          ${user.role !== 'STUDENT' ? msgTodayWidget : ''}
           <div id="weatherBox"></div>
           ${(user.role === 'ADMIN' || user.role === 'AGENT') ? '<div id="presentNowBox"></div>' : ''}
         </div>
