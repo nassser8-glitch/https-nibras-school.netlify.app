@@ -3057,18 +3057,27 @@ function renderDashboard(){
   ${isTeacher ? (() => {
     const tst = teacherStats(user);
     return `
-    <div class="card" style="display:flex;align-items:center;gap:16px;padding:14px 20px;background:linear-gradient(135deg,#f8fafc,#f1f5f9);border:1px solid #e2e8f0">
-      <span style="font-size:26px">⏱</span>
-      <div style="flex:1">
-        <div style="font-weight:700;font-size:15px">الالتزام بالدوام (${new Date().getFullYear()})</div>
+    <div style="margin:0 0 12px;border-radius:16px;padding:0;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 50%,#0ea5e9 100%);box-shadow:0 8px 24px rgba(37,99,235,.25);overflow:hidden">
+      <div style="padding:20px 24px 12px;display:flex;align-items:center;gap:12px">
+        <div style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:22px">⏱</div>
+        <div style="flex:1">
+          <div style="font-weight:800;font-size:16px;color:#fff">الالتزام بالدوام (${new Date().getFullYear()})</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:1px">السنة الدراسية الحالية</div>
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;padding:6px 14px;background:#fef2f2;border-radius:10px">
-        <span style="font-size:16px">❌</span>
-        <div><div style="font-size:11px;color:#6b7280">أيام الغياب</div><div style="font-weight:800;font-size:16px;color:#dc2626">${tst.absent}</div></div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;padding:6px 14px;background:#fffbeb;border-radius:10px">
-        <span style="font-size:16px">⏰</span>
-        <div><div style="font-size:11px;color:#6b7280">التأخر</div><div style="font-weight:800;font-size:14px;color:#d97706">${tst.lateMin} دقيقة</div><div style="font-size:11px;color:#92400e;font-weight:600">${tst.lateDays} يوم تأخر</div></div>
+      <div style="display:flex;gap:0;padding:0 16px 16px">
+        <div style="flex:1;padding:14px 16px;background:rgba(255,255,255,.13);backdrop-filter:blur(4px);border-radius:14px;text-align:center;cursor:pointer;transition:background .2s" onclick="openTeacherDetail('ABSENT','${teacherId}')" data-tip="اضغط لرؤية قائمة أيام الغياب" onmouseenter="this.style.background='rgba(255,255,255,.22)'" onmouseleave="this.style.background='rgba(255,255,255,.13)'">
+          <div style="font-size:24px;margin-bottom:4px">❌</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.65)">أيام الغياب</div>
+          <div style="font-size:28px;font-weight:900;color:#fff;margin-top:2px">${tst.absent}</div>
+        </div>
+        <div style="width:12px"></div>
+        <div style="flex:1;padding:14px 16px;background:rgba(255,255,255,.13);backdrop-filter:blur(4px);border-radius:14px;text-align:center;cursor:pointer;transition:background .2s" onclick="openTeacherDetail('LATE','${teacherId}')" data-tip="اضغط لرؤية تفاصيل التأخر" onmouseenter="this.style.background='rgba(255,255,255,.22)'" onmouseleave="this.style.background='rgba(255,255,255,.13)'">
+          <div style="font-size:24px;margin-bottom:4px">⏰</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.65)">التأخر</div>
+          <div style="font-size:28px;font-weight:900;color:#fff;margin-top:2px">${tst.lateMin}<span style="font-size:13px;font-weight:600;opacity:.8;margin-right:2px"> دقيقة</span></div>
+          <div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:2px">${tst.lateDays} يوم تأخر</div>
+        </div>
       </div>
     </div>`;
   })() : ''}
@@ -5685,18 +5694,27 @@ function renderTeacherPage(teacherId){
     ${stat('🕒', st.lastLogin ? fmtTime(st.lastLogin) : '—', 'آخر دخول', '#6b7280', 'LOGINS', 'اضغط لرؤية كل أوقات الدخول — وقت آخر تسجيل دخول للمعلم إلى الموقع')}
     ${stat('🏫', assigned.length, tl('الفصول') + ' المسندة', '#7c3aed', 'CLASSES', 'اضغط لرؤية قائمة الفصول المسندة لهذا المعلم')}
   </div>
-  <div class="card" style="display:flex;align-items:center;gap:16px;padding:14px 20px;background:linear-gradient(135deg,#f8fafc,#f1f5f9);border:1px solid #e2e8f0">
-    <span style="font-size:26px">⏱</span>
-    <div style="flex:1">
-      <div style="font-weight:700;font-size:15px">الالتزام بالدوام (${new Date().getFullYear()})</div>
+  <div style="margin:0 0 12px;border-radius:16px;padding:0;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 50%,#0ea5e9 100%);box-shadow:0 8px 24px rgba(37,99,235,.25);overflow:hidden">
+    <div style="padding:20px 24px 12px;display:flex;align-items:center;gap:12px">
+      <div style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:22px">⏱</div>
+      <div style="flex:1">
+        <div style="font-weight:800;font-size:16px;color:#fff">الالتزام بالدوام (${new Date().getFullYear()})</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:1px">السنة الدراسية الحالية</div>
+      </div>
     </div>
-    <div style="display:flex;align-items:center;gap:6px;padding:6px 14px;background:#fef2f2;border-radius:10px;cursor:pointer" onclick="openTeacherDetail('ABSENT','${teacherId}')" data-tip="اضغط لرؤية قائمة أيام الغياب">
-      <span style="font-size:16px">❌</span>
-      <div><div style="font-size:11px;color:#6b7280">أيام الغياب</div><div style="font-weight:800;font-size:16px;color:#dc2626">${st.absent}</div></div>
-    </div>
-    <div style="display:flex;align-items:center;gap:6px;padding:6px 14px;background:#fffbeb;border-radius:10px;cursor:pointer" onclick="openTeacherDetail('LATE','${teacherId}')" data-tip="اضغط لرؤية تفاصيل التأخر">
-      <span style="font-size:16px">⏰</span>
-      <div><div style="font-size:11px;color:#6b7280">التأخر</div><div style="font-weight:800;font-size:14px;color:#d97706">${st.lateMin} دقيقة</div><div style="font-size:11px;color:#92400e;font-weight:600">${st.lateDays} يوم تأخر</div></div>
+    <div style="display:flex;gap:0;padding:0 16px 16px">
+      <div style="flex:1;padding:14px 16px;background:rgba(255,255,255,.13);backdrop-filter:blur(4px);border-radius:14px;text-align:center;cursor:pointer;transition:background .2s" onclick="openTeacherDetail('ABSENT','${teacherId}')" data-tip="اضغط لرؤية قائمة أيام الغياب" onmouseenter="this.style.background='rgba(255,255,255,.22)'" onmouseleave="this.style.background='rgba(255,255,255,.13)'">
+        <div style="font-size:24px;margin-bottom:4px">❌</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.65)">أيام الغياب</div>
+        <div style="font-size:28px;font-weight:900;color:#fff;margin-top:2px">${st.absent}</div>
+      </div>
+      <div style="width:12px"></div>
+      <div style="flex:1;padding:14px 16px;background:rgba(255,255,255,.13);backdrop-filter:blur(4px);border-radius:14px;text-align:center;cursor:pointer;transition:background .2s" onclick="openTeacherDetail('LATE','${teacherId}')" data-tip="اضغط لرؤية تفاصيل التأخر" onmouseenter="this.style.background='rgba(255,255,255,.22)'" onmouseleave="this.style.background='rgba(255,255,255,.13)'">
+        <div style="font-size:24px;margin-bottom:4px">⏰</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.65)">التأخر</div>
+        <div style="font-size:28px;font-weight:900;color:#fff;margin-top:2px">${st.lateMin}<span style="font-size:13px;font-weight:600;opacity:.8;margin-right:2px"> دقيقة</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:2px">${st.lateDays} يوم تأخر</div>
+      </div>
     </div>
   </div>
   <h2 class="section-title">🏆 ${tl('الأنشطة التي شارك فيها المعلم')}</h2>
