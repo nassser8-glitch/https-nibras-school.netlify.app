@@ -2145,7 +2145,7 @@ function renderLayout(user, hash){
   else pageHtml = renderDashboard();
 
   const themeClass = school === 'GIRLS' ? 'theme-girls' : 'theme-boys';
-  const searchLive = `oninput="if(location.hash==='#/students'){const el=document.getElementById('studentSearch'); if(el){el.value=this.value; filterStudentsTable();}}"`;
+  const searchLive = `oninput="goSearchLive(this.value)"`;
   return `
   <div class="layout ${themeClass}">
     <header class="topbar">
@@ -2207,6 +2207,9 @@ function toggleSidebar(forceClose){
   document.body.classList.toggle('sidebar-locked', open);
 }
 /* البحث السريع من الشريط العلوي */
+function goSearchLive(q){
+  // لا مزامنة حية مع صفحة الطلاب — تُطبَّق فقط عند الضغط على Enter عبر goSearch
+}
 function goSearch(q){
   q = (q || '').trim();
   if(!q) return;
