@@ -1854,9 +1854,8 @@ function renderSchoolSelect(){
           <div class="school-stat-box"><span class="num">${data.pendingTransfers}</span><span class="lbl">التحويلات</span></div>
         </div>
         <button class="school-enter-btn">دخول إلى القسم</button>
-      </div>`;
+  </div>`;
   }
-
   return `
   <div class="school-dash">
     <div class="school-dash-header">
@@ -1870,6 +1869,77 @@ function renderSchoolSelect(){
     ${copyMessage ? `<div id="copyMsg" style="text-align:center;margin-top:16px;font-size:14px;font-weight:600;color:#16a34a">${copyMessage}</div>` : ''}
     <div style="text-align:center;margin-top:20px">
       <a style="color:#6b7280;font-size:13px;cursor:pointer;text-decoration:underline;line-height:36px" onclick="logout()">تسجيل الخروج</a>
+    </div>
+  </div>`;
+}
+/* ============ لوحة الأوائل للطالب ============ */
+function renderStudentLeaders(){
+  const d = loadDB();
+  const user = currentUser();
+  if(!user || user.role !== 'STUDENT') return '<h1 class="page-title">غير متاح</h1>';
+  const myStudent = (d.students||[]).find(s => s.id === user.id);
+  const myClassId = myStudent ? myStudent.classId : null;
+  const myClass = myClassId ? (d.classes||[]).find(c => c.id === myClassId) : null;
+  const myGrade = myClass ? (d.grades||[]).find(g => g.id === myClass.gradeId) : null;
+  const myClassName = myClass ? (myGrade ? myGrade.name + ' — ' : '') + 'الفصل ' + myClass.name : '';
+  const ptsMap = studentPointsMap();
+  const medals = ['🥇','🥈','🥉'];
+  const stageGroups = [
+    { tab:'myclass', label:'فصلي', min:-1, max:-1 },
+    { tab:'pri', label:'الابتدائي', min:0, max:5 },
+    { tab:'mid', label:'المتوسط', min:6, max:8 },
+    { tab:'sec', label:'الثانوي', min:9, max:11 },
+  ];
+  const renderStage = (g, showClass) => {
+    let studs;
+    if(g.tab === 'myclass'){
+      if(!myClassId) return '<p class="muted small" style="margin:4px 0">أنت غير مسند لفصل بعد</p>';
+      studs = (d.students||[]).filter(s => s.active && s.classId === myClassId);
+    } else {
+      const gradeIds = new Set(d.grades.filter(x => x.order >= g.min && x.order <= g.max).map(x => x.id));
+      const classIds = new Set(d.classes.filter(c => gradeIds.has(c.gradeId)).map(c => c.id));
+      studs = (d.students||[]).filter(s => s.active && s.classId && classIds.has(s.classId));
+    }
+    const withPts = studs.map(s => ({ s, pts: ptsMap[s.id] || 0 })).sort((a,b) => b.pts - a.pts || String(a.s.fullName||'').localeCompare(String(b.s.fullName||''),'ar'));
+    if(withPts.length === 0) return '<p class="muted small" style="margin:4px 0">لا توجد نقاط مسجلة</p>';
+    const isMe = s => s.id === user.id;
+    return `<div style="overflow-x:auto"><table class="data-table" style="width:100%">
+      <thead><tr><th>#</th><th>الطالب</th>${showClass ? '<th>الفصل</th>' : ''}<th>النقاط</th></tr></thead>
+      <tbody>${withPts.slice(0,20).map((x,i) => {
+        const cls = x.s.classId ? (d.classes||[]).find(c => c.id === x.s.classId) : null;
+        const gr = cls ? (d.grades||[]).find(g => g.id === cls.gradeId) : null;
+        const clsName = cls ? (gr ? gr.name + ' — ' : '') + 'الفصل ' + cls.name : '—';
+        const me = isMe(x.s);
+        return `<tr style="${me ? 'background:#eff6ff;font-weight:700' : ''}">
+          <td style="width:40px;text-align:center">${medals[i] || (i+1)}</td>
+          <td>${escapeHtml(x.s.fullName || x.s.name || '')} ${me ? '<span style="font-size:10px;background:#2563eb;color:#fff;padding:1px 6px;border-radius:6px;margin-right:4px">أنت</span>' : ''}</td>
+          ${showClass ? `<td style="font-size:12px;color:#6b7280">${escapeHtml(clsName)}</td>` : ''}
+          <td style="font-weight:800;color:#16a34a;white-space:nowrap">${x.pts > 0 ? '+' : ''}${x.pts}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+  };
+  return `
+  <div class="header-row"><h1 class="page-title">🏆 لوحة الأوائل</h1></div>
+  ${myClassName ? `<div style="margin-bottom:12px;padding:10px 16px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:12px;border:1px solid #bfdbfe;font-size:13px;color:#1e40af">
+    🏫 فصلي: <b>${escapeHtml(myClassName)}</b>
+  </div>` : ''}
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="card" style="padding:16px;border-right:4px solid #2563eb">
+      <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#2563eb">🏫 فصلي</div>
+      ${renderStage(stageGroups[0], false)}
+    </div>
+    <div class="card" style="padding:16px;border-right:4px solid #16a34a">
+      <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#16a34a">🎓 الابتدائي</div>
+      ${renderStage(stageGroups[1], true)}
+    </div>
+    <div class="card" style="padding:16px;border-right:4px solid #f59e0b">
+      <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#f59e0b">🎓 المتوسط</div>
+      ${renderStage(stageGroups[2], true)}
+    </div>
+    <div class="card" style="padding:16px;border-right:4px solid #8b5cf6">
+      <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#8b5cf6">🎓 الثانوي</div>
+      ${renderStage(stageGroups[3], true)}
     </div>
   </div>`;
 }
@@ -1999,6 +2069,9 @@ function renderLayout(user, hash){
       { href:'#/notebook', key:'notebook', label:'المفكرة', icon:'📒' },
       { href:'#/student-activities', key:'student-activities', label:'أنشطتي', icon:'🎨' },
     ]},
+    { title:'المدرسة', items:[
+      { href:'#/student-leaders', key:'student-leaders', label:'الأوائل', icon:'🏆' },
+    ]},
     { title:'النظام', items:[
       { href:'#/account', key:'account', label:'حسابي', icon:'⚙️' },
       { href:'#/about', key:'about', label:'حول نبراس', icon:'ⓘ' },
@@ -2062,6 +2135,7 @@ function renderLayout(user, hash){
   else if(page === 'account' && (user.role === 'TEACHER' || user.role === 'STUDENT')) pageHtml = renderAccount();
   else if(page === 'activities' && user.role !== 'STUDENT') pageHtml = renderActivities();
   else if(page === 'student-activities' && user.role === 'STUDENT') pageHtml = renderStudentActivities();
+  else if(page === 'student-leaders' && user.role === 'STUDENT') pageHtml = renderStudentLeaders();
   else if(page.startsWith('activity/') && user.role !== 'STUDENT') pageHtml = renderActivityDetail(page.split('/')[1]);
   else if(page.startsWith('teacher/') && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderTeacherPage(page.split('/')[1]);
   else if(page === 'guide-msgs' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR')) pageHtml = renderGuideMsgs();
@@ -3066,13 +3140,13 @@ function renderDashboard(){
         </div>
       </div>
       <div style="display:flex;gap:0;padding:0 16px 16px">
-        <div style="flex:1;padding:14px 16px;background:rgba(255,255,255,.13);backdrop-filter:blur(4px);border-radius:14px;text-align:center;cursor:pointer;transition:background .2s" onclick="openTeacherDetail('ABSENT','${teacherId}')" data-tip="اضغط لرؤية قائمة أيام الغياب" onmouseenter="this.style.background='rgba(255,255,255,.22)'" onmouseleave="this.style.background='rgba(255,255,255,.13)'">
+        <div style="flex:1;padding:14px 16px;background:rgba(255,255,255,.13);backdrop-filter:blur(4px);border-radius:14px;text-align:center;cursor:pointer;transition:background .2s" onclick="openTeacherDetail('ABSENT','${user.id}')" data-tip="اضغط لرؤية قائمة أيام الغياب" onmouseenter="this.style.background='rgba(255,255,255,.22)'" onmouseleave="this.style.background='rgba(255,255,255,.13)'">
           <div style="font-size:24px;margin-bottom:4px">❌</div>
           <div style="font-size:11px;color:rgba(255,255,255,.65)">أيام الغياب</div>
           <div style="font-size:28px;font-weight:900;color:#fff;margin-top:2px">${tst.absent}</div>
         </div>
         <div style="width:12px"></div>
-        <div style="flex:1;padding:14px 16px;background:rgba(255,255,255,.13);backdrop-filter:blur(4px);border-radius:14px;text-align:center;cursor:pointer;transition:background .2s" onclick="openTeacherDetail('LATE','${teacherId}')" data-tip="اضغط لرؤية تفاصيل التأخر" onmouseenter="this.style.background='rgba(255,255,255,.22)'" onmouseleave="this.style.background='rgba(255,255,255,.13)'">
+        <div style="flex:1;padding:14px 16px;background:rgba(255,255,255,.13);backdrop-filter:blur(4px);border-radius:14px;text-align:center;cursor:pointer;transition:background .2s" onclick="openTeacherDetail('LATE','${user.id}')" data-tip="اضغط لرؤية تفاصيل التأخر" onmouseenter="this.style.background='rgba(255,255,255,.22)'" onmouseleave="this.style.background='rgba(255,255,255,.13)'">
           <div style="font-size:24px;margin-bottom:4px">⏰</div>
           <div style="font-size:11px;color:rgba(255,255,255,.65)">التأخر</div>
           <div style="font-size:28px;font-weight:900;color:#fff;margin-top:2px">${tst.lateMin}<span style="font-size:13px;font-weight:600;opacity:.8;margin-right:2px"> دقيقة</span></div>
