@@ -5515,6 +5515,7 @@ function renderUsers(){
       <button class="btn-secondary" onclick="exportCredentials()">📤 تصدير بيانات الدخول</button>
       <button class="btn-primary" onclick="toggleEl('userForm')">+ إضافة ${tl('معلم')}</button>
       <button class="btn-secondary" onclick="createSulimanAccounts()" title="ينشئ 5 حسابات باسم سليمان البشري (مدير، معلم، موجه، إداري، طالب) برقم سري موحد لعرضها على المدير المباشر">🧑‍💼 حسابات سليمان</button>
+      <button class="btn-secondary" onclick="generateDemoData()" title="يولّد بيانات تجريبية: 10 طلاب + 10 طالبات + 10 معلمين + 10 معلمات">🧪 بيانات تجريبية</button>
     </div>
   </div>
   <div id="importTeacherResult"></div>
@@ -5666,6 +5667,61 @@ async function createSulimanAccounts(){
     if(errEl) errEl.innerHTML = '';
   }catch(e){
     if(errEl) errEl.innerHTML = '<div class="card mb" style="color:#dc2626">حدث خطأ أثناء إنشاء الحسابات: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+  }finally{
+    __userBusy = false;
+    renderApp();
+  }
+}
+/* ======== توليد بيانات تجريبية: 10 طلاب + 10 طالبات + 10 معلمين + 10 معلمات ======== */
+const DEMO_PW = 'Demo@2026';
+const DEMO_BOY_NAMES = ['أحمد','محمد','خالد','عمر','يوسف','علي','حسن','فيصل','عبدالله','سلمان'];
+const DEMO_GIRL_NAMES = ['فاطمة','عائشة','سارة','نور','ريم','هند','نورة','لمى','جود','دانة'];
+const DEMO_MALE_TEACHERS = ['عبدالله أحمد','سعيد خالد','ماجد عمر','ناصر يوسف','خالد سعيد','فهد علي','سلطان حسن','مشعل فيصل','أيمن حمد','راشد عبدالله'];
+const DEMO_FEMALE_TEACHERS = ['هند عبدالله','نورة سعيد','سارة ماجد','ريم ناصر','عائشة خالد','لمى فهد','جود سلطان','دانة مشعل','مريم أيمن','غادة راشد'];
+async function generateDemoData(){
+  if(__userBusy) return;
+  if(!__serverEnabled()){ window.__teacherMsg = 'توليد البيانات التجريبية متاح في وضع الخادم (Render) فقط'; renderApp(); return; }
+  if(!confirm('سأولّد بيانات تجريبية: 10 طلاب (بنين) + 10 طالبات (بنات) + 10 معلمين + 10 معلمات — الرقم السري الموحد Demo@2026 وأسماء المستخدمين: teacher1..10، teacherg1..10، boy1..10، girl1..10. متابعة؟')) return;
+  const errEl = document.getElementById('userErr');
+  __userBusy = true;
+  const results = { boys:0, girls:0, male:0, female:0, errors:[] };
+  const mkUser = async (o) => {
+    const r = await __api('POST','admin/create-user', Object.assign({ password:DEMO_PW }, o));
+    if(!(r && r.status===200 && r.j && r.j.ok)) results.errors.push((o.username||'x') + ':' + ((r&&r.j&&r.j.error)||'no') + ((r&&r.j&&r.j.detail)||''));
+  };
+  const addDemoStudent = async (school, name, idx) => {
+    try{ await __syncPull(school); }catch(e){}
+    let sd = null;
+    try{ sd = loadDBFor(school); }catch(e){}
+    if(!sd || !Array.isArray(sd.students)){ results.errors.push(name + ': تعذّر تعديل بيانات ' + school); return; }
+    const id = uid();
+    const firstClass = (sd.classes||[])[0] || null;
+    sd.students.push({ id, fullName:name, studentNo:'DX' + (10+idx), classId:firstClass ? firstClass.id : null, guardianName:'', guardianPhone:'', active:true });
+    try{ localStorage.setItem(dbKeyFor(school), JSON.stringify(sd)); }catch(e){}
+    await __syncPush(school);
+    const uname = (school==='BOYS' ? 'boy' : 'girl') + idx;
+    await mkUser({ name, username:uname, role:'STUDENT', studentId:id, email:'', school });
+  };
+  try{
+    for(let i=0;i<10;i++){
+      await mkUser({ name:DEMO_MALE_TEACHERS[i], email:'teacher'+(i+1)+'@nibras.school', role:'TEACHER', username:'teacher'+(i+1), school:'BOYS' });
+      results.male++;
+    }
+    for(let i=0;i<10;i++){
+      await mkUser({ name:DEMO_FEMALE_TEACHERS[i], email:'teacherg'+(i+1)+'@nibras.school', role:'TEACHER', username:'teacherg'+(i+1), school:'GIRLS' });
+      results.female++;
+    }
+    for(let i=0;i<10;i++){ await addDemoStudent('BOYS', DEMO_BOY_NAMES[i], i+1); results.boys++; }
+    for(let i=0;i<10;i++){ await addDemoStudent('GIRLS', DEMO_GIRL_NAMES[i], i+1); results.girls++; }
+    await __refreshSchool(getActiveSchool());
+    let msg = 'تم توليد البيانات التجريبية — 🧪 طلاب بنين: ' + results.boys + '، طالبات: ' + results.girls + '، معلمين: ' + results.male + '، معلمات: ' + results.female + ' — الرقم السري الموحد: <b dir="ltr">Demo@2026</b>';
+    if(results.errors.length){
+      msg += '<div style="color:#b45309;margin-top:6px;font-size:12px">بعض الإنشاءات لم تكتمل (' + results.errors.length + '): ' + escapeHtml(results.errors.slice(0,6).join('، ')) + (results.errors.length>6 ? '…' : '') + '</div>';
+    }
+    window.__teacherMsg = msg;
+    if(errEl) errEl.innerHTML = '';
+  }catch(e){
+    if(errEl) errEl.innerHTML = '<div class="card mb" style="color:#dc2626">حدث خطأ أثناء توليد البيانات: ' + escapeHtml(String(e && e.message || e)) + '</div>';
   }finally{
     __userBusy = false;
     renderApp();

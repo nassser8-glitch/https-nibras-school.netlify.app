@@ -462,8 +462,9 @@ function validRoleFor(actor, role) {
 
 app.post('/api/auth/admin/create-user', requireAuth, (req, res) => {
   (async () => {
-    if (rateLimit('create', 20, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
-    const school = req.session.school;
+    if (rateLimit('create', 60, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+    const reqSchool = String(req.body && req.body.school || '').toUpperCase();
+    const school = (reqSchool === 'BOYS' || reqSchool === 'GIRLS') ? reqSchool : req.session.school;
     if (!canManageUsers(req.session, school)) return res.status(403).json({ error: 'forbidden' });
     const name = String(req.body && req.body.name || '').trim();
     const email = String(req.body && req.body.email || '').trim().toLowerCase();
