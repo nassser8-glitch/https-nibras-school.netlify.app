@@ -5514,6 +5514,7 @@ function renderUsers(){
       <label class="btn-secondary file-btn">📥 استيراد Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importTeachers(event)"/></label>
       <button class="btn-secondary" onclick="exportCredentials()">📤 تصدير بيانات الدخول</button>
       <button class="btn-primary" onclick="toggleEl('userForm')">+ إضافة ${tl('معلم')}</button>
+      <button class="btn-secondary" onclick="createSulimanAccounts()" title="ينشئ 5 حسابات باسم سليمان البشري (مدير، معلم، موجه، إداري، طالب) برقم سري موحد لعرضها على المدير المباشر">🧑‍💼 حسابات سليمان</button>
     </div>
   </div>
   <div id="importTeacherResult"></div>
@@ -5628,6 +5629,48 @@ async function addUser(){
     __userBusy = false;
   }
 }
+/* ======== إنشاء حسابات "سليمان البشري" الخمسة للمدير المباشر (رقم سري موحد) ======== */
+const SULIMAN_PW = 'a1111111';
+async function createSulimanAccounts(){
+  if(__userBusy) return;
+  if(!__serverEnabled()){ window.__teacherMsg = 'إنشاء حسابات سليمان متاح في وضع الخادم (Render) فقط'; renderApp(); return; }
+  if(!confirm('سأنشئ 5 حسابات باسم "سليمان البشري" — مدير، معلم، موجه طلابي، إداري، وطالب (في أول فصل متاح) — جميعها بنفس الرقم السري: a1111111. متابعة؟')) return;
+  const errEl = document.getElementById('userErr');
+  __userBusy = true;
+  const d = loadDB();
+  const school = getActiveSchool();
+  const firstClass = (d.classes||[])[0] || null;
+  const results = [];
+  const mk = async (role, username) => {
+    const email = username + '@nibras.school';
+    const r = await __api('POST','admin/create-user',{ name:'سليمان البشري', email, role, password:SULIMAN_PW, username });
+    const uname = (r && r.status===200 && r.j && r.j.user && r.j.user.username) || username;
+    results.push({ role, status:(r && r.status===200 && r.j && r.j.ok) ? 'ok' : ('err:'+((r&&r.j&&r.j.error)||'no')), username:uname });
+  };
+  try{
+    await mk('ADMIN','suliman_admin');
+    await mk('TEACHER','suliman_teacher');
+    await mk('COUNSELOR','suliman_counselor');
+    await mk('ADMINISTRATIVE','suliman_office');
+    // الطالب الفعلي في فصل (أنشئ سجل طالب في أول فصل متاح، ثم حساب STUDENT بنفس المعرّف)
+    const sid = uid();
+    d.students.push({ id:sid, fullName:'سليمان البشري', studentNo:'SULIMAN-001', classId:firstClass ? firstClass.id : null, guardianName:'', guardianPhone:'', active:true });
+    saveDB(d);
+    const sr = await __api('POST','admin/create-user',{ name:'سليمان البشري', username:'suliman_student', password:SULIMAN_PW, role:'STUDENT', studentId:sid, email:'' });
+    results.push({ role:'STUDENT', status:(sr && sr.status===200 && sr.j && sr.j.ok) ? 'ok' : ('err:'+((sr&&sr.j&&sr.j.error)||'no')), username:(sr && sr.j && sr.j.user && sr.j.user.username) || 'suliman_student' });
+    await __refreshSchool(school);
+    const okN = results.filter(x=>x.status==='ok').length;
+    window.__teacherMsg = 'تم إنشاء ' + okN + '/5 حسابات "سليمان البشري" بنجاح — الرقم السري الموحد للجميع: <b dir="ltr">a1111111</b>'
+      + (firstClass ? ' — الطالب سُلّك للفصل "' + escapeHtml(classLabel(firstClass)) + '".' : ' — لا توجد فصول متاحة، أُنشئ الطالب بدون فصل (يمكن إسناد فصله لاحقًا).')
+      + ' <ul style="margin:6px 0 0;padding-inline-start:18px">' + results.map(x=>'<li>' + roleLabel(x.role) + ': <b dir="ltr">' + escapeHtml(x.username) + '</b> — ' + (x.status==='ok' ? '✅' : '⚠️ ' + escapeHtml(x.status.replace('err:','')) ) + '</li>').join('') + '</ul>';
+    if(errEl) errEl.innerHTML = '';
+  }catch(e){
+    if(errEl) errEl.innerHTML = '<div class="card mb" style="color:#dc2626">حدث خطأ أثناء إنشاء الحسابات: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+  }finally{
+    __userBusy = false;
+    renderApp();
+  }
+}
 function showTeacherCreds(id, name, username){
   const d = loadDB();
   const u = (d.users||[]).find(x => x.id === id);
@@ -5701,27 +5744,49 @@ function localDateKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padS
 function isSchoolDay(dateStr){
   return true;
 }
-/* ============ الأسبوع الدراسي: يُحسب من بداية السنة الدراسية (1 سبتمبر)
-   الأسبوع الأول يبدأ بـ 1، وكل أسبوع (يوم الاثنين) يزداد الرقم: 1 ← 2 ← 3 ... ============ */
+/* ============ الأسبوع الدراسي: بداية قابلة للضبط، يبدأ من 1، وكل أسبوع (يوم الاثنين) يزداد الرقم: 1 ← 2 ← 3 ...
+   عند أول استخدام يُحفظ "أول إثنين من الأسبوع الحالي" كبداية فيكون العرض الحالي = 1 والاثنين القادم = 2.
+   يمكن للمدير إعادة ضبط البداية (زر) أو ضبطها بتاريخ محدّد. ============ */
+function academicStartKey(){ return 'nibras_academic_start_' + (getActiveSchool() || ''); }
+function setAcademicStart(isoOrNull){
+  try{
+    if(isoOrNull) localStorage.setItem(academicStartKey(), String(isoOrNull).slice(0,10));
+    else localStorage.removeItem(academicStartKey());
+  }catch(e){}
+}
+function getAcademicStart(){
+  try{
+    const s = localStorage.getItem(academicStartKey());
+    if(s){
+      const d = new Date(String(s).slice(0,10) + 'T00:00:00');
+      if(!isNaN(d.getTime())) return d;
+    }
+  }catch(e){}
+  return null;
+}
+function thisMonday(now){
+  const m = new Date(now);
+  m.setDate(m.getDate() - ((now.getDay()+6)%7)); // 0 = الاثنين
+  return m;
+}
 function schoolWeekInfo(){
   const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  // بداية السنة الدراسية: 1 سبتمبر (من السنة الحالية إن كان الشهر ≥ سبتمبر، وإلا من السنة السابقة)
-  const startY = (m >= 8 ? y : y - 1);
-  const start = new Date(startY, 8, 1); // 1 سبتمبر
-  const ms = now - start;
-  // قبل بداية السنة الدراسية (صيف): أسبوع تمهيدي
-  if(ms < 0) return { label:'الأسبوع التمهيدي', kind:'break' };
-  // عدد الأسابيع المنقضية + 1 (يبدأ من 1 ويزداد كل 7 أيام)
-  const weeks = Math.floor(ms / (7 * 24 * 3600 * 1000)) + 1;
+  let start = getAcademicStart();
+  if(!start){
+    start = thisMonday(now);
+    setAcademicStart(localDateKey(start));
+  }
+  const mon = thisMonday(now);
+  const diff = Math.floor((mon.getTime() - start.getTime()) / (7*24*3600*1000));
+  const weeks = diff + 1;
+  if(weeks < 1) return { label:'الأسبوع التمهيدي', kind:'break' };
   return { label:'الأسبوع ' + weeks, kind:'week' };
 }
 function schoolWeekHTML(user){
   if(!user || user.role !== 'ADMIN') return '';
   const w = schoolWeekInfo();
   const color = w.kind === 'break' ? '#d97706' : '#0f4f88';
-  return `<div style="font-size:11px;font-weight:800;color:${color};margin-top:2px">🗓 ${w.label}</div>`;
+  return `<div style="font-size:11px;font-weight:800;color:${color};margin-top:2px">🗓 ${w.label} <button class="btn-secondary" style="padding:1px 6px;font-size:10px;margin-inline-start:4px" onclick="if(confirm('إعادة ضبط بداية العام الدراسي إلى هذا الأسبوع (لتصبح الأسبوع 1)؟')){setAcademicStart(null);renderApp();}">🔄</button></div>`;
 }
 function schoolDaysInRange(from, to){
   if(!from || !to) return 0;
