@@ -5648,16 +5648,16 @@ async function createSulimanAccounts(){
     results.push({ role, status:(r && r.status===200 && r.j && r.j.ok) ? 'ok' : ('err:'+((r&&r.j&&r.j.error)||'no')), username:uname });
   };
   try{
-    await mk('ADMIN','suliman_admin');
-    await mk('TEACHER','suliman_teacher');
-    await mk('COUNSELOR','suliman_counselor');
-    await mk('ADMINISTRATIVE','suliman_office');
+    await mk('ADMIN','suliman1');
+    await mk('TEACHER','suliman2');
+    await mk('COUNSELOR','suliman3');
+    await mk('ADMINISTRATIVE','suliman4');
     // الطالب الفعلي في فصل (أنشئ سجل طالب في أول فصل متاح، ثم حساب STUDENT بنفس المعرّف)
     const sid = uid();
     d.students.push({ id:sid, fullName:'سليمان البشري', studentNo:'SULIMAN-001', classId:firstClass ? firstClass.id : null, guardianName:'', guardianPhone:'', active:true });
     saveDB(d);
-    const sr = await __api('POST','admin/create-user',{ name:'سليمان البشري', username:'suliman_student', password:SULIMAN_PW, role:'STUDENT', studentId:sid, email:'' });
-    results.push({ role:'STUDENT', status:(sr && sr.status===200 && sr.j && sr.j.ok) ? 'ok' : ('err:'+((sr&&sr.j&&sr.j.error)||'no')), username:(sr && sr.j && sr.j.user && sr.j.user.username) || 'suliman_student' });
+    const sr = await __api('POST','admin/create-user',{ name:'سليمان البشري', username:'suliman5', password:SULIMAN_PW, role:'STUDENT', studentId:sid, email:'' });
+    results.push({ role:'STUDENT', status:(sr && sr.status===200 && sr.j && sr.j.ok) ? 'ok' : ('err:'+((sr&&sr.j&&sr.j.error)||'no')), username:(sr && sr.j && sr.j.user && sr.j.user.username) || 'suliman5' });
     await __refreshSchool(school);
     const okN = results.filter(x=>x.status==='ok').length;
     window.__teacherMsg = 'تم إنشاء ' + okN + '/5 حسابات "سليمان البشري" بنجاح — الرقم السري الموحد للجميع: <b dir="ltr">a1111111</b>'
