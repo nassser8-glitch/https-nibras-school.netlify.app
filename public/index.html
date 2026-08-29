@@ -3058,6 +3058,93 @@ function renderDashboard(){
   const partPending = pendingPartRequests();
   const hasFollowups = pendingTransfers>0 || absentTeachers.length>0 || newMaintenance>0 || partPending>0 || absent>0 || late>0;
 
+  // ====== لمحات سريعة خاصة بالمعلم (تُبنى هنا وتُدرج في الواجهة) ======
+  const tStats = isTeacher ? teacherStats(user) : null;
+  const teacherDayAtt = () => {
+    const out = { present:0, absent:0, late:0, names:[] };
+    for(const c of myClasses){
+      for(const s of d.students){
+        if(!s.active || s.classId !== c.id) continue;
+        const rec = todayAtt.find(a => a.studentId === s.id);
+        if(rec && rec.status === 'ABSENT'){ out.absent++; out.names.push(firstNameOf(s.fullName||s.name)); }
+        else if(rec && rec.status === 'LATE') out.late++;
+        else out.present++;
+      }
+    }
+    return out;
+  };
+  const tDayAtt = isTeacher ? teacherDayAtt() : null;
+  const mySubjects = isTeacher ? getTeacherSubjects(user, d) : [];
+  const myClassIds = [...new Set(mySubjects.map(s => s.classId))];
+  const myStudentsCount = [...new Set(d.students.filter(s => s.active && s.classId && myClassIds.includes(s.classId)).map(s => s.id))].length;
+  const myAssignments = isTeacher ? (d.assignments||[]).filter(a => myClassIds.includes(a.classId)).sort((a,b) => (b.created||0)-(a.created||0)) : [];
+  // الحصة القادمة اليوم (من جدول المعلم) حسب وقت اليوم
+  const ttToday = isTeacher ? (((d.timetable||{})[user.id]||{})[timetableDay]) : null;
+  const nextPeriodNow = (() => {
+    if(!isTeacher || !ttToday) return null;
+    const nowMin = new Date().getHours()*60 + new Date().getMinutes();
+    const periods = Object.keys(ttToday).map(Number).sort((a,b)=>a-b);
+    const PERIOD_START = { 1:[7,0],2:[8,0],3:[9,0],4:[10,0],5:[11,0],6:[12,0],7:[13,0] }; // تقريبي
+    const cur = periods.find(p => {
+      const st = PERIOD_START[p] || [0,0];
+      const en = PERIOD_START[p+1] || [14,0];
+      return nowMin >= st[0]*60+st[1] && nowMin < en[0]*60+en[1];
+    });
+    if(cur){ const c = ttToday[cur]; const cl = d.classes.find(x => x.id === c.classId); return { kind:'now', p:cur, sub:c.subject, cls: cl ? classLabel(cl) : '' }; }
+    const nxt = periods.find(p => { const st = PERIOD_START[p] || [0,0]; return nowMin < st[0]*60+st[1]; });
+    if(nxt){ const c = ttToday[nxt]; const cl = d.classes.find(x => x.id === c.classId); return { kind:'next', p:nxt, sub:c.subject, cls: cl ? classLabel(cl) : '' }; }
+    return null;
+  })();
+  const tpct = tDayAtt && tDayAtt.present ? Math.round(tDayAtt.present/(tDayAtt.present+tDayAtt.absent+tDayAtt.late)*100) : null;
+  const teacherQuickCards = isTeacher ? `
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 14px">
+      ${statTile('🏫', myClasses.length, 'فصولي', mySubjects.length ? mySubjects.length + ' مادة' : 'لا مواد بعد', 'location.hash=\'#/timetable\'')}
+      ${statTile('👦', myStudentsCount, 'طلابي', 'في فصولي', 'location.hash=\'#/students\'')}
+      ${statTile('✅', (tDayAtt?tDayAtt.present:0) + '/' + ((tDayAtt?tDayAtt.present:0)+(tDayAtt?tDayAtt.absent:0)+(tDayAtt?tDayAtt.late:0)), 'حضور اليوم', (tDayAtt&&tDayAtt.absent) ? tDayAtt.absent + ' غائب' : 'الكل حاضر', 'showTodayAttendance()')}
+      ${statTile('📝', myAssignments.length, 'التكليفات', 'مفتوحة لفصلي', 'location.hash=\'#/assignments\'')}
+    </div>
+    ${tpct !== null ? `
+    <div class="card mb" style="padding:14px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-weight:800;font-size:14px;color:#374151">📊 حضور طلابي اليوم (فصلي)</span>
+        <span style="font-weight:800;color:${tpct>=85?'#16a34a':tpct>=70?'#d97706':'#dc2626'}">${tpct}%</span>
+      </div>
+      <div style="height:10px;border-radius:999px;background:#eef2f7;overflow:hidden"><div style="height:100%;width:${tpct}%;background:${tpct>=85?'#22c55e':tpct>=70?'#f59e0b':'#ef4444'};border-radius:999px;transition:width .3s"></div></div>
+    </div>` : ''}
+    ${nextPeriodNow ? `
+    <div class="card mb" style="padding:0;overflow:hidden;border:none;border-radius:16px;background:linear-gradient(135deg,#0f766e,#1d4ed8);color:#fff;box-shadow:0 8px 22px rgba(15,79,136,.18)">
+      <div style="padding:16px 20px;display:flex;align-items:center;gap:14px">
+        <div style="width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">${nextPeriodNow.kind==='now' ? '🕐' : '⏭'}</div>
+        <div style="flex:1">
+          <div style="font-size:12px;opacity:.9">${nextPeriodNow.kind==='now' ? 'حصتك الآن — الحصة ' + nextPeriodNow.p : 'حصتك القادمة — الحصة ' + nextPeriodNow.p}</div>
+          <div style="font-weight:800;font-size:17px;margin-top:2px">${escapeHtml(nextPeriodNow.sub || '—')}</div>
+          <div style="font-size:12px;opacity:.92;margin-top:2px">${escapeHtml(nextPeriodNow.cls)}</div>
+        </div>
+        <a href="#/timetable" style="background:rgba(255,255,255,.22);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;color:#fff;text-decoration:none;white-space:nowrap">جدولي</a>
+      </div>
+    </div>` : ''}
+    ${(tDayAtt && tDayAtt.absent) ? `
+    <div class="card mb" style="padding:14px 16px;border-left:4px solid #ef4444">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:800;font-size:14px;color:#374151">❌ غياب اليوم في فصولي</span>
+        <span style="font-weight:800;color:#ef4444">${tDayAtt.absent} طالب</span>
+      </div>
+      <p class="muted small" style="margin:6px 0 0">${escapeHtml(tDayAtt.names.slice(0,8).join('، '))}${tDayAtt.names.length>8 ? ' …' : ''}</p>
+    </div>` : ''}
+    ` : '';
+  function statTile(ico, num, label, meta, click){
+    return `<div class="card" style="cursor:pointer;padding:16px;border-radius:16px;border:1px solid #e6edf5;box-shadow:0 4px 14px rgba(15,79,136,.06)" onclick="${click}" title="اضغط للتفاصيل">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#e0f2f1,#eef2ff);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${ico}</span>
+        <div style="min-width:0">
+          <div style="font-weight:900;font-size:20px;color:#0f172a;line-height:1.1">${num}</div>
+          <div style="font-size:12.5px;font-weight:700;color:#374151">${label}</div>
+          <div class="muted" style="font-size:11px">${meta}</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
   // حالة اليوم: طارئة أم مستقرة؟ (الغياب والتأخير أقل من 10% ولا بلاغات صيانة طارئة)
   const sAbsRate = students.length ? absent/students.length*100 : 0;
   const sLateRate = students.length ? late/students.length*100 : 0;
@@ -3241,6 +3328,7 @@ function renderDashboard(){
   ${renderEscapeAlerts()}
   ${renderAdminMsgAlerts()}
   ${hero}
+  ${isTeacher ? teacherQuickCards : ''}
   ${attPanel}
   ${isTeacher ? (() => {
     const tst = teacherStats(user);
