@@ -2079,6 +2079,7 @@ function renderLayout(user, hash){
   ] : [
     { title:'الإدارة', items:[
       (user.role === 'ADMIN' || user.role === 'AGENT') ? { href:'#/users', key:'users', label:tl('المعلمون'), icon:'👤' } : null,
+      (user.role === 'ADMIN' || user.role === 'AGENT') ? { href:'#/admins', key:'admins', label:'الإداريون', icon:'🛡' } : null,
       { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👥' },
       { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
     ]},
@@ -2130,6 +2131,7 @@ function renderLayout(user, hash){
   else if(page === 'videos') pageHtml = renderVideos();
   else if(page === 'maintenance' && user.role !== 'STUDENT') pageHtml = renderMaintenance();
   else if(page === 'users' && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderUsers();
+  else if(page === 'admins' && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderAdmins();
   else if(page === 'timetable' && (user.role === 'TEACHER' || user.role === 'STUDENT')) pageHtml = renderTimetable();
   else if(page === 'assignments' && user.role === 'TEACHER') pageHtml = renderAssignments();
   else if(page === 'assignments' && user.role === 'STUDENT') pageHtml = renderStudentAssignments();
@@ -5593,7 +5595,7 @@ function generateDefaultStructure(){
 function renderUsers(){
   const d = loadDB();
   const isAdmin = currentUser()?.role === 'ADMIN';
-  const users = d.users.filter(u => u.active && u.role !== 'STUDENT');
+  const users = d.users.filter(u => u.active && u.role === 'TEACHER');
   const rows = users.map(u => {
     const assigned = d.classes.filter(c => (c.teacherIds||[]).includes(u.id));
     const assignedHtml = assigned.length ? assigned.map(c => classLabel(c)).join('، ') : '—';
@@ -5644,6 +5646,50 @@ function renderUsers(){
   <div id="userErr"></div>
   <div class="card table-card">
     <table class="data-table"><thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>البريد الإلكتروني</th><th>الدور</th><th>بيانات الدخول</th><th>${tl('الفصول')}</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table>
+  </div>`;
+}
+function renderAdmins(){
+  const d = loadDB();
+  const isAdmin = currentUser()?.role === 'ADMIN';
+  const users = d.users.filter(u => u.active && (u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE'));
+  const rows = users.map(u => {
+    const school = getActiveSchool();
+    const moveLabel = school === 'BOYS' ? 'البنات' : 'البنين';
+    const isSelf = u.id === currentUser().id;
+    const schoolTxt = u.role === 'AGENT' ? (u.school === 'BOYS' ? 'بنين' : 'بنات') : '—';
+    const nameCell = `<span style="font-weight:600">${escapeHtml(u.name)} <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="openRoleInbox('${u.id}')" title="${'متابعة هذا الحساب: تحويلاته وإشعاراته'}">👁</button></span>`;
+    const authCell = `<div style="font-size:12px;line-height:1.7">
+        ${u.email ? `<span style="display:block;direction:ltr">📧 ${escapeHtml(u.email)}</span>` : '<span style="display:block;color:#9ca3af">📧 لا يوجد بريد</span>'}
+        ${u.firstLogin ? '<span style="display:block;color:#b45309">⏳ بانتظار أول دخول</span>' : '<span style="display:block;color:#047857">✅ مفعّل</span>'}
+      </div>`;
+    return `<tr>
+    <td>${nameCell}</td>
+    <td style="direction:ltr"><b>${escapeHtml(u.username || '—')}</b></td>
+    <td>${escapeHtml(u.email)}</td>
+    <td>${roleLabel(u.role)}</td>
+    <td>${authCell}</td>
+    <td>${schoolTxt}</td>
+    <td>${isSelf || !isAdmin ? '' : `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="showTeacherCreds('${u.id}','${escapeHtml(u.name)}','${escapeHtml(u.username||'')}')" title="عرض بيانات الدخول">🔑 بيانات الدخول</button> <button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="moveOneTeacher('${u.id}')">↔️ نقل إلى ${moveLabel}</button> <button class="del-btn" onclick="deleteUser('${u.id}')">🗑 حذف</button>`}</td>
+  </tr>`;
+  }).join('');
+
+  return `
+  <div class="header-row"><h1 class="page-title">الإداريون</h1>
+    <div class="btn-group">
+      <button class="btn-primary" onclick="toggleEl('userForm')">+ إضافة إداري</button>
+    </div>
+  </div>
+  <div id="userErr"></div>
+  <div id="userForm" class="card mb form-grid-5" style="display:none">
+    <input id="uName" class="input" placeholder="الاسم" data-tip="الاسم الكامل للمستخدم" />
+    <input id="uEmail" class="input" type="email" placeholder="بريد حقيقي (للاستعادة)" data-tip="بريد إلكتروني حقيقي يصل إليه رمز استعادة الرقم السري" />
+    <input id="uPassword" class="input" type="password" placeholder="كلمة المرور الأولية (8 أحرف على الأقل)" data-tip="كلمة مرور أولية يغيّرها المستخدم عند أول دخول — 8 أحرف على الأقل" />
+    <select id="uRole" class="input"><option value="AGENT">${roleLabel('AGENT')}</option><option value="COUNSELOR">${roleLabel('COUNSELOR')}</option><option value="ADMINISTRATIVE">${roleLabel('ADMINISTRATIVE')}</option></select>
+    <button class="btn-primary" onclick="addUser()">حفظ</button>
+  </div>
+  <div class="card table-card">
+    <table class="data-table"><thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>البريد الإلكتروني</th><th>الدور</th><th>بيانات الدخول</th><th>القسم</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table>
   </div>`;
 }
