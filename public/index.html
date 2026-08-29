@@ -5629,6 +5629,7 @@ function renderUsers(){
       <button class="btn-secondary" onclick="downloadTeacherTemplate()">⬇ تنزيل القالب</button>
       <label class="btn-secondary file-btn">📥 استيراد Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importTeachers(event)"/></label>
       <button class="btn-secondary" onclick="exportCredentials()">📤 تصدير بيانات الدخول</button>
+      <button class="btn-secondary" onclick="createInitialTeachers()" title="ينشئ قوائم المعلمين الأوائل: المعلمين في قسم البنين والمعلمات في قسم البنات بأسماء المستخدمين والأرقام السرية المرفقة">👨‍🏫 إضافة المعلمين الأوائل</button>
       <button class="btn-primary" onclick="toggleEl('userForm')">+ إضافة ${tl('معلم')}</button>
     </div>
   </div>
@@ -5648,6 +5649,87 @@ function renderUsers(){
   </div>`;
 }
 let __userBusy = false;
+/* ======== إنشاء قوائم المعلمين الأوائل الثابتة (المعلمين → BOYS، المعلمات → GIRLS) ======== */
+const INITIAL_MALE_TEACHERS = [
+  { name:'عبدالله عائش',  username:'Abdullah',  pw:'a1111111' },
+  { name:'سلمان محمد',    username:'Salman',    pw:'a1111112' },
+  { name:'مساعد بداح',    username:'Musaad',    pw:'a1111113' },
+  { name:'فهد عيد',       username:'Fahad',     pw:'a1111114' },
+  { name:'عبدالرحمن محمد', username:'Abdulrahman', pw:'a1111115' },
+  { name:'مصطفى محمد',    username:'Mustafa',   pw:'a1111116' },
+  { name:'عبدالعزيز بن عبدالله', username:'Abdulaziz', pw:'a1111117' },
+  { name:'منصور علي',     username:'Mansour',   pw:'a1111118' },
+  { name:'عبدالمالك عبد', username:'Abdulmalik', pw:'a1111119' },
+  { name:'عبد الواسع هارون', username:'Abdulwase', pw:'a1111120' },
+  { name:'تركي حمدان',    username:'Turki',     pw:'a1111121' },
+  { name:'ناجي عبدالله',  username:'Naji',      pw:'a1111122' },
+  { name:'مركز أحمد',     username:'Markaz',    pw:'a1111123' },
+  { name:'طارق مقصود',    username:'Tariq',     pw:'a1111124' },
+  { name:'عبدالحنان عبدالرؤوف', username:'Abdulhanan', pw:'a1111125' },
+  { name:'إسحاق محمد',    username:'Ishaq',     pw:'a1111126' },
+  { name:'هاني فائق',     username:'Hani',      pw:'a1111127' },
+  { name:'علاء عبدالمنعم', username:'Alaa',     pw:'a1111128' },
+  { name:'مقبول أحمد',    username:'Maqbool',   pw:'a1111129' },
+  { name:'بشار مصطفى',    username:'Bashar',    pw:'a1111130' },
+  { name:'عبدالله فيصل',  username:'Abdullah2', pw:'a1111131' },
+  { name:'خالد يوسف',     username:'Khalid',    pw:'a1111132' }
+];
+const INITIAL_FEMALE_TEACHERS = [
+  { name:'آمال عبد',      username:'Amal',      pw:'a1111133' },
+  { name:'سلوى عبد',      username:'Salwa',     pw:'a1111134' },
+  { name:'سلوم صلاح',     username:'Saloom',    pw:'a1111135' },
+  { name:'ابتسام عبدالله', username:'Ibtisam',  pw:'a1111136' },
+  { name:'عائشة فضل',     username:'Aisha',     pw:'a1111137' },
+  { name:'سميرة يونس',    username:'Sameera',   pw:'a1111138' },
+  { name:'سلوى هدايت',    username:'Salwa2',    pw:'a1111139' },
+  { name:'سارة صفي',      username:'Sarah',     pw:'a1111140' },
+  { name:'شاهدة حافظ',    username:'Shahida',   pw:'a1111141' },
+  { name:'الشيماء سامي',  username:'Alshaimaa', pw:'a1111142' },
+  { name:'شيماء ليث',     username:'Shaimaa',   pw:'a1111143' },
+  { name:'شيماء جرياري',  username:'Shaimaa2',  pw:'a1111144' },
+  { name:'أمل الشامي',    username:'Amal2',     pw:'a1111145' },
+  { name:'سميرة نواز',    username:'Sameera2',  pw:'a1111146' },
+  { name:'حنين العبيدي',  username:'Haneen',    pw:'a1111147' },
+  { name:'خديجة محمد',    username:'Khadija',   pw:'a1111148' },
+  { name:'ماريا طارق',    username:'Maria',     pw:'a1111149' },
+  { name:'زوفيا حفيظ',    username:'Zovia',     pw:'a1111150' },
+  { name:'نهلة فتجي',     username:'Nahla',     pw:'a1111151' },
+  { name:'شادية ختك',     username:'Shadia',    pw:'a1111152' },
+  { name:'أروى بشير',     username:'Arwa',      pw:'a1111153' },
+  { name:'خديجة شير',     username:'Khadija2',  pw:'a1111154' },
+  { name:'تهاني أحمد',    username:'Tahani',    pw:'a1111155' }
+];
+async function createInitialTeachers(){
+  if(__userBusy) return;
+  if(!__serverEnabled()){ window.__teacherMsg = 'إنشاء المعلمين الأوائل متاح في وضع الخادم (Render) فقط'; renderApp(); return; }
+  const total = INITIAL_MALE_TEACHERS.length + INITIAL_FEMALE_TEACHERS.length;
+  if(!confirm('سأنشئ ' + total + ' حسابات معلّمين الأوائل: ' + INITIAL_MALE_TEACHERS.length + ' معلمين (قسم البنين) + ' + INITIAL_FEMALE_TEACHERS.length + ' معلمات (قسم البنات) بأسماء المستخدمين والأرقام السرية المرفقة. متابعة؟')) return;
+  const errEl = document.getElementById('userErr');
+  __userBusy = true;
+  const results = { male:0, female:0, errors:[] };
+  const mkOne = async (o, school) => {
+    const r = await __api('POST','admin/create-user',{ name:o.name, email:(o.username + '@nibras.school'), role:'TEACHER', password:o.pw, username:o.username, school });
+    if(r && r.status===200 && r.j && r.j.ok) return true;
+    results.errors.push(o.username + ':' + ((r&&r.j&&r.j.error)||'no') + ((r&&r.j&&r.j.detail)||''));
+    return false;
+  };
+  try{
+    for(const o of INITIAL_MALE_TEACHERS){ if(await mkOne(o,'BOYS')) results.male++; }
+    for(const o of INITIAL_FEMALE_TEACHERS){ if(await mkOne(o,'GIRLS')) results.female++; }
+    await __refreshSchool(getActiveSchool());
+    let msg = 'تم إنشاء المعلمين الأوائل — 👨‍🏫 معلمين: ' + results.male + ' (البنين)، معلمات: ' + results.female + ' (البنات) — ✅ استخدم كل حساب باسم المستخدم والرقم السري المرفقين.';
+    if(results.errors.length){
+      msg += '<div style="color:#b45309;margin-top:6px;font-size:12px">بعض الإنشاءات لم تكتمل (' + results.errors.length + '): ' + escapeHtml(results.errors.slice(0,6).join('، ')) + (results.errors.length>6 ? '…' : '') + '</div>';
+    }
+    window.__teacherMsg = msg;
+    if(errEl) errEl.innerHTML = '';
+  }catch(e){
+    if(errEl) errEl.innerHTML = '<div class="card mb" style="color:#dc2626">حدث خطأ أثناء إنشاء المعلمين: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+  }finally{
+    __userBusy = false;
+    renderApp();
+  }
+}
 function showTempList(creds){
   const box = document.getElementById('importTeacherResult');
   if(!box || !creds || !creds.length) return;
