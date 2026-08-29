@@ -3332,32 +3332,62 @@ function renderDashboard(){
   ${attPanel}
   ${isTeacher ? (() => {
     const tst = teacherStats(user);
+    // عدد أيام الدراسة المنقضية (الاثنين–الجمعة) منذ بداية السنة الدراسية
+    const nowd = new Date();
+    const y = nowd.getFullYear(), mo = nowd.getMonth();
+    const yearStart = (mo>=8 ? new Date(y,8,1) : new Date(y-1,8,1));
+    yearStart.setHours(0,0,0,0);
+    const today0 = new Date(); today0.setHours(0,0,0,0);
+    let worked = 0;
+    const walk = new Date(yearStart);
+    while(walk <= today0){ const dow = walk.getDay(); if(dow>=1 && dow<=5) worked++; walk.setDate(walk.getDate()+1); }
+    const attPct = worked>0 ? Math.max(0, Math.round((Math.max(0, worked - tst.absent))/worked*100)) : 100;
+    const grade = attPct>=95 ? {t:'ممتاز',c:'#16a34a'} : attPct>=85 ? {t:'جيد جدًا',c:'#1d7fd6'} : attPct>=75 ? {t:'جيد',c:'#0f766e'} : attPct>=50 ? {t:'مقبول',c:'#d97706'} : {t:'يحتاج تحسين',c:'#dc2626'};
     return `
     <div style="margin:0 0 14px;border-radius:18px;padding:0;background:#fff;border:1px solid #e6edf5;box-shadow:0 6px 20px rgba(15,79,136,.08);overflow:hidden">
       <div style="background:linear-gradient(135deg,#0f766e,#1d4ed8);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px">
         <div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">⏱</div>
         <div style="flex:1">
-          <div style="font-weight:800;font-size:16px">الالتزام بالدوام (${new Date().getFullYear()})</div>
+          <div style="font-weight:800;font-size:16px">الالتزام بالدوام (${y})</div>
           <div style="font-size:12px;opacity:.92">بطاقة تقييم حضورك في السنة الدراسية الحالية</div>
         </div>
+        <span style="background:${grade.c};color:#fff;border-radius:999px;padding:5px 14px;font-weight:800;font-size:12.5px;white-space:nowrap">${grade.t}</span>
       </div>
-      <div style="display:flex;gap:16px;padding:20px 16px;justify-content:center;align-items:flex-start;flex-wrap:wrap">
-        <div style="flex:1;min-width:150px;max-width:210px;display:flex;flex-direction:column;align-items:center;gap:9px;cursor:pointer;transition:transform .15s" onclick="openTeacherDetail('ABSENT','${user.id}')" data-tip="اضغط لرؤية قائمة أيام الغياب" onmouseenter="this.style.transform='scale(1.03)'" onmouseleave="this.style.transform='scale(1)'">
-          <div style="width:104px;height:104px;border-radius:50%;background:linear-gradient(135deg,#fef2f2,#ffffff);border:5px solid #fecaca;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(239,68,68,.18)">
-            <div style="font-size:36px;font-weight:900;color:#ef4444;line-height:1">${tst.absent}</div>
-            <div style="font-size:11px;color:#dc2626;margin-top:2px">يوم غياب</div>
+      <div style="display:flex;gap:18px;padding:20px 18px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0">
+          <div style="width:132px;height:132px;border-radius:50%;background:conic-gradient(${grade.c} 0 ${attPct}%, #eef2f7 ${attPct}% 100%);display:flex;align-items:center;justify-content:center;position:relative">
+            <div style="position:absolute;inset:9px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <div style="font-size:30px;font-weight:900;color:${grade.c};line-height:1">${attPct}%</div>
+              <div style="font-size:10px;color:#9ca3af;margin-top:2px">نسبة الحضور</div>
+            </div>
           </div>
-          <div style="font-size:13px;font-weight:700;color:#374151">❌ أيام الغياب</div>
+          <div style="font-size:12px;color:#6b7280">من ${worked} ${worked===1?'يوم عمل':'أيام عمل'}</div>
         </div>
-        <div style="flex:1;min-width:150px;max-width:210px;display:flex;flex-direction:column;align-items:center;gap:9px;cursor:pointer;transition:transform .15s" onclick="openTeacherDetail('LATE','${user.id}')" data-tip="اضغط لرؤية تفاصيل التأخر" onmouseenter="this.style.transform='scale(1.03)'" onmouseleave="this.style.transform='scale(1)'">
-          <div style="width:104px;height:104px;border-radius:50%;background:linear-gradient(135deg,#fffbeb,#ffffff);border:5px solid #fde68a;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(217,119,6,.18)">
-            <div style="font-size:36px;font-weight:900;color:#d97706;line-height:1">${tst.lateMin}</div>
-            <div style="font-size:11px;color:#b45309;margin-top:2px">دقيقة</div>
-          </div>
-          <div style="font-size:13px;font-weight:700;color:#374151">⏰ التأخر <span style="color:#b45309;font-weight:800">(${tst.lateDays} يوم)</span></div>
+        <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:12px">
+          ${kpiPill('❌','أيام الغياب', tst.absent, '#ef4444', "openTeacherDetail('ABSENT','"+user.id+"')")}
+          ${kpiPill('⏰','أيام التأخر', tst.lateDays, '#d97706', "openTeacherDetail('LATE','"+user.id+"')")}
+          ${kpiPill('🕐','دقائق التأخر', tst.lateMin, '#b45309', "openTeacherDetail('LATE','"+user.id+"')")}
+          ${kpiPill('✅','أول دخول اليوم', tst.firstLoginToday ? 'حضور' : 'لم يسجّل بعد', tst.firstLoginToday ? '#16a34a' : '#9ca3af', '')}
+        </div>
+      </div>
+      <div style="padding:0 18px 18px">
+        <div style="height:10px;border-radius:999px;background:#eef2f7;overflow:hidden"><div style="height:100%;width:${attPct}%;background:${grade.c};border-radius:999px;transition:width .4s"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11.5px;color:#6b7280">
+          <span>✅ الحضور: ${Math.max(0, worked - tst.absent)}</span>
+          <span>❌ الغياب: ${tst.absent}</span>
+          <span>${tst.absent===0 ? '🎉 مداوم مثالي' : ''}</span>
         </div>
       </div>
     </div>`;
+    function kpiPill(ico, lbl, val, color, click){
+      return `<div style="display:flex;align-items:center;gap:12px;background:${color}12;border:1px solid ${color}33;border-radius:14px;padding:10px 14px;cursor:${click?'pointer':'default'};transition:transform .15s" ${click?`onclick="${click}"`:'title="ظهر عند أول دخول لك اليوم"'} data-tip="اضغط للتفاصيل">
+        <span style="width:38px;height:38px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0">${ico}</span>
+        <div style="flex:1">
+          <div style="font-size:12.5px;color:#374151;font-weight:700">${lbl}</div>
+          <div style="font-size:18px;font-weight:900;color:${color};line-height:1.1">${val}</div>
+        </div>
+      </div>`;
+    }
   })() : ''}
   ${bottom}
   ${isTeacher && myClasses.length ? `
