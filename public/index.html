@@ -3365,9 +3365,7 @@ function renderDashboard(){
         </div>
         <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:12px">
           ${kpiPill('❌','أيام الغياب', tst.absent, '#ef4444', "openTeacherDetail('ABSENT','"+user.id+"')")}
-          ${kpiPill('⏰','أيام التأخر', tst.lateDays, '#d97706', "openTeacherDetail('LATE','"+user.id+"')")}
           ${kpiPill('🕐','دقائق التأخر', tst.lateMin, '#b45309', "openTeacherDetail('LATE','"+user.id+"')")}
-          ${kpiPill('✅','أول دخول اليوم', tst.firstLoginToday ? 'حضور' : 'لم يسجّل بعد', tst.firstLoginToday ? '#16a34a' : '#9ca3af', '')}
         </div>
       </div>
       <div style="padding:0 18px 18px">
