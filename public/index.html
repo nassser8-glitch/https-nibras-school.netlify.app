@@ -460,6 +460,8 @@
   .dash-donut-center b { font-size:20px; color:var(--text); }
   .dash-donut-center span { font-size:10px; color:var(--muted); }
   .act-flex { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .act-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .act-block { border:1px solid var(--line); border-radius:14px; padding:12px; min-width:0; }
   .dash-legend { display:flex; flex-direction:column; gap:7px; font-size:12px; color:var(--text); min-width:0; }
   .dash-legend .row { display:flex; align-items:center; gap:7px; white-space:nowrap; }
   .dash-legend .swatch { width:11px; height:11px; border-radius:3px; flex-shrink:0; }
@@ -492,7 +494,7 @@
   @media (max-width:900px){ .topbar-search { display:none; } }
   @media (max-width:820px){ .dash-hero { grid-template-columns:1fr; } .dash-grid2 { grid-template-columns:1fr; } .dash-bottom { grid-template-columns:1fr; } .dash-mid { grid-template-columns:1fr; } }
   @media (max-width:700px){ .layout .main { padding:12px; } .dash-greet { flex-wrap:wrap; } .dash-status { flex-wrap:wrap; } .topbar-actions { gap:8px; } .topbar-brand p { display:none; } }
-  @media (max-width:560px){ .dash-stats { grid-template-columns:repeat(2,1fr); } .att-card { grid-template-columns:1fr; } .att-group + .att-group { border-inline-start:none; border-top:1px solid var(--line); } .topbar-brand h1 { font-size:13px; } .topbar-logo { width:36px; height:36px; } .topbar-actions .btn-secondary { padding:6px 9px; font-size:12px; } .topbar-user-name { font-size:12px; } .topbar-user-role { font-size:10.5px; } }
+  @media (max-width:560px){ .dash-stats { grid-template-columns:repeat(2,1fr); } .att-card { grid-template-columns:1fr; } .att-group + .att-group { border-inline-start:none; border-top:1px solid var(--line); } .topbar-brand h1 { font-size:13px; } .topbar-logo { width:36px; height:36px; } .topbar-actions .btn-secondary { padding:6px 9px; font-size:12px; } .topbar-user-name { font-size:12px; } .topbar-user-role { font-size:10.5px; } .act-grid { grid-template-columns:1fr; } }
   @media (max-width:380px){ .topbar-brand h1 { font-size:12px; } .topbar-actions .topbar-user-block { display:none; } }
 </style>
 </head>
@@ -3278,32 +3280,52 @@ function renderDashboard(){
   // ====== نسبة تفعيل الحسابات — عدد من دخل حسابه (المدير يشرف على المدرستين) ======
   const activationPanel = (() => {
     if(!isAdmin) return '';
+    const isStaffRole = r => r !== 'STUDENT' && r !== 'ADMIN';
     const schoolActs = ['BOYS','GIRLS'].map(school => {
       const sd = loadSchoolDB(school);
       const userMap = new Map((sd.users||[]).map(u => [u.id, u]));
-      let activated = 0, total = 0;
+      const st = { activated: 0, total: 0 };
       for(const s of (sd.students||[])){
         if(!s.active) continue;
         const u = userMap.get(s.id);
         if(!u || u.role !== 'STUDENT') continue;
-        total++;
-        if(u.firstLogin === false) activated++;
+        st.total++;
+        if(u.firstLogin === false) st.activated++;
       }
-      return { key: school, school: school === 'BOYS' ? 'بنين' : 'بنات', activated, total };
+      const staff = { activated: 0, total: 0 };
+      for(const u of (sd.users||[])){
+        if(u.active === false) continue;
+        if(!isStaffRole(u.role)) continue;
+        staff.total++;
+        if(u.firstLogin === false) staff.activated++;
+      }
+      return {
+        key: school, school: school === 'BOYS' ? 'بنين' : 'بنات',
+        students: st, staff
+      };
     });
-    const all = { key:'ALL', school:'الكل', activated: schoolActs[0].activated + schoolActs[1].activated, total: schoolActs[0].total + schoolActs[1].total };
+    const comb = (k, f) => {
+      const students = { activated: 0, total: 0 };
+      const staff = { activated: 0, total: 0 };
+      schoolActs.forEach(x => {
+        students.activated += x.students.activated; students.total += x.students.total;
+        staff.activated += x.staff.activated; staff.total += x.staff.total;
+      });
+      return { key: k, school: f, students, staff };
+    };
+    const all = comb('ALL', 'الكل');
     const groups = [all, ...schoolActs];
-    const actTab = (g) => {
+    const miniDonut = (label, g) => {
       const pct = g.total ? Math.round((g.activated / g.total) * 100) : 0;
       const pend = g.total - g.activated;
       const donutBg = g.total ? `conic-gradient(#22c55e 0 ${pct}%, #eef2f7 ${pct}% 100%)` : 'conic-gradient(#e4edf5 0 100%)';
       return `
-        <div class="act-flex">
-          <div class="dash-donut" style="width:122px;height:122px;background:${donutBg}">
-            <div class="dash-donut-center"><b>${pct}%</b><span>فعّلوا حسابهم</span></div>
-          </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:800;font-size:16px;color:#0f172a;margin-bottom:4px">${g.school}: ${g.activated}/${g.total} طالب</div>
+        <div class="act-block">
+          <div style="font-weight:800;font-size:14px;color:#0f172a;margin-bottom:8px">${label}: ${g.activated}/${g.total}</div>
+          <div class="act-flex">
+            <div class="dash-donut" style="width:116px;height:116px;background:${donutBg}">
+              <div class="dash-donut-center"><b>${pct}%</b><span>فعّلوا</span></div>
+            </div>
             <div class="att-legend">
               <div class="row"><span class="swatch" style="background:#22c55e"></span>دخلوا حسابهم <b>${g.activated}</b></div>
               <div class="row"><span class="swatch" style="background:#eef2f7"></span>لم يدخلوا بعد <b>${pend}</b></div>
@@ -3311,17 +3333,22 @@ function renderDashboard(){
           </div>
         </div>`;
     };
+    const actTab = (g) => `
+      <div class="act-grid">
+        ${miniDonut('👨‍🎓 الطلاب', g.students)}
+        ${miniDonut('👨‍🏫 المعلمون والإداريون', g.staff)}
+      </div>`;
     return `
     <div class="dash-panel" style="margin-bottom:14px">
       <div class="dash-panel-head">
-        <p class="dash-panel-title">🔑 تفعيل حسابات الطلاب</p>
+        <p class="dash-panel-title">🔑 نسبة تفعيل الحسابات</p>
         <span class="dash-panel-more" style="cursor:default">آخر تحديث عند فتح اللوحة</span>
       </div>
       <div class="dash-tabs" style="margin-bottom:12px">
         ${groups.map((g,i) => `<button class="dash-tab ${i===0?'active':''}" data-act="${g.key}" onclick="switchActTab('${g.key}')">${g.school}</button>`).join('')}
       </div>
       ${groups.map(g => `<div class="act-pane" data-act="${g.key}" style="${g.key==='ALL'?'':'display:none'}">${actTab(g)}</div>`).join('')}
-      <p class="muted small" style="margin:10px 0 0">يُحتسب الطالب الذي دخل حسابَه لأول مرة (فعّل حسابه) — وليس مجرد إنشاء الحساب.</p>
+      <p class="muted small" style="margin:10px 0 0">يُحتسب من دخل حسابَه لأول مرة (فعّل حسابه) — وليس مجرد إنشاء الحساب.</p>
     </div>`;
   })();
 
