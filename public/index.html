@@ -459,6 +459,7 @@
   .dash-donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1; }
   .dash-donut-center b { font-size:20px; color:var(--text); }
   .dash-donut-center span { font-size:10px; color:var(--muted); }
+  .act-flex { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
   .dash-legend { display:flex; flex-direction:column; gap:7px; font-size:12px; color:var(--text); min-width:0; }
   .dash-legend .row { display:flex; align-items:center; gap:7px; white-space:nowrap; }
   .dash-legend .swatch { width:11px; height:11px; border-radius:3px; flex-shrink:0; }
@@ -2237,6 +2238,11 @@ function switchLeadersTab(tab){
   document.querySelectorAll('.dash-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.dash-leader-pane').forEach(p => { p.style.display = p.dataset.tab === tab ? 'block' : 'none'; });
 }
+/* تبويبات نسبة تفعيل الحسابات في لوحة المدير */
+function switchActTab(key){
+  document.querySelectorAll('.dash-tab[data-act]').forEach(b => b.classList.toggle('active', b.dataset.act === key));
+  document.querySelectorAll('.act-pane').forEach(p => { p.style.display = p.dataset.act === key ? 'block' : 'none'; });
+}
 
 /* ============ الإشعارات: وميض + صوت (صيانة / مشاركة أنشطة) ============ */
 const NOTIF_SEEN_KEY = 'nibras_notif_seen_';
@@ -3269,6 +3275,56 @@ function renderDashboard(){
       ${donutHTML}
     </div>`;
 
+  // ====== نسبة تفعيل الحسابات — عدد من دخل حسابه (المدير يشرف على المدرستين) ======
+  const activationPanel = (() => {
+    if(!isAdmin) return '';
+    const schoolActs = ['BOYS','GIRLS'].map(school => {
+      const sd = loadSchoolDB(school);
+      const userMap = new Map((sd.users||[]).map(u => [u.id, u]));
+      let activated = 0, total = 0;
+      for(const s of (sd.students||[])){
+        if(!s.active) continue;
+        const u = userMap.get(s.id);
+        if(!u || u.role !== 'STUDENT') continue;
+        total++;
+        if(u.firstLogin === false) activated++;
+      }
+      return { key: school, school: school === 'BOYS' ? 'بنين' : 'بنات', activated, total };
+    });
+    const all = { key:'ALL', school:'الكل', activated: schoolActs[0].activated + schoolActs[1].activated, total: schoolActs[0].total + schoolActs[1].total };
+    const groups = [all, ...schoolActs];
+    const actTab = (g) => {
+      const pct = g.total ? Math.round((g.activated / g.total) * 100) : 0;
+      const pend = g.total - g.activated;
+      const donutBg = g.total ? `conic-gradient(#22c55e 0 ${pct}%, #eef2f7 ${pct}% 100%)` : 'conic-gradient(#e4edf5 0 100%)';
+      return `
+        <div class="act-flex">
+          <div class="dash-donut" style="width:122px;height:122px;background:${donutBg}">
+            <div class="dash-donut-center"><b>${pct}%</b><span>فعّلوا حسابهم</span></div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:800;font-size:16px;color:#0f172a;margin-bottom:4px">${g.school}: ${g.activated}/${g.total} طالب</div>
+            <div class="att-legend">
+              <div class="row"><span class="swatch" style="background:#22c55e"></span>دخلوا حسابهم <b>${g.activated}</b></div>
+              <div class="row"><span class="swatch" style="background:#eef2f7"></span>لم يدخلوا بعد <b>${pend}</b></div>
+            </div>
+          </div>
+        </div>`;
+    };
+    return `
+    <div class="dash-panel" style="margin-bottom:14px">
+      <div class="dash-panel-head">
+        <p class="dash-panel-title">🔑 تفعيل حسابات الطلاب</p>
+        <span class="dash-panel-more" style="cursor:default">آخر تحديث عند فتح اللوحة</span>
+      </div>
+      <div class="dash-tabs" style="margin-bottom:12px">
+        ${groups.map((g,i) => `<button class="dash-tab ${i===0?'active':''}" data-act="${g.key}" onclick="switchActTab('${g.key}')">${g.school}</button>`).join('')}
+      </div>
+      ${groups.map(g => `<div class="act-pane" data-act="${g.key}" style="${g.key==='ALL'?'':'display:none'}">${actTab(g)}</div>`).join('')}
+      <p class="muted small" style="margin:10px 0 0">يُحتسب الطالب الذي دخل حسابَه لأول مرة (فعّل حسابه) — وليس مجرد إنشاء الحساب.</p>
+    </div>`;
+  })();
+
   // لوحة الأوائل — المراحل (ابتدائي/متوسط/ثانوي)
   const ptsMap = studentPointsMap();
   const medals = ['🥇','🥈','🥉'];
@@ -3337,6 +3393,7 @@ function renderDashboard(){
   ${hero}
   ${isTeacher ? teacherQuickCards : ''}
   ${attPanel}
+  ${activationPanel}
   ${isTeacher ? (() => {
     const tst = teacherStats(user);
     // عدد أيام الدراسة المنقضية (الاثنين–الجمعة) منذ بداية السنة الدراسية
