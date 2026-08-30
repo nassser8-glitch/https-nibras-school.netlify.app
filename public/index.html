@@ -2245,6 +2245,39 @@ function switchActTab(key){
   document.querySelectorAll('.dash-tab[data-act]').forEach(b => b.classList.toggle('active', b.dataset.act === key));
   document.querySelectorAll('.act-pane').forEach(p => { p.style.display = p.dataset.act === key ? 'block' : 'none'; });
 }
+/* عرض أسماء من دخلوا ومن لم يدخلوا حساباتهم (الطلاب أو المعلمون) لنطاق معيّن */
+function showActNames(gkey, grp){
+  const isStaffRole = r => r !== 'STUDENT' && r !== 'ADMIN';
+  const isAdmin = currentUser()?.role === 'ADMIN';
+  if(!isAdmin) return;
+  const schools = gkey === 'ALL' ? ['BOYS','GIRLS'] : (gkey === 'BOYS' ? ['BOYS'] : ['GIRLS']);
+  const actNames = [], pendNames = [];
+  for(const school of schools){
+    const sd = loadSchoolDB(school);
+    const userMap = new Map((sd.users||[]).map(u => [u.id, u]));
+    if(grp === 'students'){
+      for(const s of (sd.students||[])){
+        if(!s.active) continue;
+        const u = userMap.get(s.id);
+        if(!u || u.role !== 'STUDENT') continue;
+        const nm = (s.fullName || s.name) + (schools.length > 1 ? (school === 'BOYS' ? ' (بنين)' : ' (بنات)') : '');
+        if(u.firstLogin === false) actNames.push(nm); else pendNames.push(nm);
+      }
+    } else {
+      for(const u of (sd.users||[])){
+        if(u.active === false) continue;
+        if(!isStaffRole(u.role)) continue;
+        const nm = (u.name || u.username) + (schools.length > 1 ? (school === 'BOYS' ? ' (بنين)' : ' (بنات)') : '');
+        if(u.firstLogin === false) actNames.push(nm); else pendNames.push(nm);
+      }
+    }
+  }
+  const roleLabel = grp === 'students' ? 'الطلاب' : 'المعلمون والإداريون';
+  const rangeLabel = gkey === 'ALL' ? 'المدرستين' : (gkey === 'BOYS' ? 'بنين' : 'بنات');
+  const li = arr => arr.length ? arr.sort((a,b)=>a.localeCompare(b,'ar')).map(n => `<li>${escapeHtml(n)}</li>`).join('') : '<li class="muted">لا يوجد</li>';
+  openDetails('تفعيل الحسابات — ' + roleLabel + ' (' + rangeLabel + ')',
+    `<li style="font-weight:800;color:#16a34a">✅ دخلوا حسابهم (${actNames.length})</li>${li(actNames)}<li style="font-weight:800;color:#9ca3af;margin-top:6px">⏳ لم يدخلوا بعد (${pendNames.length})</li>${li(pendNames)}`);
+}
 
 /* ============ الإشعارات: وميض + صوت (صيانة / مشاركة أنشطة) ============ */
 const NOTIF_SEEN_KEY = 'nibras_notif_seen_';
@@ -3281,62 +3314,67 @@ function renderDashboard(){
   const activationPanel = (() => {
     if(!isAdmin) return '';
     const isStaffRole = r => r !== 'STUDENT' && r !== 'ADMIN';
+    const acc = () => ({ activated: 0, total: 0, actNames: [], pendNames: [] });
     const schoolActs = ['BOYS','GIRLS'].map(school => {
       const sd = loadSchoolDB(school);
       const userMap = new Map((sd.users||[]).map(u => [u.id, u]));
-      const st = { activated: 0, total: 0 };
+      const st = acc();
       for(const s of (sd.students||[])){
         if(!s.active) continue;
         const u = userMap.get(s.id);
         if(!u || u.role !== 'STUDENT') continue;
+        const nm = (s.fullName || s.name) + (school === 'BOYS' ? ' (بنين)' : ' (بنات)');
         st.total++;
-        if(u.firstLogin === false) st.activated++;
+        if(u.firstLogin === false){ st.activated++; st.actNames.push(nm); } else { st.pendNames.push(nm); }
       }
-      const staff = { activated: 0, total: 0 };
+      const staff = acc();
       for(const u of (sd.users||[])){
         if(u.active === false) continue;
         if(!isStaffRole(u.role)) continue;
+        const nm = (u.name || u.username) + (school === 'BOYS' ? ' (بنين)' : ' (بنات)');
         staff.total++;
-        if(u.firstLogin === false) staff.activated++;
+        if(u.firstLogin === false){ staff.activated++; staff.actNames.push(nm); } else { staff.pendNames.push(nm); }
       }
       return {
         key: school, school: school === 'BOYS' ? 'بنين' : 'بنات',
         students: st, staff
       };
     });
-    const comb = (k, f) => {
-      const students = { activated: 0, total: 0 };
-      const staff = { activated: 0, total: 0 };
-      schoolActs.forEach(x => {
-        students.activated += x.students.activated; students.total += x.students.total;
-        staff.activated += x.staff.activated; staff.total += x.staff.total;
-      });
-      return { key: k, school: f, students, staff };
+    const mergeAcc = (arr, f) => {
+      const r = acc();
+      arr.forEach(x => { r.activated += x[f].activated; r.total += x[f].total; r.actNames.push(...x[f].actNames); r.pendNames.push(...x[f].pendNames); });
+      return r;
     };
-    const all = comb('ALL', 'الكل');
-    const groups = [all, ...schoolActs];
-    const miniDonut = (label, g) => {
+    const comb = key => ({
+      key,
+      school: key === 'ALL' ? 'الكل' : (key === 'BOYS' ? 'بنين' : 'بنات'),
+      students: mergeAcc(schoolActs, 'students'),
+      staff: mergeAcc(schoolActs, 'staff')
+    });
+    const all = comb('ALL');
+    const groups = [all, ...schoolActs.map(x => ({ key: x.key, school: x.school, students: x.students, staff: x.staff }))];
+    const miniDonut = (label, g, gkey, grp) => {
       const pct = g.total ? Math.round((g.activated / g.total) * 100) : 0;
       const pend = g.total - g.activated;
       const donutBg = g.total ? `conic-gradient(#22c55e 0 ${pct}%, #eef2f7 ${pct}% 100%)` : 'conic-gradient(#e4edf5 0 100%)';
       return `
         <div class="act-block">
-          <div style="font-weight:800;font-size:14px;color:#0f172a;margin-bottom:8px">${label}: ${g.activated}/${g.total}</div>
+          <div style="font-weight:800;font-size:14px;color:#0f172a;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:5px" onclick="showActNames('${gkey}','${grp}')" title="اضغط لعرض أسماء من دخلوا ومن لم يدخلوا">${label}: ${g.activated}/${g.total} <span style="font-size:11px;color:#2563eb">📋</span></div>
           <div class="act-flex">
-            <div class="dash-donut" style="width:116px;height:116px;background:${donutBg}">
+            <div class="dash-donut" style="width:116px;height:116px;background:${donutBg};cursor:pointer" onclick="showActNames('${gkey}','${grp}')" title="اضغط لعرض الأسماء">
               <div class="dash-donut-center"><b>${pct}%</b><span>فعّلوا</span></div>
             </div>
             <div class="att-legend">
-              <div class="row"><span class="swatch" style="background:#22c55e"></span>دخلوا حسابهم <b>${g.activated}</b></div>
-              <div class="row"><span class="swatch" style="background:#eef2f7"></span>لم يدخلوا بعد <b>${pend}</b></div>
+              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','${grp}')"><span class="swatch" style="background:#22c55e"></span>دخلوا الحساب <b>${g.activated}</b></div>
+              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','${grp}')"><span class="swatch" style="background:#eef2f7"></span>لم يدخلوا بعد <b>${pend}</b></div>
             </div>
           </div>
         </div>`;
     };
     const actTab = (g) => `
       <div class="act-grid">
-        ${miniDonut('👨‍🎓 الطلاب', g.students)}
-        ${miniDonut('👨‍🏫 المعلمون والإداريون', g.staff)}
+        ${miniDonut('👨‍🎓 الطلاب', g.students, g.key, 'students')}
+        ${miniDonut('👨‍🏫 المعلمون والإداريون', g.staff, g.key, 'staff')}
       </div>`;
     return `
     <div class="dash-panel" style="margin-bottom:14px">
@@ -3348,7 +3386,7 @@ function renderDashboard(){
         ${groups.map((g,i) => `<button class="dash-tab ${i===0?'active':''}" data-act="${g.key}" onclick="switchActTab('${g.key}')">${g.school}</button>`).join('')}
       </div>
       ${groups.map(g => `<div class="act-pane" data-act="${g.key}" style="${g.key==='ALL'?'':'display:none'}">${actTab(g)}</div>`).join('')}
-      <p class="muted small" style="margin:10px 0 0">يُحتسب من دخل حسابَه لأول مرة (فعّل حسابه) — وليس مجرد إنشاء الحساب.</p>
+      <p class="muted small" style="margin:10px 0 0">يُحتسب من دخل حسابَه لأول مرة (فعّل حسابه) — وليس مجرد إنشاء الحساب. اضغط على الرقم أو الدائرة لعرض الأسماء.</p>
     </div>`;
   })();
 
