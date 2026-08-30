@@ -2250,8 +2250,12 @@ function showActNames(gkey, grp){
   const isStaffRole = r => r !== 'STUDENT' && r !== 'ADMIN';
   const isAdmin = currentUser()?.role === 'ADMIN';
   if(!isAdmin) return;
+  const hasLoggedIn = u => !!(u && (u.lastLogin || (u.loginCount || 0) > 0));
+  const sdDate = v => { if(!v) return ''; const d = new Date(v); return (!isNaN(d) ? d.toLocaleDateString('ar') + ' ' + d.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}) : ''); };
   const schools = gkey === 'ALL' ? ['BOYS','GIRLS'] : (gkey === 'BOYS' ? ['BOYS'] : ['GIRLS']);
+  const multi = schools.length > 1;
   const actNames = [], pendNames = [];
+  const tag = school => multi ? (school === 'BOYS' ? ' (بنين)' : ' (بنات)') : '';
   for(const school of schools){
     const sd = loadSchoolDB(school);
     const userMap = new Map((sd.users||[]).map(u => [u.id, u]));
@@ -2260,16 +2264,16 @@ function showActNames(gkey, grp){
         if(!s.active) continue;
         const u = userMap.get(s.id);
         if(!u || u.role !== 'STUDENT') continue;
-        const nm = (s.fullName || s.name) + (schools.length > 1 ? (school === 'BOYS' ? ' (بنين)' : ' (بنات)') : '');
-        if(u.firstLogin === false) actNames.push(nm); else pendNames.push(nm);
+        const nm = (s.fullName || s.name) + tag(school);
+        if(hasLoggedIn(u)) actNames.push(nm + (u.lastLogin ? ' — دخل: ' + sdDate(u.lastLogin) : '')); else pendNames.push(nm);
       }
     } else {
       for(const u of (sd.users||[])){
         if(u.active === false) continue;
         if(grp === 'teachers'){ if(u.role !== 'TEACHER') continue; }
         else { if(!isStaffRole(u.role) || u.role === 'TEACHER') continue; }
-        const nm = (u.name || u.username) + (schools.length > 1 ? (school === 'BOYS' ? ' (بنين)' : ' (بنات)') : '');
-        if(u.firstLogin === false) actNames.push(nm); else pendNames.push(nm);
+        const nm = (u.name || u.username) + tag(school);
+        if(hasLoggedIn(u)) actNames.push(nm + (u.lastLogin ? ' — دخل: ' + sdDate(u.lastLogin) : '')); else pendNames.push(nm);
       }
     }
   }
@@ -3315,6 +3319,8 @@ function renderDashboard(){
   const activationPanel = (() => {
     if(!isAdmin) return '';
     const isStaffRole = r => r !== 'STUDENT' && r !== 'ADMIN';
+    // "فعّل حسابه" = من دخل حسابَه فعلاً (سجّل دخولاً — لديه سجل/تاريخ آخر دخول)
+    const hasLoggedIn = u => !!(u && (u.lastLogin || (u.loginCount || 0) > 0));
     const acc = () => ({ activated: 0, total: 0, actNames: [], pendNames: [] });
     const schoolActs = ['BOYS','GIRLS'].map(school => {
       const sd = loadSchoolDB(school);
@@ -3326,7 +3332,7 @@ function renderDashboard(){
         if(!u || u.role !== 'STUDENT') continue;
         const nm = (s.fullName || s.name) + (school === 'BOYS' ? ' (بنين)' : ' (بنات)');
         st.total++;
-        if(u.firstLogin === false){ st.activated++; st.actNames.push(nm); } else { st.pendNames.push(nm); }
+        if(hasLoggedIn(u)){ st.activated++; st.actNames.push(nm); } else { st.pendNames.push(nm); }
       }
       // المعلمون (role=TEACHER) وحدهم
       const teachers = acc();
@@ -3335,7 +3341,7 @@ function renderDashboard(){
         if(u.role !== 'TEACHER') continue;
         const nm = (u.name || u.username) + (school === 'BOYS' ? ' (بنين)' : ' (بنات)');
         teachers.total++;
-        if(u.firstLogin === false){ teachers.activated++; teachers.actNames.push(nm); } else { teachers.pendNames.push(nm); }
+        if(hasLoggedIn(u)){ teachers.activated++; teachers.actNames.push(nm); } else { teachers.pendNames.push(nm); }
       }
       // الإداريون والوكلاء والموجهون (بقية الأدوار عدا الطالب والمعلم والأدمن)
       const admins = acc();
@@ -3344,7 +3350,7 @@ function renderDashboard(){
         if(!isStaffRole(u.role) || u.role === 'TEACHER') continue;
         const nm = (u.name || u.username) + (school === 'BOYS' ? ' (بنين)' : ' (بنات)');
         admins.total++;
-        if(u.firstLogin === false){ admins.activated++; admins.actNames.push(nm); } else { admins.pendNames.push(nm); }
+        if(hasLoggedIn(u)){ admins.activated++; admins.actNames.push(nm); } else { admins.pendNames.push(nm); }
       }
       return {
         key: school, school: school === 'BOYS' ? 'بنين' : 'بنات',
