@@ -1496,7 +1496,7 @@ function renderFirstLogin(user){
     <div class="card login-card">
       <img src="logo.jpg" alt="شعار المدرسة" class="school-logo" />
       <h1>أهلاً بك، ${escapeHtml(user.name)}</h1>
-      <p class="muted">أول دخول — سجّل بريدك الإلكتروني الحقيقي (سيصله رمز الاستعادة عند نسيان الرقم السري) واختر كلمة مرور قوية جديدة (8 أحرف على الأقل)</p>
+      <p class="muted">أول دخول — سجّل بريدك الإلكتروني الحقيقي (يصل إليه رمز الاستعادة عند نسيان الرقم السري). يمكنك اختيارياً تغيير كلمة المرور بنفسك.</p>
       <div class="card" style="margin:0 0 12px;border-color:#bfdbfe;background:#eff6ff;color:#1e40af">
         <p style="margin:0;font-size:13px">اسم المستخدم للدخول: <b dir="ltr" style="font-size:16px">${escapeHtml(user.username || '')}</b></p>
         <p class="muted" style="margin:6px 0 0;font-size:11px">ستستخدم هذا الاسم (وليس البريد) مع كلمة المرور لتسجيل الدخول لاحقاً.</p>
@@ -1504,11 +1504,11 @@ function renderFirstLogin(user){
       <div id="flError" class="error-box" style="display:none"></div>
       <label>بريدك الإلكتروني الحقيقي (يصل إليه رمز استعادة الرقم السري)</label>
       <input id="flEmail" class="input" type="email" placeholder="teacher@example.com" style="direction:ltr" />
-      <label>كلمة المرور الجديدة</label>
-      <input id="flSecret" class="input" type="password" placeholder="••••••••" minlength="8" />
+      <label>كلمة المرور الجديدة <span class="muted" style="font-size:11px">(اختياري — اتركه فارغاً للإبقاء على الرقم السري الحالي)</span></label>
+      <input id="flSecret" class="input" type="password" placeholder="••••••••" />
       <label>تأكيد كلمة المرور الجديدة</label>
-      <input id="flConfirm" class="input" type="password" placeholder="••••••••" minlength="8" />
-      <button class="btn-primary full" style="margin-top:18px" onclick="saveFirstLogin()">تعيين البريد وكلمة المرور وتفعيل الحساب</button>    </div>
+      <input id="flConfirm" class="input" type="password" placeholder="••••••••" />
+      <button class="btn-primary full" style="margin-top:18px" onclick="saveFirstLogin()">حفظ البريد وتفعيل الحساب</button>    </div>
   </div>`;
 }
 let __firstLoginBusy = false;
@@ -1519,12 +1519,16 @@ async function saveFirstLogin(){
   const email = document.getElementById('flEmail').value.trim();
   const el = document.getElementById('flError');
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ if(el){ el.style.display='block'; el.textContent='أدخل بريدك الإلكتروني الصحيح مثل teacher@example.com'; } return; }
-  if(!s1 || s1.length < 8){ if(el){ el.style.display='block'; el.textContent='كلمة المرور يجب أن تكون 8 أحرف على الأقل'; } return; }
-  if(s1 !== s2){ if(el){ el.style.display='block'; el.textContent='كلمتا المرور غير متطابقتين'; } return; }
+  if(s1){
+    if(s1.length < 8){ if(el){ el.style.display='block'; el.textContent='كلمة المرور يجب أن تكون 8 أحرف على الأقل'; } return; }
+    if(s1 !== s2){ if(el){ el.style.display='block'; el.textContent='كلمتا المرور غير متطابقتين'; } return; }
+  }
   __firstLoginBusy = true;
   try{
     if(__serverEnabled()){
-      const r = await __api('POST', 'change-password', { newPassword: s1, email });
+      const body = { email };
+      if(s1) body.newPassword = s1;
+      const r = await __api('POST', 'change-password', body);
       if(r.status === 200 && r.j && r.j.user){
         __sessionUser = r.j.user;
         __mirrorSet(r.j.user);
@@ -1534,7 +1538,7 @@ async function saveFirstLogin(){
         return;
       }
       if(r.j && r.j.error === 'weak_password'){ if(el){ el.style.display='block'; el.textContent='كلمة المرور ضعيفة — 8 أحرف على الأقل مع أرقام أو رموز'; } return; }
-      if(el){ el.style.display='block'; el.textContent='تعذر تغيير كلمة المرور — أعد المحاولة'; }
+      if(el){ el.style.display='block'; el.textContent='تعذر الحفظ — أعد المحاولة'; }
       return;
     }
     // النسخة المحلية
@@ -1547,7 +1551,8 @@ async function saveFirstLogin(){
     if(!d) return;
     const u = d.users.find(x => x.id === user.id);
     if(!u) return;
-    u.password = s1;
+    if(s1) u.password = s1;
+    u.email = email;
     u.firstLogin = false;
     localStorage.setItem(key, JSON.stringify(d));
     location.hash = '#/';
@@ -5790,12 +5795,10 @@ async function addUser(){
     __userBusy = false;
   }
 }
-function showTeacherCreds(id, name, username){
+async function showTeacherCreds(id, name, username){
   const d = loadDB();
   const u = (d.users||[]).find(x => x.id === id);
   const hasAccount = !!u;
-  const pwd = hasAccount ? (u.plain_password || u.password || '') : '—';
-  const isHashed = pwd.startsWith('$2');
   const modal = document.getElementById('studentCredsModal');
   if(!modal) return;
   modal.style.display = 'flex';
@@ -5803,9 +5806,35 @@ function showTeacherCreds(id, name, username){
   const scResult = document.getElementById('scResult');
   scForm.style.display = 'none';
   scResult.style.display = '';
+  const userInp = document.getElementById('scResUser');
+  const passInp = document.getElementById('scResPass');
   document.getElementById('scStudentName').textContent = name;
-  document.getElementById('scResUser').value = hasAccount ? (u.username || '—') : 'لا يوجد حساب';
-  document.getElementById('scResPass').value = isHashed ? '🔒 مُشفّرة (لا يمكن عرضها)' : (pwd || '—');
+  userInp.value = hasAccount ? (u.username || '—') : 'لا يوجد حساب';
+  if(__serverEnabled()){
+    passInp.value = '…';
+    try{
+      const r = await __api('POST', 'admin/show-password', { userId: id });
+      let val = '—', placeholder = '';
+      if(r.status === 200 && r.j && r.j.ok){
+        if(r.j.plainPassword){ val = r.j.plainPassword; }
+        else if(r.j.hashed){ val = ''; placeholder = '🔒 مشفّرة — أعد التعيين بزر "إعادة تعيين"'; }
+        else { val = ''; placeholder = 'لا يوجد رقم سري مخزّن'; }
+      } else {
+        val = ''; placeholder = 'تعذر جلب الرقم السري';
+      }
+      passInp.value = val;
+      passInp.placeholder = placeholder;
+      return;
+    }catch(e){
+      passInp.value = '';
+      passInp.placeholder = 'تعذر جلب الرقم السري';
+      return;
+    }
+  }
+  const pwd = hasAccount ? (u.plain_password || u.password || '') : '';
+  const isHashed = pwd.startsWith('$2');
+  if(isHashed){ passInp.value = ''; passInp.placeholder = '🔒 مشفّرة (لا يمكن عرضها)'; }
+  else { passInp.value = (pwd || ''); passInp.placeholder = pwd ? '' : 'لا يوجد رقم سري'; }
 }
 async function resetTeacherSecret(id){
   const u = userById(id);

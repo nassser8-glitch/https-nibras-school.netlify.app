@@ -342,15 +342,17 @@ app.post('/api/auth/change-password', requireAuth, (req, res) => {
   (async () => {
     if (rateLimit('chpwd', 6, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
     const pw = String(req.body && req.body.newPassword || '');
-    if (!PASSWORD_RE.test(pw)) return res.status(400).json({ error: 'weak_password', min: PASSWORD_MIN });
+    if (pw && !PASSWORD_RE.test(pw)) return res.status(400).json({ error: 'weak_password', min: PASSWORD_MIN });
     const me = await db.userById(req.session.user_id);
     if (!me) return res.status(401).json({ error: 'unauthorized' });
     const email = String(req.body && req.body.email || '').trim().toLowerCase();
     if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'bad_email' });
-    // كل التحقق نجح — نطبّق التغييرات (كلمة المرور ثم البريد)
-    const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
-    await db.updateUserPasswordHash(me.id, hash, false);
-    await db.updateUserPlainPassword(me.id, pw);
+    // كل التحقق نجح — نطبّق التغييرات (كلمة المرور اختيارية ثم البريد)
+    if (pw) {
+      const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
+      await db.updateUserPasswordHash(me.id, hash, false);
+      await db.updateUserPlainPassword(me.id, pw);
+    }
     const after = await db.userById(me.id);
     if (email) {
       await db.insertUser(Object.assign({}, after, { email }));
@@ -525,6 +527,31 @@ app.post('/api/auth/admin/export-credentials', requireAuth, (req, res) => {
       out.push({ id: u.id, name: u.name, username: u.username, email: u.email, role: u.role, school: u.school, tempPassword: temp });
     }
     res.json({ ok: true, count: out.length, credentials: out });
+  })().catch(fail(res));
+});
+
+// عرض الرقم السري الحقيقي لأي حساب (المدير فقط) — يعتمد على plain_password المخزّن نصيًا
+app.post('/api/auth/admin/show-password', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    if (rateLimit('showpw', 30, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+    const userId = String(req.body && req.body.userId || '');
+    const target = await db.userById(userId);
+    if (!target) return res.status(404).json({ error: 'not_found' });
+    if (!canManageUsers(req.session, target.school)) return res.status(403).json({ error: 'forbidden' });
+    const hashed = !!(target.password_hash);
+    res.json({
+      ok: true,
+      userId: target.id,
+      name: target.name,
+      username: target.username,
+      email: target.email,
+      role: target.role,
+      school: target.school,
+      plainPassword: target.plain_password || '',
+      hashed,
+      message: target.plain_password ? '' : (hashed ? 'مشفّرة' : 'لا يوجد رقم سري'),
+    });
   })().catch(fail(res));
 });
 
