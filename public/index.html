@@ -1497,6 +1497,7 @@ function renderFirstLogin(user){
   return `
   <div class="login-wrap">
     <div class="card login-card">
+      <button class="btn-secondary full" style="margin-bottom:14px" onclick="location.hash='#/'; renderApp();">→ العودة إلى الصفحة الرئيسية</button>
       <img src="logo.jpg" alt="شعار المدرسة" class="school-logo" />
       <h1>أهلاً بك، ${escapeHtml(user.name)}</h1>
       <p class="muted">أول دخول — سجّل بريدك الإلكتروني الحقيقي (يصل إليه رمز الاستعادة عند نسيان الرقم السري). يمكنك اختيارياً تغيير كلمة المرور بنفسك.</p>
