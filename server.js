@@ -603,6 +603,53 @@ function usersSectionAllowedFor(role, selfId, prevUsers, nextUsers) {
   return jsonEqual(srt(prevUsers), srt(nextUsers));
 }
 
+// ===== دمج الأقسام عند وصول نسخة "قديمة" (stale) لئلا تُفقد تعديلات المعلمين =====
+// المشكلة: النظام يختم القسم كاملاً بزمن واحد (_ts)، لذا إذا سجّل معلم آخر (أو كان ساعة
+// الجهاز متأخرة) يُرفض الحفظ كاملاً ويضيع. هنا ندمج بدل رفضه: لكل قسم نمزج السجلات
+// حسب المفتاح (id) أو المفتاح المضمّن (timetable) مع إبقاء نسخة الخادم الأحدث وكل
+// إضافات الواصل — هكذا لا تضيع لا بيانات الخادم ولا تعديلات من يحفظ.
+function mergeSection(prevVal, inVal) {
+  // قسم الجدول: كائن متداخل teacherId -> day -> period -> {subject, classId}
+  if (prevVal && typeof prevVal === 'object' && !Array.isArray(prevVal) &&
+      inVal && typeof inVal === 'object' && !Array.isArray(inVal)) {
+    return mergeTimetable(prevVal, inVal);
+  }
+  // بقية الأقسام مصفوفة تُدمج حسب id (الإضافات تُلحق، والتعارض يرجّح الواصل)
+  if (Array.isArray(prevVal) && Array.isArray(inVal)) {
+    const map = new Map();
+    for (const r of prevVal) { if (r && typeof r === 'object' && r.id) map.set(r.id, r); }
+    for (const r of inVal) {
+      if (r && typeof r === 'object' && r.id) map.set(r.id, r);
+      else if (r) map.set('__noid_'+map.size+'_'+Math.random(), r);
+    }
+    return Array.from(map.values());
+  }
+  // لا دمج ممكن: الأحدث (الواصل) يرجح إن كان من نوع الكائن/أو يرجح الموجودة
+  return inVal !== undefined ? inVal : prevVal;
+}
+function mergeTimetable(prev, inb) {
+  const out = {};
+  const keys = new Set([...Object.keys(prev || {}), ...Object.keys(inb || {})]);
+  for (const tid of keys) {
+    const a = prev && prev[tid];
+    const b = inb && inb[tid];
+    if (!a && !b) continue;
+    if (!a || !b) { out[tid] = a || b; continue; }
+    const days = new Set([...Object.keys(a), ...Object.keys(b)]);
+    const mergedDays = {};
+    for (const day of days) {
+      const da = a[day], db = b[day];
+      if (!da || !db) { mergedDays[day] = da || db; continue; }
+      const periods = new Set([...Object.keys(da), ...Object.keys(db)]);
+      const mergedPeriods = {};
+      for (const pp of periods) mergedPeriods[pp] = db[pp] !== undefined ? db[pp] : da[pp];
+      mergedDays[day] = mergedPeriods;
+    }
+    out[tid] = mergedDays;
+  }
+  return out;
+}
+
 // ===== مطابقة جدول المستخدمين (المصادقة) مع نسخة بيانات القسم بعد كتابة قسم users =====
 async function userPresentInOtherSchool(id, school) {
   const other = school === 'BOYS' ? 'GIRLS' : 'BOYS';
@@ -691,11 +738,10 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     }
     const ts = Number(req.body.ts) || Date.now();
     const prev = await db.getSchoolData(school);
-    if (prev.data && prev.ts && ts < prev.ts) {
-      // رفض النسخة الأقدم (آخر حافظ يربح)
-      return res.json({ ok: false, reason: 'stale', ts: prev.ts });
-    }
     const prevUsers = (prev.data && Array.isArray(prev.data.users)) ? prev.data.users : [];
+    // "قديمة": وصول نسخة بزمن أقل مما لدى الخادم (حفظ معلم آخر/فرق ساعة الأجهزة).
+    // بدلاً من رفضها فتضيع تعديلات من يحفظ، ندمجها لاحقاً (مزج حسب المفتاح) مع بقاء نسخة الخادم سليمة.
+    const stale = !!(prev.data && prev.ts && ts < prev.ts);
 
     // ===== تحقق الصلاحيات لكل قسم تغيّر =====
     // المدير/الوكيل: يمكنه تعديل قسم المستخدمين، والبقية يحفظون أقسامهم (حضور/غياب...) فقط.
@@ -717,6 +763,22 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       }
     }
 
+    // عند وصول نسخة قديمة جداً، ندمج أقسام الواصل داخل نسخة الخادم الحالية (حسب المفتاح)
+    // حتى لا تُفقد تعديلات المعلم (جدول/حضور/ملاحظات...) ولا تُفسد بقية بيانات القسم.
+    if (stale && prev.data && prev.data.hasOwnProperty) {
+      const merged = JSON.parse(JSON.stringify(prev.data));
+      delete merged._ts;
+      for (const key of SECTION_KEYS) {
+        const a = prev.data[key];
+        const b = data[key];
+        if (jsonEqual(a, b)) continue;
+        merged[key] = mergeSection(a, b);
+      }
+      // قسم المستخدمين يبقى نسخة الخادم الموثوقة دائماً لغير المدير/الوكيل
+      if (!canEditUsers) merged.users = JSON.parse(JSON.stringify(prevUsers));
+      data = merged;
+    }
+
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
     const clean = JSON.parse(JSON.stringify(data));
     if (Array.isArray(clean.users) && clean.users.length) {
@@ -725,12 +787,19 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       clean.users.forEach(u => { if (unameMap.has(u.id)) u.username = unameMap.get(u.id); });
       clean.users.forEach(u => STRIP_FIELDS.forEach(f => delete u[f]));
     }
-    await db.setSchoolData(school, clean, ts);
+    // زمن الحفظ دائمًا أكبر من نسخة الخادم (حتى لا نُرفض مستقبلًا بزمن متساو/أقل).
+    // مع حماية من ساعة متقدمة جدًا: لا نسمح لجهاز بساعة بعيدة عن الواقع أن يرتكز عليه الجميع
+    // (يمنع ذلك انتشار الحذف عبر الدمج)، فيُقيّد الزمن بنطاق 5 دقائق حول ساعة الخادم.
+    const nowTs = Date.now();
+    const saneTs = Math.min(ts, nowTs + 5 * 60 * 1000);
+    const nextTs = Math.max(saneTs, (prev && prev.ts) || 0) + 1;
+    if (clean && typeof clean === 'object') clean._ts = nextTs;
+    await db.setSchoolData(school, clean, nextTs);
     // مزامنة جدول المصادقة مع أي تغيير في قسم المستخدمين (حذف/نقل/تعطيل)
     if (['ADMIN','AGENT'].includes(req.session.role)) {
       if (!jsonEqual(prevUsers, clean.users)) await reconcileUserTable(school, prevUsers, clean.users);
     }
-    res.json({ ok: true, ts });
+    res.json({ ok: true, ts: nextTs });
   })().catch(fail(res));
 });
 
