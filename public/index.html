@@ -6730,26 +6730,30 @@ function renderAssignments(){
   const classId = params.get('cid') || '';
   const subject = decodeURIComponent(params.get('sub') || '');
   const subjects = getTeacherSubjects(user, d);
-  const myClassIds = [...new Set(subjects.map(s => s.classId))];
+  // كل الفصول التي يدرّسها المعلم (من teacherIds) — حتى لو لم تكن له حصص/مواد مسجّلة بعد،
+  // حتى لا تختفي تكليفاته أو تعجز شاشة "التكليفات" عن إظهارها (كان يبدو التكليف "يُمحى").
+  const taughtClassIds = (d.classes||[]).filter(c => Array.isArray(c.teacherIds) && c.teacherIds.includes(user.id)).map(c => c.id);
+  const myClassIds = [...new Set([...taughtClassIds, ...subjects.map(s => s.classId)])];
   const gradeById = g => (d.grades||[]).find(x => x.id === g);
   const classLabel = c => { const g = gradeById(c.gradeId); return (g ? g.name + ' — ' : '') + 'الفصل ' + c.name; };
 
   if(step === 'class'){
-    if(!myClassIds.length) return `<div class="page-title">التكليفات</div><div class="card" style="text-align:center;padding:40px"><p>لا توجد مواد مسندة لك بعد.</p><p class="muted">أضف جدول الحصص أولاً من صفحة "جدولي"</p></div>`;
+    if(!myClassIds.length) return `<div class="page-title">التكليفات</div><div class="card" style="text-align:center;padding:40px"><p>لم تُسند إليك فصول بعد.</p><p class="muted">أضف جدول الحصص أولاً من صفحة "جدولي"</p></div>`;
     const cards = myClassIds.map(cid => {
       const cls = d.classes.find(c => c.id === cid);
       if(!cls) return '';
       const subCount = subjects.filter(s => s.classId === cid).length;
       const assCount = (d.assignments||[]).filter(a => a.classId === cid).length;
+      const subStep = subCount > 0 ? `#/assignments?step=subject&cid=${cid}` : `#/assignments?step=list&cid=${cid}`;
       return `<div class="card" style="padding:18px;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="location.hash='#/assignments?step=subject&cid=${cid}'">
+        <div style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="location.hash='${subStep}'">
           <span style="font-size:28px">🏫</span>
-          <div><div style="font-weight:bold;font-size:16px">${escapeHtml(classLabel(cls))}</div><div class="muted small">${subCount} مادة · ${assCount} تكليف</div></div>
+          <div><div style="font-weight:bold;font-size:16px">${escapeHtml(classLabel(cls))}</div><div class="muted small">${subCount > 0 ? subCount + ' مادة · ' : ''}${assCount} تكليف</div></div>
           <span style="margin-right:auto;font-size:18px">◀</span>
         </div>
         <div style="margin-top:10px;display:flex;gap:8px;border-top:1px solid var(--line);padding-top:10px">
           <button class="btn-secondary" style="font-size:12px;padding:5px 12px" onclick="location.hash='#/assignments?step=list&cid=${cid}'">📋 قائمة التكليفات</button>
-          <button class="btn-secondary" style="font-size:12px;padding:5px 12px" onclick="location.hash='#/assignments?step=subject&cid=${cid}'">➕ تكليف جديد</button>
+          ${subCount > 0 ? `<button class="btn-secondary" style="font-size:12px;padding:5px 12px" onclick="location.hash='#/assignments?step=subject&cid=${cid}'">➕ تكليف جديد</button>` : ''}
         </div>
       </div>`;
     }).join('');
