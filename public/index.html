@@ -1042,11 +1042,10 @@ function loadDB(){
   }
   // ترقية: بلاغات الصيانة
   if(!Array.isArray(d.maintenance)){ d.maintenance = []; cleaned = true; }
-  // أسافين الحذف للتكليفات: لا تُعرض التكليفات المحذوفة في أي شاشة (يبقى أثرها للخادم ليُنشر الحذف)
+  // أسافين الحذف للتكليفات: لا تُعرض المحذوفة في أي شاشة، لكن نُبقيها في التخزين المحلي
+  // كما هي (دون إعادة حفظ) حتى يرفعها المتصفح للخادم وتنشر الحذف فعلياً.
   if(Array.isArray(d.assignments)){
-    const beforeLen = d.assignments.length;
     d.assignments = d.assignments.filter(a => !(a && a.deleted));
-    if(d.assignments.length !== beforeLen) cleaned = true;
   }
   if(cleaned) saveDB(d);
   return d;
