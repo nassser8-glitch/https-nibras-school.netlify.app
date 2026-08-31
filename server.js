@@ -650,6 +650,26 @@ function mergeTimetable(prev, inb) {
   return out;
 }
 
+// ===== دمج قسم الطلاب الخاص بالمعلم: يسمح للمعلم بتحديث حصرياً حقول التأخر
+// (lateMinutes/lateType) على طلابه عند تسجيل الحضور، دون أن يُرفض حفظه كاملاً
+// (كان `saveAttendance` يعدّل students فترفض الواجهة/الخادم الحفظ ب403)،
+// ودون أن يمسح أي حقول أخرى يملكها المدير/المرشد لبقية الطلاب. =====
+function mergeStudentsLateOnly(prevStudents, inStudents) {
+  if (!Array.isArray(prevStudents)) prevStudents = [];
+  if (!Array.isArray(inStudents)) inStudents = [];
+  const map = new Map((prevStudents || []).map(s => [s && s.id, s]));
+  for (const s of inStudents) {
+    if (!s || !s.id) continue;
+    const p = map.get(s.id);
+    if (!p) continue; // لا ينشئ المعلم طلاباً
+    // دمج حقول التأخر فقط
+    if (s.lateMinutes && typeof s.lateMinutes === 'object') p.lateMinutes = s.lateMinutes;
+    if (s.lateType && typeof s.lateType === 'object') p.lateType = s.lateType;
+    map.set(s.id, p);
+  }
+  return Array.from(map.values());
+}
+
 // ===== مطابقة جدول المستخدمين (المصادقة) مع نسخة بيانات القسم بعد كتابة قسم users =====
 async function userPresentInOtherSchool(id, school) {
   const other = school === 'BOYS' ? 'GIRLS' : 'BOYS';
@@ -755,12 +775,9 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       const a = prev.data ? prev.data[key] : undefined;
       const b = data[key];
       if (jsonEqual(a, b)) continue;
-      if (key === 'users') {
-        if (!usersSectionAllowedFor(req.session.role, req.session.user_id, a, b))
-          return res.status(403).json({ error: 'forbidden_section:' + key });
-      } else if (!SECTION_RULES[key].includes(req.session.role)) {
-        return res.status(403).json({ error: 'forbidden_section:' + key });
-      }
+      if (key === 'users' && !usersSectionAllowedFor(req.session.role, req.session.user_id, a, b))
+        // لا يُرفض الحفظ كاملاً؛ يُدمج لاحقاً وقسم المستخدمين يبقى نسخة الخادم لغير المدير
+        continue;
     }
 
     // ===== بناء النسخة المدمجة =====
@@ -791,12 +808,20 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       return merged;
     };
     const role = req.session.role;
+    // نحتفظ بنسخة الواصل الأصلية لقسم الطلاب (قبل الدمج) لنطبق منها حقول التأخر
+    // على بيانات الخادم للمعلم: `saveAttendance` يعدّل students (lateMinutes/lateType)
+    // عند تسجيل الحضور، وقديماً كان هذا يرفض الحفظ كاملاً 403 فتضيع التعديلات.
+    const incomingStudents = (data && Array.isArray(data.students)) ? data.students : null;
     if (canEditUsers) {
       // المدير/الوكيل: استبدال كامل طازج (للإدارة الهيكلية والحذف)، ودمج عند نسخة قديمة
       if (stale && prev.data && prev.data.hasOwnProperty) data = applyMerged(prev.data, data, role, true);
     } else if (prev.data && prev.data.hasOwnProperty) {
-      // كل الباقين: دمج دائماً (لا خسارة لبيانات أحد)
+      // كل الباقين: دمج دائماً (لا خسارة لبيانات أحد). قسم الطلاب للمعلم يُدمج
+      // بحقول التأخر فقط (lateMinutes/lateType) فلا يُرفض الحفظ ولا يمسح بيانات الطالب.
       data = applyMerged(prev.data, data, role, false);
+    }
+    if (!canEditUsers && role === 'TEACHER' && incomingStudents) {
+      data.students = mergeStudentsLateOnly(prev.data ? prev.data.students : [], incomingStudents);
     }
 
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
