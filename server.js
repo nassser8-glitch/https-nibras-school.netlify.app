@@ -619,9 +619,17 @@ function mergeSection(prevVal, inVal) {
   // السجلات بلا id تُحفظ أيضاً بمفتاح مستقر (محتواها) كي لا تختفي سجلات قديمة.
   if (Array.isArray(prevVal) && Array.isArray(inVal)) {
     const keyOf = r => (r && typeof r === 'object' && r.id) ? r.id : '__anon:' + JSON.stringify(r);
+    const tomb = new Set();
+    for (const r of prevVal) { if (r && typeof r === 'object' && r.deleted) tomb.add(keyOf(r)); }
     const map = new Map();
     for (const r of prevVal) { if (r && typeof r === 'object') map.set(keyOf(r), r); }
-    for (const r of inVal) { if (r && typeof r === 'object') map.set(keyOf(r), r); }
+    for (const r of inVal) {
+      if (!r || typeof r !== 'object') continue;
+      const k = keyOf(r);
+      // أسافين الحذف (deleted) تكون لاصقة: لا يُعاد إحياء سجل محذوف من جهاز قديم/منافس
+      if (tomb.has(k)) continue;
+      map.set(k, r);
+    }
     return Array.from(map.values());
   }
   // لا دمج ممكن: الأحدث (الواصل) يرجح إن كان من نوع الكائن/أو يرجح الموجودة
@@ -737,6 +745,10 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
         if (t) { seen.add(t.id); overlay(u, t); }
         return u;
       });
+    }
+    // أسافين الحذف (deleted): تُخزَّن لتنشُر الحذف عبر الدمج لكن لا تُعاد لأي عميل
+    if (Array.isArray(rec.data.assignments)) {
+      rec.data.assignments = rec.data.assignments.filter(a => !(a && a.deleted));
     }
     res.json({ ts: rec.ts, data: rec.data });
   })().catch(fail(res));

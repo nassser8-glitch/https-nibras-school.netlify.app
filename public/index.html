@@ -1042,6 +1042,12 @@ function loadDB(){
   }
   // ترقية: بلاغات الصيانة
   if(!Array.isArray(d.maintenance)){ d.maintenance = []; cleaned = true; }
+  // أسافين الحذف للتكليفات: لا تُعرض التكليفات المحذوفة في أي شاشة (يبقى أثرها للخادم ليُنشر الحذف)
+  if(Array.isArray(d.assignments)){
+    const beforeLen = d.assignments.length;
+    d.assignments = d.assignments.filter(a => !(a && a.deleted));
+    if(d.assignments.length !== beforeLen) cleaned = true;
+  }
   if(cleaned) saveDB(d);
   return d;
 }
@@ -6802,7 +6808,7 @@ function renderAssignments(){
     const clsStudents = (d.students||[]).filter(s => s.active && s.classId === classId);
     const clsAssignments = (d.assignments||[]).filter(a => a.classId === classId).sort((a,b) => (b.created||0) - (a.created||0));
     const typeColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
-    const rows = clsAssignments.length === 0 ? `<tr><td colspan="${Math.max(clsStudents.length+4,5)}" style="text-align:center;padding:24px;color:#9ca3af">لا توجد تكليفات لهذا الفصل</td></tr>` :
+    const rows = clsAssignments.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">لا توجد تكليفات لهذا الفصل</td></tr>` :
     clsAssignments.map(a => {
       const doneCount = clsStudents.filter(s => (a.completedBy||[]).includes(s.id)).length;
       const todoCount = clsStudents.length - doneCount;
@@ -6821,6 +6827,7 @@ function renderAssignments(){
           </div>
         </td>
         <td style="white-space:nowrap"><span style="color:${pct>=75?'#16a34a':pct>=50?'#d97706':'#dc2626'};font-weight:700">${doneCount}/${clsStudents.length}</span></td>
+        ${user && (user.role==='ADMIN' || user.role==='AGENT' || a.teacherId===user.id) ? `<td><button class="icon-btn" title="حذف التكليف" onclick="deleteAssignment('${a.id}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:#dc2626">🗑</button></td>` : ''}
       </tr>`;
     }).join('');
     return `<div class="page-title">📝 التكليفات — ${cls ? escapeHtml(classLabel(cls)) : ''}</div>
@@ -6832,7 +6839,7 @@ function renderAssignments(){
     </div>
     <div class="card table-card" style="overflow-x:auto">
       <table class="data-table">
-        <thead><tr><th>التكليف</th><th>المادة</th><th>النوع</th><th>التاريخ</th><th>حالة الطلاب</th><th>نسبة الإنجاز</th></tr></thead>
+        <thead><tr><th>التكليف</th><th>المادة</th><th>النوع</th><th>التاريخ</th><th>حالة الطلاب</th><th>نسبة الإنجاز</th><th>إجراءات</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -6865,6 +6872,7 @@ function renderAssignments(){
     }).join('');
     return `<div class="page-title">📝 ${escapeHtml(a.title||'')}</div>
     <a href="#/assignments?step=list&cid=${classId}" style="font-size:13px">← الرجوع لقائمة التكليفات</a>
+    ${user && (user.role==='ADMIN' || user.role==='AGENT' || a.teacherId===user.id) ? `<button style="margin:0 12px;font-size:13px;padding:6px 14px;color:#fff;background:#dc2626;border:none;border-radius:8px;cursor:pointer" onclick="deleteAssignment('${a.id}')">🗑 حذف التكليف</button>` : ''}
     <div style="margin:10px 0;font-size:13px;color:#6b7280">
       <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${typeColors[a.type]||'#888'};margin-left:4px"></span>
       ${escapeHtml(a.subject||'')} — ${escapeHtml(a.type||'')} — ${a.date||''}
@@ -6909,6 +6917,32 @@ function toggleStudentDone(aid, sid, isDone){
   saveDB(d);
   renderApp();
 }
+function deleteAssignment(aid){
+  const user = currentUser();
+  if(!user) return;
+  const d = loadDB();
+  const a = (d.assignments||[]).find(x => x.id === aid);
+  if(!a) return;
+  // صلاحية: المعلم هو من أنشأ التكليف (أو مدير/وكيل)
+  if(user.role !== 'ADMIN' && user.role !== 'AGENT' && a.teacherId !== user.id){
+    alert('لا يمكنك حذف هذا التكليف — أنشأه معلم آخر');
+    return;
+  }
+  if(!confirm('هل تريد حذف التكليف «' + (a.title||'') + '» نهائياً؟')){
+    return;
+  }
+  // أسفين حذف (deleted) بدل الحذف الفعلي: يتنشر عبر دمج الخادم دون أن يُعاد إحياؤه
+  a.deleted = true;
+  a.deletedAt = Date.now();
+  saveDB(d);
+  const params = new URLSearchParams((location.hash.split('?')[1]||''));
+  const step = params.get('step') || 'list';
+  const classId = params.get('cid') || '';
+  if(step === 'detail') location.hash = '#/assignments?step=list&cid=' + classId;
+  renderApp();
+  alert('🗑 تم حذف التكليف');
+}
+
 function saveAssignment(){
   const user = currentUser();
   if(!user) return;
