@@ -695,8 +695,16 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       // رفض النسخة الأقدم (آخر حافظ يربح)
       return res.json({ ok: false, reason: 'stale', ts: prev.ts });
     }
+    const prevUsers = (prev.data && Array.isArray(prev.data.users)) ? prev.data.users : [];
 
     // ===== تحقق الصلاحيات لكل قسم تغيّر =====
+    // المدير/الوكيل: يمكنه تعديل قسم المستخدمين، والبقية يحفظون أقسامهم (حضور/غياب...) فقط.
+    const canEditUsers = (req.session.role === 'ADMIN' || req.session.role === 'AGENT');
+    if (!canEditUsers) {
+      // لا يحق لهذا الدور تعديل الحسابات: نتجاهل أي تغيير أرسله على قسم users
+      // ونُبقي نسخة الخادم الموثوقة سليمة، دون فقدان بقية الأقسام المشروعة (مثل الحضور).
+      data.users = JSON.parse(JSON.stringify(prevUsers));
+    }
     for (const key of SECTION_KEYS) {
       const a = prev.data ? prev.data[key] : undefined;
       const b = data[key];
@@ -720,7 +728,6 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     await db.setSchoolData(school, clean, ts);
     // مزامنة جدول المصادقة مع أي تغيير في قسم المستخدمين (حذف/نقل/تعطيل)
     if (['ADMIN','AGENT'].includes(req.session.role)) {
-      const prevUsers = prev.data && prev.data.users;
       if (!jsonEqual(prevUsers, clean.users)) await reconcileUserTable(school, prevUsers, clean.users);
     }
     res.json({ ok: true, ts });
