@@ -643,7 +643,35 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
     if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
     if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
     const rec = await db.getSchoolData(school);
-    res.json(rec.data ? { ts: rec.ts, data: rec.data } : { ts: 0, data: null });
+    if (!rec.data) return res.json({ ts: 0, data: null });
+    // احقن إحصاءات الدخول الموثوقة من جدول الحسابات (مصدر الحقيقة) في نسخة القسم،
+    // حتى لو اختلفت معرّفات/إحصاءات local storage لدى المتصفحات. المطابقة بالمعرّف ثم باسم المستخدم.
+    if (Array.isArray(rec.data.users) && rec.data.users.length) {
+      const stats = await db.usersForLoginStats(school);
+      const byId = new Map();
+      const byLower = new Map();
+      for (const t of stats) {
+        byId.set(t.id, t);
+        if (t.username) byLower.set(String(t.username).toLowerCase(), t);
+      }
+      const overlay = (u, t) => {
+        const d = t.data || {};
+        // حقن إحصاءات الدخول الفعلية فقط (دخول حقيقي مسجّل)، لا نلمس العلم ولا المعرّف
+        if (!d) return;
+        const hasLogin = !!d.lastLogin || (d.loginCount || 0) > 0;
+        if (!hasLogin) return;
+        if (d.lastLogin) u.lastLogin = d.lastLogin;
+        if (d.loginCount) u.loginCount = d.loginCount;
+        if (Array.isArray(d.loginHistory)) u.loginHistory = d.loginHistory;
+      };
+      const seen = new Set();
+      rec.data.users = rec.data.users.map(u => {
+        const t = byId.get(u.id) || (u.username ? byLower.get(String(u.username).toLowerCase()) : null);
+        if (t) { seen.add(t.id); overlay(u, t); }
+        return u;
+      });
+    }
+    res.json({ ts: rec.ts, data: rec.data });
   })().catch(fail(res));
 });
 

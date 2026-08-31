@@ -122,6 +122,13 @@ async function listUsers(school) {
   const r = await pool.query('SELECT * FROM users WHERE school = $1 ORDER BY name', [school]);
   return r.rows;
 }
+// إحصاءات الدخول الموثوقة من جدول الحسابات (مصدر الحقيقة) لعرضها في لوحة التفعيل حتى لو اختلفت معرّفات نسخة القسم
+async function usersForLoginStats(school) {
+  const r = await pool.query(
+    `SELECT id, username, name, active, first_login, data FROM users WHERE school = $1`,
+    [school]);
+  return r.rows;
+}
 async function listAllUsers() {
   const r = await pool.query('SELECT id, school, name, email, username, role, active, first_login FROM users ORDER BY school, role, name');
   return r.rows;
@@ -276,7 +283,7 @@ module.exports = {
   pool, SCHOOLS,
   initSchema,
   userByEmail, usersByEmail, userByUsername, usernameExists, generateUsername, baseUsername,
-  userById, listUsers, listAllUsers, usernamesByIds, countAdmins, insertUser,
+  userById, listUsers, listAllUsers, usersForLoginStats, usernamesByIds, countAdmins, insertUser,
   updateUserPasswordHash, updateUserPlainPassword, updateUserProfile, grantUserAccess,
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,
