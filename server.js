@@ -140,9 +140,10 @@ const SECTION_RULES = {
   activities:  ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER'],
   timetable:   ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER'],
   videos:      ['ADMIN', 'AGENT'],
+  assignments: ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'STUDENT'],
   maintenance: ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
 };
-const SECTION_KEYS = ['users','grades','classes','students','attendance','notes','transfers','activities','timetable','videos','maintenance'];
+const SECTION_KEYS = ['users','grades','classes','students','attendance','notes','transfers','activities','timetable','videos','assignments','maintenance'];
 // حقول سرية لا تُخزن/تُعاد أبدًا
 const STRIP_FIELDS = ['password','password_hash','secret','initialSecret','resetCode','resetExpires','token_hash'];
 
@@ -614,14 +615,13 @@ function mergeSection(prevVal, inVal) {
       inVal && typeof inVal === 'object' && !Array.isArray(inVal)) {
     return mergeTimetable(prevVal, inVal);
   }
-  // بقية الأقسام مصفوفة تُدمج حسب id (الإضافات تُلحق، والتعارض يرجّح الواصل)
+  // بقية الأقسام مصفوفة تُدمج حسب id (الإضافات تُلحق، والتعارض يرجّح الواصل).
+  // السجلات بلا id تُحفظ أيضاً بمفتاح مستقر (محتواها) كي لا تختفي سجلات قديمة.
   if (Array.isArray(prevVal) && Array.isArray(inVal)) {
+    const keyOf = r => (r && typeof r === 'object' && r.id) ? r.id : '__anon:' + JSON.stringify(r);
     const map = new Map();
-    for (const r of prevVal) { if (r && typeof r === 'object' && r.id) map.set(r.id, r); }
-    for (const r of inVal) {
-      if (r && typeof r === 'object' && r.id) map.set(r.id, r);
-      else if (r) map.set('__noid_'+map.size+'_'+Math.random(), r);
-    }
+    for (const r of prevVal) { if (r && typeof r === 'object') map.set(keyOf(r), r); }
+    for (const r of inVal) { if (r && typeof r === 'object') map.set(keyOf(r), r); }
     return Array.from(map.values());
   }
   // لا دمج ممكن: الأحدث (الواصل) يرجح إن كان من نوع الكائن/أو يرجح الموجودة
@@ -730,7 +730,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
     if (req.session.first_login) return res.status(403).json({ error: 'change_password_first' });
 
-    const data = req.body && req.body.data;
+    let data = req.body && req.body.data;
     if (!data || typeof data !== 'object' || Array.isArray(data))
       return res.status(400).json({ error: 'invalid_payload' });
     for (const k of ['users','grades','classes','students','attendance','notes','transfers','maintenance']) {
@@ -763,20 +763,40 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       }
     }
 
-    // عند وصول نسخة قديمة جداً، ندمج أقسام الواصل داخل نسخة الخادم الحالية (حسب المفتاح)
-    // حتى لا تُفقد تعديلات المعلم (جدول/حضور/ملاحظات...) ولا تُفسد بقية بيانات القسم.
-    if (stale && prev.data && prev.data.hasOwnProperty) {
-      const merged = JSON.parse(JSON.stringify(prev.data));
+    // ===== بناء النسخة المدمجة =====
+    // قاعدة شاملة: لا يوجد "استبدال كامل" لأي جهة غير المدير/الوكيل، حتى لو وصلت نسختها
+    // طازجة الزمن، بل تُدمج تعديلاتها حسب الصلاحيات داخل نسخة الخادم الحالية (مزج حسب المفتاح).
+    // هكذا لا يمسح معلم (جدول/حضور/ملاحظات/تكليفات...) بيانات زملائه ولا يمسح أحد القسم ككل،
+    // وخلايا الجدول المضافة تبقى محفوظة بعد التحديث/إعادة الدخول.
+    const applyMerged = (base, src, role, canEditU) => {
+      const merged = JSON.parse(JSON.stringify(base));
       delete merged._ts;
-      for (const key of SECTION_KEYS) {
-        const a = prev.data[key];
-        const b = data[key];
+      const allKeys = new Set([...SECTION_KEYS, ...Object.keys(src || {})]);
+      for (const key of allKeys) {
+        if (key === '_ts') continue;
+        const a = base[key];
+        const b = src[key];
         if (jsonEqual(a, b)) continue;
-        merged[key] = mergeSection(a, b);
+        if (key === 'users') {
+          if (canEditU) merged[key] = mergeSection(a, b);
+          else merged[key] = JSON.parse(JSON.stringify(prevUsers));
+          continue;
+        }
+        if (canEditU) { merged[key] = mergeSection(a, b); continue; }
+        // غير المدير: يكتب الأقسام المصرَّح بها فقط، والباقي يبقى نسخة الخادم سليمة
+        if (SECTION_RULES[key] && SECTION_RULES[key].includes(role)) merged[key] = mergeSection(a, b);
+        // مفاتيح غير معروفة (مثل escapeAlerts): تُدمج عاماً كي لا تُفقد إضافات/تعديلات أي جهة
+        else if (!SECTION_RULES[key]) merged[key] = mergeSection(a, b);
       }
-      // قسم المستخدمين يبقى نسخة الخادم الموثوقة دائماً لغير المدير/الوكيل
-      if (!canEditUsers) merged.users = JSON.parse(JSON.stringify(prevUsers));
-      data = merged;
+      return merged;
+    };
+    const role = req.session.role;
+    if (canEditUsers) {
+      // المدير/الوكيل: استبدال كامل طازج (للإدارة الهيكلية والحذف)، ودمج عند نسخة قديمة
+      if (stale && prev.data && prev.data.hasOwnProperty) data = applyMerged(prev.data, data, role, true);
+    } else if (prev.data && prev.data.hasOwnProperty) {
+      // كل الباقين: دمج دائماً (لا خسارة لبيانات أحد)
+      data = applyMerged(prev.data, data, role, false);
     }
 
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
