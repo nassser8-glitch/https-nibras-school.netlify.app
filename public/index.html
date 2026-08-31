@@ -496,6 +496,10 @@
   @media (max-width:700px){ .layout .main { padding:12px; } .dash-greet { flex-wrap:wrap; } .dash-status { flex-wrap:wrap; } .topbar-actions { gap:8px; } .topbar-brand p { display:none; } }
   @media (max-width:560px){ .dash-stats { grid-template-columns:repeat(2,1fr); } .att-card { grid-template-columns:1fr; } .att-group + .att-group { border-inline-start:none; border-top:1px solid var(--line); } .topbar-brand h1 { font-size:13px; } .topbar-logo { width:36px; height:36px; } .topbar-actions .btn-secondary { padding:6px 9px; font-size:12px; } .topbar-user-name { font-size:12px; } .topbar-user-role { font-size:10.5px; } .act-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
   @media (max-width:380px){ .topbar-brand h1 { font-size:12px; } .topbar-actions .topbar-user-block { display:none; } }
+  .pw-wrap { position:relative; display:block; }
+  .pw-wrap .pw-toggle { position:absolute; top:50%; inset-inline-end:8px; transform:translateY(-50%); border:none; background:transparent; cursor:pointer; font-size:16px; line-height:1; color:var(--muted); padding:4px; z-index:2; }
+  .pw-wrap .pw-toggle:hover { color:var(--text); }
+  .pw-wrap input.input { padding-inline-end:38px !important; }
 </style>
 </head>
 <body>
@@ -1297,6 +1301,47 @@ function renderApp(){
 }
 window.addEventListener('hashchange', renderApp);
 let __syncInterval = null;
+function __togglePw(btn){
+  const wrap = btn.closest('.pw-wrap');
+  if(!wrap) return;
+  const input = wrap.querySelector('input[type="password"], input[type="text"]');
+  if(!input) return;
+  if(input.type === 'password'){ input.type = 'text'; btn.textContent = '🙈'; }
+  else { input.type = 'password'; btn.textContent = '👁'; }
+  input.focus();
+}
+function setupPasswordToggles(){
+  const scan = (el) => {
+    if(!el || !el.querySelectorAll) return;
+    el.querySelectorAll('input[type="password"]').forEach((inp) => {
+      if(inp.closest('.pw-wrap')) return;
+      const wrap = document.createElement('span');
+      wrap.className = 'pw-wrap';
+      inp.parentNode.insertBefore(wrap, inp);
+      wrap.appendChild(inp);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pw-toggle';
+      btn.textContent = '👁';
+      btn.setAttribute('aria-label', 'إظهار/إخفاء كلمة المرور');
+      btn.setAttribute('tabindex', '-1');
+      btn.onclick = function(e){ e.preventDefault(); e.stopPropagation(); __togglePw(this); };
+      wrap.appendChild(btn);
+    });
+  };
+  scan(document.body);
+  if(window.__pwObserver) return;
+  try{
+    window.__pwObserver = new MutationObserver((muts) => {
+      for(const m of muts){
+        if(m.type === 'childList'){
+          for(const n of m.addedNodes){ if(n.nodeType === 1) scan(n); }
+        }
+      }
+    });
+    window.__pwObserver.observe(document.body, { childList:true, subtree:true });
+  }catch(e){}
+}
 window.addEventListener('DOMContentLoaded', async () => {
   if(__serverEnabled()){
     await __restoreSession();
@@ -1308,6 +1353,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
   if(!window.__notifTimer) window.__notifTimer = setInterval(checkNotifications, 15000);
   checkNotifications();
+  setupPasswordToggles();
 });
 
 /* ============ تسجيل الدخول ============ */
