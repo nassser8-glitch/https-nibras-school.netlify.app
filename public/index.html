@@ -3152,10 +3152,7 @@ function renderDashboard(){
   // حضور المعلمين اليوم (مثل الطلاب)
   const todayKey = localDateKey(new Date());
   const absentTeachers = teachers.filter(t => (t.absences||[]).includes(todayKey));
-  const lateTeachers = teachers.filter(t => (t.markedLate||[]).includes(todayKey) || (t.loginHistory||[]).some(iso => {
-    const dd = new Date(iso);
-    return localDateKey(dd) === todayKey && (dd.getHours()*60 + dd.getMinutes()) > SCHOOL_START_MIN;
-  }));
+  const lateTeachers = teachers.filter(t => (t.markedLate||[]).includes(todayKey));
   const presentTeachers = teachers.length - absentTeachers.length;
   const tRate = teachers.length ? Math.round(presentTeachers/teachers.length*100) : null;
 
@@ -3926,10 +3923,7 @@ function showTeacherLateList(){
   const d = loadDB();
   const todayKey = localDateKey(new Date());
   const teachers = d.users.filter(u => u.role === 'TEACHER' && u.active);
-  const late = teachers.filter(t => (t.markedLate||[]).includes(todayKey) || (t.loginHistory||[]).some(iso => {
-    const dd = new Date(iso);
-    return localDateKey(dd) === todayKey && (dd.getHours()*60 + dd.getMinutes()) > SCHOOL_START_MIN;
-  }));
+  const late = teachers.filter(t => (t.markedLate||[]).includes(todayKey));
   const rows = late.length === 0 ? `<tr><td colspan="4" style="text-align:center;padding:20px;color:#9ca3af">لا يوجد متأخرون اليوم ✅</td></tr>` :
     late.map(t => {
       const mins = (t.lateMinutes && t.lateMinutes[todayKey] != null) ? t.lateMinutes[todayKey] : '';
