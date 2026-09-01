@@ -24,7 +24,7 @@ function envOrSecret(name, fallback) {
   return fallback;
 }
 
-const ROOT = process.env.WEBROOT || path.join(__dirname, 'public');
+const ROOT = path.resolve(__dirname, process.env.WEBROOT || 'public');
 const PORT = Number(process.env.PORT) || 8090;
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS) || 24 * 60 * 60 * 1000; // 24 ساعة
 const SESSION_COOKIE = 'nibras_session';
