@@ -24,7 +24,22 @@ function envOrSecret(name, fallback) {
   return fallback;
 }
 
-const ROOT = path.resolve(__dirname, process.env.WEBROOT || 'public');
+function staticHasIndex(dir) {
+  try { return fs.existsSync(dir) && fs.statSync(dir).isDirectory() && fs.existsSync(path.join(dir, 'index.html')); } catch (_) { return false; }
+}
+let ROOT = path.resolve(__dirname, process.env.WEBROOT || 'public');
+if (!staticHasIndex(ROOT)) {
+  const candidates = [
+    path.join(__dirname, 'public-build'),
+    path.join(__dirname, 'public'),
+    path.resolve(process.cwd(), 'public-build'),
+    path.resolve(process.cwd(), 'public'),
+  ];
+  for (const cand of candidates) {
+    if (staticHasIndex(cand)) { ROOT = cand; console.log('[static] fallback ROOT ->', ROOT); break; }
+  }
+}
+console.log('[static] WEBROOT=' + (process.env.WEBROOT || '') + ' ROOT=' + ROOT + ' hasIndex=' + staticHasIndex(ROOT));
 const PORT = Number(process.env.PORT) || 8090;
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS) || 24 * 60 * 60 * 1000; // 24 ساعة
 const SESSION_COOKIE = 'nibras_session';
@@ -953,7 +968,7 @@ app.get('/api/diag/mail', async (req, res) => {
 app.get('/api/diag/db', async (req, res) => {
   try {
     const r = await db.pool.query('SELECT current_database() AS db, current_user AS usr, (SELECT count(*) FROM users) AS users');
-    res.json(r.rows[0]);
+    res.json({ ...r.rows[0], webroot: process.env.WEBROOT || '', root: ROOT, cwd: process.cwd(), hasIndex: staticHasIndex(ROOT) });
   } catch (e) {
     res.json({ error: e.message });
   }
