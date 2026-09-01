@@ -517,6 +517,7 @@ const ADMIN_MSGS_KEY = s => 'nibras_adminmsgs_'+s+'_v1';
 const SESS_MIRROR_KEY = 'nibras_secure_session_v1';
 const AUTH_API = '/api/auth/';
 const SYNC_API = '/api/db/';
+const SETTINGS_API = '/api/settings/';
 const SYNC_INTERVAL = 20000;
 const __origSetItem = localStorage.setItem.bind(localStorage);
 let __sessionUser = null; // المستخدم الحالي (من الخادم) — المرجع الوحيد للصلاحيات
@@ -549,6 +550,30 @@ async function __restoreSession(){
     const r = await __api('GET', 'me');
     if(r.status === 200 && r.j && r.j.user){ __sessionUser = r.j.user; __mirrorSet(r.j.user); return true; }
     __handleAuthError(r);
+  }catch(e){}
+  return false;
+}
+
+/* ===== إعدادات مشتركة (بداية العام الدراسي) ===== */
+const __schoolSettingsCache = {};
+async function __getSchoolSettings(school){
+  if(!__serverEnabled()) return {};
+  if(__schoolSettingsCache[school]) return __schoolSettingsCache[school];
+  try{
+    const resp = await fetch(SETTINGS_API + school);
+    if(resp.status === 401){ __handleAuthError(resp); return {}; }
+    if(!resp.ok) return {};
+    const j = await resp.json();
+    const data = (j && j.data) ? j.data : {};
+    __schoolSettingsCache[school] = data;
+    return data;
+  }catch(e){ return {}; }
+}
+async function __putSchoolSettings(school, data){
+  if(!__serverEnabled()) return false;
+  try{
+    const resp = await fetch(SETTINGS_API + school, { method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ data }) });
+    if(resp.status === 200){ __schoolSettingsCache[school] = data; return true; }
   }catch(e){}
   return false;
 }
@@ -609,6 +634,7 @@ async function syncPullAll(){
   if(!user) return;
   const schools = user.role === 'ADMIN' ? ['BOYS','GIRLS'] : [user.school];
   await Promise.all(schools.map(s => __syncPull(s)));
+  await Promise.all(schools.filter(Boolean).map(s => __getSchoolSettings(s)));
 }
 // إعادة جلب نسخة القسم من الخادم بعد أي عملية حساب (أول دخول، إنشاء مستخدم، إعادة تعيين...)
 async function __refreshSchool(school){
@@ -1421,7 +1447,12 @@ async function handleLogin(){
   try{
     const res = await login(email, password);
     if(res && res.ok){
-      if(__serverEnabled()) await syncPullAll();
+      if(__serverEnabled()){
+        await syncPullAll();
+        const u = currentUser();
+        const schools = u && u.role === 'ADMIN' ? ['BOYS','GIRLS'] : [u && u.school];
+        await Promise.all(schools.filter(Boolean).map(s => __getSchoolSettings(s)));
+      }
       location.hash = '#/';
       renderApp();
     } else {
@@ -2883,6 +2914,7 @@ function renderStudentDashboard(){
         <div style="font-size:13px;font-weight:600;opacity:.9">مرحباً بك 👋</div>
         <div style="font-size:25px;font-weight:800;margin:2px 0;letter-spacing:.5px">${escapeHtml(user.name || 'طالب')}</div>
         <div style="font-size:13px;opacity:.95">🏫 ${escapeHtml(classLabel)}</div>
+        ${schoolWeekHTML(user)}
       </div>
       <div style="display:flex;gap:10px;align-items:center">
         <div style="background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:14px;padding:10px 16px;text-align:center;min-width:96px">
@@ -3267,7 +3299,7 @@ function renderDashboard(){
       <div>
         <p class="dash-greet-title">${greetWord} ${escapeHtml(firstName)} 🌟</p>
         <p class="dash-greet-sub">بسم الله — نبدأ يومنا بالتوفيق والنجاح</p>
-        ${user.role === 'ADMIN' ? `<div style="margin-top:6px">${schoolWeekHTML(user)}</div>` : ''}
+        ${schoolWeekHTML(user)}
       </div>
     </div>
     ${(user.role === 'ADMIN' || user.role === 'AGENT') ? `
@@ -6083,13 +6115,20 @@ function isSchoolDay(dateStr){
    عند أول استخدام يُحفظ "أول إثنين من الأسبوع الحالي" كبداية فيكون العرض الحالي = 1 والاثنين القادم = 2.
    يمكن للمدير إعادة ضبط البداية (زر) أو ضبطها بتاريخ محدّد. ============ */
 function academicStartKey(){ return 'nibras_academic_start_' + (getActiveSchool() || ''); }
-function setAcademicStart(isoOrNull){
-  try{
-    if(isoOrNull) localStorage.setItem(academicStartKey(), String(isoOrNull).slice(0,10));
-    else localStorage.removeItem(academicStartKey());
-  }catch(e){}
+function __academicStartLocal(school){
+  try{ return localStorage.getItem('nibras_academic_start_' + (school || '')); }catch(e){ return null; }
 }
+// بداية العام تُخزَّن مشتركة على الخادم (ليرى الجميع نفس الرقم ويزيد تلقائياً كل إثنين).
+// عند عدم توفر الخادم تُستخدم القيمة المحلية كنقطة ارتكاز.
 function getAcademicStart(){
+  const school = getActiveSchool();
+  if(__serverEnabled()){
+    const s = (__schoolSettingsCache[school] || {}).academicStart;
+    if(s){
+      const d = new Date(String(s).slice(0,10) + 'T00:00:00');
+      if(!isNaN(d.getTime())) return d;
+    }
+  }
   try{
     const s = localStorage.getItem(academicStartKey());
     if(s){
@@ -6098,6 +6137,19 @@ function getAcademicStart(){
     }
   }catch(e){}
   return null;
+}
+function setAcademicStart(isoOrNull){
+  const school = getActiveSchool();
+  try{
+    if(isoOrNull) localStorage.setItem(academicStartKey(), String(isoOrNull).slice(0,10));
+    else localStorage.removeItem(academicStartKey());
+  }catch(e){}
+  if(__serverEnabled()){
+    Promise.resolve()
+      .then(() => __getSchoolSettings(school))
+      .then(cur => __putSchoolSettings(school, Object.assign({}, cur, { academicStart: isoOrNull ? String(isoOrNull).slice(0,10) : null })))
+      .catch(() => {});
+  }
 }
 function thisMonday(now){
   const m = new Date(now);
@@ -6127,10 +6179,13 @@ function nudgeAcademicStart(weekDelta){
   renderApp();
 }
 function schoolWeekHTML(user){
-  if(!user || user.role !== 'ADMIN') return '';
+  const isAdmin = !!(user && user.role === 'ADMIN');
   const w = schoolWeekInfo();
   const color = w.kind === 'break' ? '#d97706' : '#0f4f88';
-  return `<div style="font-size:11px;font-weight:800;color:${color};margin-top:2px">🗓 ${w.label} <button class="btn-secondary" title="خفض رقم الأسبوع" style="padding:1px 6px;font-size:10px;margin-inline-start:4px" onclick="nudgeAcademicStart(-1)">−1</button> <button class="btn-secondary" title="رفع رقم الأسبوع (ابدأ من أسبوع سابق)" style="padding:1px 6px;font-size:10px;margin-inline-start:2px" onclick="nudgeAcademicStart(1)">+1</button> <button class="btn-secondary" title="إعادة ضبط: هذا الأسبوع=1" style="padding:1px 6px;font-size:10px;margin-inline-start:2px" onclick="if(confirm('إعادة ضبط بداية العام الدراسي إلى هذا الأسبوع (لتصبح الأسبوع 1)؟')){setAcademicStart(null);renderApp();}">🔄</button></div>`;
+  const controls = isAdmin
+    ? `<button class="btn-secondary" title="خفض رقم الأسبوع" style="padding:1px 6px;font-size:10px;margin-inline-start:4px" onclick="nudgeAcademicStart(-1)">−1</button> <button class="btn-secondary" title="رفع رقم الأسبوع (ابدأ من أسبوع سابق)" style="padding:1px 6px;font-size:10px;margin-inline-start:2px" onclick="nudgeAcademicStart(1)">+1</button> <button class="btn-secondary" title="إعادة ضبط: هذا الأسبوع=1" style="padding:1px 6px;font-size:10px;margin-inline-start:2px" onclick="if(confirm('إعادة ضبط بداية العام الدراسي إلى هذا الأسبوع (لتصبح الأسبوع 1)؟')){setAcademicStart(null);renderApp();}">🔄</button>`
+    : '';
+  return `<div style="font-size:11px;font-weight:800;color:${color};margin-top:2px">🗓 ${w.label}${controls}</div>`;
 }
 function schoolDaysInRange(from, to){
   if(!from || !to) return 0;

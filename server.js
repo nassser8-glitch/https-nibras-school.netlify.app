@@ -919,6 +919,31 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
   })().catch(fail(res));
 });
 
+/* ================= إعدادات مشتركة لكل قسم (بداية العام/الأسبوع...) ================= */
+// مقروء من أي مستخدم مسجّل الدخول لمدرسته، وقابل للتعديل من المدير فقط.
+app.get('/api/settings/:school', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.params.school).toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const data = await db.getSchoolSettings(school);
+    res.json({ ok: true, data });
+  })().catch(fail(res));
+});
+
+app.put('/api/settings/:school', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.params.school).toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const data = req.body && req.body.data;
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return res.status(400).json({ error: 'invalid_payload' });
+    await db.setSchoolSettings(school, data);
+    res.json({ ok: true });
+  })().catch(fail(res));
+});
+
 /* ================= صحة وأمان ================= */
 const net = require('net');
 function tcpTest(host, port, ms) {

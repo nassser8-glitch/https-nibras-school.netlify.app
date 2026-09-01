@@ -53,6 +53,12 @@ async function initSchema() {
         ts         BIGINT NOT NULL DEFAULT 0,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        school     TEXT PRIMARY KEY CHECK (school IN ('BOYS','GIRLS')),
+        data       JSONB NOT NULL DEFAULT '{}'::jsonb,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`);
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
@@ -262,6 +268,17 @@ async function setSchoolData(school, data, ts) {
 }
 // تحديث إحصاءات الدخول داخل نسخة القسم (school_data.users) بتعديل جزئي على الخادم
 // دون نقل ملف البيانات الكامل (348KB) إلى العميل — أسرع بكثير في كل دخول.
+async function getSchoolSettings(school) {
+  const r = await pool.query('SELECT data FROM app_settings WHERE school = $1', [school]);
+  return (r.rows.length && r.rows[0].data) ? r.rows[0].data : {};
+}
+async function setSchoolSettings(school, data) {
+  await pool.query(
+    `INSERT INTO app_settings (school, data, updated_at)
+     VALUES ($1,$2, now())
+     ON CONFLICT (school) DO UPDATE SET data=EXCLUDED.data, updated_at=now()`,
+    [school, JSON.stringify(data)]);
+}
 async function patchSchoolUserStats(school, userId, lastLoginIso, loginCount, historyJsonArray) {
   await pool.query(
     `UPDATE school_data
@@ -288,4 +305,5 @@ module.exports = {
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,
   getSchoolData, setSchoolData, patchSchoolUserStats,
+  getSchoolSettings, setSchoolSettings,
 };
