@@ -630,6 +630,7 @@ async function __syncPush(school){
       body: JSON.stringify({ ts: __syncTS(obj) || Date.now(), data: obj })
     });
     if(resp.status === 401) __handleAuthError(resp);
+    if(resp.status === 403) __handleAuthError(resp);
   }catch(e){}
 }
 async function __syncPull(school){

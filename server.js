@@ -791,7 +791,10 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
       }
       const overlay = (u, t) => {
         const d = t.data || {};
-        // حقن إحصاءات الدخول الفعلية فقط (دخول حقيقي مسجّل)، لا نلمس العلم ولا المعرّف
+        // حالة «أول دخول» إلزامية من جدول الحسابات (مصدر الحقيقة) حتى لو بقي متصفح قديم
+        // يدفع علامة قديمة، فعند أي سحب تظهر الحالة الصحيحة لجهاز المدير.
+        u.firstLogin = !!t.first_login;
+        // حقن إحصاءات الدخول الفعلية فقط (دخول حقيقي مسجّل)، لا نلمس المعرّف
         if (!d) return;
         const hasLogin = !!d.lastLogin || (d.loginCount || 0) > 0;
         if (!hasLogin) return;
@@ -915,7 +918,11 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     if (Array.isArray(clean.users) && clean.users.length) {
       const uidSet = new Set(clean.users.map(u => u.id));
       const unameMap = await db.usernamesByIds([...uidSet]);
-      clean.users.forEach(u => { if (unameMap.has(u.id)) u.username = unameMap.get(u.id); });
+      // حالة «أول دخول» إلزامية من جدول الحسابات (مصدر الحقيقة): أي جهاز (حتى مدير بنسخة قديمة)
+      // يدفع users بعلامة تقدّم قديمة يُعاد تصحيحها — فلا يمكن لمن دخل فعلاً أن يظهر «بانتظار أول دخول»
+      const statusRows = await db.usersForLoginStats(school);
+      const statusMap = new Map(statusRows.map(r => [r.id, !!r.first_login]));
+      clean.users.forEach(u => { if (unameMap.has(u.id)) u.username = unameMap.get(u.id); if (statusMap.has(u.id)) u.firstLogin = statusMap.get(u.id); });
       clean.users.forEach(u => STRIP_FIELDS.forEach(f => delete u[f]));
     }
     // زمن الحفظ دائمًا أكبر من نسخة الخادم (حتى لا نُرفض مستقبلًا بزمن متساو/أقل).
