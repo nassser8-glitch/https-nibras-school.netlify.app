@@ -968,6 +968,47 @@ app.put('/api/settings/:school', requireAuth, (req, res) => {
   })().catch(fail(res));
 });
 
+/* ================= النسخ الاحتياطي والاسترجاع ================= */
+// لقطة دورية للقسمين تُخزَّن في جدول منفصل (data_backups) فلا تُمسح حتى لو استُبدلت
+// بيانات school_data نفسها — حماية من فقدان كل شيء وتكرار حادثة الأمس.
+async function takeBackups() {
+  try {
+    for (const school of db.SCHOOLS) {
+      const rec = await db.getSchoolData(school);
+      if (rec.data) await db.saveBackup(school, rec.ts, rec.data);
+    }
+  } catch (e) { console.error('[backup]', e.message); }
+}
+app.get('/api/backups', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const out = { ok: true, latest: {}, recent: {} };
+    for (const school of db.SCHOOLS) {
+      const rows = await db.listBackups(school, 10);
+      out.recent[school] = rows;
+      out.latest[school] = rows[0] || null;
+    }
+    res.json(out);
+  })().catch(fail(res));
+});
+// استرجاع بيانات قسم (بنين/بنات) من نسخة احتياطية قديمة — تجاوز كامل للبيانات الحالية
+app.post('/api/backups/restore', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const id = Number(req.body && req.body.id) || 0;
+    if (!id) return res.status(400).json({ error: 'missing' });
+    const bak = await db.getBackup(id);
+    if (!bak) return res.status(404).json({ error: 'not_found' });
+    const ts = Date.now();
+    const data = JSON.parse(JSON.stringify(bak.data));
+    if (data && typeof data === 'object') data._ts = ts;
+    await db.setSchoolData(bak.school, data, ts);
+    res.json({ ok: true, school: bak.school, ts, takenAt: bak.taken_at });
+  })().catch(fail(res));
+});
+// لقطة أولية عند الإقلاع ثم كل 30 دقيقة
+setInterval(takeBackups, 30 * 60 * 1000).unref();
+
 /* ================= صحة وأمان ================= */
 const net = require('net');
 function tcpTest(host, port, ms) {
@@ -1048,6 +1089,7 @@ app.listen(PORT, async () => {
       console.log('==============================================================');
     }
     console.log('PostgreSQL متصل — نبراس يعمل على http://localhost:' + PORT);
+    takeBackups();
   } catch (e) {
     console.error('تعذر الاتصال بقاعدة البيانات:', e.message);
     process.exit(1);

@@ -2219,6 +2219,7 @@ function renderLayout(user, hash){
     { title:'النظام', items:[
       (user.role === 'TEACHER') ? { href:'#/timetable', key:'timetable', label:tl('جدولي'), icon:'🗓' } : null,
       (user.role === 'TEACHER') ? { href:'#/account', key:'account', label:'حسابي', icon:'⚙️' } : null,
+      (user.role === 'ADMIN') ? { href:'#/backup', key:'backup', label:'النسخ الاحتياطي', icon:'📦' } : null,
       { href:'#/settings', key:'settings', label:'الإعدادات', icon:'⚙️' },
       { href:'#/about', key:'about', label:'حول نبراس', icon:'ⓘ' },
     ]},
@@ -2263,6 +2264,7 @@ function renderLayout(user, hash){
   else if(page.startsWith('teacher/') && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderTeacherPage(page.split('/')[1]);
   else if(page === 'guide-msgs' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR')) pageHtml = renderGuideMsgs();
   else if(page === 'settings') pageHtml = renderSettings();
+  else if(page === 'backup' && user.role === 'ADMIN') pageHtml = renderBackup();
   else if(page === 'notebook') pageHtml = renderNotebookPage();
   else if(page === 'about') pageHtml = renderAbout();
   else pageHtml = renderDashboard();
@@ -8345,6 +8347,103 @@ function exportReport(){
   const title = tl(reportTypes.find(t => t.value===reportState.type)?.label || 'تقرير');
   XLSX.utils.book_append_sheet(wb, ws, title.slice(0,30));
   XLSX.writeFile(wb, title + '.xlsx');
+}
+/* ============ النسخ الاحتياطي والاسترجاع (المدير فقط) ============ */
+function renderBackup(){
+  setTimeout(backupLoadList, 50);
+  const lastDevice = (() => { try { return localStorage.getItem('nibras_lastBackup') || ''; } catch(e){ return ''; } })();
+  const fmt = iso => { if(!iso) return '—'; try { return new Date(iso).toLocaleString('ar'); } catch(e){ return iso; } };
+  return `
+  <div class="header-row"><h1 class="page-title">📦 النسخ الاحتياطي والاسترجاع</h1></div>
+
+  <div class="card mb" style="border-color:#fcd34d;background:#fffbeb">
+    <div style="font-weight:700;color:#b45309">🛡️ طبقة الحماية: نسخة على جهازك + نسخ تلقائية على الخادم</div>
+    <div class="small muted" style="margin-top:6px">
+      على جهازك توفَّر نسخة كاملة (بنين + بنات) تُحدَّث تلقائياً كل ساعة في مجلد سطح المكتب لدى مدير المدرسة،
+      وعلى الخادم تُحفظ لقطة كل 30 دقيقة في جدول منفصل لا يُمسح حتى لو استُبدلت البيانات الأصلية.
+      بذلك لن يتكرر فقدان «كل شيء».
+    </div>
+  </div>
+
+  <div class="card mb">
+    <div style="font-weight:700;margin-bottom:8px">⬇️ تنزيل نسخة الآن هذا الجهاز</div>
+    <div class="small muted" style="margin-bottom:10px">أحدث تنزيل: ${fmt(lastDevice)}</div>
+    <button class="btn primary" onclick="backupDownloadAll()">⬇️ تنزيل نسخة كاملة (بنين + بنات)</button>
+  </div>
+
+  <div class="card mb">
+    <div style="font-weight:700;margin-bottom:8px">🗃️ نسخ الخادم التلقائية (كل 30 دقيقة) — استرجاع بضغطة</div>
+    <div id="backupList" class="small">جارٍ تحميل القائمة…</div>
+  </div>
+
+  <div class="card" style="border-color:#fecaca;background:#fef2f2">
+    <div style="font-weight:700;color:#b91c1c">تنبيه هام</div>
+    <div class="small" style="margin-top:6px">
+      الاسترجاع يكتب فوق بيانات القسم الحالية بالكامل (فصول، طلاب، جدول، غياب…). لا تسترجعه إلا عند الحاجة الحقيقية،
+      واحفظ أولاً نسخة من الحالة الحالية قبل أي استرجاع.
+    </div>
+  </div>`;
+}
+async function backupLoadList(){
+  const el = document.getElementById('backupList');
+  if(!el) return;
+  try{
+    const r = await fetch('/api/backups');
+    const j = await r.json();
+    if(!j || !j.recent){ el.innerHTML = 'تعذر تحميل القائمة'; return; }
+    const block = school => {
+      const rows = j.recent[school] || [];
+      if(!rows.length) return `<div class="muted">لا توجد نسخ بعد — تُنشأ تلقائياً كل 30 دقيقة.</div>`;
+      const campus = school === 'BOYS' ? 'بنين' : 'بنات';
+      return rows.map(b => `
+        <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;padding:7px 0;border-bottom:1px dashed #e2e8f0">
+          <span>${campus} — ${(() => { try { return new Date(b.taken_at).toLocaleString('ar'); } catch(e){ return b.taken_at; } })()}</span>
+          <button class="del-btn" style="color:#b91c1c" onclick="backupRestore(${b.id}, '${school}')">↩️ استرجاع</button>
+        </div>`).join('');
+    };
+    el.innerHTML = `<div style="font-weight:700;color:#0d9488">البنين</div>` + block('BOYS') + `<div style="font-weight:700;color:#8b5cf6;margin-top:12px">البنات</div>` + block('GIRLS');
+  }catch(e){
+    el.innerHTML = 'تعذر الاتصال بالخادم';
+  }
+}
+async function backupDownloadAll(){
+  const pack = { meta:{ app:'nibras', takenAt:new Date().toISOString(), device:true, description:'نسخة كاملة (بنين + بنات)' }, BOYS:null, GIRLS:null };
+  for(const s of ['BOYS','GIRLS']){
+    try{
+      const r = await fetch(SYNC_API + s);
+      const j = await r.json();
+      if(j && j.data) pack[s] = { ts: j.ts, data: j.data };
+    }catch(e){}
+  }
+  if(!pack.BOYS && !pack.GIRLS){ alert('تعذر جلب البيانات'); return; }
+  const blob = new Blob([JSON.stringify(pack, null, 1)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'nibras-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  try{ localStorage.setItem('nibras_lastBackup', new Date().toISOString()); }catch(e){}
+}
+async function backupRestore(id, school){
+  if(!confirm('إعادة بيانات قسم ' + (school === 'BOYS' ? 'البنين' : 'البنات') + ' إلى هذه النسخة؟ ستُكتب فوق البيانات الحالية. هل تريد المتابعة؟')) return;
+  if(!confirm('تأكيد أخير: أُعدت بيانات القسم فعلاً وستحل مكان الحالية نهائياً؟')) return;
+  try{
+    const r = await fetch('/api/backups/restore', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const j = await r.json();
+    if(j.ok){
+      alert('تم الاسترجاع — سيتحدّث الجميع تلقائياً بمجرد فتح التطبيق.');
+      try{ if(window.__syncPull) __syncPull(school); }catch(e){}
+      backupLoadList();
+    }else{
+      alert('فشل الاسترجاع: ' + (j.error || 'خطأ'));
+    }
+  }catch(e){
+    alert('خطأ في الاتصال بالخادم');
+  }
 }
 function renderSettings(){
   const school = getActiveSchool();

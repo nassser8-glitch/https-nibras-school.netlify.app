@@ -59,6 +59,17 @@ async function initSchema() {
         data       JSONB NOT NULL DEFAULT '{}'::jsonb,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`);
+    // نسخ احتياطية دورية لبيانات الأقسام — تُخزَّن خارج جدول school_data نفسه
+    // حتى لا تُمسح حتى لو حدث أي استبدال/حذف للبيانات الأصلية (حماية من فقدان كل شيء)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS data_backups (
+        id       BIGSERIAL PRIMARY KEY,
+        school   TEXT NOT NULL CHECK (school IN ('BOYS','GIRLS')),
+        ts       BIGINT NOT NULL,
+        data     JSONB NOT NULL,
+        taken_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`);
+    await client.query(`CREATE INDEX IF NOT EXISTS data_backups_school_idx ON data_backups(school, id)`);
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
@@ -296,6 +307,29 @@ async function patchSchoolUserStats(school, userId, lastLoginIso, loginCount, hi
     [userId, lastLoginIso, loginCount, JSON.stringify(historyJsonArray), school]);
 }
 
+/* ===== النسخ الاحتياطي الدوري ===== */
+const BACKUP_KEEP = 200;
+async function saveBackup(school, ts, data) {
+  await pool.query(
+    `INSERT INTO data_backups (school, ts, data) VALUES ($1,$2,$3)`,
+    [school, ts, JSON.stringify(data)]);
+  // تُبقي آخر 200 نسخة لكل قسم فقط كي لا تكبر القاعدة بلا حدود
+  await pool.query(
+    `DELETE FROM data_backups WHERE school = $1 AND id NOT IN (
+       SELECT id FROM data_backups WHERE school = $1 ORDER BY id DESC LIMIT ${BACKUP_KEEP})`,
+    [school]);
+}
+async function listBackups(school, limit) {
+  const r = await pool.query(
+    `SELECT id, school, ts, taken_at FROM data_backups WHERE school = $1 ORDER BY id DESC LIMIT $2`,
+    [school, limit || 30]);
+  return r.rows;
+}
+async function getBackup(id) {
+  const r = await pool.query(`SELECT id, school, ts, data, taken_at FROM data_backups WHERE id = $1`, [Number(id) || 0]);
+  return r.rows[0] || null;
+}
+
 module.exports = {
   pool, SCHOOLS,
   initSchema,
@@ -306,4 +340,5 @@ module.exports = {
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,
   getSchoolData, setSchoolData, patchSchoolUserStats,
   getSchoolSettings, setSchoolSettings,
+  saveBackup, listBackups, getBackup,
 };
