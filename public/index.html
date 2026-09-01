@@ -6117,11 +6117,20 @@ function schoolWeekInfo(){
   if(weeks < 1) return { label:'الأسبوع التمهيدي', kind:'break' };
   return { label:'الأسبوع ' + weeks, kind:'week' };
 }
+function nudgeAcademicStart(weekDelta){
+  let start = getAcademicStart();
+  const now = new Date();
+  if(!start || isNaN(start.getTime())) start = thisMonday(now);
+  const shifted = new Date(start);
+  shifted.setDate(shifted.getDate() - weekDelta * 7);
+  setAcademicStart(localDateKey(shifted));
+  renderApp();
+}
 function schoolWeekHTML(user){
   if(!user || user.role !== 'ADMIN') return '';
   const w = schoolWeekInfo();
   const color = w.kind === 'break' ? '#d97706' : '#0f4f88';
-  return `<div style="font-size:11px;font-weight:800;color:${color};margin-top:2px">🗓 ${w.label} <button class="btn-secondary" style="padding:1px 6px;font-size:10px;margin-inline-start:4px" onclick="if(confirm('إعادة ضبط بداية العام الدراسي إلى هذا الأسبوع (لتصبح الأسبوع 1)؟')){setAcademicStart(null);renderApp();}">🔄</button></div>`;
+  return `<div style="font-size:11px;font-weight:800;color:${color};margin-top:2px">🗓 ${w.label} <button class="btn-secondary" title="خفض رقم الأسبوع" style="padding:1px 6px;font-size:10px;margin-inline-start:4px" onclick="nudgeAcademicStart(-1)">−1</button> <button class="btn-secondary" title="رفع رقم الأسبوع (ابدأ من أسبوع سابق)" style="padding:1px 6px;font-size:10px;margin-inline-start:2px" onclick="nudgeAcademicStart(1)">+1</button> <button class="btn-secondary" title="إعادة ضبط: هذا الأسبوع=1" style="padding:1px 6px;font-size:10px;margin-inline-start:2px" onclick="if(confirm('إعادة ضبط بداية العام الدراسي إلى هذا الأسبوع (لتصبح الأسبوع 1)؟')){setAcademicStart(null);renderApp();}">🔄</button></div>`;
 }
 function schoolDaysInRange(from, to){
   if(!from || !to) return 0;

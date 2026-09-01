@@ -30,10 +30,10 @@ function staticHasIndex(dir) {
 let ROOT = path.resolve(__dirname, process.env.WEBROOT || 'public');
 if (!staticHasIndex(ROOT)) {
   const candidates = [
-    path.join(__dirname, 'public-build'),
     path.join(__dirname, 'public'),
-    path.resolve(process.cwd(), 'public-build'),
+    path.join(__dirname, 'public-build'),
     path.resolve(process.cwd(), 'public'),
+    path.resolve(process.cwd(), 'public-build'),
   ];
   for (const cand of candidates) {
     if (staticHasIndex(cand)) { ROOT = cand; console.log('[static] fallback ROOT ->', ROOT); break; }
