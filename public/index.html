@@ -646,10 +646,13 @@ async function __syncPull(school){
     try{ local = JSON.parse(localStorage.getItem(key) || 'null'); }catch(e){}
     const localIsEmptySeed = local && Array.isArray(local.classes) && local.classes.length === 0 && Array.isArray(local.students) && local.students.length === 0;
     const serverHasData = (j.data.students && j.data.students.length > 0) || (j.data.classes && j.data.classes.length > 0);
-    if(!local || (localIsEmptySeed && serverHasData) || j.ts > __syncTS(local)){
+    const localTs = __syncTS(local);
+    // إذا كانت نسخة الجهاز بلا زمنٍ صالح (NaN/صفر) فهي كهبة جديدة: نجلب نسخة الخادم دائماً
+    // حتى تتعافى الأجهزة المتأثرة بخلل سابق في حقل _ts.
+    if(!local || (localIsEmptySeed && serverHasData) || !(localTs > 0) || j.ts > localTs){
       __origSetItem(key, JSON.stringify(j.data));
       if(getActiveSchool && getActiveSchool() === school) renderApp();
-    } else if(local && !localIsEmptySeed && j.ts < __syncTS(local)){
+    } else if(local && !localIsEmptySeed && j.ts < localTs){
       __syncPush(school);
     }
   }catch(e){}
