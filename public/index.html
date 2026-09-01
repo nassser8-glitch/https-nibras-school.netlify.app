@@ -595,9 +595,34 @@ async function __syncPush(school){
   let obj = null;
   try{ obj = JSON.parse(raw); }catch(e){}
   if(!obj) return;
-  // حماية: لا ندفع بذرة فارغة (متصفح جديد بلا طلاب/فصول) لئلا تمحو بيانات القسم المشتركة
+  // حماية: لا ندفع بذرة فارغة (متصفح جديد بلا طلاب/فصول) لئلا تمحو بيانات القسم المشتركة.
+  // لكن بدل تجاهل الحفظ كلياً (فيعتقد المعلم أن تعديله «نُقلّع» ولم يُحفظ)، نجلب نسخة الخادم
+  // وندمج عليها تعديلات هذا الجهاز (الجدول/الغياب) ثم ندفعها.
   const isEmptySeed = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
-  if(isEmptySeed) return;
+  if(isEmptySeed){
+    try{
+      const resp = await fetch(SYNC_API + school);
+      if(resp.status === 401){ __handleAuthError(resp); return; }
+      if(!resp.ok) return;
+      const j = await resp.json();
+      const serverHasData = j && j.data && ((j.data.students && j.data.students.length > 0) || (j.data.classes && j.data.classes.length > 0));
+      if(serverHasData){
+        const sd = JSON.parse(JSON.stringify(j.data));
+        sd.timetable = Object.assign({}, sd.timetable);
+        for(const tid in obj.timetable) sd.timetable[tid] = JSON.parse(JSON.stringify(obj.timetable[tid]));
+        if(Array.isArray(obj.attendance) && obj.attendance.length){
+          sd.attendance = Array.isArray(sd.attendance) ? sd.attendance.slice() : [];
+          for(const rec of obj.attendance){
+            if(!sd.attendance.some(x => x.studentId === rec.studentId && x.date === rec.date)) sd.attendance.push(rec);
+          }
+        }
+        obj = sd;
+        try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
+      }
+    }catch(e){}
+    const stillEmpty = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
+    if(stillEmpty) return;
+  }
   try{
     const resp = await fetch(SYNC_API + school, {
       method:'PUT',

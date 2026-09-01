@@ -868,11 +868,12 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           else merged[key] = JSON.parse(JSON.stringify(prevUsers));
           continue;
         }
+        // قسم الحضور يُدمج بمنطق خاص (last-write-wins حسب studentId|date) لكافة الأدوار
+        // حتى يبقى الغياب المسجَّل قائماً ولا يختفي بأي نسخة قديمة من أي دور.
+        if (key === 'attendance') { merged[key] = mergeAttendance(a, b); continue; }
         if (canEditU) { merged[key] = mergeSection(a, b); continue; }
         // غير المدير: يكتب الأقسام المصرَّح بها فقط، والباقي يبقى نسخة الخادم سليمة
-        // قسم الحضور يُدمج بمنطق خاص (last-write-wins حسب studentId|date) لئلا يختفي الغياب
-        if (key === 'attendance') merged[key] = mergeAttendance(a, b);
-        else if (SECTION_RULES[key] && SECTION_RULES[key].includes(role)) merged[key] = mergeSection(a, b);
+        if (SECTION_RULES[key] && SECTION_RULES[key].includes(role)) merged[key] = mergeSection(a, b);
         // مفاتيح غير معروفة (مثل escapeAlerts): تُدمج عاماً كي لا تُفقد إضافات/تعديلات أي جهة
         else if (!SECTION_RULES[key]) merged[key] = mergeSection(a, b);
       }
@@ -884,8 +885,19 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     // عند تسجيل الحضور، وقديماً كان هذا يرفض الحفظ كاملاً 403 فتضيع التعديلات.
     const incomingStudents = (data && Array.isArray(data.students)) ? data.students : null;
     if (canEditUsers) {
-      // المدير/الوكيل: استبدال كامل طازج (للإدارة الهيكلية والحذف)، ودمج عند نسخة قديمة
-      if (stale && prev.data && prev.data.hasOwnProperty) data = applyMerged(prev.data, data, role, true);
+      // المدير/الوكيل: يُبقي الاستبدال الكامل الطازج للأقسام الهيكلية (الفصول/الطلاب/المستخدمون...)
+      // ليدير الإضافة والحذف، لكن قسمي الحضور والجدول لا يُستبدلان أبداً ببيانات جهازٍ أقدم:
+      // يُدمجان دائماً حتى لا يمسح جهاز إداري حصة/غياباً سجّله المعلمون حديثاً.
+      if (prev.data && prev.data.hasOwnProperty) {
+        if (stale) {
+          data = applyMerged(prev.data, data, role, true);
+        } else {
+          const cf = JSON.parse(JSON.stringify(data));
+          if (!jsonEqual(prev.data.timetable, cf.timetable)) cf.timetable = mergeTimetable(prev.data.timetable, cf.timetable);
+          if (!jsonEqual(prev.data.attendance, cf.attendance)) cf.attendance = mergeAttendance(prev.data.attendance, cf.attendance);
+          data = cf;
+        }
+      }
     } else if (prev.data && prev.data.hasOwnProperty) {
       // كل الباقين: دمج دائماً (لا خسارة لبيانات أحد). قسم الطلاب للمعلم يُدمج
       // بحقول التأخر فقط (lateMinutes/lateType) فلا يُرفض الحفظ ولا يمسح بيانات الطالب.
