@@ -635,6 +635,48 @@ function mergeSection(prevVal, inVal) {
   // لا دمج ممكن: الأحدث (الواصل) يرجح إن كان من نوع الكائن/أو يرجح الموجودة
   return inVal !== undefined ? inVal : prevVal;
 }
+// ===== دمج قسم الحضور: آخر-كتابة-يفوز حسب (studentId, date) على طابع _t =====
+// كان الدمج العام حسب id فقط، فإذا دفع معلم/جهاز آخر نسخة قديمة تظهر الطالبة (حاضر)
+// تُستبدل نسخة الخادم ABSENT بموجب المفتاح id فيختفي الغياب بعد إعادة الفتح.
+// هنا نحمي سجلّ الحضور: نُبقي السجلّ الأعلى زمناً (_t) عند تعارض (نفس الطالبة/التاريخ)،
+// وآخر-كتابة-يفوز عند قيام من يكتب فعلياً. السجلات بلا _t تُعامل كزمن 0.
+function mergeAttendance(prev, incoming) {
+  if (!Array.isArray(prev)) prev = [];
+  if (!Array.isArray(incoming)) incoming = [];
+  const keyOf = r => (r && typeof r === 'object' && r.id) ? r.id : '__anon:' + JSON.stringify(r);
+  const tOf = r => (r && typeof r === 'object' && typeof r._t === 'number') ? r._t : 0;
+  const tomb = new Set();
+  for (const r of prev) { if (r && typeof r === 'object' && r.deleted) tomb.add(keyOf(r)); }
+  // المرحلة 1: دمج حسب id مع آخر-كتابة-يفوز على _t (المكتِب الجديد يفوز عند التعادل)
+  const map = new Map();
+  for (const r of prev) { if (r && typeof r === 'object') map.set(keyOf(r), r); }
+  for (const r of incoming) {
+    if (!r || typeof r !== 'object') continue;
+    const k = keyOf(r);
+    if (tomb.has(k)) continue;
+    const ex = map.get(k);
+    if (!ex) { map.set(k, r); continue; }
+    // قفل الحذف (تومبستون) ألصق: لا يُعاد إحياء
+    if ((r.deleted || ex.deleted)) { if (r.deleted) map.set(k, r); continue; }
+    if (tOf(r) >= tOf(ex)) map.set(k, r);
+  }
+  // المرحلة 2: إزالة التكرار حسب (studentId|date) مع الإبقاء على الأعلى _t
+  // (تجنّب تراكم سجلّين لنفس الطالبة/التاريخ من معرفات مختلفة)
+  const bySD = new Map();
+  const all = Array.from(map.values());
+  const result = [];
+  for (const r of all) {
+    if (!r || typeof r !== 'object') { result.push(r); continue; }
+    const sd = (r.studentId || '') + '|' + (r.date || '');
+    if (!sd) { result.push(r); continue; }
+    const cur = bySD.get(sd);
+    if (!cur) { bySD.set(sd, r); result.push(r); continue; }
+    const idx = result.indexOf(cur);
+    if (tOf(r) > tOf(cur)) { result[idx] = r; bySD.set(sd, r); }
+  }
+  return result;
+}
+
 function mergeTimetable(prev, inb) {
   const out = {};
   const keys = new Set([...Object.keys(prev || {}), ...Object.keys(inb || {})]);
@@ -813,7 +855,9 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         }
         if (canEditU) { merged[key] = mergeSection(a, b); continue; }
         // غير المدير: يكتب الأقسام المصرَّح بها فقط، والباقي يبقى نسخة الخادم سليمة
-        if (SECTION_RULES[key] && SECTION_RULES[key].includes(role)) merged[key] = mergeSection(a, b);
+        // قسم الحضور يُدمج بمنطق خاص (last-write-wins حسب studentId|date) لئلا يختفي الغياب
+        if (key === 'attendance') merged[key] = mergeAttendance(a, b);
+        else if (SECTION_RULES[key] && SECTION_RULES[key].includes(role)) merged[key] = mergeSection(a, b);
         // مفاتيح غير معروفة (مثل escapeAlerts): تُدمج عاماً كي لا تُفقد إضافات/تعديلات أي جهة
         else if (!SECTION_RULES[key]) merged[key] = mergeSection(a, b);
       }
