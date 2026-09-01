@@ -332,6 +332,9 @@ app.post('/api/auth/login', (req, res) => {
       loginCount, lastLoginIso, hist);
 
     req._sessionToken = token;
+    // أول دخول فعلي ينهي «بانتظار أول دخول» في نسخة القسم التي تعرضها لوحة المدير:
+    // نسخة school_data كانت لا تتحدّث عند الدخول فتبقى بعض الحسابات «بانتظار» رغم دخولهم.
+    updateSchoolUser(u.school, u.id, { firstLogin: false }).catch(() => {});
     res.setHeader('Set-Cookie', cookieOpts(req));
     res.json({ ok: true, user: sendUser(u, row || { created_at: lastLoginIso, expires_at: new Date(nowMs + SESSION_TTL_MS).toISOString() }, u.role) });
   })().catch(fail(res));
