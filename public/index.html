@@ -581,72 +581,156 @@ async function __putSchoolSettings(school, data){
 /* ============ مزامنة الخادم (جلسة آمنة — لا SYNC_KEY) ============ */
 function __syncEnabled(){ return !DEMO_MODE && location.protocol.indexOf('http') === 0; }
 function __syncTS(obj){ return (obj && typeof obj === 'object' && obj._ts) || 0; }
-function __syncSchedule(school){
+/* حالة الرفع المعلّق لكل قسم: تمنع أن تسحب نسخة الخادم الأقدم فتختفي تعديلاتٌ لم تُرفع بعد */
+const __pushPending = {};
+function __pushState(school){
+  return (__pushPending[school] = __pushPending[school] || { attempts:0, lastFail:0, running:false });
+}
+function __uiToast(txt, isErr){
+  try{
+    let el = document.getElementById('__syncToast');
+    if(!el){
+      el = document.createElement('div');
+      el.id = '__syncToast';
+      el.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#065f46;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:92%;text-align:center;display:none;font-family:inherit';
+      document.body.appendChild(el);
+    }
+    el.textContent = txt;
+    el.style.background = isErr ? '#b91c1c' : '#065f46';
+    el.style.display = 'block';
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.style.display = 'none'; }, 6500);
+  }catch(e){}
+}
+function __syncSchedule(school, ms){
   if(!__syncEnabled()) return;
   clearTimeout(__syncTimers[school]);
-  __syncTimers[school] = setTimeout(() => __syncPush(school), 700);
+  __syncTimers[school] = setTimeout(() => __syncPush(school), (ms === undefined) ? 700 : ms);
 }
 async function __syncPush(school){
   if(!__syncEnabled()) return;
   const key = 'nibras_'+school+'_db_v1';
-  let raw = null;
-  try{ raw = localStorage.getItem(key); }catch(e){}
-  if(!raw) return;
-  let obj = null;
-  try{ obj = JSON.parse(raw); }catch(e){}
-  if(!obj) return;
-  // حماية: لا ندفع بذرة فارغة (متصفح جديد بلا طلاب/فصول) لئلا تمحو بيانات القسم المشتركة.
-  // لكن بدل تجاهل الحفظ كلياً (فيعتقد المعلم أن تعديله «نُقلّع» ولم يُحفظ)، نجلب نسخة الخادم
-  // وندمج عليها تعديلات هذا الجهاز (الجدول/الغياب) ثم ندفعها.
-  const isEmptySeed = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
-  if(isEmptySeed){
+  const pendKey = 'nibras_'+school+'_pending_v1';
+  const st = __pushState(school);
+  if(st.running) return;
+  st.running = true;
+  try{
+    let raw = null;
+    try{ raw = localStorage.getItem(key); }catch(e){}
+    if(!raw) return;
+    let obj = null;
+    try{ obj = JSON.parse(raw); }catch(e){}
+    if(!obj) return;
+    // إذا وُجدت نسخة احتياطية لتعديلات لم تُرفع بعد (فشل سابق)، نفضّلها إن كانت أحدث
+    // حتى لا تُفقد تعديلات المعلم إذا أُغلِق التطبيق قبل نجاح الرفع ثم أعيد فتحه.
     try{
-      const resp = await fetch(SYNC_API + school);
-      if(resp.status === 401){ __handleAuthError(resp); return; }
-      if(!resp.ok) return;
-      const j = await resp.json();
-      const serverHasData = j && j.data && ((j.data.students && j.data.students.length > 0) || (j.data.classes && j.data.classes.length > 0));
-      if(serverHasData){
-        const sd = JSON.parse(JSON.stringify(j.data));
-        sd.timetable = Object.assign({}, sd.timetable);
-        for(const tid in obj.timetable) sd.timetable[tid] = JSON.parse(JSON.stringify(obj.timetable[tid]));
-        if(Array.isArray(obj.attendance) && obj.attendance.length){
-          sd.attendance = Array.isArray(sd.attendance) ? sd.attendance.slice() : [];
-          for(const rec of obj.attendance){
-            if(!sd.attendance.some(x => x.studentId === rec.studentId && x.date === rec.date)) sd.attendance.push(rec);
-          }
-        }
-        obj = sd;
-        try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
+      const pendRaw = localStorage.getItem(pendKey);
+      if(pendRaw){
+        const pobj = JSON.parse(pendRaw);
+        if(pobj && __syncTS(pobj) > __syncTS(obj)) obj = pobj;
       }
     }catch(e){}
-    const stillEmpty = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
-    if(stillEmpty) return;
+    // حماية: لا ندفع بذرة فارغة (متصفح جديد بلا طلاب/فصول) لئلا تمحو بيانات القسم المشتركة.
+    // لكن بدل تجاهل الحفظ كلياً (فيعتقد المعلم أن تعديله «نُقلّع» ولم يُحفظ)، نجلب نسخة الخادم
+    // وندمج عليها تعديلات هذا الجهاز (الجدول/الغياب) ثم ندفعها.
+    const isEmptySeed = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
+    if(isEmptySeed){
+      try{
+        const resp = await fetch(SYNC_API + school);
+        if(resp.status === 401){ __handleAuthError(resp); return; }
+        if(!resp.ok) return;
+        const j = await resp.json();
+        const serverHasData = j && j.data && ((j.data.students && j.data.students.length > 0) || (j.data.classes && j.data.classes.length > 0));
+        if(serverHasData){
+          const sd = JSON.parse(JSON.stringify(j.data));
+          sd.timetable = Object.assign({}, sd.timetable);
+          for(const tid in obj.timetable) sd.timetable[tid] = JSON.parse(JSON.stringify(obj.timetable[tid]));
+          if(Array.isArray(obj.attendance) && obj.attendance.length){
+            sd.attendance = Array.isArray(sd.attendance) ? sd.attendance.slice() : [];
+            for(const rec of obj.attendance){
+              if(!sd.attendance.some(x => x.studentId === rec.studentId && x.date === rec.date)) sd.attendance.push(rec);
+            }
+          }
+          obj = sd;
+          try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
+        }
+      }catch(e){}
+      const stillEmpty = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
+      if(stillEmpty) return;
+    }
+    let attempt = 0;
+    const respOf = await (async () => {
+      for(; attempt < 3; attempt++){
+        let resp = null;
+        try{
+          resp = await fetch(SYNC_API + school, {
+            method:'PUT',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ ts: __syncTS(obj) || Date.now(), data: obj })
+          });
+        }catch(e){ resp = null; }
+        if(!resp){ await new Promise(res => setTimeout(res, 1000 * (attempt + 1))); continue; }
+        if(resp.status === 401 || resp.status === 403){ __handleAuthError(resp); return null; }
+        if(resp.status === 200) return resp;
+        if(resp.status === 429){ await new Promise(res => setTimeout(res, 2000 * (attempt + 1))); continue; }
+        await new Promise(res => setTimeout(res, 1000 * (attempt + 1)));
+      }
+      return null;
+    })();
+    if(respOf){
+      try{
+        const j = await respOf.json();
+        if(j && j.ts && obj && typeof obj === 'object') obj._ts = j.ts;
+      }catch(e){}
+      try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
+      try{ localStorage.removeItem(pendKey); }catch(e){}
+      const recovered = st.attempts > 0;
+      st.attempts = 0;
+      st.lastFail = 0;
+      if(recovered) __uiToast('✅ عاد الاتصال — حُفظ ما لم يكن قد رُفع.');
+      return;
+    }
+    // فشل الرفع نهائياً: نحتفظ بالتعديلات في نسخة احتياطية محلية ونعيد المحاولة لاحقاً
+    st.attempts++;
+    st.lastFail = Date.now();
+    try{ localStorage.setItem(pendKey, JSON.stringify(obj)); }catch(e){}
+    __syncTimers[school] = setTimeout(() => __syncPush(school), 15000);
+    __uiToast('⚠️ تعذّر رفع حفظك للخادم الآن — سأعيد المحاولة تلقائياً ولا تختفي بياناتك.', true);
+  }catch(e){} finally {
+    st.running = false;
   }
-  try{
-    const resp = await fetch(SYNC_API + school, {
-      method:'PUT',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ ts: __syncTS(obj) || Date.now(), data: obj })
-    });
-    if(resp.status === 401) __handleAuthError(resp);
-    if(resp.status === 403) __handleAuthError(resp);
-  }catch(e){}
 }
 async function __syncPull(school){
   if(!__syncEnabled()) return;
+  const st = __pushState(school);
+  // تعديلات لم تُرفع بعد (فشل رفع سابق أو جارٍ الرفع): لا تكتب فوقها نسخة الخادم الأقدم
+  // — نعيد محاولة الرفع فوراً بدل محوها، حتى لا «يختفي» حفظ المعلم بعد إعادة الفتح.
+  const hasPending = (st && st.lastFail > 0 && (Date.now() - st.lastFail) < 60000);
+  if(hasPending){
+    __syncSchedule(school, 0);
+    return;
+  }
   try{
-    const resp = await fetch(SYNC_API + school);
-    if(resp.status === 401){ __handleAuthError(resp); return; }
-    if(!resp.ok) return;
-    const j = await resp.json();
+    const resid = await fetch(SYNC_API + school);
+    if(resid.status === 401){ __handleAuthError(resid); return; }
+    if(!resid.ok) return;
+    const j = await resid.json();
     if(!j || !j.data || !j.ts) return;
     const key = 'nibras_'+school+'_db_v1';
+    const pendKey = 'nibras_'+school+'_pending_v1';
     let local = null;
     try{ local = JSON.parse(localStorage.getItem(key) || 'null'); }catch(e){}
+    // يوجد احتياطي تعديلات لم تُرفع: لا نبدّل نسخة الجهاز ببيانات الخادم (قد تمسحها)؛
+    // ندفع الاحتياطي أولاً ثم نعود للجلب لاحقاً.
+    let pendExists = false;
+    try{ pendExists = !!localStorage.getItem(pendKey); }catch(e){}
     const localIsEmptySeed = local && Array.isArray(local.classes) && local.classes.length === 0 && Array.isArray(local.students) && local.students.length === 0;
     const serverHasData = (j.data.students && j.data.students.length > 0) || (j.data.classes && j.data.classes.length > 0);
     const localTs = __syncTS(local);
+    if(pendExists){
+      __syncSchedule(school, 0);
+      return;
+    }
     // إذا كانت نسخة الجهاز بلا زمنٍ صالح (NaN/صفر) فهي كهبة جديدة: نجلب نسخة الخادم دائماً
     // حتى تتعافى الأجهزة المتأثرة بخلل سابق في حقل _ts.
     if(!local || (localIsEmptySeed && serverHasData) || !(localTs > 0) || j.ts > localTs){
@@ -8376,6 +8460,25 @@ function renderBackup(){
     <div id="backupList" class="small">جارٍ تحميل القائمة…</div>
   </div>
 
+  <div class="card mb">
+    <div style="font-weight:700;margin-bottom:8px">📂 الاستعادة من ملف النسخة المحفوظة على جهازك (الطريقة الأخيرة)</div>
+    <div class="small muted" style="margin-bottom:10px">
+      تُستخدم إذا فُقدت نسخ الخادم أيضاً. اختر ملف «nibras-backup-… .json» المحفوظ على جهازك وسيُعاد كل شيء تلقائياً.
+    </div>
+    <input type="file" id="backupFileInput" accept=".json" style="display:block;margin-bottom:10px" onchange="backupRestoreFromFile(this)" />
+    <div id="backupFileMsg" class="small" style="color:#0d9488"></div>
+  </div>
+
+  <div class="card mb" style="border-color:#bfdbfe;background:#eff6ff">
+    <div style="font-weight:700;color:#1d4ed8">📋 خطوات إعادة كل شيء إذا فسد الموقع (احفظها أو صوّرها)</div>
+    <ol class="small" style="margin:8px 0 0 18px;line-height:1.9">
+      <li><b>الموقع يعمل لكن فُقدت البيانات:</b> ادخل بحساب المدير ← «النسخ الاحتياطي» ← في بطاقة نسخ الخادم اختر آخر نسخة واضغط «↩️ استرجاع». تنتهي المشكلة فوراً.</li>
+      <li><b>فُقدت نسخ الخادم أيضاً:</b> افتح «النسخ الاحتياطي» ← «الاستعادة من ملف النسخة» ← اختر ملف «nibras-backup-… .json» من سطح المكتب لديك ← اضغط موافق للملفين (بنين وبنات).</li>
+      <li><b>الموقع نفسه معطّل لا يفتح:</b> لا حاجة للذعر — بياناتك محفوظة في ملف سطح المكتب وفي قاعدة البيانات. أعد النشر (Deploy) في Render ثم نفّذ أي خطوة من الخطوتين 1 أو 2 بعد فتح الصفحة.</li>
+      <li>بعد أي استرجاع، كل الأجهزة تتحدث تلقائياً بمجرد فتح التطبيق (بلا خطوة إضافية).</li>
+    </ol>
+  </div>
+
   <div class="card" style="border-color:#fecaca;background:#fef2f2">
     <div style="font-weight:700;color:#b91c1c">تنبيه هام</div>
     <div class="small" style="margin-top:6px">
@@ -8443,6 +8546,37 @@ async function backupRestore(id, school){
     }
   }catch(e){
     alert('خطأ في الاتصال بالخادم');
+  }
+}
+async function backupRestoreFromFile(input){
+  const el = document.getElementById('backupFileMsg');
+  const file = input && input.files && input.files[0];
+  if(!file){ return; }
+  try{
+    const text = await file.text();
+    const obj = JSON.parse(text);
+    const schools = [];
+    if(obj && obj.BOYS && obj.BOYS.data && Array.isArray(obj.BOYS.data.users)) schools.push('BOYS');
+    if(obj && obj.GIRLS && obj.GIRLS.data && Array.isArray(obj.GIRLS.data.users)) schools.push('GIRLS');
+    if(!schools.length){ el.textContent = '⚠️ الملف ليس نسخة احتياطية صحيحة (لا يحوي بيانات المستخدمين).'; return; }
+    const names = schools.map(s => s === 'BOYS' ? 'البنين' : 'البنات').join(' و');
+    if(!confirm('سيُعاد كل شيء (بما فيه الفصول والطلاب والجدول والغياب) لقسم ' + names + ' من هذا الملف، وتُستبدل البيانات الحالية. متابعة؟')){ input.value=''; return; }
+    if(!confirm('تأكيد أخير قبل الكتابة فوق البيانات الحالية — متابعة؟')){ input.value=''; return; }
+    const done = [];
+    for(const s of schools){
+      const r = await fetch('/api/backups/import', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ school: s, data: obj[s].data })
+      });
+      const j = await r.json();
+      done.push((s === 'BOYS' ? 'البنين' : 'البنات') + (j.ok ? ' ✓' : ' ✗ ' + (j.error || 'خطأ')));
+      if(j.ok){ try{ if(window.__syncPull) __syncPull(s); }catch(e){} }
+    }
+    el.textContent = 'النتيجة: ' + done.join(' — ') + '. أكمل على الأجهزة الأخرى تلقائياً بعد فتح التطبيق.';
+    input.value = '';
+  }catch(e){
+    el.textContent = '⚠️ تعذّر قراءة الملف — تأكد أنه «nibras-backup-… .json» ولم يعدّل.';
   }
 }
 function renderSettings(){

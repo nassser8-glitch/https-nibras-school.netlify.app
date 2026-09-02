@@ -702,12 +702,17 @@ function mergeTimetable(prev, inb) {
     const a = prev && prev[tid];
     const b = inb && inb[tid];
     if (!a && !b) continue;
-    if (!a || !b) { out[tid] = a || b; continue; }
+    // كائن فارغ {} قد يصل من جهاز قديم/ذرة جديدة — لا يمحو أبداً جدولاً محفوظاً
+    if (!a || !Object.keys(a).length) { out[tid] = b || a; continue; }
+    if (!b || !Object.keys(b).length) { out[tid] = a; continue; }
     const days = new Set([...Object.keys(a), ...Object.keys(b)]);
     const mergedDays = {};
     for (const day of days) {
       const da = a[day], db = b[day];
       if (!da || !db) { mergedDays[day] = da || db; continue; }
+      // يوم فارغ في أي جهة لا يمسح حصص اليوم المحفوظة
+      if (!Object.keys(da).length) { mergedDays[day] = db; continue; }
+      if (!Object.keys(db).length) { mergedDays[day] = da; continue; }
       const periods = new Set([...Object.keys(da), ...Object.keys(db)]);
       const mergedPeriods = {};
       for (const pp of periods) mergedPeriods[pp] = db[pp] !== undefined ? db[pp] : da[pp];
@@ -1004,6 +1009,23 @@ app.post('/api/backups/restore', requireAuth, (req, res) => {
     if (data && typeof data === 'object') data._ts = ts;
     await db.setSchoolData(bak.school, data, ts);
     res.json({ ok: true, school: bak.school, ts, takenAt: bak.taken_at });
+  })().catch(fail(res));
+});
+// استرجاع من ملف نسخة احتياطية محفوظة على جهازك (غلاف الحماية الأخير):
+// حتى لو فقدت نسخ الخادم كلها، يُعاد رفع الملف الموجود على سطح المكتب بضغطة.
+app.post('/api/backups/import', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const school = String(req.body && req.body.school || '').toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    const data = req.body && req.body.data;
+    if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.users))
+      return res.status(400).json({ error: 'invalid_payload' });
+    const ts = Date.now();
+    const clean = JSON.parse(JSON.stringify(data));
+    if (clean && typeof clean === 'object') clean._ts = ts;
+    await db.setSchoolData(school, clean, ts);
+    res.json({ ok: true, school, ts });
   })().catch(fail(res));
 });
 // لقطة أولية عند الإقلاع ثم كل 30 دقيقة
