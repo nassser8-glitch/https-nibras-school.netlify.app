@@ -6840,7 +6840,8 @@ function saveTtCell(){
   d.timetable = d.timetable || {};
   d.timetable[user.id] = d.timetable[user.id] || {};
   d.timetable[user.id][ttEdit.day] = d.timetable[user.id][ttEdit.day] || {};
-  d.timetable[user.id][ttEdit.day][ttEdit.period] = { subject, classId };
+  const prevCell = (d.timetable[user.id][ttEdit.day][ttEdit.period]) || {};
+  d.timetable[user.id][ttEdit.day][ttEdit.period] = { subject, classId, _v: (((prevCell && typeof prevCell._v === 'number') ? prevCell._v : 0) + 1) };
   saveDB(d);
   mirrorTtToOther(user.email, ttEdit.day, ttEdit.period, { subject, classId });
   closeTtForm();
@@ -6850,7 +6851,8 @@ function deleteTtCell(period){
   const user = currentUser();
   if(!confirm('حذف هذه الحصة؟')) return;
   const d = loadDB();
-  if(d.timetable && d.timetable[user.id] && d.timetable[user.id][timetableDay]) d.timetable[user.id][timetableDay][period] = { _del: true };
+  const cell = (d.timetable[user.id][timetableDay] && d.timetable[user.id][timetableDay][period]) || {};
+  if(d.timetable && d.timetable[user.id] && d.timetable[user.id][timetableDay]) d.timetable[user.id][timetableDay][period] = { _del: true, _v: (((cell && typeof cell._v === 'number') ? cell._v : 0) + 1) };
   saveDB(d);
   mirrorTtDelete(user.email, timetableDay, period);
   renderApp();
@@ -6878,7 +6880,8 @@ function mirrorTtDelete(teacherEmail, day, period){
   const od = loadDBFor(other);
   const u = (od.users || []).find(x => x.email === teacherEmail);
   if(!u || !od.timetable || !od.timetable[u.id] || !od.timetable[u.id][day]) return;
-  od.timetable[u.id][day][period] = { _del: true };
+  const cell = od.timetable[u.id][day][period] || {};
+  od.timetable[u.id][day][period] = { _del: true, _v: (((cell && typeof cell._v === 'number') ? cell._v : 0) + 1) };
   localStorage.setItem(dbKeyFor(other), JSON.stringify(od));
 }
 

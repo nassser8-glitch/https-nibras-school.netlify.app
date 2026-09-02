@@ -715,7 +715,21 @@ function mergeTimetable(prev, inb) {
       if (!Object.keys(db).length) { mergedDays[day] = da; continue; }
       const periods = new Set([...Object.keys(da), ...Object.keys(db)]);
       const mergedPeriods = {};
-      for (const pp of periods) mergedPeriods[pp] = db[pp] !== undefined ? db[pp] : da[pp];
+      for (const pp of periods){
+        const prevCell = da[pp];
+        const inCell = db[pp];
+        if (inCell === undefined){ mergedPeriods[pp] = prevCell; continue; }
+        // شاهد قبر الحذف {_del} لاصق: الخلية المحذوفة لا تعود حتى من جهاز أقدم،
+        // ولا تُعطى إلا برقم إصدار أعلى (إعادة إضافة مقصودة من الجهاز الذي رأى الحذف).
+        if (inCell && inCell._del){ mergedPeriods[pp] = inCell; continue; }
+        if (prevCell && prevCell._del){
+          const pv = (typeof prevCell._v === 'number') ? prevCell._v : 0;
+          const iv = (typeof inCell._v === 'number') ? inCell._v : 0;
+          mergedPeriods[pp] = (iv > pv) ? inCell : prevCell;
+          continue;
+        }
+        mergedPeriods[pp] = inCell;
+      }
       mergedDays[day] = mergedPeriods;
     }
     out[tid] = mergedDays;
