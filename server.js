@@ -1100,6 +1100,11 @@ app.get('/api/diag/db', async (req, res) => {
   }
 });
 
+app.use((req,res,next)=>{
+  const p = (req.path || '').split('?')[0];
+  if (p === '/' || p === '/index.html') res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  next();
+});
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));
 
 app.use((req, res) => res.status(404).json({ error: 'not_found' }));
