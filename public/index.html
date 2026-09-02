@@ -3618,8 +3618,10 @@ function renderDashboard(){
     const gradeIds = new Set(d.grades.filter(x => x.order >= g.min && x.order <= g.max).map(x => x.id));
     const classIds = new Set(d.classes.filter(c => gradeIds.has(c.gradeId)).map(c => c.id));
     const studs = students.filter(s => s.classId && classIds.has(s.classId));
-    const withPts = studs.map(s => ({ s, pts: ptsMap[s.id] || 0 })).filter(x => x.pts !== 0).sort((a,b) => b.pts - a.pts || String(a.s.fullName).localeCompare(String(b.s.fullName),'ar'));
-    if(withPts.length === 0) return '<p class="muted small" style="margin:4px 0">لا توجد نقاط مسجلة في هذه المرحلة</p>';
+    // نعرض طلاب المرحلة (فصول المعلم) بترتيب النقاط تنازلياً — حتى من له 0 نقاط يظهر،
+    // فلا تبقى مرحلة «فارغة» لدى المعلم ما دام يدرّس طلاباً فيها.
+    const withPts = studs.map(s => ({ s, pts: ptsMap[s.id] || 0 })).sort((a,b) => b.pts - a.pts || String(a.s.fullName).localeCompare(String(b.s.fullName),'ar'));
+    if(withPts.length === 0) return '<p class="muted small" style="margin:4px 0">لا توجد طلاب مسندون إليك في هذه المرحلة</p>';
     return withPts.slice(0,3).map((x,i) => `
     <div class="dash-leader-row">
       <span class="dash-leader-medal">${medals[i] || '•'}</span>
