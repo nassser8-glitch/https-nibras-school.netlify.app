@@ -6983,7 +6983,7 @@ function renderAssignments(){
   if(step === 'list'){
     const cls = d.classes.find(c => c.id === classId);
     const clsStudents = (d.students||[]).filter(s => s.active && s.classId === classId);
-    const clsAssignments = (d.assignments||[]).filter(a => a.classId === classId).sort((a,b) => (b.created||0) - (a.created||0));
+    const clsAssignments = (d.assignments||[]).filter(a => a.classId === classId && (user.role==='ADMIN' || user.role==='AGENT' || a.teacherId === user.id)).sort((a,b) => (b.created||0) - (a.created||0));
     const typeColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
     const rows = clsAssignments.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">لا توجد تكليفات لهذا الفصل</td></tr>` :
     clsAssignments.map(a => {
@@ -7028,6 +7028,7 @@ function renderAssignments(){
     const clsStudents = (d.students||[]).filter(s => s.active && s.classId === classId);
     const a = (d.assignments||[]).find(x => x.id === assignmentId);
     if(!a) return `<div class="page-title">التكليف غير موجود</div><a href="#/assignments?step=list&cid=${classId}" style="font-size:13px">← الرجوع</a>`;
+    if(user.role !== 'ADMIN' && user.role !== 'AGENT' && a.teacherId !== user.id) return `<div class="page-title">غير متاح</div><a href="#/assignments?step=list&cid=${classId}" style="font-size:13px">← الرجوع</a>`;
     const doneCount = clsStudents.filter(s => (a.completedBy||[]).includes(s.id)).length;
     const pct = clsStudents.length ? Math.round(doneCount/clsStudents.length*100) : 0;
     const typeColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
