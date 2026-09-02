@@ -3332,7 +3332,7 @@ function renderDashboard(){
   const nextPeriodNow = (() => {
     if(!isTeacher || !ttToday) return null;
     const nowMin = new Date().getHours()*60 + new Date().getMinutes();
-    const periods = Object.keys(ttToday).map(Number).sort((a,b)=>a-b);
+    const periods = Object.keys(ttToday).filter(p => ttToday[p] && !ttToday[p]._del).map(Number).sort((a,b)=>a-b);
     const PERIOD_START = { 1:[7,0],2:[8,0],3:[9,0],4:[10,0],5:[11,0],6:[12,0],7:[13,0] }; // تقريبي
     const cur = periods.find(p => {
       const st = PERIOD_START[p] || [0,0];
@@ -6719,7 +6719,7 @@ function renderTimetable(){
     const rows = TIMETABLE_PERIOD_NAMES.map((name, i) => {
       const p = i + 1;
       const cell = merged[p];
-      if(cell){
+      if(cell && !cell._del){
         const c = d.classes.find(x => x.id === cell.classId);
         return `<div class="card tt-row">
           <div class="tt-badge">الحصة ${name}</div>
@@ -6752,7 +6752,7 @@ function renderTimetable(){
   const rows2 = TIMETABLE_PERIOD_NAMES.map((name, i) => {
     const p = i + 1;
     const cell = dayCells[p];
-    if(cell){
+    if(cell && !cell._del){
       const c = d.classes.find(x => x.id === cell.classId);
       return `<div class="card tt-row">
         <div class="tt-badge">الحصة ${name}</div>
@@ -6850,7 +6850,7 @@ function deleteTtCell(period){
   const user = currentUser();
   if(!confirm('حذف هذه الحصة؟')) return;
   const d = loadDB();
-  if(d.timetable && d.timetable[user.id] && d.timetable[user.id][timetableDay]) delete d.timetable[user.id][timetableDay][period];
+  if(d.timetable && d.timetable[user.id] && d.timetable[user.id][timetableDay]) d.timetable[user.id][timetableDay][period] = { _del: true };
   saveDB(d);
   mirrorTtDelete(user.email, timetableDay, period);
   renderApp();
@@ -6878,7 +6878,7 @@ function mirrorTtDelete(teacherEmail, day, period){
   const od = loadDBFor(other);
   const u = (od.users || []).find(x => x.email === teacherEmail);
   if(!u || !od.timetable || !od.timetable[u.id] || !od.timetable[u.id][day]) return;
-  delete od.timetable[u.id][day][period];
+  od.timetable[u.id][day][period] = { _del: true };
   localStorage.setItem(dbKeyFor(other), JSON.stringify(od));
 }
 
