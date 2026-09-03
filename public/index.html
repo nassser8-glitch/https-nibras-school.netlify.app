@@ -250,6 +250,8 @@
   .sidebar-announce .line { white-space:nowrap; animation: marquee 10s linear infinite; }
   @keyframes marquee { 0%{transform:translateX(-120px);opacity:0} 8%{transform:translateX(0);opacity:1} 80%{transform:translateX(60px);opacity:1} 100%{transform:translateX(120px);opacity:0} }
   @keyframes msgPulse { 0%{box-shadow:0 0 0 0 rgba(220,38,38,.5)} 70%{box-shadow:0 0 0 12px rgba(220,38,38,0)} 100%{box-shadow:0 0 0 0 rgba(220,38,38,0)} }
+  @keyframes supGlow { 0%{box-shadow:0 0 8px 0 rgba(255,191,36,.35)} 50%{box-shadow:0 0 22px 4px rgba(255,191,36,.65)} 100%{box-shadow:0 0 8px 0 rgba(255,191,36,.35)} }
+  @keyframes supShield { 0%{transform:scale(1)} 50%{transform:scale(1.18)} 100%{transform:scale(1)} }
   @keyframes marqueeBar { 0%,100%{transform:translateX(0)} 50%{transform:translateX(-90px)} }
   .notice-bar { background:linear-gradient(135deg,var(--primary,#0f4f88),var(--accent,#1d7fd6)); color:#fff; border-radius:10px; overflow:hidden; padding:9px 0; margin-bottom:12px; box-shadow:0 2px 12px rgba(0,0,0,.15); }
   .notice-bar .line { display:inline-block; white-space:nowrap; font-size:14px; font-weight:800; padding:0 16px; animation:marqueeBar 10s ease-in-out infinite; }
@@ -3353,8 +3355,8 @@ function renderDashboard(){
       ${statTile('📝', myAssignments.length, 'التكليفات', 'مفتوحة لفصلي', 'location.hash=\'#/assignments\'')}
     </div>
     ${(() => { const sup = supervisionForUser(user); if(!sup) return ''; const partners = sup.roster.filter(u => u.id !== user.id); return `
-    <div class="card mb" style="padding:14px 18px;border:none;border-radius:16px;background:linear-gradient(135deg,#0f4f88,#1d4ed8);color:#fff;box-shadow:0 8px 22px rgba(15,79,136,.18);display:flex;align-items:center;gap:14px">
-      <div style="width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">🛡️</div>
+    <div class="card mb" style="padding:14px 18px;border:none;border-radius:16px;background:linear-gradient(135deg,#0f4f88,#1d4ed8);color:#fff;box-shadow:0 8px 22px rgba(15,79,136,.18);display:flex;align-items:center;gap:14px;animation:supGlow 2s ease-in-out infinite">
+      <div style="width:48px;height:48px;border-radius:14px;background:rgba(255,191,36,.25);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;animation:supShield 1.8s ease-in-out infinite">🛡️</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;opacity:.92;font-weight:700">إشرافك اليوم — ${sup.label}</div>
         <div style="font-weight:800;font-size:16px;margin-top:1px">معك في النوبة:</div>
