@@ -3352,6 +3352,16 @@ function renderDashboard(){
       ${statTile('✅', (tDayAtt?tDayAtt.present:0) + '/' + ((tDayAtt?tDayAtt.present:0)+(tDayAtt?tDayAtt.absent:0)+(tDayAtt?tDayAtt.late:0)), 'حضور اليوم', (tDayAtt&&tDayAtt.absent) ? tDayAtt.absent + ' غائب' : 'الكل حاضر', 'showTodayAttendance()')}
       ${statTile('📝', myAssignments.length, 'التكليفات', 'مفتوحة لفصلي', 'location.hash=\'#/assignments\'')}
     </div>
+    ${(() => { const sup = supervisionForUser(user); if(!sup) return ''; const partners = sup.roster.filter(u => u.id !== user.id); return `
+    <div class="card mb" style="padding:14px 18px;border:none;border-radius:16px;background:linear-gradient(135deg,#0f4f88,#1d4ed8);color:#fff;box-shadow:0 8px 22px rgba(15,79,136,.18);display:flex;align-items:center;gap:14px">
+      <div style="width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">🛡️</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;opacity:.92;font-weight:700">إشرافك اليوم — ${sup.label}</div>
+        <div style="font-weight:800;font-size:16px;margin-top:1px">معك في النوبة:</div>
+        <div style="font-size:12px;opacity:.95;margin-top:2px">${partners.map(p => escapeHtml(p.name.split(' ')[0])).join('، ')}</div>
+      </div>
+      <span style="background:rgba(255,255,255,.22);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:800;white-space:nowrap">${sup.roster.length} مشرفين</span>
+    </div>`; })()}
     ${tpct !== null ? `
     <div class="card mb" style="padding:14px 16px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -6640,6 +6650,36 @@ const TIMETABLE_DAYS = [
   { key:'THURSDAY', label:'الخميس', dow:4 },
   { key:'FRIDAY', label:'الجمعة', dow:5 }
 ];
+/* ===== جدول الإشراف اليومي الأسبوعي (ينوب 4 معلمين كل يوم) ===== */
+/* كل يوم يسرد هويات المعلمين المشرفين (أو اسمهم — يُضاف الحساب لاحقًا) */
+const SUPERVISION_DAYS = [
+  { key:'MONDAY', label:'الاثنين', refs:['id_456dd3f95755b462','id_2afe9dd515171d10','id_81dc0acd1fde3501','id_d172e54424f6f92f'] },
+  { key:'TUESDAY', label:'الثلاثاء', refs:['id_4796558a54b0c430','id_8eb0fad8767b9b71','id_d41b704a9a2a0723','id_ec3fe44ed2d41d03'] },
+  { key:'WEDNESDAY', label:'الأربعاء', refs:['id_b9fa8cd671d2b6bb','id_7ef93851497c92a3','id_db5090aa05914b44','id_b66b2d68e06fa1e5'] },
+  { key:'THURSDAY', label:'الخميس', refs:['id_e5e0692f7e99fb41','id_997be57741e83d6f','id_89d446202da30319','id_5a71b62656667b0b'] },
+  { key:'FRIDAY', label:'الجمعة', refs:['id_4adb92fb6dcb0936','id_1818262198c756d9','id_2ee6dfa72947ed9b','خالد'] }
+];
+/* يحسم إن كان معلم معين مُشرِفًا اليوم، ويعيد بقية زملاء نوبته */
+function supervisionForUser(user){
+  if(!user || user.role !== 'TEACHER') return null;
+  const day = TIMETABLE_DAYS.find(x => x.dow === new Date().getDay());
+  if(!day) return null;
+  const slot = SUPERVISION_DAYS.find(s => s.key === day.key);
+  if(!slot) return null;
+  const d = typeof loadDB === 'function' ? loadDB() : null;
+  const users = (d && d.users) ? d.users : [];
+  const resolve = ref => {
+    if(ref === (user.id || '')) return user;                       // الهوية نفسها
+    const byId = users.find(u => u.id === ref);
+    if(byId) return byId;
+    const byName = users.find(u => (u.name||'').includes(String(ref)));
+    return byName || null;
+  };
+  const roster = slot.refs.map(resolve).filter(Boolean);
+  const me = roster.find(u => u.id === user.id);
+  if(!me) return null;
+  return { dayKey:day.key, label:slot.label, roster };
+}
 const TIMETABLE_PERIOD_NAMES = ['الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة'];
 /* جميع المواد الممكنة حسب المراحل ليختار منها المعلم عند إدخال حصته */
 const TT_SUBJECT_GROUPS = [
