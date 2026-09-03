@@ -663,9 +663,17 @@ function mergeAttendance(prev, incoming) {
   if (!Array.isArray(incoming)) incoming = [];
   const keyOf = r => (r && typeof r === 'object' && r.id) ? r.id : '__anon:' + JSON.stringify(r);
   const tOf = r => (r && typeof r === 'object' && typeof r._t === 'number') ? r._t : 0;
+  // الغياب/التأخر «معلومات حاسمة» — لا يمحوها تسجيلُ حُضورٍ اعتيادي (افتراضي/خطأ) من معلمٍ آخر
+  // في الفصول المشتركة (عدة معلمين يفتحون نفس قائمة الطلاب). PRESENT أقل إفادة من ABSENT/LATE.
+  const inf = r => (r && typeof r === 'object' && (r.status === 'ABSENT' || r.status === 'LATE')) ? 1 : 0;
+  // اختيار السجل الفائز: الغائب/المتأخر على الحاضر مهما تقدم زمنه، وإلا الأعلى _t
+  const better = (a, b) => {
+    if (inf(a) !== inf(b)) return inf(a) > inf(b) ? a : b;
+    return tOf(a) >= tOf(b) ? a : b;
+  };
   const tomb = new Set();
   for (const r of prev) { if (r && typeof r === 'object' && r.deleted) tomb.add(keyOf(r)); }
-  // المرحلة 1: دمج حسب id مع آخر-كتابة-يفوز على _t (المكتِب الجديد يفوز عند التعادل)
+  // المرحلة 1: دمج حسب id — الغائب/المتأخر يفوز على الحاضر، وإلا آخر-كتابة-يفوز على _t
   const map = new Map();
   for (const r of prev) { if (r && typeof r === 'object') map.set(keyOf(r), r); }
   for (const r of incoming) {
@@ -676,10 +684,9 @@ function mergeAttendance(prev, incoming) {
     if (!ex) { map.set(k, r); continue; }
     // قفل الحذف (تومبستون) ألصق: لا يُعاد إحياء
     if ((r.deleted || ex.deleted)) { if (r.deleted) map.set(k, r); continue; }
-    if (tOf(r) >= tOf(ex)) map.set(k, r);
+    map.set(k, better(r, ex));
   }
-  // المرحلة 2: إزالة التكرار حسب (studentId|date) مع الإبقاء على الأعلى _t
-  // (تجنّب تراكم سجلّين لنفس الطالبة/التاريخ من معرفات مختلفة)
+  // المرحلة 2: إزالة التكرار حسب (studentId|date) — نفس قاعدة الاختيار (الغائب يفوز)
   const bySD = new Map();
   const all = Array.from(map.values());
   const result = [];
@@ -690,7 +697,8 @@ function mergeAttendance(prev, incoming) {
     const cur = bySD.get(sd);
     if (!cur) { bySD.set(sd, r); result.push(r); continue; }
     const idx = result.indexOf(cur);
-    if (tOf(r) >= tOf(cur)) { result[idx] = r; bySD.set(sd, r); }
+    const win = better(r, cur);
+    if (win !== cur) { result[idx] = win; bySD.set(sd, win); }
   }
   return result;
 }
