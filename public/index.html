@@ -736,7 +736,6 @@ async function __syncPull(school){
     // حتى تتعافى الأجهزة المتأثرة بخلل سابق في حقل _ts.
     if(!local || (localIsEmptySeed && serverHasData) || !(localTs > 0) || j.ts > localTs){
       __origSetItem(key, JSON.stringify(j.data));
-      if(!__uiDirty() && getActiveSchool && getActiveSchool() === school) renderApp();
     } else if(local && !localIsEmptySeed && j.ts < localTs){
       __syncPush(school);
     }
