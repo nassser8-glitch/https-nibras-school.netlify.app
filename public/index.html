@@ -2930,7 +2930,7 @@ function renderAdminMsgAlerts(){
         <div style="font-size:14px;line-height:1.7;font-weight:700;color:${colText};margin-top:8px;white-space:pre-wrap">${escapeHtml(m.text)}</div>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:auto;padding-top:8px">
           <span style="font-size:11px;font-weight:800;color:${colDark}">👁 ${m.views||0} اطلاع</span>
-          <button class="btn-primary" style="background:${col};border-color:${col};padding:5px 10px;font-size:12px" onclick="dismissAdminMsg('${m.id}')">✓ فهمت</button>
+          <button class="btn-primary" style="background:${col};border-color:${col};padding:5px 10px;font-size:12px" onclick="dismissAdminMsg('${m.id}')">✓ تم الاطلاع</button>
         </div>
       </div>`;
     }).join('')}
