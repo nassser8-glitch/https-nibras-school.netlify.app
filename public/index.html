@@ -583,6 +583,7 @@ function __syncEnabled(){ return !DEMO_MODE && location.protocol.indexOf('http')
 function __syncTS(obj){ return (obj && typeof obj === 'object' && obj._ts) || 0; }
 /* حالة الرفع المعلّق لكل قسم: تمنع أن تسحب نسخة الخادم الأقدم فتختفي تعديلاتٌ لم تُرفع بعد */
 const __pushPending = {};
+function __uiDirty(){ try { return !!document.querySelector('.modal-overlay') || (document.getElementById('noteForm') && document.getElementById('noteForm').style.display !== 'none'); } catch(e){ return false; } }
 function __pushState(school){
   return (__pushPending[school] = __pushPending[school] || { attempts:0, lastFail:0, running:false });
 }
@@ -735,7 +736,7 @@ async function __syncPull(school){
     // حتى تتعافى الأجهزة المتأثرة بخلل سابق في حقل _ts.
     if(!local || (localIsEmptySeed && serverHasData) || !(localTs > 0) || j.ts > localTs){
       __origSetItem(key, JSON.stringify(j.data));
-      if(getActiveSchool && getActiveSchool() === school) renderApp();
+      if(!__uiDirty() && getActiveSchool && getActiveSchool() === school) renderApp();
     } else if(local && !localIsEmptySeed && j.ts < localTs){
       __syncPush(school);
     }
@@ -4773,7 +4774,7 @@ function filterStudentsTable(){
     tr.style.display = (!q || name.includes(q) || no.includes(q)) ? '' : 'none';
   });
 }
-function toggleEl(id){ const el = document.getElementById(id); el.style.display = el.style.display==='none' ? '' : 'none'; }
+function toggleEl(id){ const el = document.getElementById(id); if(el) el.style.display = el.style.display==='none' ? '' : 'none'; }
 function fillStudentSelect(classSelectId, studentSelectId){
   const classId = document.getElementById(classSelectId).value;
   const sel = document.getElementById(studentSelectId);
