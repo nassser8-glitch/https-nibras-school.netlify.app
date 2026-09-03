@@ -5444,9 +5444,9 @@ function saveAttendance(){
       }
       else { delete st.lateMinutes[date]; delete st.lateType[date]; }
     }
-    const attObj = { id:uid(), studentId, classId:realClassId, date:attendanceState.date, status, absenceType: at, createdBy: currentUser()?.id };
+    const attObj = { id:uid(), studentId, classId:realClassId, date:attendanceState.date, status, absenceType: at, createdBy: currentUser()?.id, _t: Date.now() };
     if(status === 'LATE' && lateMins > 0) attObj.lateMinutes = lateMins;
-    if(rec){ rec.status = status; rec.classId = realClassId; rec.absenceType = at; rec.createdBy = currentUser()?.id || rec.createdBy; if(status === 'LATE' && lateMins > 0) rec.lateMinutes = lateMins; else delete rec.lateMinutes; }
+    if(rec){ rec.status = status; rec.classId = realClassId; rec.absenceType = at; rec._t = Date.now(); rec.createdBy = currentUser()?.id || rec.createdBy; if(status === 'LATE' && lateMins > 0) rec.lateMinutes = lateMins; else delete rec.lateMinutes; }
     else { d.attendance.push(attObj); }
   });
   Object.entries(attendanceState.tDraft || {}).forEach(([teacherId, status]) => {

@@ -690,7 +690,7 @@ function mergeAttendance(prev, incoming) {
     const cur = bySD.get(sd);
     if (!cur) { bySD.set(sd, r); result.push(r); continue; }
     const idx = result.indexOf(cur);
-    if (tOf(r) > tOf(cur)) { result[idx] = r; bySD.set(sd, r); }
+    if (tOf(r) >= tOf(cur)) { result[idx] = r; bySD.set(sd, r); }
   }
   return result;
 }
