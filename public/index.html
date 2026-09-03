@@ -5580,10 +5580,17 @@ function addNote(){
   savingNote = true;
   try {
     const d = loadDB();
-    const points = notePoints(noteType, category);
+    // اشتقاق نوع الملاحظة من الفئة المختارة تلقائياً حتى لا يحدث خلل بأن تكون
+    // ملاحظة سلبية بفئة موجبة (أو العكس) فتُخصم الإيجابية أو تُضاف السلبية.
+    let effType = noteType;
+    if(category && category !== 'أخرى' && category !== 'تحرير'){
+      if(noteCategoriesPositive.includes(category)) effType = 'POSITIVE';
+      else if(noteCategoriesNegative.includes(category)) effType = 'NEGATIVE';
+    }
+    const points = notePoints(effType, category);
     const batchId = uid();
     ids.forEach(sid => {
-      d.notes.push({ id:uid(), studentId:sid, type:noteType, category, description, points, createdBy: currentUser().id, createdAt: new Date().toISOString(), batchId });
+      d.notes.push({ id:uid(), studentId:sid, type:effType, category, description, points, createdBy: currentUser().id, createdAt: new Date().toISOString(), batchId });
     });
     saveDB(d);
   } finally {
