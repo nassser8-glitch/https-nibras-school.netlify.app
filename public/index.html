@@ -730,17 +730,40 @@ async function __syncPull(school){
     try{ pendExists = !!localStorage.getItem(pendKey); }catch(e){}
     const localIsEmptySeed = local && Array.isArray(local.classes) && local.classes.length === 0 && Array.isArray(local.students) && local.students.length === 0;
     const serverHasData = (j.data.students && j.data.students.length > 0) || (j.data.classes && j.data.classes.length > 0);
-    const localTs = __syncTS(local);
     if(pendExists){
       __syncSchedule(school, 0);
       return;
     }
-    // إذا كانت نسخة الجهاز بلا زمنٍ صالح (NaN/صفر) فهي كهبة جديدة: نجلب نسخة الخادم دائماً
-    // حتى تتعافى الأجهزة المتأثرة بخلل سابق في حقل _ts.
-    if(!local || (localIsEmptySeed && serverHasData) || !(localTs > 0) || j.ts > localTs){
-      __origSetItem(key, JSON.stringify(j.data));
-    } else if(local && !localIsEmptySeed && j.ts < localTs){
-      __syncPush(school);
+    const server = j.data;
+    // دمج آمن: نبدأ من نسخة الخادم (مصدر الحقيقة لأحدث بيانات الزملاء/المشرفين) ونحفظ فوقها
+    // تعديلات هذا الجهاز المحلية التي لم تصل بعد للخادم (ملاحظات/غياب جديدة بوقت أحدث) —
+    // حتى لا يختفي عملُ المعلم ولا تغيب عنه بيانات زملائه في الفصول المشتركة.
+    if(!local || localIsEmptySeed || !(serverHasData)){
+      __origSetItem(key, JSON.stringify(server));
+    } else {
+      const merged = JSON.parse(JSON.stringify(server));
+      merged.timetable = Object.assign({}, merged.timetable);
+      if(local.timetable) for(const tid in local.timetable) merged.timetable[tid] = JSON.parse(JSON.stringify(local.timetable[tid]));
+      // غياب محلي جديد (أحدث من نظيره في الخادم) يحفظ فوقه
+      if(Array.isArray(local.attendance)){
+        merged.attendance = Array.isArray(merged.attendance) ? merged.attendance.slice() : [];
+        const tOf = r => (r && typeof r === 'object' && typeof r._t === 'number') ? r._t : 0;
+        const bySD = new Map(merged.attendance.map(r => [ (r.studentId||'')+'|'+(r.date||''), r ]));
+        for(const r of local.attendance){
+          const sd = (r.studentId||'')+'|'+(r.date||'');
+          const ex = bySD.get(sd);
+          if(!ex) { bySD.set(sd, r); merged.attendance.push(r); }
+          else if(tOf(r) > tOf(ex)){ merged.attendance = merged.attendance.map(x => (x===ex)?r:x); bySD.set(sd, r); }
+        }
+      }
+      // ملاحظات محلية جديدة (لم تُرفع) نضمن بقاءها
+      if(Array.isArray(local.notes)){
+        merged.notes = Array.isArray(merged.notes) ? merged.notes.slice() : [];
+        const nMap = new Map(merged.notes.map(n => [n.id, n]));
+        for(const n of local.notes){ if(!nMap.has(n.id)){ nMap.set(n.id,n); merged.notes.push(n); } }
+      }
+      merged._ts = Math.max(__syncTS(server), __syncTS(local), Date.now());
+      __origSetItem(key, JSON.stringify(merged));
     }
   }catch(e){}
 }
