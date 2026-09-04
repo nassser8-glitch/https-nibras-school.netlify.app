@@ -1,5 +1,5 @@
 ﻿/* ظ†ط¨ط±ط§ط³ â€” Service Worker ظ„ظ„طھط«ط¨ظٹطھ ظˆط§ظ„ط¹ظ…ظ„ ط¯ظˆظ† ط§طھطµط§ظ„ */
-const CACHE_NAME = 'nibras-v19';
+const CACHE_NAME = 'nibras-v20';
 const CORE_ASSETS = [
   './',
   './index.html',
