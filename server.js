@@ -637,6 +637,11 @@ function mergeSection(prevVal, inVal) {
   // السجلات بلا id تُحفظ أيضاً بمفتاح مستقر (محتواها) كي لا تختفي سجلات قديمة.
   if (Array.isArray(prevVal) && Array.isArray(inVal)) {
     const keyOf = r => (r && typeof r === 'object' && r.id) ? r.id : '__anon:' + JSON.stringify(r);
+    // قائمة منع دائمة: تكليفات معتمة (مثل «1» و«11» لعبدالله) مُحذوفة نهائياً لا يمكن لأي
+    // جهاز قديم إعادة إحيائها مهما دفع نسخته — فلترة مباشرة قبل الدمج.
+    const blockedKeys = new Set(['id_gmrt4bv0mtjke2qi', 'id_ualtqnkfmtjkhr43']);
+    prevVal = prevVal.filter(r => !(r && typeof r === 'object' && blockedKeys.has(keyOf(r))));
+    inVal = inVal.filter(r => !(r && typeof r === 'object' && blockedKeys.has(keyOf(r))));
     const tomb = new Set();
     for (const r of prevVal) { if (r && typeof r === 'object' && r.deleted) tomb.add(keyOf(r)); }
     const map = new Map();
@@ -644,8 +649,11 @@ function mergeSection(prevVal, inVal) {
     for (const r of inVal) {
       if (!r || typeof r !== 'object') continue;
       const k = keyOf(r);
+      const localDeleted = !!r.deleted;
       // أسافين الحذف (deleted) تكون لاصقة: لا يُعاد إحياء سجل محذوف من جهاز قديم/منافس
       if (tomb.has(k)) continue;
+      // إذا وصلت نسخة محذوفة (من جهاز يريد الحذف) نجعلها لاصقة أيضاً: تُحفر كقبر
+      if (localDeleted) { tomb.add(k); map.delete(k); continue; }
       map.set(k, r);
     }
     return Array.from(map.values());
