@@ -521,7 +521,7 @@ const SESS_MIRROR_KEY = 'nibras_secure_session_v1';
 const AUTH_API = '/api/auth/';
 const SYNC_API = '/api/db/';
 const SETTINGS_API = '/api/settings/';
-const SYNC_INTERVAL = 20000;
+const SYNC_INTERVAL = 60000;
 const __origSetItem = localStorage.setItem.bind(localStorage);
 let __sessionUser = null; // المستخدم الحالي (من الخادم) — المرجع الوحيد للصلاحيات
 let __syncTimers = {};
@@ -588,7 +588,7 @@ function __syncTS(obj){ return (obj && typeof obj === 'object' && obj._ts) || 0;
 const __pushPending = {};
 function __uiDirty(){ try { return !!document.querySelector('.modal-overlay') || (document.getElementById('noteForm') && document.getElementById('noteForm').style.display !== 'none'); } catch(e){ return false; } }
 function __pushState(school){
-  return (__pushPending[school] = __pushPending[school] || { attempts:0, lastFail:0, running:false });
+  return (__pushPending[school] = __pushPending[school] || { attempts:0, lastFail:0, running:false, lastOkAt:0, lastOkTs:0 });
 }
 function __uiToast(txt, isErr){
   try{
@@ -634,6 +634,14 @@ async function __syncPush(school){
         if(pobj && __syncTS(pobj) > __syncTS(obj)) obj = pobj;
       }
     }catch(e){}
+    // تخفيف ضغط النقل: إن كانت بيانات هذا الجهاز لم تتغيّر منذ آخر رفع ناجح فلا نرفع
+    // ولا نسحب — يوفر من نقل كامل القاعدة مرارًا بلا فائدة (يحمي حدّ نقل البيانات في القاعدة).
+    const localTsNow = __syncTS(obj);
+    const hasPendingBak = (()=>{ try{ return !!localStorage.getItem(pendKey); }catch(e){ return false; } })();
+    if(!hasPendingBak && st.lastOkAt > 0 && localTsNow === st.lastOkTs){
+      st.running = false;
+      return;
+    }
     // حماية منفصلة تجعل الرفع آمنًا عبر أجهزة متعددة:
     // قبل أي رفع نصهر تعديلات هذا الجهاز فوق أحدث نسخة من الخادم، فلا يُمكن لجهاز قديم
     // (متصفح/تاب غير محدَّث) أن يمسح ما حُفظ من جهازٍ آخر أحدث. هذا هو مصدر «اختفاء الحفظ»
@@ -715,6 +723,8 @@ async function __syncPush(school){
         if(j && j.ts && obj && typeof obj === 'object') obj._ts = j.ts;
       }catch(e){}
       try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
+      st.lastOkAt = Date.now();
+      st.lastOkTs = __syncTS(obj);
       try{ localStorage.removeItem(pendKey); }catch(e){}
       const recovered = st.attempts > 0;
       st.attempts = 0;
@@ -735,6 +745,7 @@ async function __syncPush(school){
 async function __syncPull(school){
   if(!__syncEnabled()) return;
   const st = __pushState(school);
+  if(st.running) return;
   // تعديلات لم تُرفع بعد (فشل رفع سابق أو جارٍ الرفع): لا تكتب فوقها نسخة الخادم الأقدم
   // — نعيد محاولة الرفع فوراً بدل محوها، حتى لا «يختفي» حفظ المعلم بعد إعادة الفتح.
   const hasPending = (st && st.lastFail > 0 && (Date.now() - st.lastFail) < 60000);

@@ -1124,24 +1124,42 @@ if (process.env.RENDER && process.env.PING_URL_DISABLED !== '1') {
 }
 
 app.listen(PORT, async () => {
-  try {
-    await db.initSchema();
-    const seed = require('./seed');
-    const temp = await seed.ensureAdminAccount();
-    if (temp) {
-      console.log('');
-      console.log('==============================================================');
-      console.log('  أول تشغيل: حُسوب المدير جاهز');
-      console.log('  البريد: admin@nibras.local');
-      console.log('  كلمة المرور المؤقتة (تُعرض مرة واحدة فقط): ' + temp);
-      console.log('  سيُطلب منك تعيين كلمة مرور قوية جديدة عند أول دخول.');
-      console.log('==============================================================');
+  const dbOk = await (async () => {
+    try {
+      await db.initSchema();
+      const seed = require('./seed');
+      const temp = await seed.ensureAdminAccount();
+      if (temp) {
+        console.log('');
+        console.log('==============================================================');
+        console.log('  أول تشغيل: حُسوب المدير جاهز');
+        console.log('  البريد: admin@nibras.local');
+        console.log('  كلمة المرور المؤقتة (تُعرض مرة واحدة فقط): ' + temp);
+        console.log('  سيُطلب منك تعيين كلمة مرور قوية جديدة عند أول دخول.');
+        console.log('==============================================================');
+      }
+      console.log('PostgreSQL متصل — نبراس يعمل على http://localhost:' + PORT);
+      takeBackups();
+      return true;
+    } catch (e) {
+      console.error('تعذر الاتصال بقاعدة البيانات:', e.message);
+      return false;
     }
-    console.log('PostgreSQL متصل — نبراس يعمل على http://localhost:' + PORT);
-    takeBackups();
-  } catch (e) {
-    console.error('تعذر الاتصال بقاعدة البيانات:', e.message);
-    process.exit(1);
+  })();
+  if (!dbOk) {
+    // وضع التدهور: نبقى شغالين لخدمة الواجهة والملفات الثابتة، ونعيد محاولة
+    // الاتصال بالقاعدة في الخلفية حتى تتعافى (أو يُرفع حدّ نقل البيانات في القاعدة).
+    console.warn('⚠️ القاعدة غير متاحة الآن — الخادم يخدم الواجهة فقط ويعيد المحاولة دوريًا.');
+    const tryConn = async () => {
+      try {
+        await db.initSchema();
+        console.log('✅ استعاد الخادم الاتصال بقاعدة البيانات.');
+        try { takeBackups(); } catch (e) {}
+      } catch (e) {
+        setTimeout(tryConn, 30000);
+      }
+    };
+    setTimeout(tryConn, 30000);
   }
 });
 
