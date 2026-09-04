@@ -2750,12 +2750,17 @@ function revealAdminMsg(id){
   const found = findAdminMsgAcross(id);
   if(!found) return;
   const { school, arr, m } = found;
-  m.views = (m.views||0) + 1;
-  if(!m.firstViewAt){ m.firstViewAt = new Date().toISOString(); m.firstViewByName = currentUser()?.name || ''; }
+  const u = currentUser();
+  m.seenBy = m.seenBy || {};
+  if(!(u.id in m.seenBy)){
+    m.seenBy[u.id] = new Date().toISOString();
+    if(!m.firstViewAt){ m.firstViewAt = new Date().toISOString(); m.firstViewByName = u.name || ''; m.firstViewBy = u.id; }
+  }
   m.lastViewAt = new Date().toISOString();
-  m.lastViewByName = currentUser()?.name || '';
+  m.lastViewByName = u.name || '';
+  m.lastViewBy = u.id;
   m.revealed = true;
-  m.revealedBy = currentUser()?.name || '';
+  m.revealedBy = u.name || '';
   m.read = true;
   saveAdminMsgsFor(school, arr);
   renderApp();
@@ -2900,21 +2905,26 @@ function renderAdminMsgAlerts(){
   };
   let msgs = combinedMsgs();
   if(msgs.length === 0) return '';
-  // مرات الاطلاع: كل مرة تُفتح فيها الصفحة وتظهر الرسالة = اطلاع جديد (بعد فتح مباشر لا يُحتسب فتحان)
+  // إثبات الاطلاع: يُحتسب لكل معلم مرة واحدة فقط (بمعرّفه)، فلا تتضخم الأرقام
+  // بمرّات فتح الصفحة المتكررة. كل معلم = اطلاع واحد مهما فتح رسالته عدة مرات.
   const now = Date.now();
   if(now - (window.__msgViewAt || 0) > 3000){
     window.__msgViewAt = now;
     const userName = user.name;
+    const uid = user.id;
     const touched = {};
     msgs.forEach(m => {
       const key = m._school || school;
       touched[key] = touched[key] || loadAdminMsgsFor(key);
       const rec = touched[key].find(x => x.id === m.id);
       if(rec){
-        rec.views = (rec.views||0) + 1;
-        if(!rec.firstViewAt){ rec.firstViewAt = new Date().toISOString(); rec.firstViewByName = userName; }
-        rec.lastViewAt = new Date().toISOString();
-        rec.lastViewByName = userName;
+        rec.seenBy = rec.seenBy || {};
+        if(uid && !(uid in rec.seenBy)){
+          rec.seenBy[uid] = new Date().toISOString();
+          if(!rec.firstViewAt || rec.firstViewBy !== uid){ rec.firstViewAt = new Date().toISOString(); rec.firstViewByName = userName; rec.firstViewBy = uid; }
+        }
+        if(uid) rec.lastViewAt = new Date().toISOString();
+        if(uid) rec.lastViewByName = userName;
         rec.read = true;
       }
     });
@@ -2942,7 +2952,7 @@ function renderAdminMsgAlerts(){
         <div style="flex:${flexW(m)} 1 0;min-width:200px;background:${bg};border:2px solid ${col};border-radius:12px;padding:10px 12px;box-shadow:0 2px 10px rgba(220,38,38,.2);animation:msgPulse 1.5s infinite;display:flex;flex-direction:column">
           <div style="font-size:12px;font-weight:900;color:${col}">${senderLabel} <span style="background:${col};color:#fff;font-size:10px;padding:1px 7px;border-radius:999px">${badgeLabel}</span></div>
           <div style="font-size:11px;color:${colDark};margin-top:4px">🕐 ${fmtTime(m.createdAt)}</div>
-          <div style="font-size:13px;font-weight:700;color:${colDark};margin-top:8px;letter-spacing:2px;background:#fff;border:1px dashed ${col};border-radius:8px;padding:6px 8px;text-align:center">🔒 محتوى مخفي (${m.views||0} اطلاع)</div>
+          <div style="font-size:13px;font-weight:700;color:${colDark};margin-top:8px;letter-spacing:2px;background:#fff;border:1px dashed ${col};border-radius:8px;padding:6px 8px;text-align:center">🔒 محتوى مخفي (${Object.keys(m.seenBy||{}).length||0} معلم اطّلع)</div>
           <button class="btn-primary" style="margin-top:auto;background:${col};border-color:${col};width:100%;padding:6px 8px;font-size:12px" onclick="revealAdminMsg('${m.id}')">🔓 الاطلاع على المحتوى</button>
         </div>`;
       }
@@ -2952,7 +2962,7 @@ function renderAdminMsgAlerts(){
         <div style="font-size:11px;color:${colDark};margin-top:4px">🕐 ${fmtTime(m.createdAt)}</div>
         <div style="font-size:14px;line-height:1.7;font-weight:700;color:${colText};margin-top:8px;white-space:pre-wrap">${escapeHtml(m.text)}</div>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:auto;padding-top:8px">
-          <span style="font-size:11px;font-weight:800;color:${colDark}">👁 ${m.views||0} اطلاع</span>
+          <span style="font-size:11px;font-weight:800;color:${colDark}">${(m.seenBy && user.id && (user.id in m.seenBy)) ? '✓ تم اطلاعك' : ('👁 ' + (Object.keys(m.seenBy||{}).length||0) + ' معلم اطّلع')}</span>
           <button class="btn-primary" style="background:${col};border-color:${col};padding:5px 10px;font-size:12px" onclick="dismissAdminMsg('${m.id}')">✓ تم الاطلاع</button>
         </div>
       </div>`;
@@ -6572,7 +6582,7 @@ function renderTeacherPage(teacherId){
             <span style="font-size:12px;color:#6b7280">🕐 ${fmtTime(m.createdAt)} <span style="display:inline-block;background:${col};color:#fff;font-size:10px;font-weight:800;padding:1px 7px;border-radius:999px;margin-right:6px">${fromLabel}</span></span>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span style="font-size:11px;color:${m.revealed ? '#16a34a' : '#b91c1c'};font-weight:700">${m.revealed ? '✅ اطّلع على المحتوى' : '⏳ لم يفتح المحتوى بعد'}</span>
-              <span style="font-size:11px;color:#6b7280">${m.views||0} الاطلاع${m.firstViewAt ? ' — أول اطلاع: ' + fmtTime(m.firstViewAt) + (firstName ? ' بواسطة ' + escapeHtml(firstName) : '') : ''}${m.dismissed ? ' — أخفاها ' + (dismisserName ? escapeHtml(dismisserName) : '') : (m.revealed && m.revealedBy ? ' — آخر اطلاع: ' + escapeHtml(m.revealedBy) : ' — لا تزال ظاهرة')}</span>
+              <span style="font-size:11px;color:#6b7280">${Object.keys(m.seenBy||{}).length||0} معلم اطّلع${m.firstViewAt ? ' — أول اطلاع: ' + fmtTime(m.firstViewAt) + (firstName ? ' بواسطة ' + escapeHtml(firstName) : '') : ''}${m.dismissed ? ' — أخفاها ' + (dismisserName ? escapeHtml(dismisserName) : '') : (m.revealed && m.revealedBy ? ' — آخر اطلاع: ' + escapeHtml(m.revealedBy) : ' — لا تزال ظاهرة')}</span>
               ${(isAdmin || ownsMsg(m)) ? `<span style="display:flex;align-items:center;gap:6px">
                 <button class="btn-secondary" style="padding:3px 10px;font-size:12px" onclick="editAdminMsg('${m.id}')" title="تعديل نص الرسالة">✏️</button>
                 <button class="btn-secondary danger" style="padding:3px 10px;font-size:12px" onclick="deleteAdminMsg('${m.id}')" title="حذف الرسالة">🗑</button>
@@ -8338,7 +8348,7 @@ function computeReportRows(){
       .sort((a,b) => b.createdAt.localeCompare(a.createdAt))
       .map(m => {
         const st = m.dismissed ? 'أُخفيت' : (m.revealed ? 'اطّلع على المحتوى' : 'لم يُفتح');
-        return { 'التاريخ': m.createdAt.slice(0,10), 'الوقت': fmtTime(m.createdAt), 'المرسل': m.senderName || tl(roleLabels[m.senderRole] || m.senderRole || '—'), 'المرسل إليه': m.teacherName || (m.teacherId==='ALL' ? tl('جميع المعلمين') : '—'), 'الرسالة': m.text, 'الاطلاع': m.views||0, 'الحالة': st, 'أخفاها': m.dismissedBy || '—' };
+        return { 'التاريخ': m.createdAt.slice(0,10), 'الوقت': fmtTime(m.createdAt), 'المرسل': m.senderName || tl(roleLabels[m.senderRole] || m.senderRole || '—'), 'المرسل إليه': m.teacherName || (m.teacherId==='ALL' ? tl('جميع المعلمين') : '—'), 'الرسالة': m.text, 'الاطلاع': Object.keys(m.seenBy||{}).length||0, 'الحالة': st, 'أخفاها': m.dismissedBy || '—' };
       });
   } else if(type === 'activities'){
     const inActs = (d.activities || []).filter(a => inRange(a.date));
