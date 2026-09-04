@@ -658,23 +658,30 @@ async function __syncPush(school){
           const serverHasData = Array.isArray(sd.students) && sd.students.length > 0;
           const localNonEmpty = (!isEmptySeed0) || Array.isArray(obj.students);
           if(serverHasData && localNonEmpty){
-            // 1) الجدول: دمج «إضافة فقط» — لا يُمسح جدول الخادم بنسخة جهاز قديمٍ فارغ/جزئي
-            sd.timetable = Object.assign({}, sd.timetable || {});
-            if(obj.timetable){
-              for(const tid in obj.timetable){
-                const sTT = sd.timetable[tid] || (sd.timetable[tid] = {});
-                const lTT = obj.timetable[tid];
-                if(!lTT) continue;
-                for(const day in lTT){
-                  const sDay = sTT[day] || (sTT[day] = {});
-                  const lDay = lTT[day];
-                  if(!lDay) continue;
-                  for(const slot in lDay){
-                    if(!(slot in sDay)) sDay[slot] = JSON.parse(JSON.stringify(lDay[slot]));
+            // 1) الجدول: دمج خَلَوي بمعرّف الإصدار _v — الخلية ذات الإصدار الأعلى تفوز،
+            // فيُحدَّث جدولُ هذا الجهاز الجديد (لا يُمسح) ولا يستطيع جهازٌ قديمٌ استبدال خلايا أحدث.
+            const vOf = c => (c && typeof c === 'object' && typeof c._v === 'number') ? c._v : 0;
+            const mergeTT = (target, fromT) => {
+              if(!fromT) return;
+              target.timetable = target.timetable || {};
+              for(const tid in fromT){
+                const tT = target.timetable[tid] || (target.timetable[tid] = {});
+                const fD = fromT[tid];
+                if(!fD) continue;
+                for(const day in fD){
+                  const tD = tT[day] || (tT[day] = {});
+                  const fP = fD[day];
+                  if(!fP) continue;
+                  for(const slot in fP){
+                    const fc = fP[slot];
+                    const tc = tD[slot];
+                    if(fc && (!tc || vOf(fc) > vOf(tc))) tD[slot] = JSON.parse(JSON.stringify(fc));
+                    else if(fc === null && !tc) delete tD[slot];
                   }
                 }
               }
-            }
+            };
+            mergeTT(sd, obj.timetable);
             // 2) الحضور: الأحدث _t يفوز — لا يسمح جهاز قديم بمسح غياب أحدث من جهاز آخر
             sd.attendance = Array.isArray(sd.attendance) ? sd.attendance.slice() : [];
             const tOf = r => (r && typeof r === 'object' && typeof r._t === 'number') ? r._t : 0;
@@ -795,20 +802,23 @@ async function __syncPull(school){
       __origSetItem(key, JSON.stringify(server));
     } else {
       const merged = JSON.parse(JSON.stringify(server));
-      // دمج الجدول الزمني «إضافة فقط»: نبدأ من نسخة الخادم ونضيف أي خانات محلية غير موجودة
-      // فيها — فلا يستطيع جهازٌ قديمٌ بجدولٍ فارغ/جزئي أن يمسح جدولَ الخادم (سبب مسح الجدول).
+      // دمج الجدول خَلَوي بمعرّف الإصدار _v — الخلية الأعلى إصداراً تفوز،
+      // فيُحدَّث جدولُ هذا الجهاز الجديد ولا يستطيع جهازٌ قديمٌ مسح خلايا أحدث.
+      const vOfC = c => (c && typeof c === 'object' && typeof c._v === 'number') ? c._v : 0;
       merged.timetable = Object.assign({}, merged.timetable || {});
       if(local.timetable){
         for(const tid in local.timetable){
-          const sTT = merged.timetable[tid] || (merged.timetable[tid] = {});
-          const lTT = local.timetable[tid];
-          if(!lTT) continue;
-          for(const day in lTT){
-            const sDay = sTT[day] || (sTT[day] = {});
-            const lDay = lTT[day];
-            if(!lDay) continue;
-            for(const slot in lDay){
-              if(!(slot in sDay)) sDay[slot] = JSON.parse(JSON.stringify(lDay[slot]));
+          const tT = merged.timetable[tid] || (merged.timetable[tid] = {});
+          const fD = local.timetable[tid];
+          if(!fD) continue;
+          for(const day in fD){
+            const tD = tT[day] || (tT[day] = {});
+            const fP = fD[day];
+            if(!fP) continue;
+            for(const slot in fP){
+              const fc = fP[slot];
+              const tc = tD[slot];
+              if(fc && (!tc || vOfC(fc) > vOfC(tc))) tD[slot] = JSON.parse(JSON.stringify(fc));
             }
           }
         }
