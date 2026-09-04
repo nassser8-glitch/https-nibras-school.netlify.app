@@ -634,34 +634,62 @@ async function __syncPush(school){
         if(pobj && __syncTS(pobj) > __syncTS(obj)) obj = pobj;
       }
     }catch(e){}
-    // حماية: لا ندفع بذرة فارغة (متصفح جديد بلا طلاب/فصول) لئلا تمحو بيانات القسم المشتركة.
-    // لكن بدل تجاهل الحفظ كلياً (فيعتقد المعلم أن تعديله «نُقلّع» ولم يُحفظ)، نجلب نسخة الخادم
-    // وندمج عليها تعديلات هذا الجهاز (الجدول/الغياب) ثم ندفعها.
-    const isEmptySeed = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
-    if(isEmptySeed){
-      try{
-        const resp = await fetch(SYNC_API + school);
-        if(resp.status === 401){ __handleAuthError(resp); return; }
-        if(!resp.ok) return;
-        const j = await resp.json();
-        const serverHasData = j && j.data && ((j.data.students && j.data.students.length > 0) || (j.data.classes && j.data.classes.length > 0));
-        if(serverHasData){
-          const sd = JSON.parse(JSON.stringify(j.data));
-          sd.timetable = Object.assign({}, sd.timetable);
-          for(const tid in obj.timetable) sd.timetable[tid] = JSON.parse(JSON.stringify(obj.timetable[tid]));
-          if(Array.isArray(obj.attendance) && obj.attendance.length){
+    // حماية منفصلة تجعل الرفع آمنًا عبر أجهزة متعددة:
+    // قبل أي رفع نصهر تعديلات هذا الجهاز فوق أحدث نسخة من الخادم، فلا يُمكن لجهاز قديم
+    // (متصفح/تاب غير محدَّث) أن يمسح ما حُفظ من جهازٍ آخر أحدث. هذا هو مصدر «اختفاء الحفظ»
+    // لدى المعلمين الذين يدخلون من أكثر من جهاز (مساعد/عبدالمالك) بينما إسحاق الخصوصي بجهازٍ واحد سالم.
+    // نُدمج بالحقول التالية: الجدول الزمني، الحضور (الأحدث يفوز)، الملاحظات، ثم ندفع الدمج.
+    const isEmptySeed0 = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
+    try{
+      const mresp = await fetch(SYNC_API + school);
+      if(mresp.status === 401){ __handleAuthError(mresp); return; }
+      if(mresp.ok){
+        const mj = await mresp.json();
+        if(mj && mj.data){
+          const sd = JSON.parse(JSON.stringify(mj.data));
+          const serverHasData = Array.isArray(sd.students) && sd.students.length > 0;
+          const localNonEmpty = (!isEmptySeed0) || Array.isArray(obj.students);
+          if(serverHasData && localNonEmpty){
+            // 1) الجدول: دمج محلي فوق الخادم (الخادم مصدر الحقيقة لأحدث نسخة، ثم تصبّ تعديلات هذا الجهاز)
+            sd.timetable = Object.assign({}, sd.timetable);
+            if(obj.timetable) for(const tid in obj.timetable) sd.timetable[tid] = JSON.parse(JSON.stringify(obj.timetable[tid]));
+            // 2) الحضور: الأحدث _t يفوز — لا يسمح جهاز قديم بمسح غياب أحدث من جهاز آخر
             sd.attendance = Array.isArray(sd.attendance) ? sd.attendance.slice() : [];
-            for(const rec of obj.attendance){
-              if(!sd.attendance.some(x => x.studentId === rec.studentId && x.date === rec.date)) sd.attendance.push(rec);
+            const tOf = r => (r && typeof r === 'object' && typeof r._t === 'number') ? r._t : 0;
+            const aByKey = new Map(sd.attendance.map(r => [ (r.studentId||'')+'|'+(r.date||''), r ]));
+            for(const r of (Array.isArray(obj.attendance) ? obj.attendance : [])){
+              const k = (r.studentId||'')+'|'+(r.date||'');
+              const ex = aByKey.get(k);
+              if(!ex){ aByKey.set(k, r); sd.attendance.push(r); }
+              else if(tOf(r) > tOf(ex)){
+                sd.attendance = sd.attendance.map(x => (x === ex) ? r : x);
+                aByKey.set(k, r);
+              }
             }
+            // 3) الملاحظات: نحتفظ بأي ملاحظة محلية غير موجودة بالخادم (حتى لا تُمسح ملاحظات هذا الجهاز)
+            if(Array.isArray(obj.notes)){
+              sd.notes = Array.isArray(sd.notes) ? sd.notes.slice() : [];
+              const nMap = new Map(sd.notes.map(n => [n.id, n]));
+              for(const n of obj.notes){ if(!nMap.has(n.id)){ nMap.set(n.id, n); sd.notes.push(n); } }
+            }
+            const mergedTs = Math.max(
+              (sd && sd._ts) || 0,
+              (obj && obj._ts) || 0,
+              __syncTS(mj.data) || 0
+            );
+            obj = sd;
+            obj._ts = mergedTs || Date.now();
+            try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
+          } else if(serverHasData && isEmptySeed0){
+            // متصفح جديد فارغ تماماً: نأخذ نسخة الخادم (لا نرفع فارغاً فوق عملية)
+            obj = JSON.parse(JSON.stringify(mj.data));
+            try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
           }
-          obj = sd;
-          try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
         }
-      }catch(e){}
-      const stillEmpty = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
-      if(stillEmpty) return;
-    }
+      }
+    }catch(e){}
+    const stillEmpty = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
+    if(stillEmpty) return;
     let attempt = 0;
     const respOf = await (async () => {
       for(; attempt < 3; attempt++){
