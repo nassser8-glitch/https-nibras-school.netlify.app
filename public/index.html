@@ -658,9 +658,23 @@ async function __syncPush(school){
           const serverHasData = Array.isArray(sd.students) && sd.students.length > 0;
           const localNonEmpty = (!isEmptySeed0) || Array.isArray(obj.students);
           if(serverHasData && localNonEmpty){
-            // 1) الجدول: دمج محلي فوق الخادم (الخادم مصدر الحقيقة لأحدث نسخة، ثم تصبّ تعديلات هذا الجهاز)
-            sd.timetable = Object.assign({}, sd.timetable);
-            if(obj.timetable) for(const tid in obj.timetable) sd.timetable[tid] = JSON.parse(JSON.stringify(obj.timetable[tid]));
+            // 1) الجدول: دمج «إضافة فقط» — لا يُمسح جدول الخادم بنسخة جهاز قديمٍ فارغ/جزئي
+            sd.timetable = Object.assign({}, sd.timetable || {});
+            if(obj.timetable){
+              for(const tid in obj.timetable){
+                const sTT = sd.timetable[tid] || (sd.timetable[tid] = {});
+                const lTT = obj.timetable[tid];
+                if(!lTT) continue;
+                for(const day in lTT){
+                  const sDay = sTT[day] || (sTT[day] = {});
+                  const lDay = lTT[day];
+                  if(!lDay) continue;
+                  for(const slot in lDay){
+                    if(!(slot in sDay)) sDay[slot] = JSON.parse(JSON.stringify(lDay[slot]));
+                  }
+                }
+              }
+            }
             // 2) الحضور: الأحدث _t يفوز — لا يسمح جهاز قديم بمسح غياب أحدث من جهاز آخر
             sd.attendance = Array.isArray(sd.attendance) ? sd.attendance.slice() : [];
             const tOf = r => (r && typeof r === 'object' && typeof r._t === 'number') ? r._t : 0;
@@ -781,8 +795,24 @@ async function __syncPull(school){
       __origSetItem(key, JSON.stringify(server));
     } else {
       const merged = JSON.parse(JSON.stringify(server));
-      merged.timetable = Object.assign({}, merged.timetable);
-      if(local.timetable) for(const tid in local.timetable) merged.timetable[tid] = JSON.parse(JSON.stringify(local.timetable[tid]));
+      // دمج الجدول الزمني «إضافة فقط»: نبدأ من نسخة الخادم ونضيف أي خانات محلية غير موجودة
+      // فيها — فلا يستطيع جهازٌ قديمٌ بجدولٍ فارغ/جزئي أن يمسح جدولَ الخادم (سبب مسح الجدول).
+      merged.timetable = Object.assign({}, merged.timetable || {});
+      if(local.timetable){
+        for(const tid in local.timetable){
+          const sTT = merged.timetable[tid] || (merged.timetable[tid] = {});
+          const lTT = local.timetable[tid];
+          if(!lTT) continue;
+          for(const day in lTT){
+            const sDay = sTT[day] || (sTT[day] = {});
+            const lDay = lTT[day];
+            if(!lDay) continue;
+            for(const slot in lDay){
+              if(!(slot in sDay)) sDay[slot] = JSON.parse(JSON.stringify(lDay[slot]));
+            }
+          }
+        }
+      }
       // غياب محلي جديد (أحدث من نظيره في الخادم) يحفظ فوقه
       if(Array.isArray(local.attendance)){
         merged.attendance = Array.isArray(merged.attendance) ? merged.attendance.slice() : [];
