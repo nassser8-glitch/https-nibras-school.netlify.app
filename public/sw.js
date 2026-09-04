@@ -1,5 +1,5 @@
-/* نبراس — Service Worker للتثبيت والعمل دون اتصال */
-const CACHE_NAME = 'nibras-v18';
+﻿/* ظ†ط¨ط±ط§ط³ â€” Service Worker ظ„ظ„طھط«ط¨ظٹطھ ظˆط§ظ„ط¹ظ…ظ„ ط¯ظˆظ† ط§طھطµط§ظ„ */
+const CACHE_NAME = 'nibras-v19';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -35,7 +35,7 @@ self.addEventListener('fetch', (event) => {
 
   const isDocument = req.mode === 'navigate' || req.headers.get('accept').indexOf('text/html') === 0;
   if (isDocument) {
-    // index.html دائمًا من الشبكة (مع السقوط إلى الخبطة عند انقطاع النت) — لا توجد نسخة قديمة عالقة
+    // index.html ط¯ط§ط¦ظ…ظ‹ط§ ظ…ظ† ط§ظ„ط´ط¨ظƒط© (ظ…ط¹ ط§ظ„ط³ظ‚ظˆط· ط¥ظ„ظ‰ ط§ظ„ط®ط¨ط·ط© ط¹ظ†ط¯ ط§ظ†ظ‚ط·ط§ط¹ ط§ظ„ظ†طھ) â€” ظ„ط§ طھظˆط¬ط¯ ظ†ط³ط®ط© ظ‚ط¯ظٹظ…ط© ط¹ط§ظ„ظ‚ط©
     event.respondWith(
       fetch(req).then((resp) => {
         if (resp && resp.status === 200 && resp.type === 'basic') {
@@ -61,3 +61,4 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
