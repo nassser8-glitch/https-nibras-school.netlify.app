@@ -936,6 +936,10 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           data = applyMerged(prev.data, data, role, true);
         } else {
           const cf = JSON.parse(JSON.stringify(data));
+          // التكليفات/النشاطات (وشواهد الحذف فيها) تُدمج دائماً حتى للمدير/الوكيل:
+          // استبدالها كلياً بنسخة جهازٍ قديم يمسح شاهد الحذف فيعود التكليف المحذوف.
+          if (!jsonEqual(prev.data.assignments, cf.assignments)) cf.assignments = mergeSection(prev.data.assignments, cf.assignments);
+          if (!jsonEqual(prev.data.activities, cf.activities)) cf.activities = mergeSection(prev.data.activities, cf.activities);
           if (!jsonEqual(prev.data.timetable, cf.timetable)) cf.timetable = mergeTimetable(prev.data.timetable, cf.timetable);
           if (!jsonEqual(prev.data.attendance, cf.attendance)) cf.attendance = mergeAttendance(prev.data.attendance, cf.attendance);
           data = cf;
