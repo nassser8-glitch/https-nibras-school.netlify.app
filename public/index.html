@@ -910,7 +910,44 @@ async function __refreshSchool(school){
     const j = await resp.json();
     if(j && j.data){
       const key = 'nibras_'+school+'_db_v1';
-      __origSetItem(key, JSON.stringify(j.data));
+      let local = null;
+      try{ const raw = localStorage.getItem(key); if(raw) local = JSON.parse(raw); }catch(e){ local = null; }
+      // دمج واعٍ للشواهد: لو كان التكليف محذوفاً محلياً (قبر) لا نعيده حتى لو وصلت نسخة قديمة
+      // غير محذوفة من الخادم (سباق: حذف محلي قبل أن يصله الشاهد) — المحذوف يفوز ثم الأعلى _v.
+      if(local && typeof local === 'object'){
+        const betterP = (a, b) => {
+          if(!a) return b;
+          if(!b) return a;
+          if(!!a.deleted !== !!b.deleted) return a.deleted ? a : b;
+          const va = (typeof a._v === 'number') ? a._v : 0;
+          const vb = (typeof b._v === 'number') ? b._v : 0;
+          if(va !== vb) return va > vb ? a : b;
+          const ta = a.created || a.createdAt || 0, tb = b.created || b.createdAt || 0;
+          return ta >= tb ? a : b;
+        };
+        const mergeArr = (sdArr, loArr) => {
+          const m = new Map();
+          for(const x of (Array.isArray(sdArr) ? sdArr : [])) if(x && x.id != null) m.set(x.id, x);
+          for(const x of (Array.isArray(loArr) ? loArr : [])){
+            if(!x || x.id == null) continue;
+            const ex = m.get(x.id);
+            m.set(x.id, betterP(x, ex));
+          }
+          return Array.from(m.values());
+        };
+        const out = JSON.parse(JSON.stringify(j.data));
+        if(!Array.isArray(out.assignments) && Array.isArray(local.assignments)) out.assignments = [];
+        if(Array.isArray(out.assignments)) out.assignments = mergeArr(out.assignments, local.assignments);
+        if(Array.isArray(out.activities)) out.activities = mergeArr(out.activities, local.activities);
+        if(Array.isArray(out.notes) && Array.isArray(local.notes)){
+          const nMap = new Map(out.notes.map(n => [n.id, n]));
+          for(const n of local.notes){ if(!nMap.has(n.id)){ nMap.set(n.id, n); out.notes.push(n); } }
+        }
+        out._ts = Math.max((j.data && j.data._ts) || 0, (local && local._ts) || 0, Date.now());
+        __origSetItem(key, JSON.stringify(out));
+      } else {
+        __origSetItem(key, JSON.stringify(j.data));
+      }
     }
   }catch(e){}
 }
