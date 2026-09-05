@@ -1,5 +1,5 @@
 ﻿/* نبراس — Service Worker للتثبيت والعمل دون اتصال */
-const CACHE_NAME = 'nibras-v21';
+const CACHE_NAME = 'nibras-v22';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -21,7 +21,15 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    ).then(() => self.clients.claim()).then(() =>
+      // بعد سيطرة النسخة الجديدة نطلب من كل النوافذ إعادة التحميل مرة واحدة
+      // حتى لا تبقى أي جهاز يعمل بملفات قديمة مخزنة
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) =>
+        clients.forEach((client) => {
+          try { client.postMessage({ type: 'NEW_VERSION' }); } catch (_) { /* تجاهل */ }
+        })
+      )
+    )
   );
 });
 

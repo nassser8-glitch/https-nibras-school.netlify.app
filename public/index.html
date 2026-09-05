@@ -9004,7 +9004,23 @@ function saveAnnouncement(){
 /* تسجيل Service Worker للتثبيت والعمل دون اتصال — يعمل فقط عبر http/https */
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('sw.js').catch(function(){});
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(function(){});
+  });
+  /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
+     فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف) */
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if (sessionStorage.getItem('__nibrasReloaded') !== 'v22') {
+      sessionStorage.setItem('__nibrasReloaded', 'v22');
+      location.reload();
+    }
+  });
+  navigator.serviceWorker.addEventListener('message', function(e){
+    if (e && e.data && e.data.type === 'NEW_VERSION') {
+      if (sessionStorage.getItem('__nibrasReloaded') !== 'v22') {
+        sessionStorage.setItem('__nibrasReloaded', 'v22');
+        location.reload();
+      }
+    }
   });
 }
 /* ============ لافتة تثبيت التطبيق على الجوال ============ */
