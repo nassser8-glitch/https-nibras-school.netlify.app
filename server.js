@@ -1131,7 +1131,8 @@ app.get('/api/diag/db', async (req, res) => {
 
 app.use((req,res,next)=>{
   const p = (req.path || '').split('?')[0];
-  if (p === '/' || p === '/index.html') res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  if (p === '/' || p === '/index.html' || p === '/sw.js' || p === '/manifest.webmanifest')
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   next();
 });
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));
