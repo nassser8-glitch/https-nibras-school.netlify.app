@@ -2585,7 +2585,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v23</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v24</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -6856,7 +6856,7 @@ const SUPERVISION_DAYS = [
   { key:'TUESDAY', label:'الثلاثاء', refs:['id_4796558a54b0c430','id_8eb0fad8767b9b71','id_d41b704a9a2a0723','id_ec3fe44ed2d41d03'] },
   { key:'WEDNESDAY', label:'الأربعاء', refs:['id_b9fa8cd671d2b6bb','id_7ef93851497c92a3','id_db5090aa05914b44','id_b66b2d68e06fa1e5'] },
   { key:'THURSDAY', label:'الخميس', refs:['id_e5e0692f7e99fb41','id_997be57741e83d6f','id_89d446202da30319','id_5a71b62656667b0b'] },
-  { key:'FRIDAY', label:'الجمعة', refs:['id_4adb92fb6dcb0936','id_1818262198c756d9','id_2ee6dfa72947ed9b','خالد'] }
+  { key:'FRIDAY', label:'الجمعة', refs:['id_4adb92fb6dcb0936','id_1818262198c756d9','id_0fce45f1ea09','خالد'] }
 ];
 /* يحسم إن كان معلم معين مُشرِفًا اليوم، ويعيد بقية زملاء نوبته */
 function supervisionForUser(user){
@@ -9008,15 +9008,15 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
      فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف) */
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (sessionStorage.getItem('__nibrasReloaded') !== 'v23') {
-      sessionStorage.setItem('__nibrasReloaded', 'v23');
+    if (sessionStorage.getItem('__nibrasReloaded') !== 'v24') {
+      sessionStorage.setItem('__nibrasReloaded', 'v24');
       location.reload();
     }
   });
   navigator.serviceWorker.addEventListener('message', function(e){
     if (e && e.data && e.data.type === 'NEW_VERSION') {
-      if (sessionStorage.getItem('__nibrasReloaded') !== 'v23') {
-        sessionStorage.setItem('__nibrasReloaded', 'v23');
+      if (sessionStorage.getItem('__nibrasReloaded') !== 'v24') {
+        sessionStorage.setItem('__nibrasReloaded', 'v24');
         location.reload();
       }
     }
