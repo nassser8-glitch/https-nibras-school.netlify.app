@@ -1,5 +1,5 @@
-﻿/* ظ†ط¨ط±ط§ط³ â€” Service Worker ظ„ظ„طھط«ط¨ظٹطھ ظˆط§ظ„ط¹ظ…ظ„ ط¯ظˆظ† ط§طھطµط§ظ„ */
-const CACHE_NAME = 'nibras-v20';
+﻿/* نبراس — Service Worker للتثبيت والعمل دون اتصال */
+const CACHE_NAME = 'nibras-v21';
 const CORE_ASSETS = [
   './',
   './index.html',
