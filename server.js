@@ -1074,7 +1074,7 @@ function tcpTest(host, port, ms) {
 }
 app.get('/api/health', (req, res) => {
   res.json({
-    ok: true, schools: db.SCHOOLS, db: 'postgres',
+    ok: true, ver: 'nibras-server-v21', schools: db.SCHOOLS, db: 'postgres',
     mail: {
       host: !!MAIL_HOST,
       user: !!MAIL_USER,
