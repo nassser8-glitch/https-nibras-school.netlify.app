@@ -3190,7 +3190,7 @@ function renderStudentDashboard(){
   const cls = myStudent && myStudent.classId ? (d.classes||[]).find(c => c.id === myStudent.classId) : null;
   const grade = cls ? (d.grades||[]).find(g => g.id === cls.gradeId) : null;
   const classLabel = grade ? grade.name + ' — الفصل ' + cls.name : '—';
-  const assignments = (d.assignments||[]).filter(a => myStudent && a.classId === myStudent.classId);
+  const assignments = (d.assignments||[]).filter(a => myStudent && a.classId === myStudent.classId && !(a && a.deleted));
   const recentAssignments = assignments.slice(-8).reverse();
   const assignmentTypes = ['واجب','مشروع','حفظ','أخرى'];
   const typeColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
@@ -3410,7 +3410,7 @@ function renderStudentAssignments(){
   const cls = myStudent.classId ? (d.classes||[]).find(c => c.id === myStudent.classId) : null;
   const grade = cls ? (d.grades||[]).find(g => g.id === cls.gradeId) : null;
   const classLabelTxt = (grade ? grade.name + ' — ' : '') + (cls ? 'الفصل ' + cls.name : '—');
-  const assignments = (d.assignments||[]).filter(a => a.classId === myStudent.classId).sort((a,b) => (b.created||0) - (a.created||0));
+  const assignments = (d.assignments||[]).filter(a => a.classId === myStudent.classId && !(a && a.deleted)).sort((a,b) => (b.created||0) - (a.created||0));
   const typeIcons = { 'واجب':'📋', 'مشروع':'🎨', 'حفظ':'📖', 'أخرى':'📌' };
   const typeColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
   const total = assignments.length;
@@ -4806,7 +4806,7 @@ function pointItems(d){
     });
   });
   const attKeys = new Set(d.attendance.map(a => a.studentId + '|' + a.date + '|' + a.status));
-  const doneAssignKeys = new Set((d.assignments||[]).flatMap(a => (a.completedBy||[]).map(sid => sid + '|' + a.id)));
+  const doneAssignKeys = new Set((d.assignments||[]).filter(a => !(a && a.deleted)).flatMap(a => (a.completedBy||[]).map(sid => sid + '|' + a.id)));
   return items.filter(it => {
     if(it.kind === 'note' && (it.category === 'الغياب' || it.category === 'التأخر')){
       const date = it.createdAt ? String(it.createdAt).slice(0,10) : '';
@@ -7172,7 +7172,7 @@ function renderAssignments(){
       const cls = d.classes.find(c => c.id === cid);
       if(!cls) return '';
       const subCount = subjects.filter(s => s.classId === cid).length;
-      const assCount = (d.assignments||[]).filter(a => a.classId === cid).length;
+      const assCount = (d.assignments||[]).filter(a => a.classId === cid && !(a && a.deleted)).length;
       const subStep = subCount > 0 ? `#/assignments?step=subject&cid=${cid}` : `#/assignments?step=list&cid=${cid}`;
       return `<div class="card" style="padding:18px;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="location.hash='${subStep}'">
