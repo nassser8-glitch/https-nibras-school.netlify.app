@@ -974,6 +974,19 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     if (['ADMIN','AGENT'].includes(req.session.role)) {
       if (!jsonEqual(prevUsers, clean.users)) await reconcileUserTable(school, prevUsers, clean.users);
     }
+    // تدقيق المزامنة: تسجيل كل حفظ لمعرفة الجهاز الذي يكتب فعلاً (IP/متصفح) عند التشخيص
+    try {
+      await db.auditSync({
+        school, ip: req.ip,
+        ua: req.headers['user-agent'] || '',
+        user_id: req.session.user_id, role: req.session.role,
+        n_assign: (clean.assignments || []).length,
+        n_tomb: (clean.assignments || []).filter(a => a && a.deleted).length,
+        assign_ids: (clean.assignments || []).map(a => a && a.id).filter(Boolean),
+        data_ts: nextTs,
+        payload: req.body ? Buffer.byteLength(JSON.stringify(req.body)) : 0,
+      });
+    } catch (auditErr) { console.error('audit failed (non-blocking):', auditErr.message); }
     res.json({ ok: true, ts: nextTs });
   })().catch(fail(res));
 });

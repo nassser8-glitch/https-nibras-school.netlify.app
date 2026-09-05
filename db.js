@@ -70,6 +70,25 @@ async function initSchema() {
         taken_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`);
     await client.query(`CREATE INDEX IF NOT EXISTS data_backups_school_idx ON data_backups(school, id)`);
+    // تدقيق المزامنة: يسجل كل PUT (الزمن، العنوان، المتصفح، الدور، وأعداد التكليفات والشواهد)
+    // ليتسنى تشخيص أي خلل في المزامنة/الحذف لاحقاً من قاعدة البيانات نفسها.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sync_audit (
+        id          BIGSERIAL PRIMARY KEY,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        school      TEXT NOT NULL,
+        ip          TEXT,
+        ua          TEXT,
+        user_id     TEXT,
+        role        TEXT,
+        n_assign    INT,
+        n_tomb      INT,
+        assign_ids  JSONB,
+        data_ts     BIGINT,
+        payload     INT
+      )`);
+    await client.query(`CREATE INDEX IF NOT EXISTS sync_audit_school_idx ON sync_audit(school)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS sync_audit_time_idx ON sync_audit(created_at)`);
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
@@ -330,6 +349,22 @@ async function getBackup(id) {
   return r.rows[0] || null;
 }
 
+/* ===== تدقيق المزامنة ===== */
+async function auditSync(rec) {
+  try {
+    await pool.query(
+      `INSERT INTO sync_audit (school, ip, ua, user_id, role, n_assign, n_tomb, assign_ids, data_ts, payload)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [rec.school, rec.ip || null, rec.ua || null, rec.user_id || null, rec.role || null,
+       rec.n_assign || 0, rec.n_tomb || 0, JSON.stringify(rec.assign_ids || []), rec.data_ts || 0, rec.payload || 0]);
+    // إبقاء التدقيق محدوداً: آخر 5000 سطر فقط
+    await pool.query(`DELETE FROM sync_audit WHERE id NOT IN (SELECT id FROM sync_audit ORDER BY id DESC LIMIT 5000)`);
+  } catch (e) {
+    // فشل التدقيق لا يجب أن يكسر الحفظ
+    console.error('auditSync failed:', e.message);
+  }
+}
+
 module.exports = {
   pool, SCHOOLS,
   initSchema,
@@ -341,4 +376,5 @@ module.exports = {
   getSchoolData, setSchoolData, patchSchoolUserStats,
   getSchoolSettings, setSchoolSettings,
   saveBackup, listBackups, getBackup,
+  auditSync,
 };
