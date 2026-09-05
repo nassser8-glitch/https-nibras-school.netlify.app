@@ -652,8 +652,9 @@ function mergeSection(prevVal, inVal) {
       const localDeleted = !!r.deleted;
       // أسافين الحذف (deleted) تكون لاصقة: لا يُعاد إحياء سجل محذوف من جهاز قديم/منافس
       if (tomb.has(k)) continue;
-      // إذا وصلت نسخة محذوفة (من جهاز يريد الحذف) نجعلها لاصقة أيضاً: تُحفر كقبر
-      if (localDeleted) { tomb.add(k); map.delete(k); continue; }
+      // إذا وصلت نسخة محذوفة (من جهاز يريد الحذف) نجعلها لاصقة ونُبقي شاهدها في التخزين
+      // حتى يُرسل للعملاء عبر GET (يرى كل جهاز أنه محذوف فيحذفه محلياً) ولا يُعرض إطلاقاً.
+      if (localDeleted) { tomb.add(k); map.set(k, r); continue; }
       map.set(k, r);
     }
     return Array.from(map.values());
@@ -844,10 +845,9 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
         return u;
       });
     }
-    // أسافين الحذف (deleted): تُخزَّن لتنشُر الحذف عبر الدمج لكن لا تُعاد لأي عميل
-    if (Array.isArray(rec.data.assignments)) {
-      rec.data.assignments = rec.data.assignments.filter(a => !(a && a.deleted));
-    }
+    // أسافين الحذف (deleted) تُرسل للعملاء كشواهد حذف: هكذا يعرف كل جهازٍ التكليفات
+    // المحذوفة فيحذفها محلياً (لا تُصفّى هنا — التصفية للعرض تتم في loadDB داخل العميل).
+    // إرسالها يضمن انتشار الحذف عبر كل الأجهزة مهما احتفظ بعضها بنسخة قديمة.
     res.json({ ts: rec.ts, data: rec.data });
   })().catch(fail(res));
 });
