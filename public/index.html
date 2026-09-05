@@ -1130,6 +1130,17 @@ function attendancePoints(status, lateMins){
   }
   return 0;
 }
+// «خط بداية النقاط»: كل النقاط السلبية قبل هذا التاريخ لا تُحتسب (تنظيف الأسبوع الماضي
+// والانطلاق من الصفر هذا الأسبوع دون مسح سجلات الحضور/التكليفات). يُضبط من إعدادات
+// المدرسة (pointsStartFrom) عبر واجهة الإدارة أو يُرجع للقيمة الافتراضية هنا.
+const POINTS_START_FROM = '2026-09-05';
+function pointsCutoffDate(){
+  try{
+    const s = (typeof __schoolSettingsCache === 'object' && __schoolSettingsCache) ? __schoolSettingsCache[((currentUser()||{}).school)] : null;
+    if(s && s.pointsStartFrom) return String(s.pointsStartFrom).slice(0,10);
+  }catch(e){}
+  return POINTS_START_FROM;
+}
 const schoolNames = { BOYS:'قسم البنين', GIRLS:'قسم البنات' };
 
 const feminineLabels = {
@@ -2585,7 +2596,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v24</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v25</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -4807,7 +4818,12 @@ function pointItems(d){
   });
   const attKeys = new Set(d.attendance.map(a => a.studentId + '|' + a.date + '|' + a.status));
   const doneAssignKeys = new Set((d.assignments||[]).filter(a => !(a && a.deleted)).flatMap(a => (a.completedBy||[]).map(sid => sid + '|' + a.id)));
+  const cut = pointsCutoffDate();
   return items.filter(it => {
+    if(it.type === 'NEGATIVE' && cut){
+      const dt = it.createdAt ? String(it.createdAt).slice(0,10) : '';
+      if(dt && dt < cut) return false;
+    }
     if(it.kind === 'note' && (it.category === 'الغياب' || it.category === 'التأخر')){
       const date = it.createdAt ? String(it.createdAt).slice(0,10) : '';
       const status = it.category === 'الغياب' ? 'ABSENT' : 'LATE';
@@ -9008,15 +9024,15 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
      فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف) */
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (sessionStorage.getItem('__nibrasReloaded') !== 'v24') {
-      sessionStorage.setItem('__nibrasReloaded', 'v24');
+    if (sessionStorage.getItem('__nibrasReloaded') !== 'v25') {
+      sessionStorage.setItem('__nibrasReloaded', 'v25');
       location.reload();
     }
   });
   navigator.serviceWorker.addEventListener('message', function(e){
     if (e && e.data && e.data.type === 'NEW_VERSION') {
-      if (sessionStorage.getItem('__nibrasReloaded') !== 'v24') {
-        sessionStorage.setItem('__nibrasReloaded', 'v24');
+      if (sessionStorage.getItem('__nibrasReloaded') !== 'v25') {
+        sessionStorage.setItem('__nibrasReloaded', 'v25');
         location.reload();
       }
     }
