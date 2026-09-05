@@ -1370,11 +1370,9 @@ function loadDB(){
   }
   // ترقية: بلاغات الصيانة
   if(!Array.isArray(d.maintenance)){ d.maintenance = []; cleaned = true; }
-  // أسافين الحذف للتكليفات: لا تُعرض المحذوفة في أي شاشة، لكن نُبقيها في التخزين المحلي
-  // كما هي (دون إعادة حفظ) حتى يرفعها المتصفح للخادم وتنشر الحذف فعلياً.
-  if(Array.isArray(d.assignments)){
-    d.assignments = d.assignments.filter(a => !(a && a.deleted));
-  }
+  // أسافين الحذف للتكليفات: تُبقي في التخزين المحلي (لا تُمسح هنا) حتى يرفعها المتصفح
+  // للخادم فتنتشر الحذف فعلياً. مجرد عرضٍ حذف الشوهد من القائمة لا يُفقدها.
+  (function(){})(); // (لا تصفية لأشجار الحذف في loadDB — تُصفّى عند العرض فقط)
   if(cleaned) saveDB(d);
   return d;
 }
@@ -3526,7 +3524,7 @@ function renderDashboard(){
   const mySubjects = isTeacher ? getTeacherSubjects(user, d) : [];
   const myClassIds = [...new Set(mySubjects.map(s => s.classId))];
   const myStudentsCount = [...new Set(d.students.filter(s => s.active && s.classId && myClassIds.includes(s.classId)).map(s => s.id))].length;
-  const myAssignments = isTeacher ? (d.assignments||[]).filter(a => myClassIds.includes(a.classId)).sort((a,b) => (b.created||0)-(a.created||0)) : [];
+  const myAssignments = isTeacher ? (d.assignments||[]).filter(a => myClassIds.includes(a.classId) && !(a && a.deleted)).sort((a,b) => (b.created||0)-(a.created||0)) : [];
   // الحصة القادمة اليوم (من جدول المعلم) حسب وقت اليوم
   const ttToday = isTeacher ? (((d.timetable||{})[user.id]||{})[timetableDay]) : null;
   const nextPeriodNow = (() => {
@@ -4797,6 +4795,7 @@ function pointItems(d){
     if(pts !== 0) items.push({ studentId:a.studentId, type:'NEGATIVE', category:a.status==='ABSENT'?'الغياب':'التأخر', description:'حسب سجل الحضور ('+a.date+')' + (a.lateMinutes ? ' — ' + a.lateMinutes + ' دقيقة' : ''), points:pts, createdBy:a.createdBy, createdAt:a.date+'T00:00:00.000Z', kind:'att' });
   });
   (d.assignments||[]).forEach(a => {
+    if(a && a.deleted) return;
     if(!a.date || a.date > today) return;
     (d.students||[]).forEach(s => {
       if(!s.active || s.classId !== a.classId) return;
@@ -7230,7 +7229,7 @@ function renderAssignments(){
   if(step === 'list'){
     const cls = d.classes.find(c => c.id === classId);
     const clsStudents = (d.students||[]).filter(s => s.active && s.classId === classId);
-    const clsAssignments = (d.assignments||[]).filter(a => a.classId === classId && (user.role==='ADMIN' || user.role==='AGENT' || a.teacherId === user.id)).sort((a,b) => (b.created||0) - (a.created||0));
+    const clsAssignments = (d.assignments||[]).filter(a => a.classId === classId && (user.role==='ADMIN' || user.role==='AGENT' || a.teacherId === user.id) && !(a && a.deleted)).sort((a,b) => (b.created||0) - (a.created||0));
     const typeColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
     const rows = clsAssignments.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">لا توجد تكليفات لهذا الفصل</td></tr>` :
     clsAssignments.map(a => {
@@ -8482,7 +8481,7 @@ function computeReportRows(){
   } else if(type === 'assignments'){
     const user = currentUser();
     const myClassIds = new Set(getClassesSorted().map(c => c.id));
-    const clsAss = (d.assignments||[]).filter(a => myClassIds.has(a.classId) && (!classId || a.classId===classId) && (!from && !to || (a.date && inRange(a.date))));
+    const clsAss = (d.assignments||[]).filter(a => myClassIds.has(a.classId) && !(a && a.deleted) && (!classId || a.classId===classId) && (!from && !to || (a.date && inRange(a.date))));
     const rowsAll = clsAss.sort((a,b) => (b.created||0) - (a.created||0)).map(a => {
       const cls = classById(a.classId);
       const g = cls ? gradeById(cls.gradeId) : null;
