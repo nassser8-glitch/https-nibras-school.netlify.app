@@ -1133,7 +1133,7 @@ function attendancePoints(status, lateMins){
 // «خط بداية النقاط»: كل النقاط السلبية قبل هذا التاريخ لا تُحتسب (تنظيف الأسبوع الماضي
 // والانطلاق من الصفر هذا الأسبوع دون مسح سجلات الحضور/التكليفات). يُضبط من إعدادات
 // المدرسة (pointsStartFrom) عبر واجهة الإدارة أو يُرجع للقيمة الافتراضية هنا.
-const POINTS_START_FROM = '2026-09-05';
+const POINTS_START_FROM = '2026-09-07';
 function pointsCutoffDate(){
   try{
     const s = (typeof __schoolSettingsCache === 'object' && __schoolSettingsCache) ? __schoolSettingsCache[((currentUser()||{}).school)] : null;
@@ -2597,7 +2597,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v28</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v29</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -9044,15 +9044,15 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
      فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف) */
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (sessionStorage.getItem('__nibrasReloaded') !== 'v28') {
-      sessionStorage.setItem('__nibrasReloaded', 'v28');
+    if (sessionStorage.getItem('__nibrasReloaded') !== 'v29') {
+      sessionStorage.setItem('__nibrasReloaded', 'v29');
       location.reload();
     }
   });
   navigator.serviceWorker.addEventListener('message', function(e){
     if (e && e.data && e.data.type === 'NEW_VERSION') {
-      if (sessionStorage.getItem('__nibrasReloaded') !== 'v28') {
-        sessionStorage.setItem('__nibrasReloaded', 'v28');
+      if (sessionStorage.getItem('__nibrasReloaded') !== 'v29') {
+        sessionStorage.setItem('__nibrasReloaded', 'v29');
         location.reload();
       }
     }
