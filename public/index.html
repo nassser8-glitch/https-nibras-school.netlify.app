@@ -2597,7 +2597,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v27</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v28</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -6244,25 +6244,9 @@ function renderUsers(){
 function renderAdmins(){
   const cur = currentUser();
   const isAdmin = cur?.role === 'ADMIN';
-  let items = [];
-  if(isAdmin){
-    const map = new Map();
-    ['BOYS','GIRLS'].forEach(school => {
-      const sd = loadSchoolDB(school) || { users: [] };
-      (sd.users || []).forEach(u => {
-        if(!u.active) return;
-        if(!(u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE')) return;
-        let it = map.get(u.id);
-        if(!it){ it = { u, schools: [] }; map.set(u.id, it); }
-        if(!it.schools.includes(school)) it.schools.push(school);
-      });
-    });
-    items = Array.from(map.values());
-  } else {
-    const d = loadDB();
-    const school = getActiveSchool();
-    items = (d.users || []).filter(u => u.active && (u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE')).map(u => ({ u, schools: [school] }));
-  }
+  const d = loadDB();
+  const school = getActiveSchool();
+  const items = (d.users || []).filter(u => u.active && (u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE')).map(u => ({ u, schools: [school] }));
   const rows = items.map(({ u, schools }) => {
     const moveLabel = schools[0] === 'BOYS' ? 'البنات' : 'البنين';
     const isSelf = u.id === (cur && cur.id);
@@ -9060,15 +9044,15 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
      فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف) */
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (sessionStorage.getItem('__nibrasReloaded') !== 'v27') {
-      sessionStorage.setItem('__nibrasReloaded', 'v27');
+    if (sessionStorage.getItem('__nibrasReloaded') !== 'v28') {
+      sessionStorage.setItem('__nibrasReloaded', 'v28');
       location.reload();
     }
   });
   navigator.serviceWorker.addEventListener('message', function(e){
     if (e && e.data && e.data.type === 'NEW_VERSION') {
-      if (sessionStorage.getItem('__nibrasReloaded') !== 'v27') {
-        sessionStorage.setItem('__nibrasReloaded', 'v27');
+      if (sessionStorage.getItem('__nibrasReloaded') !== 'v28') {
+        sessionStorage.setItem('__nibrasReloaded', 'v28');
         location.reload();
       }
     }
