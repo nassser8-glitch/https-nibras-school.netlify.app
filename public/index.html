@@ -1189,6 +1189,7 @@ function roleLabel(role){
 function teacherEmoji(){ return getActiveSchool() === 'GIRLS' ? '👩‍🏫' : '👨‍🏫'; }
 function isManager(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'COUNSELOR'); }
 function canManageTeachers(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
+function isAdminRole(role){ return (role === 'AGENT' || role === 'COUNSELOR' || role === 'ADMINISTRATIVE'); }
 function canManageActivities(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
 function canManageVideos(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
 function ensureDefaultAccounts(){
@@ -2596,7 +2597,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v26</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v27</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -3464,7 +3465,7 @@ function renderDashboard(){
   const isMgr = isManager(user);
   const canMgrT = canManageTeachers(user);
   const students = getVisibleStudents();
-  const teachers = d.users.filter(u => u.role === 'TEACHER' && u.active);
+  const teachers = d.users.filter(u => ((u.role === 'TEACHER') || isAdminRole(u.role)) && u.active);
   const today = todayStr();
   const visibleIds = new Set(students.map(s => s.id));
   const todayAtt = d.attendance.filter(a => a.date === today && (isMgr || visibleIds.has(a.studentId)));
@@ -4183,6 +4184,14 @@ function openRoleInbox(uid, school){
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px">
         <div class="card stat" style="flex:1;min-width:170px" data-tip="عدد المرات التي سجّل فيها هذا الحساب دخوله إلى الموقع حتى الآن"><span class="stat-icon">🔑</span><div><p class="muted">عدد مرات الدخول</p><p class="stat-value" style="color:#2563eb">${u.loginCount || 0}</p></div></div>
         <div class="card stat" style="flex:1;min-width:170px" data-tip="وقت آخر تسجيل دخول لهذا الحساب"><span class="stat-icon">🕒</span><div><p class="muted">آخر دخول</p><p class="stat-value" style="color:#6b7280">${u.lastLogin ? fmtTime(u.lastLogin) : '—'}</p></div></div>
+        <div class="card" style="flex:1;min-width:180px;border-radius:14px;padding:14px 16px;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 60%,#0ea5e9 100%);color:#fff">
+          <div style="font-weight:800;font-size:13px;margin-bottom:8px">الالتزام بالدوام (${new Date().getFullYear()})</div>
+          <div style="display:flex;gap:14px;align-items:center">
+            <div style="text-align:center"><div style="font-size:22px;font-weight:900">${u.absences ? u.absences.length : 0}</div><div style="font-size:10.5px;opacity:.8">أيام غياب</div></div>
+            <div style="text-align:center"><div style="font-size:22px;font-weight:900">${u.markedLate ? u.markedLate.length : 0}</div><div style="font-size:10.5px;opacity:.8">يوم تأخر</div></div>
+            <div style="text-align:center"><div style="font-size:22px;font-weight:900">${Object.keys(u.lateMinutes || {}).length}</div><div style="font-size:10.5px;opacity:.8">تأخر بدقائق</div></div>
+          </div>
+        </div>
       </div>
       <h4 style="margin:14px 0 6px">📨 تحويلات معلّقة موجهة لهذا الحساب</h4>
       <table class="data-table" style="margin-top:8px"><thead><tr><th>الطالب</th><th>إلى</th><th>الأولوية</th><th>السبب</th></tr></thead><tbody>${pendRows}</tbody></table>
@@ -4272,7 +4281,7 @@ function showAttendanceList(status){
 function showTeacherAbsenceList(){
   const d = loadDB();
   const todayKey = localDateKey(new Date());
-  const teachers = d.users.filter(u => u.role === 'TEACHER' && u.active);
+  const teachers = d.users.filter(u => ((u.role === 'TEACHER') || isAdminRole(u.role)) && u.active);
   const absent = teachers.filter(t => (t.absences||[]).includes(todayKey));
   const rows = absent.length === 0 ? `<tr><td colspan="4" style="text-align:center;padding:20px;color:#9ca3af">لا يوجد غائبون اليوم ✅</td></tr>` :
     absent.map(t => `<tr>
@@ -4300,7 +4309,7 @@ function showTeacherAbsenceList(){
 function showTeacherLateList(){
   const d = loadDB();
   const todayKey = localDateKey(new Date());
-  const teachers = d.users.filter(u => u.role === 'TEACHER' && u.active);
+  const teachers = d.users.filter(u => ((u.role === 'TEACHER') || isAdminRole(u.role)) && u.active);
   const late = teachers.filter(t => (t.markedLate||[]).includes(todayKey));
   const rows = late.length === 0 ? `<tr><td colspan="4" style="text-align:center;padding:20px;color:#9ca3af">لا يوجد متأخرون اليوم ✅</td></tr>` :
     late.map(t => {
@@ -5343,7 +5352,7 @@ function renderAttendance(){
   else if(!attendanceState.classId || (!isTeachers && !classes.some(c => c.id === attendanceState.classId))) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : (classes[0] ? classes[0].id : null);
   const currentClass = classes.find(c => c.id === attendanceState.classId) || null;
   const isMgr = isManager(currentUser());
-  const teacherList = isTeachers && isMgr ? d.users.filter(u => u.role === 'TEACHER' && u.active).sort((a,b)=>a.name.localeCompare(b.name,'ar')) : [];
+  const teacherList = isTeachers && isMgr ? d.users.filter(u => (u.role === 'TEACHER' || isAdminRole(u.role)) && u.active).sort((a,b)=>a.name.localeCompare(b.name,'ar')) : [];
 
   const students = !isTeachers && attendanceState.classId
     ? d.students.filter(s => s.active && s.classId === attendanceState.classId).sort((a,b)=>a.fullName.localeCompare(b.fullName,'ar'))
@@ -9051,15 +9060,15 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
      فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف) */
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (sessionStorage.getItem('__nibrasReloaded') !== 'v26') {
-      sessionStorage.setItem('__nibrasReloaded', 'v26');
+    if (sessionStorage.getItem('__nibrasReloaded') !== 'v27') {
+      sessionStorage.setItem('__nibrasReloaded', 'v27');
       location.reload();
     }
   });
   navigator.serviceWorker.addEventListener('message', function(e){
     if (e && e.data && e.data.type === 'NEW_VERSION') {
-      if (sessionStorage.getItem('__nibrasReloaded') !== 'v26') {
-        sessionStorage.setItem('__nibrasReloaded', 'v26');
+      if (sessionStorage.getItem('__nibrasReloaded') !== 'v27') {
+        sessionStorage.setItem('__nibrasReloaded', 'v27');
         location.reload();
       }
     }
