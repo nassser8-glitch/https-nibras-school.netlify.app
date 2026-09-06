@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <!--
@@ -2596,7 +2596,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v25</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v26</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -4131,11 +4131,17 @@ function showTodayAttendance(){
 
 /* ============ قائمة التحويلات المعلّقة (عند الضغط على البطاقة) ============ */
 /* عين متابعة حساب وكيل/موجه/مساعد إداري: يعرض تحويلاته وإشعاراته الموجهة إليه */
-function openRoleInbox(uid){
+function openRoleInbox(uid, school){
   const me = currentUser();
   if(!me || me.role !== 'ADMIN') return;
-  const d = loadDB();
-  const u = d.users.find(x => x.id === uid);
+  const candidates = (school ? [school] : ['BOYS','GIRLS']);
+  let u = null;
+  const uSchools = [];
+  candidates.forEach(s => {
+    const sd = loadSchoolDB(s) || { users: [] };
+    const found = (sd.users || []).find(x => x.id === uid);
+    if(found){ if(!u) u = found; if(!uSchools.includes(s)) uSchools.push(s); }
+  });
   if(!u) return;
   const sources = ['BOYS','GIRLS'].map(s => ({ school: s, d: loadSchoolDB(s) }));
   const pending = [];
@@ -4171,8 +4177,12 @@ function openRoleInbox(uid){
   overlay.innerHTML = `
     <div class="card" style="width:min(720px,100%);max-height:86vh;overflow:auto;padding:20px">
       <div class="header-row">
-        <h3 style="margin:0">👁 متابعة: ${escapeHtml(u.name)} <span class="muted small">(${roleLabel(u.role)})</span></h3>
+        <h3 style="margin:0">👁 متابعة: ${escapeHtml(u.name)} <span class="muted small">(${roleLabel(u.role)})</span>${uSchools.map(s => `<span class="badge ${s === 'BOYS' ? 'badge-boys' : 'badge-girls'}" style="margin-left:6px">${campusLabels[s] || s}</span>`).join(' ')}</h3>
         <button class="btn-secondary" onclick="this.closest('.card').parentElement.remove()">✕ إغلاق</button>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px">
+        <div class="card stat" style="flex:1;min-width:170px" data-tip="عدد المرات التي سجّل فيها هذا الحساب دخوله إلى الموقع حتى الآن"><span class="stat-icon">🔑</span><div><p class="muted">عدد مرات الدخول</p><p class="stat-value" style="color:#2563eb">${u.loginCount || 0}</p></div></div>
+        <div class="card stat" style="flex:1;min-width:170px" data-tip="وقت آخر تسجيل دخول لهذا الحساب"><span class="stat-icon">🕒</span><div><p class="muted">آخر دخول</p><p class="stat-value" style="color:#6b7280">${u.lastLogin ? fmtTime(u.lastLogin) : '—'}</p></div></div>
       </div>
       <h4 style="margin:14px 0 6px">📨 تحويلات معلّقة موجهة لهذا الحساب</h4>
       <table class="data-table" style="margin-top:8px"><thead><tr><th>الطالب</th><th>إلى</th><th>الأولوية</th><th>السبب</th></tr></thead><tbody>${pendRows}</tbody></table>
@@ -6178,7 +6188,7 @@ function renderUsers(){
     const nameCell = u.role === 'TEACHER'
       ? `<a href="#/teacher/${u.id}" style="font-weight:700;color:#2563eb;text-decoration:none;cursor:pointer" title="${tl('متابعة المعلم ورسائله')}">${escapeHtml(u.name)} 👁</a>`
       : (u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE')
-        ? `<span style="font-weight:600">${escapeHtml(u.name)} <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="openRoleInbox('${u.id}')" title="${tl('متابعة هذا الحساب: تحويلاته وإشعاراته')}">👁</button></span>`
+        ? `<span style="font-weight:600">${escapeHtml(u.name)} <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="openRoleInbox('${u.id}','${school}')" title="${tl('متابعة هذا الحساب: آخر دخول وعدد مرات الدخول وتحويلاته وإشعاراته')}">👁</button></span>`
         : `<span style="font-weight:600">${escapeHtml(u.name)}</span>`;
     const authCell = u.role === 'TEACHER'
       ? `<div style="font-size:12px;line-height:1.7">
@@ -6223,15 +6233,32 @@ function renderUsers(){
   </div>`;
 }
 function renderAdmins(){
-  const d = loadDB();
-  const isAdmin = currentUser()?.role === 'ADMIN';
-  const users = d.users.filter(u => u.active && (u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE'));
-  const rows = users.map(u => {
+  const cur = currentUser();
+  const isAdmin = cur?.role === 'ADMIN';
+  let items = [];
+  if(isAdmin){
+    const map = new Map();
+    ['BOYS','GIRLS'].forEach(school => {
+      const sd = loadSchoolDB(school) || { users: [] };
+      (sd.users || []).forEach(u => {
+        if(!u.active) return;
+        if(!(u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE')) return;
+        let it = map.get(u.id);
+        if(!it){ it = { u, schools: [] }; map.set(u.id, it); }
+        if(!it.schools.includes(school)) it.schools.push(school);
+      });
+    });
+    items = Array.from(map.values());
+  } else {
+    const d = loadDB();
     const school = getActiveSchool();
-    const moveLabel = school === 'BOYS' ? 'البنات' : 'البنين';
-    const isSelf = u.id === currentUser().id;
-    const schoolTxt = u.role === 'AGENT' ? (u.school === 'BOYS' ? 'بنين' : 'بنات') : '—';
-    const nameCell = `<span style="font-weight:600">${escapeHtml(u.name)} <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="openRoleInbox('${u.id}')" title="${'متابعة هذا الحساب: تحويلاته وإشعاراته'}">👁</button></span>`;
+    items = (d.users || []).filter(u => u.active && (u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE')).map(u => ({ u, schools: [school] }));
+  }
+  const rows = items.map(({ u, schools }) => {
+    const moveLabel = schools[0] === 'BOYS' ? 'البنات' : 'البنين';
+    const isSelf = u.id === (cur && cur.id);
+    const schoolTxt = schools.map(s => `<span class="badge ${s === 'BOYS' ? 'badge-boys' : 'badge-girls'}" style="margin-left:6px">${campusLabels[s] || s}</span>`).join(' ');
+    const nameCell = `<span style="font-weight:600">${escapeHtml(u.name)} <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="openRoleInbox('${u.id}','${schools[0]}')" title="${'متابعة هذا الحساب: آخر دخول وعدد مرات الدخول وتحويلاته وإشعاراته'}">👁</button></span>`;
     const authCell = `<div style="font-size:12px;line-height:1.7">
         ${u.email ? `<span style="display:block;direction:ltr">📧 ${escapeHtml(u.email)}</span>` : '<span style="display:block;color:#9ca3af">📧 لا يوجد بريد</span>'}
         ${u.firstLogin ? '<span style="display:block;color:#b45309">⏳ بانتظار أول دخول</span>' : '<span style="display:block;color:#047857">✅ مفعّل</span>'}
@@ -9024,15 +9051,15 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
      فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف) */
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (sessionStorage.getItem('__nibrasReloaded') !== 'v25') {
-      sessionStorage.setItem('__nibrasReloaded', 'v25');
+    if (sessionStorage.getItem('__nibrasReloaded') !== 'v26') {
+      sessionStorage.setItem('__nibrasReloaded', 'v26');
       location.reload();
     }
   });
   navigator.serviceWorker.addEventListener('message', function(e){
     if (e && e.data && e.data.type === 'NEW_VERSION') {
-      if (sessionStorage.getItem('__nibrasReloaded') !== 'v25') {
-        sessionStorage.setItem('__nibrasReloaded', 'v25');
+      if (sessionStorage.getItem('__nibrasReloaded') !== 'v26') {
+        sessionStorage.setItem('__nibrasReloaded', 'v26');
         location.reload();
       }
     }
