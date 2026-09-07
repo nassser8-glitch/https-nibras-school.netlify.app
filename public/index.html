@@ -3009,9 +3009,13 @@ function dismissAdminMsg(id){
   const found = findAdminMsgAcross(id);
   if(!found) return;
   const { school, arr, m } = found;
-  m.dismissed = true;
-  m.dismissedAt = new Date().toISOString();
-  m.dismissedBy = currentUser()?.name || '';
+  const u = currentUser();
+  m.seenBy = m.seenBy || {};
+  m.seenBy[u.id] = new Date().toISOString();
+  m.lastViewAt = new Date().toISOString();
+  m.lastViewByName = u.name || '';
+  m.lastViewBy = u.id;
+  m.read = true;
   m.updatedAt = new Date().toISOString();
   saveAdminMsgsFor(school, arr);
   renderApp();
@@ -3032,9 +3036,6 @@ function revealAdminMsg(id){
   m.revealed = true;
   m.revealedBy = u.name || '';
   m.read = true;
-  m.dismissed = true;
-  m.dismissedAt = new Date().toISOString();
-  m.dismissedBy = u.name || '';
   m.updatedAt = new Date().toISOString();
   saveAdminMsgsFor(school, arr);
   renderApp();
@@ -3116,7 +3117,7 @@ function checkMsgBeep(){
     window.__msgBeepIds[user.id] = {};
   }
   const rung = window.__msgBeepIds[user.id];
-  const msgs = adminMsgsFor(user.id).filter(m => !m.dismissed && !m.revealed && m.senderRole !== 'TRANSFER');
+  const msgs = adminMsgsFor(user.id).filter(m => !m.dismissed && !m.revealed && m.senderRole !== 'TRANSFER' && !(m.seenBy && user.id && (user.id in m.seenBy)));
   const fresh = msgs.filter(m => !rung['m:' + m.id]);
   if(fresh.length){
     fresh.forEach(m => rung['m:' + m.id] = 1);
@@ -3186,6 +3187,7 @@ function renderAdminMsgAlerts(){
     }
     let arr = adminMsgsFor(user.id).filter(m => !m.dismissed);
     if(user.role !== 'TEACHER') arr = arr.filter(m => m.teacherId !== 'ALL');
+    if(!isAdmin) arr = arr.filter(m => !(m.seenBy && user.id && (user.id in m.seenBy)));
     return arr;
   };
   let msgs = combinedMsgs();
