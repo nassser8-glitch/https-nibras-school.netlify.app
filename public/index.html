@@ -2688,7 +2688,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v35</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v36</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -3012,6 +3012,8 @@ function dismissAdminMsg(id){
   const u = currentUser();
   m.seenBy = m.seenBy || {};
   m.seenBy[u.id] = new Date().toISOString();
+  m.clearedBy = m.clearedBy || {};
+  m.clearedBy[u.id] = new Date().toISOString();
   m.lastViewAt = new Date().toISOString();
   m.lastViewByName = u.name || '';
   m.lastViewBy = u.id;
@@ -3117,7 +3119,7 @@ function checkMsgBeep(){
     window.__msgBeepIds[user.id] = {};
   }
   const rung = window.__msgBeepIds[user.id];
-  const msgs = adminMsgsFor(user.id).filter(m => !m.dismissed && !m.revealed && m.senderRole !== 'TRANSFER' && !(m.seenBy && user.id && (user.id in m.seenBy)));
+  const msgs = adminMsgsFor(user.id).filter(m => !m.dismissed && !m.revealed && m.senderRole !== 'TRANSFER' && !(m.clearedBy && user.id && (user.id in m.clearedBy)));
   const fresh = msgs.filter(m => !rung['m:' + m.id]);
   if(fresh.length){
     fresh.forEach(m => rung['m:' + m.id] = 1);
@@ -3187,7 +3189,7 @@ function renderAdminMsgAlerts(){
     }
     let arr = adminMsgsFor(user.id).filter(m => !m.dismissed);
     if(user.role !== 'TEACHER') arr = arr.filter(m => m.teacherId !== 'ALL');
-    if(!isAdmin) arr = arr.filter(m => !(m.seenBy && user.id && (user.id in m.seenBy)));
+    if(user.role === 'TEACHER' || user.role === 'AGENT' || user.role === 'COUNSELOR') arr = arr.filter(m => !(m.clearedBy && user.id && (user.id in m.clearedBy)));
     return arr;
   };
   let msgs = combinedMsgs();
@@ -9192,20 +9194,21 @@ function saveAnnouncement(){
 /* تسجيل Service Worker للتثبيت والعمل دون اتصال — يعمل فقط عبر http/https */
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('sw.js?v=35', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=36', { updateViaCache: 'none' }).catch(function(){});
+    setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
      فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف) */
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (sessionStorage.getItem('__nibrasReloaded') !== 'v35') {
-      sessionStorage.setItem('__nibrasReloaded', 'v35');
+    if (sessionStorage.getItem('__nibrasReloaded') !== 'v36') {
+      sessionStorage.setItem('__nibrasReloaded', 'v36');
       location.reload();
     }
   });
   navigator.serviceWorker.addEventListener('message', function(e){
     if (e && e.data && e.data.type === 'NEW_VERSION') {
-      if (sessionStorage.getItem('__nibrasReloaded') !== 'v35') {
-        sessionStorage.setItem('__nibrasReloaded', 'v35');
+      if (sessionStorage.getItem('__nibrasReloaded') !== 'v36') {
+        sessionStorage.setItem('__nibrasReloaded', 'v36');
         location.reload();
       }
     }
