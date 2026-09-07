@@ -738,6 +738,38 @@ async function __syncPush(school){
             };
             if(mj.data && Array.isArray(mj.data.assignments)) sd.assignments = mergeByIdBetter(sd.assignments, obj.assignments);
             if(mj.data && Array.isArray(mj.data.activities)) sd.activities = mergeByIdBetter(sd.activities, obj.activities);
+            const unionMsgs = (srvArr, locArr) => {
+              const m = new Map();
+              for(const x of (Array.isArray(srvArr) ? srvArr : [])) if(x && x.id != null) m.set(x.id, x);
+              for(const x of (Array.isArray(locArr) ? locArr : [])){
+                if(!x || x.id == null) continue;
+                if(!m.has(x.id)) m.set(x.id, x);
+              }
+              return Array.from(m.values());
+            };
+            const srvMsgs = mj.data && Array.isArray(mj.data.adminMsgs) ? mj.data.adminMsgs : [];
+            const localMsgs = Array.isArray(obj.adminMsgs) ? obj.adminMsgs : [];
+            const msgsChanged = srvMsgs.length !== localMsgs.length || srvMsgs.some(x => !localMsgs.some(y => y && y.id === x.id));
+            const srvSug = mj.data && Array.isArray(mj.data.suggestions) ? mj.data.suggestions : [];
+            const localSug = Array.isArray(obj.suggestions) ? obj.suggestions : [];
+            const sugChanged = srvSug.length !== localSug.length || srvSug.some(x => !localSug.some(y => y && y.id === x.id));
+            if(msgsChanged) sd.adminMsgs = unionMsgs(srvMsgs, localMsgs);
+            if(sugChanged) sd.suggestions = unionMsgs(srvSug, localSug);
+            const srvAnn = mj.data && Array.isArray(mj.data.announcements) ? mj.data.announcements : [];
+            const localAnn = Array.isArray(obj.announcements) ? obj.announcements : [];
+            const annBest = (a, b) => {
+              if(!a) return b;
+              if(!b) return a;
+              const ta = a.updatedAt || a.createdAt || 0, tb = b.updatedAt || b.createdAt || 0;
+              return ta >= tb ? a : b;
+            };
+            let mergedAnn = srvAnn.slice();
+            for(const a of localAnn){
+              const i = mergedAnn.findIndex(x => x && x.id === a.id);
+              if(i === -1) mergedAnn.push(a);
+              else mergedAnn[i] = annBest(mergedAnn[i], a);
+            }
+            if(JSON.stringify(mergedAnn) !== JSON.stringify(srvAnn)) sd.announcements = mergedAnn;
             const mergedTs = Math.max(
               (sd && sd._ts) || 0,
               (obj && obj._ts) || 0,
@@ -900,6 +932,32 @@ async function __syncPull(school){
       };
       if(Array.isArray(local.assignments)) merged.assignments = mergeByIdBetterP(merged.assignments, local.assignments);
       if(Array.isArray(local.activities)) merged.activities = mergeByIdBetterP(merged.activities, local.activities);
+      const unionMsgsP = (srvArr, locArr) => {
+        const m = new Map();
+        for(const x of (Array.isArray(srvArr) ? srvArr : [])) if(x && x.id != null) m.set(x.id, x);
+        for(const x of (Array.isArray(locArr) ? locArr : [])){
+          if(!x || x.id == null) continue;
+          if(!m.has(x.id)) m.set(x.id, x);
+        }
+        return Array.from(m.values());
+      };
+      if(Array.isArray(local.adminMsgs)) merged.adminMsgs = unionMsgsP(merged.adminMsgs, local.adminMsgs);
+      if(Array.isArray(local.suggestions)) merged.suggestions = unionMsgsP(merged.suggestions, local.suggestions);
+      if(Array.isArray(local.announcements)){
+        const annBestP = (a, b) => {
+          if(!a) return b;
+          if(!b) return a;
+          const ta = a.updatedAt || a.createdAt || 0, tb = b.updatedAt || b.createdAt || 0;
+          return ta >= tb ? a : b;
+        };
+        const srvAnnP = Array.isArray(merged.announcements) ? merged.announcements.slice() : [];
+        for(const a of local.announcements){
+          const i = srvAnnP.findIndex(x => x && x.id === a.id);
+          if(i === -1) srvAnnP.push(a);
+          else srvAnnP[i] = annBestP(srvAnnP[i], a);
+        }
+        merged.announcements = srvAnnP;
+      }
       merged._ts = Math.max(__syncTS(server), __syncTS(local), Date.now());
       __origSetItem(key, JSON.stringify(merged));
     }
@@ -2614,7 +2672,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v33</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v34</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -9104,15 +9162,15 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
      فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف) */
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (sessionStorage.getItem('__nibrasReloaded') !== 'v33') {
-      sessionStorage.setItem('__nibrasReloaded', 'v33');
+    if (sessionStorage.getItem('__nibrasReloaded') !== 'v34') {
+      sessionStorage.setItem('__nibrasReloaded', 'v34');
       location.reload();
     }
   });
   navigator.serviceWorker.addEventListener('message', function(e){
     if (e && e.data && e.data.type === 'NEW_VERSION') {
-      if (sessionStorage.getItem('__nibrasReloaded') !== 'v33') {
-        sessionStorage.setItem('__nibrasReloaded', 'v33');
+      if (sessionStorage.getItem('__nibrasReloaded') !== 'v34') {
+        sessionStorage.setItem('__nibrasReloaded', 'v34');
         location.reload();
       }
     }
