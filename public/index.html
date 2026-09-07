@@ -768,8 +768,8 @@ async function __syncPush(school){
             const srvSug = mj.data && Array.isArray(mj.data.suggestions) ? mj.data.suggestions : [];
             const localSug = Array.isArray(obj.suggestions) ? obj.suggestions : [];
             const sugChanged = srvSug.length !== localSug.length || srvSug.some(x => !localSug.some(y => y && y.id === x.id));
-            if(msgsChanged) sd.adminMsgs = unionMsgs(srvMsgs, localMsgs);
-            if(sugChanged) sd.suggestions = unionMsgs(srvSug, localSug);
+            sd.adminMsgs = unionMsgs(srvMsgs, localMsgs);
+            sd.suggestions = unionMsgs(srvSug, localSug);
             const srvAnn = mj.data && Array.isArray(mj.data.announcements) ? mj.data.announcements : [];
             const localAnn = Array.isArray(obj.announcements) ? obj.announcements : [];
             const annBest = (a, b) => {
@@ -3032,6 +3032,9 @@ function revealAdminMsg(id){
   m.revealed = true;
   m.revealedBy = u.name || '';
   m.read = true;
+  m.dismissed = true;
+  m.dismissedAt = new Date().toISOString();
+  m.dismissedBy = u.name || '';
   m.updatedAt = new Date().toISOString();
   saveAdminMsgsFor(school, arr);
   renderApp();
