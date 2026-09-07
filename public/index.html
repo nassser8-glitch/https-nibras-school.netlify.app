@@ -1778,6 +1778,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     await __restoreSession();
     await syncPullAll();
     renderApp();
+    backfillActivityMsgs();
     if(!__syncInterval) __syncInterval = setInterval(syncPullAll, SYNC_INTERVAL);
   } else {
     renderApp();
@@ -2688,7 +2689,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v37</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v38</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -8490,6 +8491,36 @@ function notifyPartRequestToAgent(d, a, req){
   });
   saveAdminMsgs(arr);
 }
+/* backfill: توليد رسائل طلبات المشاركة المفقودة (للطلبات القديمة المرسلة قبل نشر هذا التحديث)
+   تعمل على أي مدرسة نشطة ولأي معلم، فتضمن وصول إشعار الوكيل لكل طلب جديد وقديم */
+function backfillActivityMsgs(){
+  const school = getActiveSchool();
+  const d = loadDB();
+  const arr = loadAdminMsgs();
+  let changed = false;
+  (d.activities || []).forEach(a => {
+    (a.requests || []).forEach(req => {
+      if(req.status !== 'PENDING') return;
+      if(arr.some(m => m.senderRole === 'ACTIVITY' && m.partReqId === req.id)) return;
+      (d.users || []).filter(u => u.active && u.role === 'AGENT').forEach(ag => {
+        if(arr.some(m => m.senderRole === 'ACTIVITY' && m.partReqId === req.id)) return;
+        arr.push({
+          id: uid(), teacherId: ag.id, teacherName: ag.name,
+          text: '🎨 طلب مشاركة في نشاط "' + String(a.name) + '": ' + req.teacherName + ' — نوع المشاركة: ' + req.kind,
+          createdAt: new Date().toISOString(), read:false, dismissed:false, views:0,
+          senderRole: 'ACTIVITY', senderName: req.teacherName, senderId: req.teacherId,
+          activityId: a.id, partReqId: req.id, partTeacherId: req.teacherId
+        });
+        changed = true;
+      });
+    });
+  });
+  if(changed){
+    saveAdminMsgs(arr);
+    __syncSchedule(school, 0);
+    renderApp();
+  }
+}
 function approveRequest(id, reqId){
   const d = loadDB();
   const a = (d.activities || []).find(x => x.id === id);
@@ -9233,21 +9264,21 @@ function saveAnnouncement(){
 /* تسجيل Service Worker للتثبيت والعمل دون اتصال — يعمل فقط عبر http/https */
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('sw.js?v=37', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=38', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
      فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف) */
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (sessionStorage.getItem('__nibrasReloaded') !== 'v37') {
-      sessionStorage.setItem('__nibrasReloaded', 'v37');
+    if (sessionStorage.getItem('__nibrasReloaded') !== 'v38') {
+      sessionStorage.setItem('__nibrasReloaded', 'v38');
       location.reload();
     }
   });
   navigator.serviceWorker.addEventListener('message', function(e){
     if (e && e.data && e.data.type === 'NEW_VERSION') {
-      if (sessionStorage.getItem('__nibrasReloaded') !== 'v37') {
-        sessionStorage.setItem('__nibrasReloaded', 'v37');
+      if (sessionStorage.getItem('__nibrasReloaded') !== 'v38') {
+        sessionStorage.setItem('__nibrasReloaded', 'v38');
         location.reload();
       }
     }
