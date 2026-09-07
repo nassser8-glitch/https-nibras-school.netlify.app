@@ -2925,7 +2925,7 @@ function saveAdminMsgs(arr){ saveAdminMsgsFor(getActiveSchool(), arr); }
 function saveAdminMsgsFor(school, arr){ __persistMsgs(school, arr); }
 /* حفظ الرسائل في مرآة قاعدة البيانات (تتزامن مع كل الأجهزة عبر الخادم) مع نسخة محلية احتياطية */
 function __persistMsgs(school, arr){
-  try{ const d = loadSchoolDB(school); d.adminMsgs = JSON.parse(JSON.stringify(arr)); saveDB(d); }catch(e){}
+  try{ const d = loadSchoolDB(school); d.adminMsgs = JSON.parse(JSON.stringify(arr)); d._ts = Date.now(); saveDB(d); }catch(e){}
   try{ localStorage.setItem(ADMIN_MSGS_KEY(school), JSON.stringify(arr)); }catch(e){}
   __syncSchedule(school, 0);
 }
@@ -9057,7 +9057,7 @@ function loadSuggestionsAll(){
 }
 function saveSuggestions(arr, school){
   const sc = school || getActiveSchool();
-  try{ const d = loadSchoolDB(sc); d.suggestions = JSON.parse(JSON.stringify(arr)); saveDB(d); }catch(e){}
+  try{ const d = loadSchoolDB(sc); d.suggestions = JSON.parse(JSON.stringify(arr)); d._ts = Date.now(); saveDB(d); }catch(e){}
   try{ localStorage.setItem(suggestionsKey(sc), JSON.stringify(arr)); }catch(e){}
   __syncSchedule(sc, 0);
 }
@@ -9077,7 +9077,7 @@ function getAnnouncementFor(school){
   return { text: legacy || 'الصلاة على النبي', sender: localStorage.getItem(ANNOUNCEMENT_SENDER_KEY(sc)) || '' };
 }
 function setAnnouncementFor(school, obj){
-  try{ const d = loadSchoolDB(school); d.announcements = obj && obj.text ? [obj] : []; saveDB(d); }catch(e){}
+  try{ const d = loadSchoolDB(school); d.announcements = obj && obj.text ? [obj] : []; d._ts = Date.now(); saveDB(d); }catch(e){}
   if(obj && obj.text){
     try{ localStorage.setItem(ANNOUNCEMENT_KEY(school), obj.text); }catch(e){}
     if(obj.senderName){ try{ localStorage.setItem(ANNOUNCEMENT_SENDER_KEY(school), obj.senderName); }catch(e){} }
