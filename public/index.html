@@ -2688,7 +2688,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v34</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v35</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -9187,20 +9187,20 @@ function saveAnnouncement(){
 /* تسجيل Service Worker للتثبيت والعمل دون اتصال — يعمل فقط عبر http/https */
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=35', { updateViaCache: 'none' }).catch(function(){});
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
      فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف) */
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (sessionStorage.getItem('__nibrasReloaded') !== 'v34') {
-      sessionStorage.setItem('__nibrasReloaded', 'v34');
+    if (sessionStorage.getItem('__nibrasReloaded') !== 'v35') {
+      sessionStorage.setItem('__nibrasReloaded', 'v35');
       location.reload();
     }
   });
   navigator.serviceWorker.addEventListener('message', function(e){
     if (e && e.data && e.data.type === 'NEW_VERSION') {
-      if (sessionStorage.getItem('__nibrasReloaded') !== 'v34') {
-        sessionStorage.setItem('__nibrasReloaded', 'v34');
+      if (sessionStorage.getItem('__nibrasReloaded') !== 'v35') {
+        sessionStorage.setItem('__nibrasReloaded', 'v35');
         location.reload();
       }
     }
