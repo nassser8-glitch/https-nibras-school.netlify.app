@@ -149,16 +149,27 @@ const SECTION_RULES = {
   grades:      ['ADMIN', 'AGENT', 'COUNSELOR'],
   classes:     ['ADMIN', 'AGENT', 'COUNSELOR'],
   students:    ['ADMIN', 'AGENT', 'COUNSELOR'],
-  attendance:  ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER'],
-  notes:       ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER'],
-  transfers:   ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER'],
-  activities:  ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER'],
+  attendance:  ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
+  notes:       ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
+  transfers:   ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
+  activities:  ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
   timetable:   ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER'],
   videos:      ['ADMIN', 'AGENT'],
   assignments: ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'STUDENT'],
   maintenance: ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
+  // رسائل «الوكيل/المدير/الموجه → المعلم» وتنبيهاته (هروب/تحويل)، ورسالة اليوم، واقتراحاتها:
+  // كانت في localStorage لكل جهاز فلا تصل المعلمين — أصبحت أقساماً تُزامن مع كل الأجهزة.
+  adminMsgs:     ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
+  announcements: ['ADMIN'],
+  suggestions:   ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
 };
-const SECTION_KEYS = ['users','grades','classes','students','attendance','notes','transfers','activities','timetable','videos','assignments','maintenance'];
+const SECTION_KEYS = ['users','grades','classes','students','attendance','notes','transfers','activities','timetable','videos','assignments','maintenance','adminMsgs','announcements','suggestions'];
+// إسناد إداري مثبّت: مسؤولو الأقسام يُسندون لجميع فصول قسمهم ويبقون مثبتين في كل حفظ
+// (نسخة جهاز قديمة أو حفظ مدير بجهاز قديم كان يمسح الإسناد — هنا يُعاد فرضه قبل التخزين).
+const ALWAYS_TEACHER_IDS = {
+  GIRLS: ['id_61e90132bc11ff7b'],                                            // تهاني «تهاني أحمد» — إدارية بنات
+  BOYS:  ['id_0449f163a8198447', 'id_6ef8036cc7f4c692'],                      // خالد يوسف + عبدالله فيصل — بنين
+};
 // حقول سرية لا تُخزن/تُعاد أبدًا
 const STRIP_FIELDS = ['password','password_hash','secret','initialSecret','resetCode','resetExpires','token_hash'];
 
@@ -611,6 +622,8 @@ app.get('/api/auth/accounts', (req, res) => {
 /* ================= /api/db (البيانات) ================= */
 function schoolAccess(session, school) {
   if (session.role === 'ADMIN') return true;
+  // «إداري شامل»: حسابات مخوّلة بإدارة طلاب كلا القسمين (بنين/بنات) مثلًا لتسجيل الغياب/التأخر
+  if (session.data && session.data.allSchools) return true;
   return session.school === school;
 }
 function jsonEqual(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
@@ -866,6 +879,11 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     for (const k of ['users','grades','classes','students','attendance','notes','transfers','maintenance']) {
       if (!Array.isArray(data[k])) return res.status(400).json({ error: 'invalid_section:' + k });
     }
+    // أقسام الرسائل/الإعلان/الاقتراحات: أجهزة أقدم لا ترسلها بعد — تُعامَل كفارغة دون رفض الحفظ.
+    for (const k of ['adminMsgs','announcements','suggestions']) {
+      if (data[k] === undefined) data[k] = [];
+      else if (!Array.isArray(data[k])) return res.status(400).json({ error: 'invalid_section:' + k });
+    }
     const ts = Number(req.body.ts) || Date.now();
     const prev = await db.getSchoolData(school);
     const prevUsers = (prev.data && Array.isArray(prev.data.users)) ? prev.data.users : [];
@@ -942,6 +960,11 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           if (!jsonEqual(prev.data.activities, cf.activities)) cf.activities = mergeSection(prev.data.activities, cf.activities);
           if (!jsonEqual(prev.data.timetable, cf.timetable)) cf.timetable = mergeTimetable(prev.data.timetable, cf.timetable);
           if (!jsonEqual(prev.data.attendance, cf.attendance)) cf.attendance = mergeAttendance(prev.data.attendance, cf.attendance);
+          // الرسائل/الإعلان/الاقتراحات: تُدمج دائماً حتى مع استبدال المدير الكامل،
+          // حتى لا يمسح حفظٌ إداري على جهاز قديم رسائلَ وصلت حديثاً للمعلمين من جهات أخرى.
+          if (Array.isArray(prev.data.adminMsgs) && !jsonEqual(prev.data.adminMsgs, cf.adminMsgs)) cf.adminMsgs = mergeSection(prev.data.adminMsgs, cf.adminMsgs);
+          if (Array.isArray(prev.data.announcements) && !jsonEqual(prev.data.announcements, cf.announcements)) cf.announcements = mergeSection(prev.data.announcements, cf.announcements);
+          if (Array.isArray(prev.data.suggestions) && !jsonEqual(prev.data.suggestions, cf.suggestions)) cf.suggestions = mergeSection(prev.data.suggestions, cf.suggestions);
           data = cf;
         }
       }
@@ -950,9 +973,20 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       // بحقول التأخر فقط (lateMinutes/lateType) فلا يُرفض الحفظ ولا يمسح بيانات الطالب.
       data = applyMerged(prev.data, data, role, false);
     }
-    if (!canEditUsers && role === 'TEACHER' && incomingStudents) {
+    if (!canEditUsers && (role === 'TEACHER' || role === 'ADMINISTRATIVE') && incomingStudents) {
+      // المعلم والإداري: يُسمح لهما بتعديل حقول التأخر للطلاب (lateMinutes/lateType) فقط
       data.students = mergeStudentsLateOnly(prev.data ? prev.data.students : [], incomingStudents);
     }
+
+    // حماية «بداية النقاط»: أي ملاحظة سلبية (points < 0) بتاريخ قبل بداية العام الدراسي تُحذف
+    // حتى لو حملها جهاز قديم لا يزال يحتوي نسخة كاملة — تمنع عودة النقاط السلبية المحذوفة.
+    try {
+      const stCut = await db.getSchoolSettings(school);
+      const cutDate = (stCut.pointsStartFrom || '2026-09-07').slice(0, 10);
+      if (Array.isArray(data.notes)) {
+        data.notes = data.notes.filter(n => !((typeof n.points === 'number' && n.points < 0) && (n.createdAt || '').slice(0, 10) < cutDate));
+      }
+    } catch (_) {}
 
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
     const clean = JSON.parse(JSON.stringify(data));
@@ -973,6 +1007,19 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     const saneTs = Math.min(ts, nowTs + 5 * 60 * 1000);
     const nextTs = Math.max(saneTs, (prev && prev.ts) || 0) + 1;
     if (clean && typeof clean === 'object') clean._ts = nextTs;
+    // تثبيت الإسناد الإداري: إعادة فرض مسؤولي القسم في كل فصل مهما حمل جهاز الحفظ
+    try {
+      const keepIds = ALWAYS_TEACHER_IDS[school];
+      if (keepIds && Array.isArray(clean.classes)) {
+        for (const c of clean.classes) {
+          if (!c || (typeof c !== 'object')) continue;
+          const t = Array.isArray(c.teacherIds) ? c.teacherIds.filter(x => typeof x === 'string') : [];
+          let changed = false;
+          for (const id of keepIds) { if (!t.includes(id)) { t.push(id); changed = true; } }
+          if (changed) c.teacherIds = t;
+        }
+      }
+    } catch (_) {}
     await db.setSchoolData(school, clean, nextTs);
     // مزامنة جدول المصادقة مع أي تغيير في قسم المستخدمين (حذف/نقل/تعطيل)
     if (['ADMIN','AGENT'].includes(req.session.role)) {

@@ -611,6 +611,19 @@ function __syncSchedule(school, ms){
   clearTimeout(__syncTimers[school]);
   __syncTimers[school] = setTimeout(() => __syncPush(school), (ms === undefined) ? 700 : ms);
 }
+// دمج سجلّي حضور لنفس الطالب/اليوم بنفس سياسة الخادم: الغائب/المتأخر يفوز على الحاضر
+// مهما اختلف الزمن، و«القبر» (deleted) يفوز دائماً، ثم الأعلى _t يفوز.
+function __attWinner(a, b){
+  if(!a) return b;
+  if(!b) return a;
+  if(!!a.deleted !== !!b.deleted) return a.deleted ? a : b;
+  const infA = (a.status === 'ABSENT' || a.status === 'LATE') ? 1 : 0;
+  const infB = (b.status === 'ABSENT' || b.status === 'LATE') ? 1 : 0;
+  if(infA !== infB) return infA > infB ? a : b;
+  const ta = (typeof a._t === 'number') ? a._t : 0;
+  const tb = (typeof b._t === 'number') ? b._t : 0;
+  return ta >= tb ? a : b;
+}
 async function __syncPush(school){
   if(!__syncEnabled()) return;
   const key = 'nibras_'+school+'_db_v1';
@@ -682,15 +695,15 @@ async function __syncPush(school){
               }
             };
             mergeTT(sd, obj.timetable);
-            // 2) الحضور: الأحدث _t يفوز — لا يسمح جهاز قديم بمسح غياب أحدث من جهاز آخر
+            // 2) الحضور: الغائب/المتأخر يفوز على الحاضر (نفس سياسة الخادم) — لا يسمح جهاز قديم
+            //    بمسح غياب أحدث أو حاضرٍ بزمنٍ أحدث بتجاوز غيابٍ مسجَّل من زميل
             sd.attendance = Array.isArray(sd.attendance) ? sd.attendance.slice() : [];
-            const tOf = r => (r && typeof r === 'object' && typeof r._t === 'number') ? r._t : 0;
             const aByKey = new Map(sd.attendance.map(r => [ (r.studentId||'')+'|'+(r.date||''), r ]));
             for(const r of (Array.isArray(obj.attendance) ? obj.attendance : [])){
               const k = (r.studentId||'')+'|'+(r.date||'');
               const ex = aByKey.get(k);
               if(!ex){ aByKey.set(k, r); sd.attendance.push(r); }
-              else if(tOf(r) > tOf(ex)){
+              else if(__attWinner(r, ex) === r){
                 sd.attendance = sd.attendance.map(x => (x === ex) ? r : x);
                 aByKey.set(k, r);
               }
@@ -847,16 +860,15 @@ async function __syncPull(school){
           }
         }
       }
-      // غياب محلي جديد (أحدث من نظيره في الخادم) يحفظ فوقه
+      // غياب محلي جديد يُحفظ فوقه مع تفضيل الغائب/المتأخر على الحاضر (توافق مع سياسة الخادم)
       if(Array.isArray(local.attendance)){
         merged.attendance = Array.isArray(merged.attendance) ? merged.attendance.slice() : [];
-        const tOf = r => (r && typeof r === 'object' && typeof r._t === 'number') ? r._t : 0;
         const bySD = new Map(merged.attendance.map(r => [ (r.studentId||'')+'|'+(r.date||''), r ]));
         for(const r of local.attendance){
           const sd = (r.studentId||'')+'|'+(r.date||'');
           const ex = bySD.get(sd);
           if(!ex) { bySD.set(sd, r); merged.attendance.push(r); }
-          else if(tOf(r) > tOf(ex)){ merged.attendance = merged.attendance.map(x => (x===ex)?r:x); bySD.set(sd, r); }
+          else if(__attWinner(r, ex) === r){ merged.attendance = merged.attendance.map(x => (x===ex)?r:x); bySD.set(sd, r); }
         }
       }
       // ملاحظات محلية جديدة (لم تُرفع) نضمن بقاءها
@@ -1188,6 +1200,8 @@ function roleLabel(role){
 }
 function teacherEmoji(){ return getActiveSchool() === 'GIRLS' ? '👩‍🏫' : '👨‍🏫'; }
 function isManager(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'COUNSELOR'); }
+// الإداري (ADMINISTRATIVE) دور مدرسي شامل يرى كل فصول/طلاب القسم (ويستثنى منه فلترة الفصول المسندة)
+function seesAllClasses(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE'); }
 function canManageTeachers(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
 function isAdminRole(role){ return (role === 'AGENT' || role === 'COUNSELOR' || role === 'ADMINISTRATIVE'); }
 function canManageActivities(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
@@ -1292,7 +1306,7 @@ function seedDBFor(school){ if(DEMO_MODE && DEMO_SEED && DEMO_SEED[school]) retu
   // في وضع الخادم: الحسابات تُنشأ في قاعدة البيانات فقط (لا حسابات افتراضية بكلمات مرور معروفة في المتصفح)
   return {
     users: __serverEnabled() ? [] : [{ id: uid(), name:'مدير النظام', email:'admin@nibras.local', password:null, role:'ADMIN', active:true }],
-    grades: [], classes: [], students: [], attendance: [], notes: [], transfers: [], maintenance: []
+    grades: [], classes: [], students: [], attendance: [], notes: [], transfers: [], maintenance: [], adminMsgs: [], announcements: [], suggestions: []
   };
 }
 function seedDB(){
@@ -1506,8 +1520,8 @@ function getClassesSorted(){
   const d = loadDB();
   const user = currentUser();
   let classes = d.classes;
-  // المعلم يرى فقط الفصول المسندة إليه (المدير والوكيل يريان الكل)
-  if(user && !isManager(user)){
+  // غير الشموليين (معلم فقط) يرون الفصول المسندة إليهم؛ المدير/الوكيل/المرشدة/الإداري يرون الكل
+  if(user && !seesAllClasses(user)){
     classes = classes.filter(c => (c.teacherIds||[]).includes(user.id));
   }
   return classes.slice().sort((a,b) => {
@@ -1519,7 +1533,7 @@ function getVisibleStudents(){
   const d = loadDB();
   const user = currentUser();
   let students = d.students.filter(s => s.active);
-  if(user && !isManager(user)){
+  if(user && !seesAllClasses(user)){
     const classIds = getClassesSorted().map(c => c.id);
     students = students.filter(s => s.classId && classIds.includes(s.classId));
   }
@@ -1610,7 +1624,7 @@ function renderApp(){
       renderApp();
       return;
     }
-    if(user.role !== 'ADMIN'){
+    if(user.role !== 'ADMIN' && !(user.allSchools)){
       const us = getUserSchool();
       if(us){ setActiveSchool(us); renderApp(); return; }
     }
@@ -1626,8 +1640,8 @@ function renderApp(){
     app.innerHTML = renderFirstLogin(user);
     return;
   }
-  // منع المعلم من الدخول لمدرسة غير مدرسته (حماية إضافية)
-  if(!isManager(user) && getUserSchool() !== school){
+  // منع المعلم من الدخول لمدرسة غير مدرسته (حماية إضافية) — الإداري الشامل يستثنى
+  if(!isManager(user) && !(user && user.allSchools) && getUserSchool() !== school){
     alert('ليست لديك صلاحية الدخول إلى هذا القسم');
     logout();
     return;
@@ -2219,9 +2233,11 @@ function renderSchoolSelect(){
     }
     return null;
   })() : null;
+  // الإداري الشامل (allSchools) يرى كلا القسمين كالمدير
+  const canAll = isAdmin || !!(user && user.allSchools);
 
-  const boys = (isAdmin || userSchool === 'BOYS') ? getSchoolOverview('BOYS') : null;
-  const girls = (isAdmin || userSchool === 'GIRLS') ? getSchoolOverview('GIRLS') : null;
+  const boys = (canAll || userSchool === 'BOYS') ? getSchoolOverview('BOYS') : null;
+  const girls = (canAll || userSchool === 'GIRLS') ? getSchoolOverview('GIRLS') : null;
 
   function panelHtml(school, data){
     if(!data) return '';
@@ -2513,8 +2529,9 @@ function renderLayout(user, hash){
   ).join('');
 
   const schoolNow = getActiveSchool();
-  const announceSender = localStorage.getItem(ANNOUNCEMENT_SENDER_KEY(schoolNow));
-  const msgMarquee = (localStorage.getItem(ANNOUNCEMENT_KEY(schoolNow))||'الصلاة على النبي').split('\n').filter(Boolean).join(' • ');
+  const annCfg = getAnnouncementFor(schoolNow);
+  const announceSender = annCfg.sender;
+  const msgMarquee = (annCfg.text || 'الصلاة على النبي').split('\n').filter(Boolean).join(' • ');
   const senderFirstName = announceSender ? firstNameOf(announceSender) : '';
   const msgTodayWidget = `
     <div class="msg-day-center" onclick="location.hash='#/settings'" title="فتح صفحة رسالة اليوم">
@@ -2577,7 +2594,7 @@ function renderLayout(user, hash){
               <div class="topbar-user-name">${escapeHtml(user.name)}</div>
               <div class="topbar-user-role">${roleLabel(user.role)}</div>
             </div>
-            ${user.role==='ADMIN' ? `<button class="btn-secondary" style="padding:7px 12px" onclick="switchSchool()">🔀 تبديل القسم</button>` : ''}
+            ${(user.role==='ADMIN' || user.allSchools) ? `<button class="btn-secondary" style="padding:7px 12px" onclick="switchSchool()">🔀 تبديل القسم</button>` : ''}
             <button class="btn-secondary" style="padding:7px 12px" onclick="logout()">🚪 خروج</button>
           </div>
         </div>
@@ -2597,7 +2614,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v29</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v33</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -2837,18 +2854,23 @@ function checkNotifications(){
 
 /* ============ رسائل المدير إلى المعلمين ============ */
 function loadAdminMsgs(){
-  let arr = [];
-  try { arr = JSON.parse(localStorage.getItem(ADMIN_MSGS_KEY(getActiveSchool())) || '[]'); } catch(e){ arr = []; }
-  return Array.isArray(arr) ? arr : [];
+  return loadAdminMsgsFor(getActiveSchool());
 }
 /* إشعارات قسم محدد دون تغيير القسم النشط (للمدير: رؤية القسمين معًا) */
 function loadAdminMsgsFor(school){
+  try{ const d = loadSchoolDB(school); if(Array.isArray(d.adminMsgs)) return d.adminMsgs; }catch(e){}
   let arr = [];
   try { arr = JSON.parse(localStorage.getItem(ADMIN_MSGS_KEY(school)) || '[]'); } catch(e){ arr = []; }
   return Array.isArray(arr) ? arr : [];
 }
-function saveAdminMsgs(arr){ localStorage.setItem(ADMIN_MSGS_KEY(getActiveSchool()), JSON.stringify(arr)); }
-function saveAdminMsgsFor(school, arr){ localStorage.setItem(ADMIN_MSGS_KEY(school), JSON.stringify(arr)); }
+function saveAdminMsgs(arr){ saveAdminMsgsFor(getActiveSchool(), arr); }
+function saveAdminMsgsFor(school, arr){ __persistMsgs(school, arr); }
+/* حفظ الرسائل في مرآة قاعدة البيانات (تتزامن مع كل الأجهزة عبر الخادم) مع نسخة محلية احتياطية */
+function __persistMsgs(school, arr){
+  try{ const d = loadSchoolDB(school); d.adminMsgs = JSON.parse(JSON.stringify(arr)); saveDB(d); }catch(e){}
+  try{ localStorage.setItem(ADMIN_MSGS_KEY(school), JSON.stringify(arr)); }catch(e){}
+  __syncSchedule(school, 0);
+}
 /* البحث عن رسالة في كلا القسمين (للمدير) أو القسم النشط فقط */
 function findAdminMsgAcross(id){
   const user = currentUser();
@@ -2866,7 +2888,7 @@ function unreadForSchool(school, email){
     const d = JSON.parse(localStorage.getItem('nibras_' + school + '_db_v1') || 'null');
     const u = d && d.users.find(x => x.email === email);
     if(!u) return 0;
-    const arr = JSON.parse(localStorage.getItem(ADMIN_MSGS_KEY(school)) || '[]');
+    const arr = (d && Array.isArray(d.adminMsgs)) ? d.adminMsgs : [];
     return arr.filter(m => m.senderId === u.id && !m.read && !m.dismissed).length;
   }catch(e){ return 0; }
 }
@@ -3101,7 +3123,7 @@ function renderAdminMsgAlerts(){
         rec.read = true;
       }
     });
-    Object.keys(touched).forEach(k => { try { localStorage.setItem(ADMIN_MSGS_KEY(k), JSON.stringify(touched[k])); } catch(e){} });
+    Object.keys(touched).forEach(k => saveAdminMsgsFor(k, touched[k]));
     msgs = combinedMsgs();
   }
   startMsgBeepLoop();
@@ -4689,10 +4711,10 @@ function renderCharts(d){
   const now = new Date();
   const fmt = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   let att = d.attendance;
-  // المعلم يرى إحصائيات فصوله فقط (المدير والوكيل يرون الكل)
+  // المعلم يرى إحصائيات فصوله فقط (المدير/الوكيل/المرشدة/الإداري يرون الكل)
   const user = currentUser();
   const visibleIds = new Set(getVisibleStudents().map(s => s.id));
-  if(user && !isManager(user)){
+  if(user && !seesAllClasses(user)){
     const classIds = new Set(getClassesSorted().map(c => c.id));
     att = att.filter(a => classIds.has(a.classId));
   }
@@ -8872,8 +8894,9 @@ function renderSettings(){
   const school = getActiveSchool();
   const user = currentUser();
   const isAdmin = user?.role === 'ADMIN';
-  const announcement = localStorage.getItem(ANNOUNCEMENT_KEY(school)) || 'الصلاة على النبي';
-  const suggSender = localStorage.getItem(ANNOUNCEMENT_SENDER_KEY(school));
+  const annCfg = getAnnouncementFor(school);
+  const announcement = annCfg.text || 'الصلاة على النبي';
+  const suggSender = annCfg.sender;
   const suggestions = loadSuggestionsAll();
 
   const currentCard = `
@@ -8957,8 +8980,10 @@ function renderSettings(){
 /* اقتراحات رسالة اليوم: المعلم/الوكيل يقترحون → المدير يوافق → تظهر للجميع */
 function suggestionsKey(school){ return 'nibras_' + (school || getActiveSchool()) + '_suggestions_v1'; }
 function loadSuggestions(school){
+  const sc = school || getActiveSchool();
+  try{ const d = loadSchoolDB(sc); if(Array.isArray(d.suggestions)) return d.suggestions; }catch(e){}
   let arr = [];
-  try { arr = JSON.parse(localStorage.getItem(suggestionsKey(school)) || '[]'); } catch(e){ arr = []; }
+  try { arr = JSON.parse(localStorage.getItem(suggestionsKey(sc)) || '[]'); } catch(e){ arr = []; }
   return Array.isArray(arr) ? arr : [];
 }
 // المدير يرى اقتراحات القسمين معًا (بنين وبنات)، وغيره يرى اقتراحات قسمه فقط
@@ -8972,7 +8997,38 @@ function loadSuggestionsAll(){
   }
   return loadSuggestions().map(s => ({ ...s, _school: getActiveSchool() }));
 }
-function saveSuggestions(arr, school){ localStorage.setItem(suggestionsKey(school || getActiveSchool()), JSON.stringify(arr)); }
+function saveSuggestions(arr, school){
+  const sc = school || getActiveSchool();
+  try{ const d = loadSchoolDB(sc); d.suggestions = JSON.parse(JSON.stringify(arr)); saveDB(d); }catch(e){}
+  try{ localStorage.setItem(suggestionsKey(sc), JSON.stringify(arr)); }catch(e){}
+  __syncSchedule(sc, 0);
+}
+function getAnnouncementFor(school){
+  const sc = school || getActiveSchool();
+  let mir = null;
+  try{
+    const d = loadSchoolDB(sc);
+    const arr = Array.isArray(d.announcements) ? d.announcements : [];
+    if(arr.length){
+      const last = arr.slice().sort((a,b) => String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))[0];
+      if(last && last.text) mir = { text: last.text, sender: last.senderName || '' };
+    }
+  }catch(e){}
+  if(mir) return mir;
+  const legacy = localStorage.getItem(ANNOUNCEMENT_KEY(sc)) || '';
+  return { text: legacy || 'الصلاة على النبي', sender: localStorage.getItem(ANNOUNCEMENT_SENDER_KEY(sc)) || '' };
+}
+function setAnnouncementFor(school, obj){
+  try{ const d = loadSchoolDB(school); d.announcements = obj && obj.text ? [obj] : []; saveDB(d); }catch(e){}
+  if(obj && obj.text){
+    try{ localStorage.setItem(ANNOUNCEMENT_KEY(school), obj.text); }catch(e){}
+    if(obj.senderName){ try{ localStorage.setItem(ANNOUNCEMENT_SENDER_KEY(school), obj.senderName); }catch(e){} }
+    else { try{ localStorage.removeItem(ANNOUNCEMENT_SENDER_KEY(school)); }catch(e){} }
+  } else {
+    try{ localStorage.removeItem(ANNOUNCEMENT_KEY(school)); localStorage.removeItem(ANNOUNCEMENT_SENDER_KEY(school)); }catch(e){}
+  }
+  __syncSchedule(school, 0);
+}
 function wordCount(text){ return String(text||'').trim().split(/\s+/).filter(Boolean).length; }
 function updateSugCount(){
   const el = document.getElementById('sugText');
@@ -9000,8 +9056,7 @@ function approveSuggestion(id){
   if(!s || s.status !== 'PENDING') return;
   if(!confirm('اعتماد هذه العبارة كرسالة اليوم؟')) return;
   const school = s._school || getActiveSchool();
-  localStorage.setItem(ANNOUNCEMENT_KEY(school), s.text);
-  localStorage.setItem(ANNOUNCEMENT_SENDER_KEY(school), s.authorName + ' (' + roleLabel(s.authorRole) + ')');
+  setAnnouncementFor(school, { id: uid(), text: s.text, senderName: s.authorName + ' (' + roleLabel(s.authorRole) + ')', updatedAt: new Date().toISOString() });
   const arr = loadSuggestions(school);
   const t = arr.find(x => x.id === id);
   if(t){ t.status = 'APPROVED'; t.approvedAt = new Date().toISOString(); }
@@ -9029,9 +9084,14 @@ function fmtTime(iso){
 function saveAnnouncement(){
   const text = document.getElementById('announceText').value.trim();
   const school = getActiveSchool();
-  if(text){ localStorage.setItem(ANNOUNCEMENT_KEY(school), text); }
-  else { localStorage.removeItem(ANNOUNCEMENT_KEY(school)); }
-  localStorage.removeItem(ANNOUNCEMENT_SENDER_KEY(school));
+  const user = currentUser();
+  if(text){ setAnnouncementFor(school, { id: uid(), text, senderName: user ? (user.name || '') : '', updatedAt: new Date().toISOString() }); }
+  else {
+    try{ const d = loadSchoolDB(school); d.announcements = []; saveDB(d); }catch(e){}
+    localStorage.removeItem(ANNOUNCEMENT_KEY(school));
+    localStorage.removeItem(ANNOUNCEMENT_SENDER_KEY(school));
+    __syncSchedule(school, 0);
+  }
   renderApp();
 }
 </script>
@@ -9044,15 +9104,15 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
      فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف) */
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (sessionStorage.getItem('__nibrasReloaded') !== 'v29') {
-      sessionStorage.setItem('__nibrasReloaded', 'v29');
+    if (sessionStorage.getItem('__nibrasReloaded') !== 'v33') {
+      sessionStorage.setItem('__nibrasReloaded', 'v33');
       location.reload();
     }
   });
   navigator.serviceWorker.addEventListener('message', function(e){
     if (e && e.data && e.data.type === 'NEW_VERSION') {
-      if (sessionStorage.getItem('__nibrasReloaded') !== 'v29') {
-        sessionStorage.setItem('__nibrasReloaded', 'v29');
+      if (sessionStorage.getItem('__nibrasReloaded') !== 'v33') {
+        sessionStorage.setItem('__nibrasReloaded', 'v33');
         location.reload();
       }
     }
