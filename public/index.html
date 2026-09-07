@@ -624,6 +624,20 @@ function __attWinner(a, b){
   const tb = (typeof b._t === 'number') ? b._t : 0;
   return ta >= tb ? a : b;
 }
+/* اختيار أحدث نسخة من رسالة (بأحدث وقت تعديل/اطلاع) عند الدمج حتى لا تختفي حالة الاطلاع والقراءة */
+function __pickMsg(a, b){
+  if(!a) return b;
+  if(!b) return a;
+  const t = m => Math.max(
+    Date.parse(m && (m.updatedAt || '')) || 0,
+    Date.parse(m && (m.editedAt || '')) || 0,
+    Date.parse(m && (m.lastViewAt || '')) || 0,
+    Date.parse(m && (m.dismissedAt || '')) || 0,
+    Date.parse(m && (m.revealedAt || '')) || 0,
+    Date.parse(m && (m.createdAt || '')) || 0
+  );
+  return t(b) >= t(a) ? b : a;
+}
 async function __syncPush(school){
   if(!__syncEnabled()) return;
   const key = 'nibras_'+school+'_db_v1';
@@ -744,6 +758,7 @@ async function __syncPush(school){
               for(const x of (Array.isArray(locArr) ? locArr : [])){
                 if(!x || x.id == null) continue;
                 if(!m.has(x.id)) m.set(x.id, x);
+                else if(__pickMsg(m.get(x.id), x) === x) m.set(x.id, x);
               }
               return Array.from(m.values());
             };
@@ -938,6 +953,7 @@ async function __syncPull(school){
         for(const x of (Array.isArray(locArr) ? locArr : [])){
           if(!x || x.id == null) continue;
           if(!m.has(x.id)) m.set(x.id, x);
+          else if(__pickMsg(m.get(x.id), x) === x) m.set(x.id, x);
         }
         return Array.from(m.values());
       };
@@ -2996,6 +3012,7 @@ function dismissAdminMsg(id){
   m.dismissed = true;
   m.dismissedAt = new Date().toISOString();
   m.dismissedBy = currentUser()?.name || '';
+  m.updatedAt = new Date().toISOString();
   saveAdminMsgsFor(school, arr);
   renderApp();
 }
@@ -3015,6 +3032,7 @@ function revealAdminMsg(id){
   m.revealed = true;
   m.revealedBy = u.name || '';
   m.read = true;
+  m.updatedAt = new Date().toISOString();
   saveAdminMsgsFor(school, arr);
   renderApp();
 }
@@ -3089,17 +3107,28 @@ function renderGuideMsgs(){
 function checkMsgBeep(){
   const user = currentUser();
   if(!user || user.role === 'ADMIN') return;
-  const msgs = adminMsgsFor(user.id).filter(m => !m.dismissed && !m.revealed && m.senderRole !== 'TRANSFER');
-  if(msgs.length){
-    try { playMsgAlert(); }catch(e){}
-    return;
+  if(window.__msgBeepUser !== user.id || !window.__msgBeepIds || !window.__msgBeepIds[user.id]){
+    window.__msgBeepUser = user.id;
+    window.__msgBeepIds = window.__msgBeepIds || {};
+    window.__msgBeepIds[user.id] = {};
   }
-  // تنبيه هروب من الحصة (من قاعدة البيانات المتزامنة) — يقرع الجرس للوكيل على أي جهاز
+  const rung = window.__msgBeepIds[user.id];
+  const msgs = adminMsgsFor(user.id).filter(m => !m.dismissed && !m.revealed && m.senderRole !== 'TRANSFER');
+  const fresh = msgs.filter(m => !rung['m:' + m.id]);
+  if(fresh.length){
+    fresh.forEach(m => rung['m:' + m.id] = 1);
+    try { playMsgAlert(); }catch(e){}
+  }
+  // تنبيه هروب من الحصة (من قاعدة البيانات المتزامنة) — يقرع الجرس مرة واحدة لكل تنبيه جديد للوكيل
   if(user.role === 'AGENT'){
     try{
       const d = loadDB();
-      const pending = (d.escapeAlerts||[]).some(a => a.date === todayStr() && a.type === 'ESCAPE' && !a.dismissed);
-      if(pending){ try { playMsgAlert(); }catch(e){} }
+      const alerts = (d.escapeAlerts||[]).filter(a => a.date === todayStr() && a.type === 'ESCAPE' && !a.dismissed);
+      const freshE = alerts.filter(a => !rung['e:' + a.id]);
+      if(freshE.length){
+        freshE.forEach(a => rung['e:' + a.id] = 1);
+        try { playMsgAlert(); }catch(e){}
+      }
     }catch(e){}
   }
 }
@@ -3179,6 +3208,7 @@ function renderAdminMsgAlerts(){
         if(uid) rec.lastViewAt = new Date().toISOString();
         if(uid) rec.lastViewByName = userName;
         rec.read = true;
+        rec.updatedAt = new Date().toISOString();
       }
     });
     Object.keys(touched).forEach(k => saveAdminMsgsFor(k, touched[k]));
