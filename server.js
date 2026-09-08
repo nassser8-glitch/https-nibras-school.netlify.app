@@ -725,6 +725,57 @@ function mergeAttendance(prev, incoming) {
   return result;
 }
 
+// ===== دمج الأنشطة عميقاً: لا تمحو نسخة قديمة من جهازٍ آخر طلباتِ المشاركة المضافة حديثاً =====
+// كل نشاط يحتوي requests[] (طلبات مشاركة المعلمين) وparticipants[] (المعتمدون) وeventTime..
+// عندما يفتح معلمٌ/جهازٌ قديم يملك نسخة سابقة بلا الطلب الجديد ويدفعها، كان الدمج القديم حسب id
+// يستهلك كائن النشاط كاملاً فيُفقد الطلب من قاعدة البيانات. الدمج هنا:
+//   - للمصفوفات requests/participants: دمج عناصرها حسب id (الإضافات تُلحق، لا شيء يُحذف).
+//   - لبقية الحقول (الحقول النصية/الزمن): آخر-كتابة-يفوز بالـ _v إن وُجد وإلا بالواصل.
+function mergeActivities(prevActs, inActs) {
+  if (!Array.isArray(prevActs)) prevActs = [];
+  if (!Array.isArray(inActs)) inActs = [];
+  const keyOf = r => (r && typeof r === 'object' && r.id) ? r.id : '__anon:' + JSON.stringify(r);
+  const vOf = r => (r && typeof r === 'object' && typeof r._v === 'number') ? r._v : 0;
+  const mergeList = (prev, inc) => {
+    if (!Array.isArray(prev)) prev = [];
+    if (!Array.isArray(inc)) inc = [];
+    const tomb = new Set();
+    for (const r of prev) if (r && typeof r === 'object' && r.deleted) tomb.add(keyOf(r));
+    const map = new Map();
+    for (const r of prev) if (r && typeof r === 'object') map.set(keyOf(r), r);
+    for (const r of inc) {
+      if (!r || typeof r !== 'object') continue;
+      const k = keyOf(r);
+      if (tomb.has(k)) continue;
+      if (r.deleted) { tomb.add(k); map.set(k, r); continue; }
+      map.set(k, r);
+    }
+    return Array.from(map.values());
+  };
+  const tomb = new Set();
+  for (const a of prevActs) if (a && typeof a === 'object' && a.deleted) tomb.add(keyOf(a));
+  const map = new Map();
+  for (const a of prevActs) if (a && typeof a === 'object') map.set(keyOf(a), a);
+  for (const a of inActs) {
+    if (!a || typeof a !== 'object') continue;
+    const k = keyOf(a);
+    if (tomb.has(k)) continue;
+    if (a.deleted) { tomb.add(k); map.set(k, a); continue; }
+    const ex = map.get(k);
+    if (!ex) { map.set(k, JSON.parse(JSON.stringify(a))); continue; }
+    const merged = JSON.parse(JSON.stringify(ex));
+    if (a.requests || ex.requests) merged.requests = mergeList(ex.requests, a.requests);
+    if (a.participants || ex.participants) merged.participants = mergeList(ex.participants, a.participants);
+    for (const key of Object.keys(a)) {
+      if (key === 'id' || key === 'requests' || key === 'participants') continue;
+      merged[key] = a[key];
+    }
+    if (typeof a._v === 'number') merged._v = a._v;
+    map.set(k, merged);
+  }
+  return Array.from(map.values());
+}
+
 function mergeTimetable(prev, inb) {
   const out = {};
   const keys = new Set([...Object.keys(prev || {}), ...Object.keys(inb || {})]);
@@ -957,7 +1008,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           // التكليفات/النشاطات (وشواهد الحذف فيها) تُدمج دائماً حتى للمدير/الوكيل:
           // استبدالها كلياً بنسخة جهازٍ قديم يمسح شاهد الحذف فيعود التكليف المحذوف.
           if (!jsonEqual(prev.data.assignments, cf.assignments)) cf.assignments = mergeSection(prev.data.assignments, cf.assignments);
-          if (!jsonEqual(prev.data.activities, cf.activities)) cf.activities = mergeSection(prev.data.activities, cf.activities);
+          if (!jsonEqual(prev.data.activities, cf.activities)) cf.activities = mergeActivities(prev.data.activities, cf.activities);
           if (!jsonEqual(prev.data.timetable, cf.timetable)) cf.timetable = mergeTimetable(prev.data.timetable, cf.timetable);
           if (!jsonEqual(prev.data.attendance, cf.attendance)) cf.attendance = mergeAttendance(prev.data.attendance, cf.attendance);
           // الرسائل/الإعلان/الاقتراحات: تُدمج دائماً حتى مع استبدال المدير الكامل،
