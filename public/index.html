@@ -8472,8 +8472,15 @@ function requestParticipation(id, kindOverride){
   const a = (d.activities || []).find(x => x.id === id);
   const me = currentUser();
   if(!a || !me) return;
+  const kindEl = document.getElementById('partKind');
+  const selVal = kindEl ? kindEl.value : '';
+  // حماية إضافية: لو اختار المعلم "أخرى" لكن لم تُدمج التفاصيل لسبب ما، نفتح النافذة بدلاً من رسالة الخطأ
+  if((!kindOverride || !kindOverride.trim()) && selVal === 'أخرى'){
+    openOtherKindModal(id);
+    return;
+  }
   // النوع: إن وُرد صراحةً (نافذة "أخرى") يُستخدم مباشرة، وإلا من القائمة المنسدلة
-  const kind = (kindOverride && kindOverride.trim()) ? kindOverride.trim() : document.getElementById('partKind').value.trim();
+  const kind = (kindOverride && kindOverride.trim()) ? kindOverride.trim() : selVal.trim();
   if(!kind){ alert('اكتب نوع المشاركة المطلوبة (مثال: عمل مسابقة، لوحة جدارية)'); return; }
   a.requests = a.requests || [];
   if(a.requests.some(r => r.teacherId === me.id && r.status === 'PENDING')){ alert('لديك طلب قيد المراجعة بالفعل'); return; }
