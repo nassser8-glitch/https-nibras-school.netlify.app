@@ -986,6 +986,15 @@ async function syncPullAll(){
   const schools = user.role === 'ADMIN' ? ['BOYS','GIRLS'] : [user.school];
   await Promise.all(schools.map(s => __syncPull(s)));
   await Promise.all(schools.filter(Boolean).map(s => __getSchoolSettings(s)));
+  // عرض الإشعارات الجديدة فور وصولها دون انتظار تحديث يدوي للصفحة
+  // (السحب الدوري يجلب الرسائل إلى التخزين، لكن بدون إعادة الرسم لا تظهر للوكيل/الموجهة/المدير)
+  const key = 'nibras_'+(user.school||'BOYS')+'_db_v1';
+  let sig = '';
+  try{
+    const d = JSON.parse(localStorage.getItem(key) || 'null');
+    if(d && Array.isArray(d.adminMsgs)) sig = d.adminMsgs.filter(m => m.senderRole === 'ACTIVITY' || m.teacherId === user.id || m.teacherId === 'ALL').map(m => m.id + ':' + (m.read?1:0) + ':' + (m.dismissed?1:0)).join(',');
+  }catch(e){}
+  if(sig && sig !== (window.__lastMsgSig || '') && location.hash !== '#/login'){ window.__lastMsgSig = sig; renderApp(); }
 }
 // إعادة جلب نسخة القسم من الخادم بعد أي عملية حساب (أول دخول، إنشاء مستخدم، إعادة تعيين...)
 async function __refreshSchool(school){
