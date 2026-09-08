@@ -46,6 +46,12 @@ const SESSION_COOKIE = 'nibras_session';
 const MAX_BODY_MB = Number(process.env.MAX_BODY_MB) || 20;
 const BCRYPT_ROUNDS = 10;
 
+// حسابات مفعّلة قسرياً: لا يُسمح لأي نسخة قديمة من أي جهازٍ بإعادة تعطيلها
+// (على سبيل المثال: المعلم المفوّض يدوياً من المدير — الحماية ضمن حساب واحد)
+const FORCE_ACTIVE = new Set([
+  'id_81dc0acd1fde3501', // عبد الواسع هارون (abdulwase) — مفعّل يدوياً من المدير
+]);
+
 // بريد استعادة الرقم السري (SMTP) — يأتي من متغيرات البيئة (لا يُحفظ في الكود)
 const MAIL_HOST = envOrSecret('MAIL_HOST', '');
 const MAIL_PORT = Number(envOrSecret('MAIL_PORT', '587'));
@@ -845,6 +851,23 @@ async function userPresentInOtherSchool(id, school) {
   return rec.data && Array.isArray(rec.data.users) && rec.data.users.some(u => u.id === id);
 }
 async function reconcileUserTable(school, prevUsers, nextUsers) {
+  // تصحيح الفعّل الإجباري قبل أي مقارنة: أي نسخة (من أي جهاز) تحاول تعطيل حساب
+  // مُفعّل إجبارياً تُصحَّح فوراً — يحمي الحسابَ دون التأثير في بقية الحسابات.
+  if (nextUsers) {
+    let forcedChanged = false;
+    for (const n of nextUsers) {
+      if (n && FORCE_ACTIVE.has(n.id) && n.active === false) { n.active = true; forcedChanged = true; }
+    }
+    if (forcedChanged && school) {
+      const rec = await db.getSchoolData(school);
+      if (rec && rec.data && Array.isArray(rec.data.users)) {
+        for (const u of rec.data.users) {
+          if (u && FORCE_ACTIVE.has(u.id) && u.active === false) u.active = true;
+        }
+        await db.setSchoolData(school, rec.data, Date.now());
+      }
+    }
+  }
   const nextMap = new Map((nextUsers || []).map(u => [u.id, u]));
   const prevMap = new Map((prevUsers || []).map(u => [u.id, u]));
   for (const p of (prevUsers || [])) {
@@ -1050,6 +1073,11 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       const statusMap = new Map(statusRows.map(r => [r.id, !!r.first_login]));
       clean.users.forEach(u => { if (unameMap.has(u.id)) u.username = unameMap.get(u.id); if (statusMap.has(u.id)) u.firstLogin = statusMap.get(u.id); });
       clean.users.forEach(u => STRIP_FIELDS.forEach(f => delete u[f]));
+    }
+    // حماية الحسابات المُفعّلة قسرياً من أي نسخة قديمة: أي جهة تدفع active=false لأحدها
+    // تُكتب active=true (تُصلح نسخة القسم)، وَتُفعَّل في جدول الحسابات عند اللزوم.
+    if (Array.isArray(clean.users)) {
+      clean.users.forEach(u => { if (u && FORCE_ACTIVE.has(u.id) && u.active === false) u.active = true; });
     }
     // زمن الحفظ دائمًا أكبر من نسخة الخادم (حتى لا نُرفض مستقبلًا بزمن متساو/أقل).
     // مع حماية من ساعة متقدمة جدًا: لا نسمح لجهاز بساعة بعيدة عن الواقع أن يرتكز عليه الجميع
