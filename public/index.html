@@ -8467,12 +8467,13 @@ function renderActivityDetail(id){
   <p class="muted small" style="margin-top:12px">سيظهر تقرير بأسماء المشاركين في نهاية العام من صفحة التقارير ← "تقرير الأنشطة والمشاركين".</p>
   `;
 }
-function requestParticipation(id){
+function requestParticipation(id, kindOverride){
   const d = loadDB();
   const a = (d.activities || []).find(x => x.id === id);
   const me = currentUser();
   if(!a || !me) return;
-  const kind = document.getElementById('partKind').value.trim();
+  // النوع: إن وُرد صراحةً (نافذة "أخرى") يُستخدم مباشرة، وإلا من القائمة المنسدلة
+  const kind = (kindOverride && kindOverride.trim()) ? kindOverride.trim() : document.getElementById('partKind').value.trim();
   if(!kind){ alert('اكتب نوع المشاركة المطلوبة (مثال: عمل مسابقة، لوحة جدارية)'); return; }
   a.requests = a.requests || [];
   if(a.requests.some(r => r.teacherId === me.id && r.status === 'PENDING')){ alert('لديك طلب قيد المراجعة بالفعل'); return; }
@@ -8610,11 +8611,8 @@ function confirmOtherKind(){
   const text = document.getElementById('otherKindText').value.trim();
   if(!text){ alert('اكتب تفاصيل المشاركة أولاً'); return; }
   const actId = otherKindActId;
-  // نحفظ القيمة في حقل partKind ثم ننفّذ الإرسال
-  const kindEl = document.getElementById('partKind');
-  if(kindEl) kindEl.value = 'أخرى: ' + text;
   closeOtherKindModal();
-  requestParticipation(actId);
+  requestParticipation(actId, 'أخرى: ' + text);
 }
 function confirmReject(){
   if(!rejectTarget) return;
