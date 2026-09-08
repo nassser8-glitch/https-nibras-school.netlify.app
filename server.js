@@ -782,6 +782,60 @@ function mergeActivities(prevActs, inActs) {
   return Array.from(map.values());
 }
 
+// ===== دمج الفصول بعمق: لا تضيع إسنادَات المعلمين (teacherIds) من نسخة قديمة لجهازٍ آخر =====
+// لمحة: ابتداءً من v40 أصبح إسَناد المعلم للفصول عملياً متكرراً (حتى كلاً بعدد معلمين يظهر لكل فصل).
+// القائمة teacherIds عناصرها سلاسل (لا كائنات)، لذا بدل دمجٍ حسب id لسلاسل (لا معنى) — ندمج
+// كمجموعة: اتحاد عناصر الخادم والواصل يُبقى كل الإسنادات المعروفة (لا يُحذف من نسخة قديمة)،
+// وحذفُ الإسناد مقصودٌ يُوجَّه بإزاحة سطر الفصل وإنقاص المجموعة من الجهة الأحدث فحسب —
+// الشباك نافذة زمنية ضيقة، والتيار الغالب هو إسنادات تُضاف ولا تُوجد حاجة لنسخة قديمة تُنقِصها.
+function mergeClasses(prevCls, inCls) {
+  if (!Array.isArray(prevCls)) prevCls = [];
+  if (!Array.isArray(inCls)) inCls = [];
+  const keyOf = r => (r && typeof r === 'object' && r.id) ? r.id : '__anon:' + JSON.stringify(r);
+  const tomb = new Set();
+  for (const r of prevCls) { if (r && typeof r === 'object' && r.deleted) tomb.add(keyOf(r)); }
+  const map = new Map();
+  for (const r of prevCls) { if (r && typeof r === 'object') map.set(keyOf(r), JSON.parse(JSON.stringify(r))); }
+  for (const r of inCls) {
+    if (!r || typeof r !== 'object') continue;
+    const k = keyOf(r);
+    if (tomb.has(k)) continue;
+    if (r.deleted) { tomb.add(k); map.set(k, JSON.parse(JSON.stringify(r))); continue; }
+    const ex = map.get(k);
+    if (!ex) { map.set(k, JSON.parse(JSON.stringify(r))); continue; }
+    // اتحاد teacherIds: الإسنادات من كلا الطرفين تبقى — لا تُحذف إسناد لأي جهة قديمة/منافِسة
+    const merged = JSON.parse(JSON.stringify(r));
+    const ids = new Set(Array.isArray(ex.teacherIds) ? ex.teacherIds : []);
+    for (const id of (Array.isArray(r.teacherIds) ? r.teacherIds : [])) if (id) ids.add(id);
+    // removedTeacherIds (من أي جهة يحملها في نسخته): إزالات مقصودة تُحترم عبر الأقسام،
+    // وحقل الفصل نفسه (removedTeacherIds) يبقى في نسخة الخادم حتى لو لَم يحمله الواصل.
+    const removed = new Set(Array.isArray(ex.removedTeacherIds) ? ex.removedTeacherIds : []);
+    for (const id of (Array.isArray(r.removedTeacherIds) ? r.removedTeacherIds : [])) if (id) removed.add(id);
+    for (const id of removed) ids.delete(id);
+    // قاعدة الحق في الإعادة: الظهور الصريح/الجديد للمعلم في teacherIds الواصل (من جهاز
+    // يريد فعلياً إعادة إسناده — مثل addTeacherToClass) يتغلب على سجل الحذف، ولو كان
+    // الحذف مسجلاً لدى الخادم مسبقاً. يعاد إضافته إلى ids ويُزال من removed.
+    for (const id of (Array.isArray(r.teacherIds) ? r.teacherIds : [])) {
+      if (id && removed.has(id)) { removed.delete(id); ids.add(id); }
+    }
+    for (const id of removed) ids.delete(id);
+    merged.teacherIds = Array.from(ids);
+    merged.removedTeacherIds = Array.from(removed);
+    // للحقول المتبقية: آخر-كتابة-يفوز على _v (وإلا الواصل) — كالأنشطة
+    const vOf = x => (typeof x._v === 'number') ? x._v : 0;
+    if ((typeof ex._v === 'number') && vOf(r) < vOf(ex)) {
+      for (const [key, val] of Object.entries(ex)) {
+        if (key === 'id' || key === 'teacherIds' || key === 'removedTeacherIds') continue;
+        if (!(key in merged)) merged[key] = val;
+        else if (key === '_v') merged[key] = ex[key];
+      }
+    }
+    if (typeof ex._v === 'number') merged._v = ex._v;
+    map.set(k, merged);
+  }
+  return Array.from(map.values());
+}
+
 function mergeTimetable(prev, inb) {
   const out = {};
   const keys = new Set([...Object.keys(prev || {}), ...Object.keys(inb || {})]);
@@ -1006,6 +1060,8 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         // قسم الحضور يُدمج بمنطق خاص (last-write-wins حسب studentId|date) لكافة الأدوار
         // حتى يبقى الغياب المسجَّل قائماً ولا يختفي بأي نسخة قديمة من أي دور.
         if (key === 'attendance') { merged[key] = mergeAttendance(a, b); continue; }
+        if (key === 'activities') { merged[key] = mergeActivities(a, b); continue; }
+        if (key === 'classes') { merged[key] = mergeClasses(a, b); continue; }
         if (canEditU) { merged[key] = mergeSection(a, b); continue; }
         // غير المدير: يكتب الأقسام المصرَّح بها فقط، والباقي يبقى نسخة الخادم سليمة
         if (SECTION_RULES[key] && SECTION_RULES[key].includes(role)) merged[key] = mergeSection(a, b);
@@ -1032,6 +1088,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           // استبدالها كلياً بنسخة جهازٍ قديم يمسح شاهد الحذف فيعود التكليف المحذوف.
           if (!jsonEqual(prev.data.assignments, cf.assignments)) cf.assignments = mergeSection(prev.data.assignments, cf.assignments);
           if (!jsonEqual(prev.data.activities, cf.activities)) cf.activities = mergeActivities(prev.data.activities, cf.activities);
+          if (!jsonEqual(prev.data.classes, cf.classes)) cf.classes = mergeClasses(prev.data.classes, cf.classes);
           if (!jsonEqual(prev.data.timetable, cf.timetable)) cf.timetable = mergeTimetable(prev.data.timetable, cf.timetable);
           if (!jsonEqual(prev.data.attendance, cf.attendance)) cf.attendance = mergeAttendance(prev.data.attendance, cf.attendance);
           // الرسائل/الإعلان/الاقتراحات: تُدمج دائماً حتى مع استبدال المدير الكامل،

@@ -6278,6 +6278,7 @@ function addTeacherToClass(classId){
   if(!cls) return;
   if(!Array.isArray(cls.teacherIds)) cls.teacherIds = [];
   if(!cls.teacherIds.includes(teacherId)) cls.teacherIds.push(teacherId);
+  if(Array.isArray(cls.removedTeacherIds)) cls.removedTeacherIds = cls.removedTeacherIds.filter(id => id !== teacherId);
   saveDB(d);
   renderApp();
 }
@@ -6287,6 +6288,8 @@ function removeTeacherFromClass(classId, teacherId){
   const cls = d.classes.find(c => c.id === classId);
   if(!cls) return;
   if(Array.isArray(cls.teacherIds)) cls.teacherIds = cls.teacherIds.filter(t => t !== teacherId);
+  if(!Array.isArray(cls.removedTeacherIds)) cls.removedTeacherIds = [];
+  if(!cls.removedTeacherIds.includes(teacherId)) cls.removedTeacherIds.push(teacherId);
   saveDB(d);
   renderApp();
 }
