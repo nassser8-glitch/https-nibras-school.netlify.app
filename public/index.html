@@ -8415,7 +8415,7 @@ function renderActivityDetail(id){
         <div style="font-size:14px;font-weight:700;margin-bottom:8px">✋ طلب المشاركة في: <b>${escapeHtml(a.name)}</b></div>
         <div class="small muted" style="margin-bottom:8px">اختر نوع مشاركتك المطلوبة في هذا النشاط</div>
         <div class="form-inline">
-          <select id="partKind" class="input" style="min-width:220px" data-tip="اختر نوع مشاركتك المطلوبة في هذا النشاط، مثل: عمل مسابقة، لوحة جدارية، توزيعات..."><option value="">اختر نوع المشاركة...</option>${activityReqKinds.map(k=>`<option value="${k}">${k}</option>`).join('')}</select>
+          <select id="partKind" class="input" style="min-width:220px" data-tip="اختر نوع مشاركتك المطلوبة في هذا النشاط، مثل: عمل مسابقة، لوحة جدارية، توزيعات..." onchange="if(this.value==='أخرى'){openOtherKindModal('${a.id}')}"><option value="">اختر نوع المشاركة...</option>${activityReqKinds.map(k=>`<option value="${k}">${k}</option>`).join('')}</select>
           <button class="btn-primary" onclick="if(document.getElementById('partKind').value==='أخرى'){openOtherKindModal('${a.id}')}else{requestParticipation('${a.id}')}">📨 إرسال الطلب</button>
         </div>
         <div class="small muted" style="margin-top:6px">سيُعرض طلبك على الوكيل ليختار المشاركين، ويطّلع عليه المدير.</div>
@@ -8570,7 +8570,7 @@ function openOtherKindModal(actId){
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `<div class="modal-box" style="max-width:480px">
-    <div class="modal-head"><h3>📝 تفاصيل المشاركة</h3><button class="modal-close" onclick="closeOtherKindModal()">✕</button></div>
+    <div class="modal-head"><h3>📝 تفاصيل المشاركة</h3><button class="modal-close" onclick="cancelOtherKind()">✕</button></div>
     <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0">
       <div>
         <label style="display:block;font-weight:600;margin-bottom:6px">اكتب تفاصيل مشاركتك في هذا النشاط</label>
@@ -8579,11 +8579,11 @@ function openOtherKindModal(actId){
       </div>
       <div style="display:flex;gap:8px;margin-top:4px">
         <button class="btn-primary" onclick="confirmOtherKind()">📨 إرسال الطلب</button>
-        <button class="btn-secondary" onclick="closeOtherKindModal()">إلغاء</button>
+        <button class="btn-secondary" onclick="cancelOtherKind()">إلغاء</button>
       </div>
     </div>
   </div>`;
-  overlay.onclick = e => { if(e.target === overlay) closeOtherKindModal(); };
+  overlay.onclick = e => { if(e.target === overlay) cancelOtherKind(); };
   document.body.appendChild(overlay);
   setTimeout(()=>{ const t = document.getElementById('otherKindText'); if(t) t.focus(); }, 100);
 }
@@ -8591,6 +8591,11 @@ function closeOtherKindModal(){
   const ov = document.querySelector('.modal-overlay');
   if(ov) ov.remove();
   otherKindActId = null;
+}
+function cancelOtherKind(){
+  const kindEl = document.getElementById('partKind');
+  if(kindEl) kindEl.value = '';
+  closeOtherKindModal();
 }
 function confirmOtherKind(){
   const text = document.getElementById('otherKindText').value.trim();
