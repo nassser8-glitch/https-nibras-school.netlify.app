@@ -1307,6 +1307,9 @@ function isManager(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || 
 // الإداري (ADMINISTRATIVE) دور مدرسي شامل يرى كل فصول/طلاب القسم (ويستثنى منه فلترة الفصول المسندة)
 function seesAllClasses(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE'); }
 function canManageTeachers(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
+// من يُسمح له بتسجيل الغياب/التأخر لأيام دراسية سابقة: المدير (ADMIN)، الوكيل (AGENT)،
+// والإداري «عبدالله فيصل» (ADMINISTRATIVE — بنين)
+function canRecordPastAttendance(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.id === 'id_6ef8036cc7f4c692'); }
 function isAdminRole(role){ return (role === 'AGENT' || role === 'COUNSELOR' || role === 'ADMINISTRATIVE'); }
 function canManageActivities(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
 function canManageVideos(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
@@ -5517,7 +5520,7 @@ function renderAttendance(){
   const classes = getClassesSorted();
   // الوكيل والمدير بإمكانهما تسجيل الغياب/التأخر لأيام سابقة — فقط نضمن وجود تاريخ افتراضي صالح (اليوم إن لم يُحدَّد بعد)
   if(!attendanceState.date) attendanceState.date = todayStr();
-  const allowPastDates = canManageTeachers(currentUser());
+  const allowPastDates = canRecordPastAttendance(currentUser());
   if(!allowPastDates && attendanceState.date < todayStr()) attendanceState.date = todayStr();
   const isTeachers = canManageTeachers(currentUser()) && attendanceState.classId === 'TEACHERS';
   if(classes.length === 0 && !isTeachers) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : null;
