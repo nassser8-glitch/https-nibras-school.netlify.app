@@ -611,39 +611,85 @@ function __syncSchedule(school, ms){
   clearTimeout(__syncTimers[school]);
   __syncTimers[school] = setTimeout(() => __syncPush(school), (ms === undefined) ? 700 : ms);
 }
+// قاعدة التأكيد المزدوج للغياب: لا يُحتسب الطالب غائباً إلا إذا سجّله معلّمان في حصّتين
+// مختلفتين (مسجّلان مختلفان في absClerks). السجلات القديمة (قبل القاعدة) بلا absClerks
+// تُعامَل كمؤكَّدة تلقائياً (لا ينقص عدد غياباتها). علامة __LEGACY_ABS تحفظ حالة السجل
+// القديم المؤكَّد إذا أُعيد حفظه — فلا يُفقد غيابٌ سُجّل قبل العمل بالقاعدة.
+// رقم عشريّ واحد موحّد في كل البطاقات (بنين/بنات، الفصل، الطالب، الرسوم والتقارير).
+const __LEGACY_ABS = '__legacy_abs__';
+function __attRealClerks(rec){
+  if(!rec || !Array.isArray(rec.absClerks)) return [];
+  return rec.absClerks.filter(x => x && x !== __LEGACY_ABS);
+}
+function __attIsAbsent(rec){
+  if(!rec || rec.status !== 'ABSENT') return false;
+  if(!Array.isArray(rec.absClerks)) return true;
+  if(rec.absClerks.indexOf(__LEGACY_ABS) !== -1) return true;
+  return __attRealClerks(rec).length >= 2;
+}
+// الحالة الفعلية للسجل وفق القاعدة: غائب فقط إذا مؤكداً (قديم بلا قائمة، أو شارة قديمة، أو ≥2 مؤكِّد)،
+// وإلا ما سُجّل فيه حالياً (متأخر/حاضر). مصدر واحد يُستخدم في العدّ والعرض ليطابق النسبة دائماً.
+function __attEffStatus(rec){
+  if(!rec) return 'PRESENT';
+  if(__attIsAbsent(rec)) return 'ABSENT';
+  return rec.status === 'LATE' ? 'LATE' : 'PRESENT';
+}
 // دمج سجلّي حضور لنفس الطالب/اليوم بنفس سياسة الخادم: الغائب/المتأخر يفوز على الحاضر
 // مهما اختلف الزمن، و«القبر» (deleted) يفوز دائماً، ثم الأعلى _t يفوز.
+// عند الدمج تُدمج قائمة مؤكِّدي الغياب absClerks (اتحاد) بدل استبدالها — فلا تضيع
+// تأكيدات معلّمين تسجّلوا من أجهزة مختلفة لنفس الطالب/اليوم.
 function __attWinner(a, b){
   if(!a) return b;
   if(!b) return a;
   if(!!a.deleted !== !!b.deleted) return a.deleted ? a : b;
   const infA = (a.status === 'ABSENT' || a.status === 'LATE') ? 1 : 0;
   const infB = (b.status === 'ABSENT' || b.status === 'LATE') ? 1 : 0;
-  if(infA !== infB) return infA > infB ? a : b;
-  const ta = (typeof a._t === 'number') ? a._t : 0;
-  const tb = (typeof b._t === 'number') ? b._t : 0;
-  return ta >= tb ? a : b;
+  let win = infA !== infB ? (infA > infB ? a : b) : a;
+  if(win === a && infA === infB){
+    const ta = (typeof a._t === 'number') ? a._t : 0;
+    const tb = (typeof b._t === 'number') ? b._t : 0;
+    if(tb > ta) win = b;
+  }
+  if(win && win.status === 'ABSENT' && (Array.isArray(a.absClerks) || Array.isArray(b.absClerks))){
+    const clerks = [];
+    [a, b].forEach(r => {
+      if(!r || r.status !== 'ABSENT') return;
+      if(Array.isArray(r.absClerks)) r.absClerks.forEach(c => { if(c && clerks.indexOf(c) === -1) clerks.push(c); });
+      else if(clerks.indexOf(__LEGACY_ABS) === -1) clerks.push(__LEGACY_ABS);
+    });
+    const merged = Object.assign({}, win);
+    merged.absClerks = clerks;
+    return merged;
+  }
+  return win;
 }
 /* إحصائية حضور الموعد الفريدة: مهما تعددت سجلات اليوم (عدة معلمين/حِصص لنفس الفصل)،
    يُحسب الطالب غائبًا/متأخرًا مرة واحدة فقط؛ ومن لم يُسجَّل له غياب/تأخر فهو حاضر افتراضيًا.
    `ids` مجموعة معرفات الطلاب المطلوب حسابهم لهذا التاريخ. */
 function attCountsByDate(d, date, ids){
   const idSet = new Set(ids || []);
-  const worst = new Map();
+  // تجميع لكل طالب/يوم عبر كل سجلاته: ندمج قوائم مؤكِّدي الغياب (اتحاداً) بدل أخذ أسوأ سجل
+  // واحد — فعدم احتساب الغياب يعتمد العدد الكلي للمؤكدين وليس سجل واحد يفوز بالزمن.
+  const agg = new Map();
   (Array.isArray(d.attendance) ? d.attendance : []).forEach(a => {
     if(!a || !a.date || a.date !== date || !idSet.has(a.studentId)) return;
-    const cur = worst.get(a.studentId);
-    if(!cur){ worst.set(a.studentId, a); return; }
-    const inf = r => r && r.status === 'ABSENT' ? 2 : (r && r.status === 'LATE' ? 1 : 0);
-    const ia = inf(a), ic = inf(cur);
-    if(ia > ic || (ia === ic && ((a._t||0) >= (cur._t||0)))) worst.set(a.studentId, a);
+    let g = agg.get(a.studentId);
+    if(!g){ g = { absClerks: new Set(), legacyAbs: false, late: false }; agg.set(a.studentId, g); }
+    if(a.status === 'ABSENT'){
+      if(Array.isArray(a.absClerks)){
+        if(a.absClerks.indexOf(__LEGACY_ABS) !== -1) g.legacyAbs = true;
+        a.absClerks.forEach(c => { if(c && c !== __LEGACY_ABS) g.absClerks.add(c); });
+      }
+      else g.legacyAbs = true; // سجل قديم بلا قائمة تأكيد = غياب مؤكد قبل القاعدة
+    }
+    else if(a.status === 'LATE') g.late = true;
   });
   let absent = 0, late = 0;
-  for(const r of worst.values()){
-    if(r.status === 'ABSENT') absent++;
-    else if(r.status === 'LATE') late++;
+  for(const g of agg.values()){
+    if(g.legacyAbs || g.absClerks.size >= 2) absent++;
+    else if(g.late) late++;
   }
-  return { present: Math.max(0, idSet.size - absent - late), absent, late, records: worst.size };
+  return { present: Math.max(0, idSet.size - absent - late), absent, late, records: agg.size };
 }
 /* اختيار أحدث نسخة من رسالة (بأحدث وقت تعديل/اطلاع) عند الدمج حتى لا تختفي حالة الاطلاع والقراءة */
 function __pickMsg(a, b){
@@ -838,6 +884,24 @@ async function __syncPush(school){
               (obj && obj._ts) || 0,
               __syncTS(mj.data) || 0
             );
+            // الأقسام غير المُدمجة أعلاه (الطلاب/الفصول/الدرجات/المحوّلات/الصيانة/التنبيهات...):
+            // نقايضها اتحاداً حسب id كي لا يفقد هذا الجهاز تعديلاته المحلية غير المرفوعة بعد
+            // حين تُستبدل obj بدمج الخادم — كان يفقد جهازُ المعلم تعديلَ الطالب (تأخر/غياب معلم)
+            // بعد إعادة فتح التطبيق متى فشل الرفع المباشر أو سبقه دمجُ دفعة أخرى.
+            const locallyOnly = (lArr, sArr) => {
+              if(!Array.isArray(lArr) || lArr.length === 0) return sArr;
+              const out = Array.isArray(sArr) ? sArr.slice() : [];
+              const seen = new Set(out.map(x => (x && x.id != null) ? x.id : JSON.stringify(x)));
+              for(const x of lArr){
+                if(!x) continue;
+                const k = (x.id != null) ? x.id : JSON.stringify(x);
+                if(!seen.has(k)){ out.push(JSON.parse(JSON.stringify(x))); seen.add(k); }
+              }
+              return out;
+            };
+            ['students','classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
+              if(Array.isArray(local[sec])) sd[sec] = locallyOnly(local[sec], sd[sec]);
+            });
             obj = sd;
             obj._ts = mergedTs || Date.now();
             try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
@@ -930,8 +994,13 @@ async function __syncPull(school){
     // دمج آمن: نبدأ من نسخة الخادم (مصدر الحقيقة لأحدث بيانات الزملاء/المشرفين) ونحفظ فوقها
     // تعديلات هذا الجهاز المحلية التي لم تصل بعد للخادم (ملاحظات/غياب جديدة بوقت أحدث) —
     // حتى لا يختفي عملُ المعلم ولا تغيب عنه بيانات زملائه في الفصول المشتركة.
-    if(!local || localIsEmptySeed || !(serverHasData)){
+    // لا نستبدل نسخة محلية ممتلئة بنسخة خادم فارغة لحظياً (مدرسة جديدة أو شريحة معطوبة) —
+    // وإلا محى السحبُ كلَ حفظِ المعلم بعد إعادة فتح التطبيق بمجرد صفر عدد الطلاب/الفصول.
+    if(!local || localIsEmptySeed){
       __origSetItem(key, JSON.stringify(server));
+    } else if(!(serverHasData) && Array.isArray(local.students) && local.students.length > 0){
+      // الخادم فارغ والنُسخة المحلية ممتلئة: نُبقي المحلية سليمة ولا نكتب فوقها فارغاً؛
+      // الرفع القادم سيملأ الخادم. البيانات المحلية تظل كما هي حتى ينتظم الخادم.
     } else {
       const merged = JSON.parse(JSON.stringify(server));
       // دمج الجدول خَلَوي بمعرّف الإصدار _v — الخلية الأعلى إصداراً تفوز،
@@ -963,7 +1032,7 @@ async function __syncPull(school){
           const sd = (r.studentId||'')+'|'+(r.date||'');
           const ex = bySD.get(sd);
           if(!ex) { bySD.set(sd, r); merged.attendance.push(r); }
-          else if(__attWinner(r, ex) === r){ merged.attendance = merged.attendance.map(x => (x===ex)?r:x); bySD.set(sd, r); }
+          else { const win = __attWinner(r, ex); if(win !== ex){ merged.attendance = merged.attendance.map(x => (x===ex)?win:x); bySD.set(sd, win); } }
         }
       }
       // ملاحظات محلية جديدة (لم تُرفع) نضمن بقاءها
@@ -1048,6 +1117,23 @@ async function __syncPull(school){
           }
         }
       }
+      // الأقسام غير المُدمجة أعلاه (الطلاب/الفصول/الدرجات/المحوّلات/الصيانة/التنبيهات...):
+      // نُلحق أي سجل محلي غير موجود في نسخة الخادم حتى لا يفقد السحبُ حفظَ هذا الجهاز
+      // (تعديل تأخر/غياب ليس في الخادم بعد) عند إعادة فتح التطبيق على أي متصفح/جهاز.
+      const locallyOnlyP = (lArr, sArr) => {
+        if(!Array.isArray(lArr) || lArr.length === 0) return sArr;
+        const out = Array.isArray(sArr) ? sArr.slice() : [];
+        const seen = new Set(out.map(x => (x && x.id != null) ? x.id : JSON.stringify(x)));
+        for(const x of lArr){
+          if(!x) continue;
+          const k = (x.id != null) ? x.id : JSON.stringify(x);
+          if(!seen.has(k)){ out.push(JSON.parse(JSON.stringify(x))); seen.add(k); }
+        }
+        return out;
+      };
+      ['students','classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
+        if(Array.isArray(local[sec])) merged[sec] = locallyOnlyP(local[sec], merged[sec]);
+      });
       merged._ts = Math.max(__syncTS(server), __syncTS(local), Date.now());
       __origSetItem(key, JSON.stringify(merged));
     }
@@ -3732,8 +3818,9 @@ function renderDashboard(){
       for(const s of d.students){
         if(!s.active || s.classId !== c.id) continue;
         const rec = todayAtt.find(a => a.studentId === s.id);
-        if(rec && rec.status === 'ABSENT'){ out.absent++; out.names.push(firstNameOf(s.fullName||s.name)); }
-        else if(rec && rec.status === 'LATE') out.late++;
+        const eff = __attEffStatus(rec);
+        if(eff === 'ABSENT'){ out.absent++; out.names.push(firstNameOf(s.fullName||s.name)); }
+        else if(eff === 'LATE') out.late++;
         else out.present++;
       }
     }
@@ -4305,7 +4392,7 @@ function showTodayAttendance(){
   recsInit.forEach(a => uniq.set(a.studentId, __attWinner(uniq.get(a.studentId), a)));
   const recs = Array.from(uniq.values());
   const order = { PRESENT:0, LATE:1, ABSENT:2 };
-  recs.sort((a,b) => (order[a.status]||0) - (order[b.status]||0));
+  recs.sort((a,b) => (order[__attEffStatus(a)]||0) - (order[__attEffStatus(b)]||0));
   const ptsMapAttList = studentPointsMap();
   const statusBadge = { PRESENT:['حاضر','#16a34a'], LATE:['متأخر','#d97706'], ABSENT:['غائب','#dc2626'] };
   const absTypeLabel = t => t === 'EXCUSED' ? 'مستأذن' : (t === 'ESCAPE' ? 'هارب من الحصة' : 'غائب');
@@ -4314,8 +4401,8 @@ function showTodayAttendance(){
     recs.map(a => {
       const s = studentById(a.studentId);
       const cls = s?.classId ? classById(s.classId) : null;
-      const isAbs = a.status === 'ABSENT';
-      const [label, color] = isAbs ? [absTypeLabel(a.absenceType), absTypeColor(a.absenceType)] : (statusBadge[a.status] || ['—','#6b7280']);
+      const isAbs = __attEffStatus(a) === 'ABSENT';
+      const [label, color] = isAbs ? [absTypeLabel(a.absenceType), absTypeColor(a.absenceType)] : (statusBadge[__attEffStatus(a)] || ['—','#6b7280']);
       return `<tr>
         <td>${studentNameLink(s, s ? (ptsMapAttList[s.id] || 0) : undefined)}</td>
         <td>${escapeHtml(s?.studentNo || '—')}</td>
@@ -4455,7 +4542,7 @@ function showAttendanceList(status){
   const students = getVisibleStudents();
   const visibleIds = new Set(students.map(s => s.id));
   const today = todayStr();
-  const recsInit = d.attendance.filter(a => a.date === today && a.status === status && visibleIds.has(a.studentId));
+  const recsInit = d.attendance.filter(a => a.date === today && __attEffStatus(a) === status && visibleIds.has(a.studentId));
   const isAbsent = status === 'ABSENT';
   const absTypeLabel = t => t === 'EXCUSED' ? 'مستأذن' : (t === 'ESCAPE' ? 'هارب من الحصة' : 'غائب');
   const ptsMapAttList = studentPointsMap();
@@ -5046,8 +5133,9 @@ function pointItems(d){
     items.push({ studentId:n.studentId, type:n.type, category:n.category, description:n.description, points:(n.points ?? notePoints(n.type, n.category)), createdBy:n.createdBy, createdAt:n.createdAt, kind:'note' });
   });
   d.attendance.forEach(a => {
-    const pts = attendancePoints(a.status, a.lateMinutes);
-    if(pts !== 0) items.push({ studentId:a.studentId, type:'NEGATIVE', category:a.status==='ABSENT'?'الغياب':'التأخر', description:'حسب سجل الحضور ('+a.date+')' + (a.lateMinutes ? ' — ' + a.lateMinutes + ' دقيقة' : ''), points:pts, createdBy:a.createdBy, createdAt:a.date+'T00:00:00.000Z', kind:'att' });
+    const eff = __attEffStatus(a);
+    const pts = attendancePoints(eff, a.lateMinutes);
+    if(pts !== 0) items.push({ studentId:a.studentId, type:'NEGATIVE', category:eff==='ABSENT'?'الغياب':'التأخر', description:'حسب سجل الحضور ('+a.date+')' + (a.lateMinutes ? ' — ' + a.lateMinutes + ' دقيقة' : ''), points:pts, createdBy:a.createdBy, createdAt:a.date+'T00:00:00.000Z', kind:'att' });
   });
   (d.assignments||[]).forEach(a => {
     if(a && a.deleted) return;
@@ -5918,8 +6006,26 @@ function saveAttendance(){
     }
     const attObj = { id:uid(), studentId, classId:realClassId, date:attendanceState.date, status, absenceType: at, createdBy: currentUser()?.id, _t: Date.now() };
     if(status === 'LATE' && lateMins > 0) attObj.lateMinutes = lateMins;
-    if(rec){ rec.status = status; rec.classId = realClassId; rec.absenceType = at; rec._t = Date.now(); rec.createdBy = currentUser()?.id || rec.createdBy; if(status === 'LATE' && lateMins > 0) rec.lateMinutes = lateMins; else delete rec.lateMinutes; }
-    else { d.attendance.push(attObj); }
+    const me = currentUser()?.id;
+    if(rec){
+      // قائمة مؤكِّدي الغياب: تُجمَّع عند كل حفظ (اتحاد) — الغياب لا يُحتسب إلا إذا سجّله
+      // معلّمان مختلفان في حصّتين مختلفتين (≥2 مؤكِّد فعلي)، أو سجل قديم (قبل القاعدة).
+      let clerks = Array.isArray(rec.absClerks) ? rec.absClerks.slice() : [];
+      if(status === 'ABSENT'){
+        // سجل قديم بلا قائمة (غياب سُجّل قبل القاعدة): نضع شارة الحفظ مسبقاً ليستمر احتسابه
+        if(!Array.isArray(rec.absClerks)){ clerks = rec.status === 'ABSENT' ? [__LEGACY_ABS] : []; }
+        if(me && clerks.indexOf(me) === -1) clerks.push(me);
+      } else {
+        // حاضر/متأخر من هذا المعلم: نزيل تأكيده وشارة القديم — تصحيح صريح يلغي هذا الغياب
+        clerks = clerks.filter(c => c !== me && c !== __LEGACY_ABS);
+      }
+      rec.status = status; rec.classId = realClassId; rec.absenceType = at; rec.absClerks = clerks; rec._t = Date.now(); rec.createdBy = me || rec.createdBy;
+      if(status === 'LATE' && lateMins > 0) rec.lateMinutes = lateMins; else delete rec.lateMinutes;
+    }
+    else {
+      if(status === 'ABSENT' && me) attObj.absClerks = [me]; else attObj.absClerks = [];
+      d.attendance.push(attObj);
+    }
   });
   Object.entries(attendanceState.tDraft || {}).forEach(([teacherId, status]) => {
     const u = d.users.find(x => x.id === teacherId);
@@ -8859,10 +8965,10 @@ function computeReportRows(){
   if(type === 'attendance' || type === 'absence' || type === 'late'){
     const statusFilter = type==='absence' ? 'ABSENT' : type==='late' ? 'LATE' : null;
     rows = d.attendance
-      .filter(a => canSeeClass(a.classId) && (!classId || a.classId===classId) && (!statusFilter || a.status===statusFilter) && inRange(a.date))
+      .filter(a => canSeeClass(a.classId) && (!classId || a.classId===classId) && (!statusFilter || __attEffStatus(a)===statusFilter) && inRange(a.date))
       .sort((a,b) => b.date.localeCompare(a.date))
       .map(a => { const s = studentById(a.studentId); const c = classById(a.classId); const g = c?gradeById(c.gradeId):null;
-        return { 'التاريخ':a.date, 'الطالب':s?.fullName||'—', 'الرقم':s?.studentNo||'—', 'الصف':g?.name||'—', 'الفصل':c?.name||'—', 'الحالة':statusLabels[a.status] }; });
+        return { 'التاريخ':a.date, 'الطالب':s?.fullName||'—', 'الرقم':s?.studentNo||'—', 'الصف':g?.name||'—', 'الفصل':c?.name||'—', 'الحالة':statusLabels[__attEffStatus(a)] }; });
   } else if(type === 'notes'){
     rows = d.notes
       .filter(n => { const s = studentById(n.studentId); return canSeeStudent(n.studentId) && (!classId || s?.classId===classId) && (!from && !to || inRange(n.createdAt.slice(0,10))); })
@@ -8896,7 +9002,7 @@ function computeReportRows(){
     const absentDays = new Map(), lateDays = new Map(); // classId -> { studentId: Set(date) }
     d.attendance.forEach(a => {
       if(!canSeeClass(a.classId) || (classId && a.classId!==classId) || !inRange(a.date)) return;
-      const perClass = a.status==='ABSENT' ? absentDays : a.status==='LATE' ? lateDays : null;
+      const perClass = __attEffStatus(a)==='ABSENT' ? absentDays : __attEffStatus(a)==='LATE' ? lateDays : null;
       if(!perClass) return;
       let bySt = perClass.get(a.classId);
       if(!bySt){ bySt = {}; perClass.set(a.classId, bySt); }
