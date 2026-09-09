@@ -2406,7 +2406,7 @@ function renderSchoolSelect(){
     const label = isBoys ? 'البنين' : 'البنات';
     const icon = isBoys ? '👦' : '👧';
     const cls = isBoys ? 'boys' : 'girls';
-    const attRate = data.students ? Math.round((data.present + data.late) / data.students * 100) : 0;
+    const attRate = data.students ? (data.present + data.late) / data.students * 100 : 0;
     const maxStudents = Math.max((boys&&boys.students)||0, (girls&&girls.students)||0, 1);
     const maxClasses = Math.max((boys&&boys.classes)||0, (girls&&girls.classes)||0, 1);
     const tls = t => isBoys ? t : (feminineLabels[t] || t);
@@ -2423,7 +2423,7 @@ function renderSchoolSelect(){
               <span><span style="color:#16a34a;font-weight:600">${data.present}</span> حاضر</span>
               <span><span style="color:#dc2626;font-weight:600">${data.absent}</span> غائب</span>
               <span><span style="color:#d97706;font-weight:600">${data.late}</span> متأخر</span>
-              <span style="font-weight:600;color:${attRate >= 90 ? '#16a34a' : attRate >= 70 ? '#d97706' : '#dc2626'}">${attRate}%</span>
+              <span style="font-weight:600;color:${attRate >= 90 ? '#16a34a' : attRate >= 70 ? '#d97706' : '#dc2626'}">${fmtRate(attRate)}</span>
             </div>
           </div>
         </div>
@@ -2775,7 +2775,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v48</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v49</span></footer>
   </div>`;
 }
 function switchSchool(){
