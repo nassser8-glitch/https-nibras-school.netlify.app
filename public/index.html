@@ -624,6 +624,27 @@ function __attWinner(a, b){
   const tb = (typeof b._t === 'number') ? b._t : 0;
   return ta >= tb ? a : b;
 }
+/* إحصائية حضور الموعد الفريدة: مهما تعددت سجلات اليوم (عدة معلمين/حِصص لنفس الفصل)،
+   يُحسب الطالب غائبًا/متأخرًا مرة واحدة فقط؛ ومن لم يُسجَّل له غياب/تأخر فهو حاضر افتراضيًا.
+   `ids` مجموعة معرفات الطلاب المطلوب حسابهم لهذا التاريخ. */
+function attCountsByDate(d, date, ids){
+  const idSet = new Set(ids || []);
+  const worst = new Map();
+  (Array.isArray(d.attendance) ? d.attendance : []).forEach(a => {
+    if(!a || !a.date || a.date !== date || !idSet.has(a.studentId)) return;
+    const cur = worst.get(a.studentId);
+    if(!cur){ worst.set(a.studentId, a); return; }
+    const inf = r => r && r.status === 'ABSENT' ? 2 : (r && r.status === 'LATE' ? 1 : 0);
+    const ia = inf(a), ic = inf(cur);
+    if(ia > ic || (ia === ic && ((a._t||0) >= (cur._t||0)))) worst.set(a.studentId, a);
+  });
+  let absent = 0, late = 0;
+  for(const r of worst.values()){
+    if(r.status === 'ABSENT') absent++;
+    else if(r.status === 'LATE') late++;
+  }
+  return { present: Math.max(0, idSet.size - absent - late), absent, late, records: worst.size };
+}
 /* اختيار أحدث نسخة من رسالة (بأحدث وقت تعديل/اطلاع) عند الدمج حتى لا تختفي حالة الاطلاع والقراءة */
 function __pickMsg(a, b){
   if(!a) return b;
@@ -2266,14 +2287,14 @@ function getSchoolOverview(school){
   const d = loadDB();
   if(oldKey) localStorage.setItem(SCHOOL_KEY, oldKey); else localStorage.removeItem(SCHOOL_KEY);
   const today = todayStr();
-  const todayAtt = d.attendance.filter(a => a.date === today);
   const students = d.students.filter(s => s.active);
+  const att = attCountsByDate(d, today, students.map(s => s.id));
   return {
     students: students.length,
     classes: d.classes.length,
-    present: todayAtt.filter(a => a.status === 'PRESENT').length,
-    absent: todayAtt.filter(a => a.status === 'ABSENT').length,
-    late: todayAtt.filter(a => a.status === 'LATE').length,
+    present: att.present,
+    absent: att.absent,
+    late: att.late,
     pendingTransfers: d.transfers.filter(t => t.status === 'PENDING').length,
     teachers: d.users.filter(u => u.role === 'TEACHER' && u.active).length,
   };
@@ -2296,7 +2317,7 @@ function donutChart(present, absent, late){
     arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.c}" stroke-width="14" stroke-dasharray="${d} ${circ - d}" stroke-dashoffset="${-off}"/>`;
     off += d;
   });
-  return `<svg width="120" height="120" viewBox="0 0 100 100"><g transform="rotate(-90 ${cx} ${cy})"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#f3f4f6" stroke-width="14"/>${arcs}</g><text x="50" y="46" text-anchor="middle" fill="#1f2937" font-size="20" font-weight="800">${present+absent}</text><text x="50" y="58" text-anchor="middle" fill="#6b7280" font-size="9">حضور</text></svg>`;
+  return `<svg width="120" height="120" viewBox="0 0 100 100"><g transform="rotate(-90 ${cx} ${cy})"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#f3f4f6" stroke-width="14"/>${arcs}</g><text x="50" y="46" text-anchor="middle" fill="#1f2937" font-size="20" font-weight="800">${present}</text><text x="50" y="58" text-anchor="middle" fill="#6b7280" font-size="9">حضور</text></svg>`;
 }
 function barMeter(value, max, color){
   const pct = max > 0 ? Math.min(value / max * 100, 100) : 0;
@@ -2329,7 +2350,7 @@ function renderSchoolSelect(){
     const label = isBoys ? 'البنين' : 'البنات';
     const icon = isBoys ? '👦' : '👧';
     const cls = isBoys ? 'boys' : 'girls';
-    const attRate = (data.present + data.absent) > 0 ? Math.round(data.present / (data.present + data.absent) * 100) : 0;
+    const attRate = data.students ? Math.round(data.present / data.students * 100) : 0;
     const maxStudents = Math.max((boys&&boys.students)||0, (girls&&girls.students)||0, 1);
     const maxClasses = Math.max((boys&&boys.classes)||0, (girls&&girls.classes)||0, 1);
     const tls = t => isBoys ? t : (feminineLabels[t] || t);
@@ -3598,10 +3619,11 @@ function renderDashboard(){
   const today = todayStr();
   const visibleIds = new Set(students.map(s => s.id));
   const todayAtt = d.attendance.filter(a => a.date === today && (isMgr || visibleIds.has(a.studentId)));
-  const absent = todayAtt.filter(a => a.status === 'ABSENT').length;
-  const late = todayAtt.filter(a => a.status === 'LATE').length;
+  const dayAttCounts = attCountsByDate(d, today, students.map(s => s.id));
+  const absent = dayAttCounts.absent;
+  const late = dayAttCounts.late;
   // الأصل الحضور: من لم يُسجَّل له غياب يُعتبر حاضرًا افتراضيًا
-  const present = Math.max(0, students.length - absent - late);
+  const present = dayAttCounts.present;
   const rate = students.length ? present / students.length * 100 : null;
   const pendingTransfers = (isAdmin
     ? ['BOYS','GIRLS'].reduce((n,s) => n + loadSchoolDB(s).transfers.filter(t => t.status === 'PENDING' && transferForMe(t)).length, 0)
@@ -3612,11 +3634,11 @@ function renderDashboard(){
   const myClasses = isTeacher ? d.classes.filter(c => (c.teacherIds || []).includes(user.id)) : [];
   const myClassCards = myClasses.map(c => {
     const sts = d.students.filter(s => s.active && s.classId === c.id);
-    const recs = todayAtt.filter(a => a.classId === c.id);
-    const ca = recs.filter(r => r.status === 'ABSENT').length;
-    const cl = recs.filter(r => r.status === 'LATE').length;
+    const cc = attCountsByDate(d, today, sts.map(s => s.id));
+    const ca = cc.absent;
+    const cl = cc.late;
     // الأصل الحضور: من لم يُسجَّل له غياب يُعتبر حاضرًا افتراضيًا
-    const cp = Math.max(0, sts.length - ca - cl);
+    const cp = cc.present;
     const crate = sts.length ? cp / sts.length * 100 : null;
     return `<div class="card class-mini" style="padding:0;overflow:hidden;margin:0;border:1px solid #e6edf5;box-shadow:0 4px 14px rgba(15,79,136,.08);border-radius:14px">
       <div style="background:linear-gradient(135deg,#0f766e,#1d4ed8);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:6px">
@@ -4222,7 +4244,10 @@ function showTodayAttendance(){
   const students = getVisibleStudents();
   const visibleIds = new Set(students.map(s => s.id));
   const today = todayStr();
-  const recs = d.attendance.filter(a => a.date === today && visibleIds.has(a.studentId));
+  const recsInit = d.attendance.filter(a => a.date === today && visibleIds.has(a.studentId));
+  const uniq = new Map();
+  recsInit.forEach(a => uniq.set(a.studentId, __attWinner(uniq.get(a.studentId), a)));
+  const recs = Array.from(uniq.values());
   const order = { PRESENT:0, LATE:1, ABSENT:2 };
   recs.sort((a,b) => (order[a.status]||0) - (order[b.status]||0));
   const ptsMapAttList = studentPointsMap();
@@ -4374,10 +4399,13 @@ function showAttendanceList(status){
   const students = getVisibleStudents();
   const visibleIds = new Set(students.map(s => s.id));
   const today = todayStr();
-  const recs = d.attendance.filter(a => a.date === today && a.status === status && visibleIds.has(a.studentId));
+  const recsInit = d.attendance.filter(a => a.date === today && a.status === status && visibleIds.has(a.studentId));
   const isAbsent = status === 'ABSENT';
   const absTypeLabel = t => t === 'EXCUSED' ? 'مستأذن' : (t === 'ESCAPE' ? 'هارب من الحصة' : 'غائب');
   const ptsMapAttList = studentPointsMap();
+  const uniq = new Map();
+  recsInit.forEach(a => uniq.set(a.studentId, __attWinner(uniq.get(a.studentId), a)));
+  const recs = Array.from(uniq.values());
   const rows = recs.length === 0 ? `<tr><td colspan="4" style="text-align:center;padding:20px;color:#9ca3af">لا يوجد ${isAbsent ? 'غائبون' : 'متأخرون'} اليوم</td></tr>` :
     recs.map(a => {
       const s = studentById(a.studentId);
@@ -4835,11 +4863,11 @@ function renderCharts(d){
   for(let i=0; i<5; i++){
     const d = new Date(lastMon); d.setDate(lastMon.getDate() + i);
     const ds = fmt(d);
-    const dayAtt = att.filter(a => a.date === ds);
+    const cc = attCountsByDate(d, ds, Array.from(visibleIds));
     // الأصل الحضور: من لم يُسجَّل له غياب يُعتبر حاضرًا افتراضيًا
-    const a = dayAtt.filter(a => a.status==='ABSENT').length;
-    const l = dayAtt.filter(a => a.status==='LATE').length;
-    const p = Math.max(0, visibleIds.size - a - l);
+    const a = cc.absent;
+    const l = cc.late;
+    const p = cc.present;
     const total = p + a + l;
     weekDays.push({ label:dayNames[d.getDay()], present:p, absent:a, late:l, total });
   }
@@ -4870,10 +4898,16 @@ function renderCharts(d){
     const wkEnd = new Date(wkStart); wkEnd.setDate(wkStart.getDate() + 6);
     if(wkEnd > monthEnd) wkEnd.setTime(monthEnd.getTime());
     const s = fmt(wkStart), e_ = fmt(wkEnd);
-    const wAtt = att.filter(a => a.date >= s && a.date <= e_);
-    const wP = wAtt.filter(a => a.status==='PRESENT').length;
-    const wT = wAtt.length;
-    weeks.push({ label:`${wkStart.getDate()}-${wkEnd.getDate()}`, rate:wT>0?Math.round(wP/wT*100):0, total:wT });
+    let presentSum = 0, daysWithRecs = 0;
+    const dIter = new Date(wkStart);
+    while(dIter <= wkEnd){
+      const ds = fmt(dIter);
+      const cc = attCountsByDate(d, ds, Array.from(visibleIds));
+      if(cc.records > 0){ presentSum += cc.present; daysWithRecs++; }
+      dIter.setDate(dIter.getDate() + 1);
+    }
+    const expected = daysWithRecs * visibleIds.size;
+    weeks.push({ label:`${wkStart.getDate()}-${wkEnd.getDate()}`, rate:expected>0?Math.round(presentSum/expected*100):0, total:daysWithRecs });
     wkStart.setDate(wkStart.getDate() + 7);
   }
   const maxWk = Math.max(...weeks.map(w=>w.rate||1));
@@ -4896,11 +4930,17 @@ function renderCharts(d){
     const mStart = new Date(year, m, 1);
     const mEnd = new Date(year, m+1, 0);
     const s = fmt(mStart), e_ = fmt(mEnd);
-    const mAtt = att.filter(a => a.date >= s && a.date <= e_);
-    const mP = mAtt.filter(a => a.status==='PRESENT').length;
-    const mT = mAtt.length;
+    let presentSum = 0, daysWithRecs = 0;
+    const dIter = new Date(mStart);
+    while(dIter <= mEnd){
+      const ds = fmt(dIter);
+      const cc = attCountsByDate(d, ds, Array.from(visibleIds));
+      if(cc.records > 0){ presentSum += cc.present; daysWithRecs++; }
+      dIter.setDate(dIter.getDate() + 1);
+    }
+    const expected = daysWithRecs * visibleIds.size;
     const mNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-    qMonths.push({ label:mNames[m], rate:mT>0?Math.round(mP/mT*100):0, total:mT });
+    qMonths.push({ label:mNames[m], rate:expected>0?Math.round(presentSum/expected*100):0, total:daysWithRecs });
   }
   const maxQ = Math.max(...qMonths.map(m=>m.rate||1));
   const qChart = qMonths.map(m => {
@@ -8779,16 +8819,26 @@ function computeReportRows(){
     return rowsAll;
   } else if(type === 'class_summary'){
     const classes = d.classes.filter(c => canSeeClass(c.id) && (!classId || c.id===classId));
+    const absentDays = new Map(), lateDays = new Map(); // classId -> { studentId: Set(date) }
+    d.attendance.forEach(a => {
+      if(!canSeeClass(a.classId) || (classId && a.classId!==classId) || !inRange(a.date)) return;
+      const perClass = a.status==='ABSENT' ? absentDays : a.status==='LATE' ? lateDays : null;
+      if(!perClass) return;
+      let bySt = perClass.get(a.classId);
+      if(!bySt){ bySt = {}; perClass.set(a.classId, bySt); }
+      (bySt[a.studentId] = bySt[a.studentId] || new Set()).add(a.date);
+    });
     rows = classes.map(c => {
       const g = gradeById(c.gradeId);
       const students = d.students.filter(s => s.active && s.classId===c.id);
-      const att = d.attendance.filter(a => a.classId===c.id && inRange(a.date));
-      const absent = att.filter(a=>a.status==='ABSENT').length, late = att.filter(a=>a.status==='LATE').length;
-      // الأصل الحضور: كل طالب حاضرة افتراضيًا ما لم يُسجَّل له غياب/تأخر في اليوم
+      // الغياب/التأخر لكل طالب في كل يوم يُحسب مرة واحدة مهما تعددت السجلات
+      const abD = Object.values(absentDays.get(c.id) || {}).reduce((n,set)=>n+set.size, 0);
+      const laD = Object.values(lateDays.get(c.id) || {}).reduce((n,set)=>n+set.size, 0);
       const schoolDays = (from && to) ? schoolDaysInRange(from, to) : 1;
       const totalSeats = students.length * schoolDays;
-      const present = Math.max(0, totalSeats - absent - late);
-      return { 'الصف':g?.name||'—', 'الفصل':c.name, 'عدد الطلاب':students.length, 'أيام':schoolDays, 'نسبة الحضور': totalSeats ? Math.round(present/totalSeats*100)+'%':'—', 'الغياب':absent, 'التأخر':late };
+      // الأصل الحضور: كل طالب حاضر افتراضيًا ما لم يُسجَّل له غياب/تأخر في اليوم
+      const present = Math.max(0, totalSeats - abD - laD);
+      return { 'الصف':g?.name||'—', 'الفصل':c.name, 'عدد الطلاب':students.length, 'أيام':schoolDays, 'نسبة الحضور': totalSeats ? Math.round(present/totalSeats*100)+'%':'—', 'الغياب':abD, 'التأخر':laD };
     });
   } else if(type === 'messages'){
     rows = loadAdminMsgs()
