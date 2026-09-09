@@ -2775,7 +2775,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v47</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v48</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -3761,7 +3761,7 @@ function renderDashboard(){
     if(nxt){ const c = ttToday[nxt]; const cl = d.classes.find(x => x.id === c.classId); return { kind:'next', p:nxt, sub:c.subject, cls: cl ? classLabel(cl) : '' }; }
     return null;
   })();
-  const tpct = tDayAtt && tDayAtt.present ? Math.round(tDayAtt.present/(tDayAtt.present+tDayAtt.absent+tDayAtt.late)*100) : null;
+  const tpct = tDayAtt && (tDayAtt.present+tDayAtt.late) ? Math.round((tDayAtt.present+tDayAtt.late)/(tDayAtt.present+tDayAtt.absent+tDayAtt.late)*100) : null;
   const teacherQuickCards = isTeacher ? `
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 14px">
       ${statTile('🏫', myClasses.length, 'فصولي', mySubjects.length ? mySubjects.length + ' مادة' : 'لا مواد بعد', 'location.hash=\'#/timetable\'')}
@@ -4959,7 +4959,7 @@ function renderCharts(d){
     while(dIter <= wkEnd){
       const ds = fmt(dIter);
       const cc = attCountsByDate(d, ds, Array.from(visibleIds));
-      if(cc.records > 0){ presentSum += cc.present; daysWithRecs++; }
+      if(cc.records > 0){ presentSum += cc.present + cc.late; daysWithRecs++; }
       dIter.setDate(dIter.getDate() + 1);
     }
     const expected = daysWithRecs * visibleIds.size;
@@ -4991,7 +4991,7 @@ function renderCharts(d){
     while(dIter <= mEnd){
       const ds = fmt(dIter);
       const cc = attCountsByDate(d, ds, Array.from(visibleIds));
-      if(cc.records > 0){ presentSum += cc.present; daysWithRecs++; }
+      if(cc.records > 0){ presentSum += cc.present + cc.late; daysWithRecs++; }
       dIter.setDate(dIter.getDate() + 1);
     }
     const expected = daysWithRecs * visibleIds.size;
@@ -8910,8 +8910,8 @@ function computeReportRows(){
       const laD = Object.values(lateDays.get(c.id) || {}).reduce((n,set)=>n+set.size, 0);
       const schoolDays = (from && to) ? schoolDaysInRange(from, to) : 1;
       const totalSeats = students.length * schoolDays;
-      // الأصل الحضور: كل طالب حاضر افتراضيًا ما لم يُسجَّل له غياب/تأخر في اليوم
-      const present = Math.max(0, totalSeats - abD - laD);
+      // الأصل الحضور: كل طالب حاضر افتراضيًا ما لم يُسجَّل له غياب في اليوم
+      const present = Math.max(0, totalSeats - abD);
       return { 'الصف':g?.name||'—', 'الفصل':c.name, 'عدد الطلاب':students.length, 'أيام':schoolDays, 'نسبة الحضور': totalSeats ? Math.round(present/totalSeats*100)+'%':'—', 'الغياب':abD, 'التأخر':laD };
     });
   } else if(type === 'messages'){
