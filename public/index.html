@@ -749,6 +749,33 @@ async function __syncPush(school){
               const nMap = new Map(sd.notes.map(n => [n.id, n]));
               for(const n of obj.notes){ if(!nMap.has(n.id)){ nMap.set(n.id, n); sd.notes.push(n); } }
             }
+            // 3.5) المستخدمون (غياب/تأخر المعلمين): نجعل نسخة الخادم أساساً لكن ندمج الغياب
+            //    والتأخر المسجَّل محلياً فوقها — وإلا تُستبدل نسخة الخادمُ بتعديلاتِ هذا
+            //    الجهاز فيضيع غياب المعلّم الذي يسجّله الوكيل/المدير من كشف «المعلمون».
+            if(Array.isArray(obj.users)){
+              sd.users = Array.isArray(sd.users) ? sd.users.slice() : [];
+              const uMapStay = new Map(sd.users.map(u => [u.id, u]));
+              for(const lu of obj.users){
+                if(!lu || !lu.id) continue;
+                const su = uMapStay.get(lu.id);
+                if(!su){ sd.users.push(JSON.parse(JSON.stringify(lu))); continue; }
+                const unionArr = (f) => {
+                  if(!Array.isArray(lu[f])) return;
+                  if(!Array.isArray(su[f])) su[f] = [];
+                  for(const v of lu[f]){ if(!su[f].includes(v)) su[f].push(v); }
+                };
+                unionArr('absences');
+                unionArr('markedLate');
+                if(lu.lateMinutes && typeof lu.lateMinutes === 'object'){
+                  if(!su.lateMinutes || typeof su.lateMinutes !== 'object') su.lateMinutes = {};
+                  for(const dt in lu.lateMinutes){ su.lateMinutes[dt] = lu.lateMinutes[dt]; }
+                }
+                if(lu.lateType && typeof lu.lateType === 'object'){
+                  if(!su.lateType || typeof su.lateType !== 'object') su.lateType = {};
+                  for(const dt in lu.lateType){ su.lateType[dt] = lu.lateType[dt]; }
+                }
+              }
+            }
             // 4) التكليفات/النشاطات: نحافظ على أي عنصر محلي غير مرفوع بعد (لا يُمسح عند أخذ نسخة الخادم).
             //    الممسوح (deleted) يفوز، ثم الأعلى _v، ثم الأحدث created.
             const betterItem = (a, b) => {
@@ -994,6 +1021,32 @@ async function __syncPull(school){
           else srvAnnP[i] = annBestP(srvAnnP[i], a);
         }
         merged.announcements = srvAnnP;
+      }
+      // المستخدمون (غياب/تأخر المعلمين): نسخة الخادم أساس ونحفظ فوقها التعديلات المحلية
+      // — وإلا محى السحبُ غيابَ المعلم الذي سجّله الوكيل/المدير للتو من كشف «المعلمون».
+      if(Array.isArray(local.users)){
+        merged.users = Array.isArray(merged.users) ? merged.users.slice() : [];
+        const uMapP = new Map(merged.users.map(u => [u.id, u]));
+        for(const lu of local.users){
+          if(!lu || !lu.id) continue;
+          const su = uMapP.get(lu.id);
+          if(!su){ merged.users.push(JSON.parse(JSON.stringify(lu))); continue; }
+          const unionArrP = (f) => {
+            if(!Array.isArray(lu[f])) return;
+            if(!Array.isArray(su[f])) su[f] = [];
+            for(const v of lu[f]){ if(!su[f].includes(v)) su[f].push(v); }
+          };
+          unionArrP('absences');
+          unionArrP('markedLate');
+          if(lu.lateMinutes && typeof lu.lateMinutes === 'object'){
+            if(!su.lateMinutes || typeof su.lateMinutes !== 'object') su.lateMinutes = {};
+            for(const dt in lu.lateMinutes){ su.lateMinutes[dt] = lu.lateMinutes[dt]; }
+          }
+          if(lu.lateType && typeof lu.lateType === 'object'){
+            if(!su.lateType || typeof su.lateType !== 'object') su.lateType = {};
+            for(const dt in lu.lateType){ su.lateType[dt] = lu.lateType[dt]; }
+          }
+        }
       }
       merged._ts = Math.max(__syncTS(server), __syncTS(local), Date.now());
       __origSetItem(key, JSON.stringify(merged));
@@ -2722,7 +2775,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v41</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v46</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -5577,7 +5630,7 @@ function renderAttendance(){
     ['CLASS','تأخر عن الحصة'],
     ['EARLY_LEAVE','خروج مبكر']
   ];
-  const rows = students.length === 0 ? `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">${emptyMsg}</td></tr>` :
+  const rows = (!isTeachers && students.length === 0) ? `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">${tl('لا يوجد طلاب في هذا الفصل')}</td></tr>` :
     students.map(s => {
       const isLateRow = attendanceState.draft[s.id] === 'LATE';
       const savedMins = (s.lateMinutes && s.lateMinutes[attendanceState.date] != null) ? s.lateMinutes[attendanceState.date] : '';
@@ -5615,7 +5668,7 @@ function renderAttendance(){
         <input type="number" id="latMin-${t.id}" min="0" max="600" step="1" placeholder="دقائق" value="${typedMins}" style="width:58px;padding:3px 4px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;${hide}" title="دقائق التأخر/الخروج المبكر" />
       </td>
     </tr>`;
-  }).join('') : '';
+  }).join('') : (isTeachers ? `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">${tl('لا يوجد معلمون بعد')}</td></tr>` : '');
 
   return `
   <h1 class="page-title">تسجيل الحضور</h1>
@@ -5889,7 +5942,22 @@ function saveAttendance(){
     }
     else { u.absences = u.absences.filter(x => x !== date); u.markedLate = u.markedLate.filter(x => x !== date); delete u.lateMinutes[date]; delete u.lateType[date]; }
   });
+  d._ts = Date.now();
   saveDB(d);
+  // رفع مباشر مؤكد لمحتوى الحفظ (يتضمن غياب/تأخر المعلمين) بدل الاعتماد على جدولة
+  // الرفع التي قد تُهمل تعديلات كشف «المعلمون» أو يمحيها سحب لاحق — نرفع فوراً هنا.
+  {
+    const schoolNow = getActiveSchool();
+    if(__syncEnabled() && schoolNow){
+      const body = JSON.stringify({ ts: d._ts, data: d });
+      try{
+        fetch(SYNC_API + schoolNow, { method:'PUT', headers:{ 'Content-Type':'application/json' }, body })
+          .catch(()=>{ if(typeof __syncSchedule === 'function') __syncSchedule(schoolNow, 4000); });
+      }catch(e){
+        if(typeof __syncSchedule === 'function') __syncSchedule(schoolNow, 4000);
+      }
+    }
+  }
   attendanceState.draft = {};
   attendanceState.absenceType = {};
   attendanceState.sLateMin = {};
@@ -9381,7 +9449,7 @@ function saveAnnouncement(){
 /* تسجيل Service Worker للتثبيت والعمل دون اتصال — يعمل فقط عبر http/https */
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('sw.js?v=38', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=39', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
