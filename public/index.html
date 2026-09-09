@@ -5515,7 +5515,10 @@ let attendanceState = { classId:null, date: todayStr(), draft:{}, absenceType:{}
 function renderAttendance(){
   const d = loadDB();
   const classes = getClassesSorted();
-  if(!attendanceState.date || attendanceState.date < todayStr()) attendanceState.date = todayStr();
+  // الوكيل والمدير بإمكانهما تسجيل الغياب/التأخر لأيام سابقة — فقط نضمن وجود تاريخ افتراضي صالح (اليوم إن لم يُحدَّد بعد)
+  if(!attendanceState.date) attendanceState.date = todayStr();
+  const allowPastDates = canManageTeachers(currentUser());
+  if(!allowPastDates && attendanceState.date < todayStr()) attendanceState.date = todayStr();
   const isTeachers = canManageTeachers(currentUser()) && attendanceState.classId === 'TEACHERS';
   if(classes.length === 0 && !isTeachers) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : null;
   else if(!attendanceState.classId || (!isTeachers && !classes.some(c => c.id === attendanceState.classId))) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : (classes[0] ? classes[0].id : null);
