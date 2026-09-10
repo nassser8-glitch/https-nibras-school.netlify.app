@@ -612,10 +612,10 @@ function __syncSchedule(school, ms){
   clearTimeout(__syncTimers[school]);
   __syncTimers[school] = setTimeout(() => __syncPush(school), (ms === undefined) ? 700 : ms);
 }
-// قاعدة التأكيد المزدوج للغياب: لا يُحتسب الطالب غائباً إلا إذا سجّله معلّمان في حصّتين
-// مختلفتين (مسجّلان مختلفان في absClerks). السجلات القديمة (قبل القاعدة) بلا absClerks
-// تُعامَل كمؤكَّدة تلقائياً (لا ينقص عدد غياباتها). علامة __LEGACY_ABS تحفظ حالة السجل
-// القديم المؤكَّد إذا أُعيد حفظه — فلا يُفقد غيابٌ سُجّل قبل العمل بالقاعدة.
+// قاعدة التأكيد المزدوج للغياب: الطالب يُحسب غائباً فور تسجيله، مهما سجّله معلم واحد أو اثنان.
+// شارة «⏳ بانتظار معلم ثانٍ» تنبيه إرشادي فقط (من سجّل المعلّمَين مختلفَيْن لا يزال يستفيد
+// منها كمعلومة)، لكنها لا تُخفي الغياب من العداد. السجلات القديمة (قبل القاعدة) بلا absClerks
+// تبقى محتسبة تلقائياً. علامة __LEGACY_ABS تحفظ حالة السجل القديم إذا أُعيد حفظه.
 // رقم عشريّ واحد موحّد في كل البطاقات (بنين/بنات، الفصل، الطالب، الرسوم والتقارير).
 const __LEGACY_ABS = '__legacy_abs__';
 function __attRealClerks(rec){
@@ -624,20 +624,18 @@ function __attRealClerks(rec){
 }
 function __attIsAbsent(rec){
   if(!rec || rec.status !== 'ABSENT') return false;
-  if(!Array.isArray(rec.absClerks)) return true;
-  if(rec.absClerks.indexOf(__LEGACY_ABS) !== -1) return true;
-  return __attRealClerks(rec).length >= 2;
+  return true;
 }
-// غياب «معلّق»: سُجّله معلم واحد فقط ولم يؤكده معلم ثانٍ بعد — يسجَّل ويُحفظ،
-// لكنه لا يُحتسب في العداد إلا بعد تأكيد المعلم الثاني (قاعدة الحصتين).
+// غياب «معلّق»: سجّله معلم واحد فقط ولم يؤكده معلم ثانٍ بعد — يُسجَّل ويُحفظ ويُحتسب في
+// العداد فوراً، والشارة تنبيه للمعلم الثاني فقط ولا تُخفي الغياب من الأرقام.
 function __attPendingConfirm(rec){
   if(!rec || rec.status !== 'ABSENT') return false;
   if(!Array.isArray(rec.absClerks)) return false;   // قديم بلا قائمة = مؤكد
   if(rec.absClerks.indexOf(__LEGACY_ABS) !== -1) return false;
   return __attRealClerks(rec).length < 2;
 }
-// الحالة الفعلية للسجل وفق القاعدة: غائب فقط إذا مؤكداً (قديم بلا قائمة، أو شارة قديمة، أو ≥2 مؤكِّد)،
-// وإلا ما سُجّل فيه حالياً (متأخر/حاضر). مصدر واحد يُستخدم في العدّ والعرض ليطابق النسبة دائماً.
+// الحالة الفعلية للسجل: أي سجل غياب يُحسب غائباً فوراً، وما دون ذلك يُحسب ما سُجّل فيه
+// (متأخر/حاضر). مصدر واحد يُستخدم في العدّ والعرض ليطابق النسبة دائماً.
 function __attEffStatus(rec){
   if(!rec) return 'PRESENT';
   if(__attIsAbsent(rec)) return 'ABSENT';
@@ -677,25 +675,19 @@ function __attWinner(a, b){
    `ids` مجموعة معرفات الطلاب المطلوب حسابهم لهذا التاريخ. */
 function attCountsByDate(d, date, ids){
   const idSet = new Set(ids || []);
-  // تجميع لكل طالب/يوم عبر كل سجلاته: ندمج قوائم مؤكِّدي الغياب (اتحاداً) بدل أخذ أسوأ سجل
-  // واحد — فعدم احتساب الغياب يعتمد العدد الكلي للمؤكدين وليس سجل واحد يفوز بالزمن.
+  // كل سجل غياب/تأخر يُحتسب فور تسجيله مهما كان عدد المؤكِّدين — السجل المعلّق (بانتظار
+  // معلم ثانٍ) مسئول عنه أحد المعلمين وهو واقع مسجَّل، فلا يُخفى من العداد اليومي/الأسبوعي.
   const agg = new Map();
   (Array.isArray(d.attendance) ? d.attendance : []).forEach(a => {
     if(!a || !a.date || a.date !== date || !idSet.has(a.studentId)) return;
     let g = agg.get(a.studentId);
-    if(!g){ g = { absClerks: new Set(), legacyAbs: false, late: false }; agg.set(a.studentId, g); }
-    if(a.status === 'ABSENT'){
-      if(Array.isArray(a.absClerks)){
-        if(a.absClerks.indexOf(__LEGACY_ABS) !== -1) g.legacyAbs = true;
-        a.absClerks.forEach(c => { if(c && c !== __LEGACY_ABS) g.absClerks.add(c); });
-      }
-      else g.legacyAbs = true; // سجل قديم بلا قائمة تأكيد = غياب مؤكد قبل القاعدة
-    }
+    if(!g){ g = { absent:false, late:false }; agg.set(a.studentId, g); }
+    if(a.status === 'ABSENT') g.absent = true;
     else if(a.status === 'LATE') g.late = true;
   });
   let absent = 0, late = 0;
   for(const g of agg.values()){
-    if(g.legacyAbs || g.absClerks.size >= 2) absent++;
+    if(g.absent) absent++;
     else if(g.late) late++;
   }
   return { present: Math.max(0, idSet.size - absent - late), absent, late, records: agg.size };
@@ -2870,7 +2862,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v51</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v52</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -5737,7 +5729,7 @@ function renderAttendance(){
       const sAbsType = (attendanceState.draft[s.id] === 'ABSENT' && attendanceState.absenceType && attendanceState.absenceType[s.id]) || '';
       const absBadge = sAbsType === 'EXCUSED' ? `<span class="abs-type-badge exc" title="غياب بإذن">مستأذن</span>` : (sAbsType === 'ESCAPE' ? `<span class="abs-type-badge esc" title="هرب من الحصة">هارب من الحصة</span>` : '');
       const sRec04 = d.attendance.find(a => a.studentId === s.id && a.date === attendanceState.date);
-      const pendingBadge = __attPendingConfirm(sRec04) ? `<span class="abs-type-badge pend" title="سجّل أحد المعلمين هذا الغياب وهو محفوظ، لكنه يُحتسب في العداد فقط بعد تأكيد معلم ثانٍ">⏳ بانتظار معلم ثانٍ</span>` : '';
+      const pendingBadge = __attPendingConfirm(sRec04) ? `<span class="abs-type-badge pend" title="الغياب محفوظ ومحتسب، لكن سجّله معلم واحد فقط حتى الآن — تنبيه للمعلم الثاني">⏳ بانتظار معلم ثانٍ</span>` : '';
       return `<tr>
       <td style="font-weight:600">${studentNameLink(s, ptsMapAtt[s.id] || 0)} ${absBadge}${pendingBadge}</td>
       <td>${escapeHtml(s.studentNo)}</td>
