@@ -334,6 +334,7 @@
   .login-card h1 { color:#0f4f88; font-size:26px; margin:0 0 4px; }
   .login-card label { display:block; text-align:right; font-size:13px; font-weight:600; margin:14px 0 4px; }
   .error-box { background:#fef2f2; color:#dc2626; font-size:13px; border-radius:8px; padding:8px 12px; margin-top:12px; }
+  .success-box { background:#f0fdf4; color:#16a34a; font-size:13px; border-radius:8px; padding:8px 12px; margin-top:12px; }
   .hint { font-size:12px; color:#9ca3af; margin-top:14px; }
   .toggle-btn { font-size:13px; padding:6px 12px; border-radius:8px; font-weight:600; border:1px solid #e5e7eb; background:#fff; color:#6b7280; cursor:pointer; }
   .toggle-btn.active { background:#1d7fd6; color:#fff; border-color:#1d7fd6; }
@@ -2862,7 +2863,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v52</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v53</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -9417,6 +9418,19 @@ function renderSettings(){
 
   const directMsgCard = '';
 
+  const passCard = `
+  <div class="card" style="max-width:600px">
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">🔒 تغيير الرقم السري</div>
+    <div style="font-size:12.5px;color:#6b7280;margin-bottom:12px">غيّر رقمك السري في أي وقت — يبقى صالحاً للدخول من جميع أجهزتك.</div>
+    <div id="passErr" class="error-box" style="display:none"></div>
+    <div id="passOk" class="success-box" style="display:none"></div>
+    <label>الرقم السري الجديد (8 أحرف على الأقل — حروف وأرقام أو رموز)</label>
+    <input id="passNew" class="input" type="password" placeholder="••••••••" autocomplete="new-password" />
+    <label>تأكيد الرقم السري الجديد</label>
+    <input id="passConfirm" class="input" type="password" placeholder="••••••••" autocomplete="new-password" />
+    <button class="btn-primary" style="margin-top:14px" onclick="saveMyPassword()">💾 حفظ الرقم السري</button>
+  </div>`;
+
   const installCard = `
   <div class="card" style="max-width:600px">
     <div style="font-size:14px;font-weight:700;margin-bottom:6px">📲 إضافة التطبيق إلى الشاشة الرئيسية</div>
@@ -9434,7 +9448,43 @@ function renderSettings(){
   ${suggestCard}
   ${adminInboxCard}
   ${directMsgCard}
+  ${passCard}
   ${installCard}`;
+}
+let __pwdBusy = false;
+async function saveMyPassword(){
+  if(__pwdBusy) return;
+  const s1 = document.getElementById('passNew')?.value || '';
+  const s2 = document.getElementById('passConfirm')?.value || '';
+  const errEl = document.getElementById('passErr');
+  const okEl = document.getElementById('passOk');
+  if(errEl) errEl.style.display = 'none';
+  if(okEl) okEl.style.display = 'none';
+  if(s1.length < 8){ if(errEl){ errEl.style.display = 'block'; errEl.textContent = 'الرقم السري يجب أن يكون 8 أحرف على الأقل'; } return; }
+  if(/[^A-Za-z0-9@#$%^&*!._\-+=]/.test(s1)){ if(errEl){ errEl.style.display = 'block'; errEl.textContent = 'الرقم السري يحتوي رموزاً غير مسموحة (حروف إنجليزية وأرقام فقط مع @ # $ % ^ & * ! . _ - + =)'; } return; }
+  if(!/[A-Za-z]/.test(s1)){ if(errEl){ errEl.style.display = 'block'; errEl.textContent = 'الرقم السري يجب أن يحتوي حرفاً إنجليزياً واحداً على الأقل'; } return; }
+  if(s1 !== s2){ if(errEl){ errEl.style.display = 'block'; errEl.textContent = 'الرقمان غير متطابقين'; } return; }
+  __pwdBusy = true;
+  try{
+    if(__serverEnabled()){
+      const r = await __api('POST', 'change-password', { newPassword: s1 });
+      if(r.status === 200 && r.j && r.j.ok){
+        if(r.j.user){ __sessionUser = r.j.user; __mirrorSet(r.j.user); }
+        if(document.getElementById('passNew')) document.getElementById('passNew').value = '';
+        if(document.getElementById('passConfirm')) document.getElementById('passConfirm').value = '';
+        if(okEl){ okEl.style.display = 'block'; okEl.textContent = '✅ تم تغيير الرقم السري بنجاح — ستدخل به من الآن.'; }
+        setTimeout(() => { if(okEl) okEl.style.display = 'none'; }, 6000);
+        return;
+      }
+      if(errEl){ errEl.style.display = 'block'; errEl.textContent = r.j && r.j.error === 'weak_password' ? 'الرقم السري ضعيف — 8 أحرف على الأقل مع حروف إنجليزية وأرقام أو رموز' : 'تعذر التغيير — أعد المحاولة'; }
+      return;
+    }
+    if(errEl){ errEl.style.display = 'block'; errEl.textContent = 'عذراً — هذه النسخة المحلية لا تدعم تغيير الرقم السري.'; }
+  }catch(e){
+    if(errEl){ errEl.style.display = 'block'; errEl.textContent = 'خطأ في الاتصال — أعد المحاولة'; }
+  }finally{
+    __pwdBusy = false;
+  }
 }
 /* اقتراحات رسالة اليوم: المعلم/الوكيل يقترحون → المدير يوافق → تظهر للجميع */
 function suggestionsKey(school){ return 'nibras_' + (school || getActiveSchool()) + '_suggestions_v1'; }
