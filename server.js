@@ -1287,6 +1287,11 @@ app.post('/api/backups/restore', requireAuth, (req, res) => {
       const bl = new Set(data._blockedClasses);
       data.classes = data.classes.filter(c => c && !bl.has(c.id));
     }
+    // حارس: استرجاع نسخة بلا مستخدمين = تفريغ مقنّع — يُرفض مع تسجيل الفاعل
+    if (!data || !Array.isArray(data.users) || data.users.length === 0) {
+      console.warn('[restore-guard] رفض استرجاع بلا users لـ', bak.school, 'من', req.session.user_id, 'IP', req.ip);
+      return res.status(409).json({ error: 'wipe_blocked', reason: 'restore_empty' });
+    }
     await db.setSchoolData(bak.school, data, ts);
     res.json({ ok: true, school: bak.school, ts, takenAt: bak.taken_at });
   })().catch(fail(res));
@@ -1301,6 +1306,12 @@ app.post('/api/backups/import', requireAuth, (req, res) => {
     const data = req.body && req.body.data;
     if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.users))
       return res.status(400).json({ error: 'invalid_payload' });
+    // حارس ثانٍ: استيراد قسم بلا مستخدمين إطلاقاً = تفريغ مقنّع — يُرفض (الاستيراد
+    // المشروع يحمل دائماً حسابات النظام). مع تسجيل الفاعل في سجل الخادم للتشخيص.
+    if (data.users.length === 0) {
+      console.warn('[import-guard] رفض استيراد بلا users لـ', school, 'من', req.session.user_id, 'IP', req.ip);
+      return res.status(409).json({ error: 'wipe_blocked', reason: 'import_empty' });
+    }
     const ts = Date.now();
     const clean = JSON.parse(JSON.stringify(data));
     if (clean && typeof clean === 'object') clean._ts = ts;
