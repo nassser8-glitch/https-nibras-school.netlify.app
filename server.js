@@ -699,24 +699,6 @@ function mergeAttendance(prev, incoming) {
     if (inf(a) !== inf(b)) return inf(a) > inf(b) ? a : b;
     return tOf(a) >= tOf(b) ? a : b;
   };
-  // اتحاد قوائم مؤكِّدي الغياب: عند تطابق سجلّي غياب لنفس الطالب/اليوم (من معلّمين/أجهزة مختلفة)
-  // ندمج absClerks (المجموعات) بدل إبقاء الفائز وحده — فلا تضيع تأكيدات تُجمِّع الغياب.
-  const LEGACY_ABS = '__legacy_abs__';
-  const unionClerks = (a, b) => {
-    const win = better(a, b);
-    if (!win || win.status !== 'ABSENT') return win;
-    if (!Array.isArray(a.absClerks) && !Array.isArray(b.absClerks)) return win;
-    const clerks = [];
-    const add = c => { if (c && clerks.indexOf(c) === -1) clerks.push(c); };
-    [a, b].forEach(r => {
-      if (!r || r.status !== 'ABSENT') return;
-      if (Array.isArray(r.absClerks)) r.absClerks.forEach(add);
-      else add(LEGACY_ABS); // سجل قديم بلا قائمة = غياب مؤكد سابقاً
-    });
-    const out = Object.assign({}, win);
-    out.absClerks = clerks;
-    return out;
-  };
   const tomb = new Set();
   for (const r of prev) { if (r && typeof r === 'object' && r.deleted) tomb.add(keyOf(r)); }
   // المرحلة 1: دمج حسب id — الغائب/المتأخر يفوز على الحاضر، وإلا آخر-كتابة-يفوز على _t
@@ -730,7 +712,7 @@ function mergeAttendance(prev, incoming) {
     if (!ex) { map.set(k, r); continue; }
     // قفل الحذف (تومبستون) ألصق: لا يُعاد إحياء
     if ((r.deleted || ex.deleted)) { if (r.deleted) map.set(k, r); continue; }
-    map.set(k, unionClerks(r, ex));
+    map.set(k, better(r, ex));
   }
   // المرحلة 2: إزالة التكرار حسب (studentId|date) — نفس قاعدة الاختيار (الغائب يفوز)
   const bySD = new Map();
@@ -743,7 +725,7 @@ function mergeAttendance(prev, incoming) {
     const cur = bySD.get(sd);
     if (!cur) { bySD.set(sd, r); result.push(r); continue; }
     const idx = result.indexOf(cur);
-    const win = unionClerks(r, cur);
+    const win = better(r, cur);
     if (win !== cur) { result[idx] = win; bySD.set(sd, win); }
   }
   return result;
