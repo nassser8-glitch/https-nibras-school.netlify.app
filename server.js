@@ -916,6 +916,27 @@ function mergeStudentsLateOnly(prevStudents, inStudents) {
   return Array.from(map.values());
 }
 
+// ===== حارس تلوث القسمين (cross-section) =====
+// القسمان منفصلان تماماً (لا يوجد معرّف مستخدم مشترك بين GIRLS و BOYS إطلاقاً).
+// أي دفعة حفظ/استيراد/استرجاع تستحضر حسابات القسم الآخر = جهاز ملوِّث يدمج النسختين.
+// نرفضها 409 لتتوقف العودة الدورية لأرقام البنين داخل قسم البنات (والعكس).
+async function otherSchoolUserIds(school) {
+  const other = school === 'BOYS' ? 'GIRLS' : 'BOYS';
+  const rec = await db.getSchoolData(other);
+  const set = new Set();
+  if (rec && rec.data && Array.isArray(rec.data.users)) {
+    for (const u of rec.data.users) if (u && u.id) set.add(u.id);
+  }
+  return set;
+}
+// تساهل لعمليات النقل المشروعة: تحمّل حتى 3 معرّفات أجنبية (نقل حساب واحد) دون منع،
+// بينما دفعة منسوخة من قسم آخر تحمل العشرات — تُرفض قاطعة.
+function foreignUserCount(users, otherIds) {
+  let n = 0;
+  for (const u of users || []) if (u && u.id && otherIds.has(u.id)) n++;
+  return n;
+}
+
 // ===== مطابقة جدول المستخدمين (المصادقة) مع نسخة بيانات القسم بعد كتابة قسم users =====
 async function userPresentInOtherSchool(id, school) {
   const other = school === 'BOYS' ? 'GIRLS' : 'BOYS';
@@ -1050,6 +1071,16 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     if (wasFull && nowEmptyAll) {
       console.warn('[wipe-guard] رفض تفريغ قسم كامل لـ', school, 'من', req.session && req.session.role || '?', 'ts=', ts);
       return res.status(409).json({ error: 'wipe_blocked', reason: 'full_section' });
+    }
+    // ===== حارس التلوث المتبادل بين القسمين (cross-section) =====
+    // جهاز ملوِّث يحمل نسخة ممزوجة (users من البنين + من البنات) ويدفعها على قسم واحد
+    // فيتسرب حسابات القسم الآخر إليه (ظهرت «معلمات» بأسماء أولادٍ في البنات: abdullah, salman...).
+    // نرفض أي كتابة تستحضر أكثر من 3 معرّفات من القسم الآخر — تمنع الخلط جذرياً.
+    const otherIdsSet = await otherSchoolUserIds(school);
+    const foreignN = foreignUserCount(nowUsers, otherIdsSet);
+    if (foreignN > 3) {
+      console.warn('[cross-section] رفض حفظ خلط قسمين لـ', school, 'على يد', req.session && req.session.user_id || '?', 'foreign=', foreignN, 'ts=', ts);
+      return res.status(409).json({ error: 'cross_section_blocked', reason: 'foreign_users', count: foreignN });
     }
     // "قديمة": وصول نسخة بزمن أقل مما لدى الخادم (حفظ معلم آخر/فرق ساعة الأجهزة).
     // بدلاً من رفضها فتضيع تعديلات من يحفظ، ندمجها لاحقاً (مزج حسب المفتاح) مع بقاء نسخة الخادم سليمة.
@@ -1292,6 +1323,12 @@ app.post('/api/backups/restore', requireAuth, (req, res) => {
       console.warn('[restore-guard] رفض استرجاع بلا users لـ', bak.school, 'من', req.session.user_id, 'IP', req.ip);
       return res.status(409).json({ error: 'wipe_blocked', reason: 'restore_empty' });
     }
+    // حارس: استرجاع نسخة ممزوجة من القسمين = تلوث — يُرفض
+    const roth = await otherSchoolUserIds(bak.school);
+    if (foreignUserCount(data.users, roth) > 3) {
+      console.warn('[restore-guard] رفض استرجاع يخلط قسمين لـ', bak.school, 'من', req.session.user_id, 'IP', req.ip);
+      return res.status(409).json({ error: 'cross_section_blocked', reason: 'restore_foreign_users' });
+    }
     await db.setSchoolData(bak.school, data, ts);
     res.json({ ok: true, school: bak.school, ts, takenAt: bak.taken_at });
   })().catch(fail(res));
@@ -1311,6 +1348,13 @@ app.post('/api/backups/import', requireAuth, (req, res) => {
     if (data.users.length === 0) {
       console.warn('[import-guard] رفض استيراد بلا users لـ', school, 'من', req.session.user_id, 'IP', req.ip);
       return res.status(409).json({ error: 'wipe_blocked', reason: 'import_empty' });
+    }
+    // حارس: استيراد ممزوج من القسمين = تلوث — يُرفض
+    const ioth = await otherSchoolUserIds(school);
+    const iForeign = foreignUserCount(data.users, ioth);
+    if (iForeign > 3) {
+      console.warn('[import-guard] رفض استيراد يخلط قسمين لـ', school, 'من', req.session.user_id, 'IP', req.ip, 'foreign=', iForeign);
+      return res.status(409).json({ error: 'cross_section_blocked', reason: 'import_foreign_users', count: iForeign });
     }
     const ts = Date.now();
     const clean = JSON.parse(JSON.stringify(data));
