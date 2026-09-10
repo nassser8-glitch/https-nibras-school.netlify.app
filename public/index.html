@@ -2761,6 +2761,7 @@ function renderLayout(user, hash){
     { title:'المدرسة', items:[
       (user.role !== 'STUDENT') ? { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉', badge: user.role === 'AGENT' ? pendingPartRequests() : 0 } : null,
       { href:'#/memo', key:'memo', label:'المفكرة والتذكير', icon:'📒' },
+      { href:'#/daily-msg', key:'daily-msg', label:'رسالة اليوم', icon:'📢' },
       { href:'#/maintenance', key:'maintenance', label:'الصيانة', icon:'🔧' },
       (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR') ? { href:'#/guide-msgs', key:'guide-msgs', label:'رسائل المعلمين', icon:'💬', badge: msgMonitorBadge(user) } : null,
     ]},
@@ -2783,7 +2784,7 @@ function renderLayout(user, hash){
   const msgMarquee = (annCfg.text || 'الصلاة على النبي').split('\n').filter(Boolean).join(' • ');
   const senderFirstName = announceSender ? firstNameOf(announceSender) : '';
   const msgTodayWidget = `
-    <div class="msg-day-center" onclick="location.hash='#/settings'" title="فتح صفحة رسالة اليوم">
+    <div class="msg-day-center" onclick="location.hash='#/daily-msg'" title="فتح صفحة رسالة اليوم">
       <div class="dash-welcome-label">📢 رسالة اليوم</div>
       <div class="msg-static">${escapeHtml(msgMarquee)}</div>
       ${senderFirstName ? `<div class="msg-sender">— ${escapeHtml(senderFirstName)}</div>` : ''}
@@ -2813,6 +2814,7 @@ function renderLayout(user, hash){
   else if(page.startsWith('teacher/') && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderTeacherPage(page.split('/')[1]);
   else if(page === 'guide-msgs' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR')) pageHtml = renderGuideMsgs();
   else if(page === 'settings') pageHtml = renderSettings();
+  else if(page === 'daily-msg') pageHtml = renderDailyMsg();
   else if(page === 'backup' && user.role === 'ADMIN') pageHtml = renderBackup();
   else if(page === 'notebook') pageHtml = renderNotebookPage();
   else if(page === 'about') pageHtml = renderAbout();
@@ -9350,7 +9352,7 @@ async function backupRestoreFromFile(input){
     el.textContent = '⚠️ تعذّر قراءة الملف — تأكد أنه «nibras-backup-… .json» ولم يعدّل.';
   }
 }
-function renderSettings(){
+function renderDailyMsg(){
   const school = getActiveSchool();
   const user = currentUser();
   const isAdmin = user?.role === 'ADMIN';
@@ -9418,6 +9420,17 @@ function renderSettings(){
 
   const directMsgCard = '';
 
+  return `
+  <div class="header-row"><h1 class="page-title">رسالة اليوم — ${schoolNames[school]||''}</h1></div>
+  ${currentCard}
+  ${editorCard}
+  ${suggestCard}
+  ${adminInboxCard}
+  ${directMsgCard}`;
+}
+function renderSettings(){
+  const school = getActiveSchool();
+
   const passCard = `
   <div class="card" style="max-width:600px">
     <div style="font-size:14px;font-weight:700;margin-bottom:6px">🔒 تغيير الرقم السري</div>
@@ -9442,12 +9455,7 @@ function renderSettings(){
   </div>`;
 
   return `
-  <div class="header-row"><h1 class="page-title">رسالة اليوم — ${schoolNames[school]||''}</h1></div>
-  ${currentCard}
-  ${editorCard}
-  ${suggestCard}
-  ${adminInboxCard}
-  ${directMsgCard}
+  <div class="header-row"><h1 class="page-title">الإعدادات</h1></div>
   ${passCard}
   ${installCard}`;
 }
