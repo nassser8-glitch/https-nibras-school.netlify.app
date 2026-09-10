@@ -1033,6 +1033,24 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     const ts = Number(req.body.ts) || Date.now();
     const prev = await db.getSchoolData(school);
     const prevUsers = (prev.data && Array.isArray(prev.data.users)) ? prev.data.users : [];
+    // ===== حارس ضد المسح الفارغ (wipe-guard) =====
+    // متصفح/جهاز جديد يفتح التطبيق أول مرة يكون تخزينه المحلي فارغاً، ومع خوارزميات
+    // الوقت القديمة يُرى «أحدث» فيدفع القسم فارغاً فيمسح قسمَ المدرسة كله (users=students=classes=0).
+    // نرفض كتابةً تفرّغ قسماً كان ممتلئاً — لا يجوز رمياً أن يختفي القسم كاملاً بهذه الطريقة.
+    const nowUsers = Array.isArray(data.users) ? data.users : [];
+    const nowStudents = Array.isArray(data.students) ? data.students : [];
+    const nowClasses = Array.isArray(data.classes) ? data.classes : [];
+    const wasFull = prevUsers.length > 0
+      || ((prev.data) && Array.isArray(prev.data.students) && prev.data.students.length > 0);
+    const nowEmptyAll = nowUsers.length === 0 && nowStudents.length === 0 && nowClasses.length === 0;
+    if (prevUsers.length > 0 && nowUsers.length === 0) {
+      console.warn('[wipe-guard] رفض تفريغ قسم users لـ', school, 'من', req.session && req.session.role || '?', 'ts=', ts);
+      return res.status(409).json({ error: 'wipe_blocked', reason: 'users' });
+    }
+    if (wasFull && nowEmptyAll) {
+      console.warn('[wipe-guard] رفض تفريغ قسم كامل لـ', school, 'من', req.session && req.session.role || '?', 'ts=', ts);
+      return res.status(409).json({ error: 'wipe_blocked', reason: 'full_section' });
+    }
     // "قديمة": وصول نسخة بزمن أقل مما لدى الخادم (حفظ معلم آخر/فرق ساعة الأجهزة).
     // بدلاً من رفضها فتضيع تعديلات من يحفظ، ندمجها لاحقاً (مزج حسب المفتاح) مع بقاء نسخة الخادم سليمة.
     // نسخة تقلّ عن نسخة الخادم بأكثر من 5 دقائق تُعدّ قديمة (تُدمج، لا تُحذف بيانات أحد).
