@@ -1192,6 +1192,16 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         }
       }
     } catch (_) {}
+    // ===== حارس الفصول المحظورة (blocked-classes) =====
+    // قائمة معرّفات فصول تُعدّ محذوفة نهائياً من القسم (فصول بلا طلاب/مكررة أُزيلت إدارياً).
+    // أي جهاز قديم يحملها لاحقاً تحذف فصوله فوراً ولا تُخزن — تمنع عودة التكرار المُزالة أبداً.
+    const prevBlocked = new Set(Array.isArray(prev.data && prev.data._blockedClasses) ? prev.data._blockedClasses : []);
+    const inBlocked = new Set(Array.isArray(clean._blockedClasses) ? clean._blockedClasses : []);
+    for (const id of prevBlocked) inBlocked.add(id);
+    if (Array.isArray(clean.classes) && inBlocked.size) {
+      clean.classes = clean.classes.filter(c => c && !inBlocked.has(c.id));
+    }
+    clean._blockedClasses = [...inBlocked];
     await db.setSchoolData(school, clean, nextTs);
     // مزامنة جدول المصادقة مع أي تغيير في قسم المستخدمين (حذف/نقل/تعطيل)
     if (['ADMIN','AGENT'].includes(req.session.role)) {
@@ -1273,6 +1283,10 @@ app.post('/api/backups/restore', requireAuth, (req, res) => {
     const ts = Date.now();
     const data = JSON.parse(JSON.stringify(bak.data));
     if (data && typeof data === 'object') data._ts = ts;
+    if (data && Array.isArray(data._blockedClasses) && Array.isArray(data.classes)) {
+      const bl = new Set(data._blockedClasses);
+      data.classes = data.classes.filter(c => c && !bl.has(c.id));
+    }
     await db.setSchoolData(bak.school, data, ts);
     res.json({ ok: true, school: bak.school, ts, takenAt: bak.taken_at });
   })().catch(fail(res));
@@ -1290,6 +1304,10 @@ app.post('/api/backups/import', requireAuth, (req, res) => {
     const ts = Date.now();
     const clean = JSON.parse(JSON.stringify(data));
     if (clean && typeof clean === 'object') clean._ts = ts;
+    if (Array.isArray(clean._blockedClasses) && Array.isArray(clean.classes)) {
+      const bl = new Set(clean._blockedClasses);
+      clean.classes = clean.classes.filter(c => c && !bl.has(c.id));
+    }
     await db.setSchoolData(school, clean, ts);
     res.json({ ok: true, school, ts });
   })().catch(fail(res));
