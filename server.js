@@ -208,6 +208,52 @@ if (process.env.FORCE_HTTPS === '1') {
   });
 }
 
+/* ================= وضع الصيانة ================= */
+// يُفعَّل/يُعطَّل فوراً من قاعدة البيانات عبر app_flags.maintenance (لا إعادة نشر).
+// أثناء الصيانة: كل الطلبات تُفى صفحة إعلان، ما عدا /api/health (لدقات البقاء نشطاً).
+const MAINT_CACHE_MS = 5000;
+let maintCache = { on: false, at: 0 };
+async function maintenanceOn() {
+  const now = Date.now();
+  if (now - maintCache.at < MAINT_CACHE_MS) return maintCache.on;
+  try {
+    const v = await db.getFlag('maintenance');
+    maintCache = { on: v === true || v === 'true', at: now };
+    return maintCache.on;
+  } catch (_) { return false; }
+}
+const MAINT_PAGE = `<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>نبراس — صيانة</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+    font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#f3f6fb;color:#22304a}
+  .box{max-width:460px;background:#fff;border-radius:16px;padding:44px 40px;text-align:center;
+    box-shadow:0 10px 30px rgba(31,45,90,.12)}
+  .dot{width:58px;height:58px;margin:0 auto 22px;border-radius:50%;
+    background:#eef2fb;display:flex;align-items:center;justify-content:center;
+    font-size:30px;color:#3451b2}
+  h1{font-size:22px;margin:0 0 10px}
+  p{font-size:15px;line-height:1.8;color:#5a6a8a;margin:0}
+  .pill{margin-top:20px;font-size:12px;color:#8794b0;background:#f4f7fd;border-radius:999px;
+    padding:6px 14px;display:inline-block}
+</style></head><body><div class="box">
+  <div class="dot">&#9881;</div>
+  <h1>النظام في صيانة</h1>
+  <p>نعمل حالياً على إجراء تحسينات على النظام، وسيعود للعمل قريباً بإذن الله.<br>شكراً لصبركم.</p>
+  <div class="pill">نبراس — منصة إدارة المدارس</div>
+</div></body></html>`;
+app.use((req, res, next) => {
+  maintenanceOn().then(on => {
+    if (on && req.path !== '/api/health') {
+      res.status(503).type('html').send(MAINT_PAGE);
+      return;
+    }
+    next();
+  }).catch(next);
+});
+
 /* ================= الحد من المعدل ================= */
 const rateBuckets = new Map();
 function rateLimit(routeKey, limit, windowMs, req) {

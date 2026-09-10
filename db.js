@@ -46,6 +46,14 @@ async function initSchema() {
       )`);
     await client.query(`
       CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id)`);
+    // أعلام عامة قابلة للتحكم من القاعدة مباشرة (بدون إعادة نشر):
+    // تُستخدم حالياً لتفعيل/إيقاف "وضع الصيانة" فوراً من قاعدة البيانات.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_flags (
+        key        TEXT PRIMARY KEY,
+        value      JSONB NOT NULL DEFAULT 'false'::jsonb,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS school_data (
         school     TEXT PRIMARY KEY CHECK (school IN ('BOYS','GIRLS')),
@@ -365,9 +373,22 @@ async function auditSync(rec) {
   }
 }
 
+/* ===== الأعلام العامة ===== */
+async function getFlag(key) {
+  const r = await pool.query('SELECT value FROM app_flags WHERE key = $1', [key]);
+  return r.rows.length ? r.rows[0].value : null;
+}
+async function setFlag(key, value) {
+  await pool.query(
+    `INSERT INTO app_flags (key, value, updated_at) VALUES ($1,$2, now())
+     ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()`,
+    [key, JSON.stringify(value)]);
+}
+
 module.exports = {
   pool, SCHOOLS,
   initSchema,
+  getFlag, setFlag,
   userByEmail, usersByEmail, userByUsername, usernameExists, generateUsername, baseUsername,
   userById, listUsers, listAllUsers, usersForLoginStats, usernamesByIds, countAdmins, insertUser,
   updateUserPasswordHash, updateUserPlainPassword, updateUserProfile, grantUserAccess,
