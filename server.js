@@ -1494,6 +1494,69 @@ app.post('/api/ops/ensure-girls-admin', async (req, res) => {
   } catch (e) { console.error('[ensure-girls-admin]', e); res.status(500).json({ error: 'db' }); }
 });
 
+// نقطة مؤقتة: تنظيف بيانات قسم البنات على مستوى القاعدة مباشرة (campus=GIRLS،
+// حذف الفصول الميتة والمواد المكررة بلا طلاب). تُستدعى مرة واحدة ثم تُحذف.
+app.post('/api/ops/clean-girls', async (req, res) => {
+  try {
+    const rec = await db.getSchoolData('GIRLS');
+    if (!rec.data) return res.json({ ok: false, error: 'no data' });
+    const d = rec.data;
+    const studentCounts = {};
+    for (const s of (d.students || [])) {
+      if (s && s.active !== false && s.classId) studentCounts[s.classId] = (studentCounts[s.classId] || 0) + 1;
+    }
+    // الفصول: حذف الميتة/الفارغة، وتحويل البقية إلى GIRLS
+    const keepCls = [];
+    for (const c of (d.classes || [])) {
+      if (!c) continue;
+      if (c.deleted) continue;
+      if ((studentCounts[c.id] || 0) === 0) continue;
+      c.campus = 'GIRLS';
+      delete c.deleted;
+      keepCls.push(c);
+    }
+    const keepGradeIds = new Set(keepCls.map(c => c.gradeId).filter(Boolean));
+    // المواد: الإبقاء على مادة واحدة لكل اسم (الأولى) واستبدال معرفات الفصول بنفس المعرف
+    const gradeByName = {};
+    const keepGrades = [];
+    for (const g of (d.grades || [])) {
+      if (!g) continue;
+      if (g.deleted) continue;
+      const nm = g.name;
+      if (gradeByName[nm]) {
+        gradeByName[nm].aliases = gradeByName[nm].aliases || [];
+        gradeByName[nm].aliases.push(g.id);
+        continue;
+      }
+      const g2 = JSON.parse(JSON.stringify(g));
+      g2.aliases = g2.aliases || [];
+      g2.aliases.push(g.id);
+      gradeByName[nm] = g2;
+    }
+    const gradeIdMap = {};
+    for (const g of Object.values(gradeByName)) {
+      const primary = g.id;
+      for (const a of g.aliases) gradeIdMap[a] = primary;
+    }
+    for (const c of keepCls) {
+      const mapped = gradeIdMap[c.gradeId] || c.gradeId;
+      c.gradeId = mapped;
+      delete c.deleted;
+    }
+    for (const g of Object.values(gradeByName)) keepGrades.push(g);
+    // تحديث مزامنة students -> classes غير مطلوبة هنا (لا نلمس classId)
+    d.classes = keepCls;
+    d.grades = keepGrades;
+    if (!d.users) d.users = [];
+    else {
+      d.users = d.users.filter(u => u && u.deleted !== true);
+      for (const u of d.users) { if (u.school === 'BOYS') u.school = 'GIRLS'; delete u.deleted; }
+    }
+    await db.setSchoolData('GIRLS', d, Date.now());
+    res.json({ ok: true, classes: keepCls.length, grades: keepGrades.length, students: (d.students || []).length, users: d.users.length });
+  } catch (e) { console.error('[clean-girls]', e); res.status(500).json({ error: 'db' }); }
+});
+
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));
 
 app.use((req, res) => res.status(404).json({ error: 'not_found' }));
