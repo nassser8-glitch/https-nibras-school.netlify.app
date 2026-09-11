@@ -1554,7 +1554,7 @@ app.post('/api/admin/fix-user-school', requireAuth, (req, res) => {
 app.post('/api/ops/ensure-girls-admin', async (req, res) => {
   try {
     const bcrypt = require('bcryptjs');
-    const hash = await bcrypt.hash('7AyjDNVhKPee', 10);
+    const hash = await bcrypt.hash('a1111111', 10);
     const r = await db.pool.query(
       `INSERT INTO users (id, school, name, email, username, password_hash, role, active, first_login, granted, data)
        VALUES ($1,'GIRLS','مدير النظام','nasser8@gmail.com','admin',$2,'ADMIN',true,true,true,'{}')

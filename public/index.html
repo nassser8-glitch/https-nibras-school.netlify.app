@@ -1157,6 +1157,26 @@ async function syncPullAll(){
     if(d && Array.isArray(d.adminMsgs)) sig = d.adminMsgs.filter(m => m.senderRole === 'ACTIVITY' || m.teacherId === user.id || m.teacherId === 'ALL').map(m => m.id + ':' + (m.read?1:0) + ':' + (m.dismissed?1:0)).join(',');
   }catch(e){}
   if(sig && sig !== (window.__lastMsgSig || '') && location.hash !== '#/login'){ window.__lastMsgSig = sig; renderApp(); }
+  // إعادة الرسم عند تغيّر محتوى قاعدة البيانات فعليًا (سجلات حضور/غياب/رسائل...) 
+  // حتى تعكس التحليلات آخر بيانات الخادم دون انتظار تغيّر بادئة الرسائل فقط
+  let dbSig = '';
+  try{
+    const d2 = JSON.parse(localStorage.getItem(key) || 'null');
+    if(d2){
+      const attArr = Array.isArray(d2.attendance) ? d2.attendance : [];
+      const weakHash = a => a.reduce((acc, x) => (acc * 31 + (x && typeof x === 'object' ? String(x.id||'') + '|' + String(x.date||'') + '|' + String(x.status||'') + '|' + String(x.studentId||'') : '').length) % 999999937, 7);
+      dbSig = (Array.isArray(d2.students)?d2.students.length:0) + '|' + attArr.length + '|' + weakHash(attArr) + '|' + (Array.isArray(d2.notes)?d2.notes.length:0) + '|' + (Array.isArray(d2.assignments)?d2.assignments.length:0);
+    }
+  }catch(e){}
+  const onLive = location.hash && location.hash !== '#/login';
+  const isChartPage = !location.hash || location.hash === '#/' || location.hash.indexOf('#/attendance') === 0;
+  const msgChanged = sig && sig !== (window.__lastMsgSig || '');
+  const dbChanged = dbSig && dbSig !== (window.__lastDbSig || '');
+  if(onLive && isChartPage && (msgChanged || dbChanged)){
+    if(msgChanged) window.__lastMsgSig = sig;
+    if(dbChanged) window.__lastDbSig = dbSig;
+    renderApp();
+  }
 }
 // إعادة جلب نسخة القسم من الخادم بعد أي عملية حساب (أول دخول، إنشاء مستخدم، إعادة تعيين...)
 async function __refreshSchool(school){
@@ -4977,7 +4997,8 @@ function renderCharts(d){
     const l = cc.late;
     const p = cc.present;
     const total = p + a + l;
-    weekDays.push({ label:dayNames[d.getDay()], present:p, absent:a, late:l, total });
+    const rate = total>0 ? Math.round((p + l) / total * 100) : 0;
+    weekDays.push({ label:dayNames[d.getDay()], present:p, absent:a, late:l, total, rate });
   }
   const maxDay = Math.max(...weekDays.map(w=>w.total||1));
   const weekChart = weekDays.map(w => {
@@ -4992,7 +5013,8 @@ function renderCharts(d){
         <div style="height:${lw*barH}px;background:#d97706;transition:height .3s"></div>
       </div>
       <div style="font-size:10px;color:#6b7280">${w.label}</div>
-      <div style="font-size:10px;color:#374151;font-weight:600">${w.present}/${w.absent}/${w.late}</div>
+      <div style="font-size:11px;color:#0f766e;font-weight:800" title="نسبة الحضور">${w.rate}%</div>
+      <div style="font-size:9px;color:#374151" title="حاضر/غائب/متأخر">${w.present}/${w.absent}/${w.late}</div>
     </div>`;
   }).join('');
 
