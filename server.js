@@ -1554,13 +1554,43 @@ app.post('/api/ops/clean-girls', async (req, res) => {
     // تحديث مزامنة students -> classes غير مطلوبة هنا (لا نلمس classId)
     d.classes = keepCls;
     d.grades = keepGrades;
-    if (!d.users) d.users = [];
-    else {
+    // إزالة تكرار المعلمات: لكل اسم مستخدم نُبقي المعرّف الموجود في جدول users
+    // (الحقيقي)، ونعيد توجيه كل المرجعات (جدول زمني/فصول...) من المعرّف اليتيم إليه.
+    const tRows = await db.pool.query(`SELECT id, username FROM users WHERE school='GIRLS'`);
+    const tableIds = new Set(tRows.rows.map(r => r.id));
+    const idRemap = {};
+    if (Array.isArray(d.users)) {
       d.users = d.users.filter(u => u && u.deleted !== true);
       for (const u of d.users) { if (u.school === 'BOYS') u.school = 'GIRLS'; delete u.deleted; }
+      const byName = {};
+      for (const u of d.users) {
+        (byName[u.username] = byName[u.username] || []).push(u);
+      }
+      const deduped = [];
+      for (const list of Object.values(byName)) {
+        const canonical = list.find(u => tableIds.has(u.id)) || list[0];
+        for (const u of list) {
+          if (u !== canonical) idRemap[u.id] = canonical.id;
+        }
+        deduped.push(canonical);
+      }
+      d.users = deduped;
+    }
+    // إعادة توجيه المرجعات القديمة عبر سلسلة JSON ثم إعادة البناء
+    if (Object.keys(idRemap).length) {
+      let json = JSON.stringify(d);
+      for (const [oldId, newId] of Object.entries(idRemap)) {
+        json = json.split(oldId).join(newId);
+      }
+      const patched = JSON.parse(json);
+      d.classes = patched.classes;
+      d.grades = patched.grades;
+      d.students = patched.students;
+      d.timetable = patched.timetable;
+      d.users = patched.users;
     }
     await db.setSchoolData('GIRLS', d, Date.now());
-    res.json({ ok: true, classes: keepCls.length, grades: keepGrades.length, students: (d.students || []).length, users: d.users.length });
+    res.json({ ok: true, classes: keepCls.length, grades: keepGrades.length, students: (d.students || []).length, users: d.users.length, remapped: Object.keys(idRemap).length });
   } catch (e) { console.error('[clean-girls]', e); res.status(500).json({ error: 'db' }); }
 });
 
