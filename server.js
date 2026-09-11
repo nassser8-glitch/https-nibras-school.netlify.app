@@ -1557,9 +1557,9 @@ app.post('/api/ops/ensure-girls-admin', async (req, res) => {
     const hash = await bcrypt.hash('a1111111', 10);
     const r = await db.pool.query(
       `INSERT INTO users (id, school, name, email, username, password_hash, role, active, first_login, granted, data)
-       VALUES ($1,'GIRLS','مدير النظام','nasser8@gmail.com','admin',$2,'ADMIN',true,true,true,'{}')
+       VALUES ($1,'GIRLS','مدير النظام','nasser8@gmail.com','admin',$2,'ADMIN',true,false,true,'{}')
        ON CONFLICT (username) DO UPDATE SET school='GIRLS', password_hash=EXCLUDED.password_hash,
-         role='ADMIN', active=true, granted=true, first_login=true
+         role='ADMIN', active=true, granted=true, first_login=false
        RETURNING id, school, username, role`,
       ['id_admin_seed', hash]);
     res.json({ ok: true, admin: r.rows[0] });

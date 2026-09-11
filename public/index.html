@@ -929,13 +929,21 @@ async function __syncPush(school){
           });
         }catch(e){ resp = null; }
         if(!resp){ await new Promise(res => setTimeout(res, 1000 * (attempt + 1))); continue; }
-        if(resp.status === 401 || resp.status === 403){ __handleAuthError(resp); return null; }
+        if(resp.status === 401){ __handleAuthError(resp); return null; }
+        if(resp.status === 403){
+          // الحساب ينتظر تغيير كلمة مروره (firstLogin) — الرفع محجوب مؤقتاً.
+          // لا نُنشئ احتياطي «معلّق» ولا نُفعّل منعَ السحب، وإلا حُجبت بياناتُ الخادم
+          // عن اللوحات إلى الأبد وظلّت الإحصائيات قديمة (146/0/0). السحب القادم
+          // يدمج المحلي بالخادم ويُبقي التعديلات محفوظة لدى الجهاز.
+          return { __authBlocked:true };
+        }
         if(resp.status === 200) return resp;
         if(resp.status === 429){ await new Promise(res => setTimeout(res, 2000 * (attempt + 1))); continue; }
         await new Promise(res => setTimeout(res, 1000 * (attempt + 1)));
       }
       return null;
     })();
+    if(respOf && respOf.__authBlocked){ st.lastFail = 0; return; }
     if(respOf){
       try{
         const j = await respOf.json();
