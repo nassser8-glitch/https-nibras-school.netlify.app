@@ -1065,6 +1065,62 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
   })().catch(fail(res));
 });
 
+// ===== تطبيع المعلمات المكررة (مركزي، يُستدعى عند كل حفظ/تنظيف) =====
+// مشكلة تكرار معلمة واحدة بمعرّفين (نسخة قديمة + جديدة). لكل اسم مستخدم نُبقي المعرّف
+// الموجود في جدول users (المصدر الموثوق للمصادقة) ونحوّل الباقي لـ«تومبستون» deleted:true
+// لاصق بالمعرّف اليتيم الأصلي (يمنع أي جهاز قديم يعيد إحياءه)، ونعيد توجيه كل مرجعات اليتيم
+// (تيميتابل/فصول/حضور/ملاحظات...) نحو الحقيقي كي لا تضيع جداول الواصلة.
+async function normalizeTeacherDuplicates(school, data) {
+  if (!data || !Array.isArray(data.users)) return { remapped: 0, dropped: 0 };
+  const tRows = await db.pool.query(`SELECT id FROM users WHERE school=$1`, [school]);
+  const tableIds = new Set(tRows.rows.map(r => r.id));
+  const live = data.users.filter(u => u && u.deleted !== true);
+  const byName = {};
+  for (const u of live) (byName[u.username] = byName[u.username] || []).push(u);
+  // (المعرّف في جدول users) -> أول يتيم ضُمّ إليه
+  const canonToOrphan = {};
+  for (const list of Object.values(byName)) {
+    if (list.length <= 1) continue;
+    const canonical = list.find(u => tableIds.has(u.id)) || list[0];
+    for (const u of list) if (u !== canonical && !canonToOrphan[canonical.id]) canonToOrphan[canonical.id] = u.id;
+  }
+  // إعادة توجيه المرجعات: canonical id هو المصير، واليتيم يُستبدل به في كامل الـ data
+  const remap = {};
+  for (const canonicalId of Object.keys(canonToOrphan)) remap[canonToOrphan[canonicalId]] = canonicalId;
+  // بناء قائمة المستخدمين النهائية من الـ live (قبل الريماب) حتى تحمل التوابة المعرّف اليتيم
+  const out = [];
+  const seen = new Set();
+  for (const u of live) {
+    if (!u) continue;
+    const nm = String(u.username || '');
+    const canonical = (byName[nm] || []).find(x => x && tableIds.has(x.id)) || (byName[nm] || [])[0];
+    const isCanon = canonical && canonical.id === u.id;
+    if (!nm || !isCanon || seen.has(nm)) {
+      out.push(Object.assign({}, u, { deleted: true }));
+      continue;
+    }
+    seen.add(nm);
+    out.push(u);
+  }
+  const dropped = live.length - out.filter(u => u && u.deleted !== true).length;
+  data.users = out;
+  const remapped = Object.keys(remap).length ? remapJsonRefs(data, remap) : 0;
+  return { remapped, dropped };
+}
+// إعادة توجيه معرّفات يتيمة في كل أقسام data ما عدا users (التي سبق بناؤها)
+function remapJsonRefs(data, remap) {
+  const saved = data.users;
+  data.users = [];
+  let json = JSON.stringify(data);
+  for (const [oldId, newId] of Object.entries(remap)) {
+    json = json.replace(new RegExp(String(oldId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), newId);
+  }
+  const patched = JSON.parse(json);
+  for (const k of Object.keys(patched)) data[k] = patched[k];
+  data.users = saved;
+  return Object.keys(remap).length;
+}
+
 app.put('/api/db/:school', requireAuth, (req, res) => {
   (async () => {
     if (rateLimit('dbwrite', 180, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
@@ -1085,6 +1141,12 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       else if (!Array.isArray(data[k])) return res.status(400).json({ error: 'invalid_section:' + k });
     }
     const ts = Number(req.body.ts) || Date.now();
+    // ===== تطبيع المعلمات المكررة عند الحفظ: أي جهاز كان (حتى نسخة قديمة) تمر قائمة
+    // users بترتيب يحذف المعرّف اليتيم لصالح المعرّف الحقيقي + إعادة توجيه مرجعاته.
+    // ننفذ على النسخة الواصلة قبل كل الحمايات حتى يرى المُدمج قائمة نقية.
+    try {
+      await normalizeTeacherDuplicates(school, data);
+    } catch (e) { console.warn('[normalizeTeacherDuplicates]', e.message); }
     const prev = await db.getSchoolData(school);
     const prevUsers = (prev.data && Array.isArray(prev.data.users)) ? prev.data.users : [];
     // ===== حارس ضد المسح الفارغ (wipe-guard) =====
@@ -1221,6 +1283,9 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
 
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
     const clean = JSON.parse(JSON.stringify(data));
+    // تطبيع ثانٍ بعد الدمج: الدمج (mergeSection/mergeClasses...) قد يعيد مرجعات يتيمة
+    // لمعلمات مكررة من نسخة جهاز قديم، فننظف النتيجة النهائية التي ستُخزن.
+    try { await normalizeTeacherDuplicates(school, clean); } catch (e) { console.warn('[normalize#2]', e.message); }
     if (Array.isArray(clean.users) && clean.users.length) {
       const uidSet = new Set(clean.users.map(u => u.id));
       const unameMap = await db.usernamesByIds([...uidSet]);
@@ -1555,50 +1620,11 @@ app.post('/api/ops/clean-girls', async (req, res) => {
     // تحديث مزامنة students -> classes غير مطلوبة هنا (لا نلمس classId)
     d.classes = keepCls;
     d.grades = keepGrades;
-    // إزالة تكرار المعلمات: لكل اسم مستخدم نُبقي المعرّف الموجود في جدول users
-    // (الحقيقي)، ونعيد توجيه كل المرجعات (جدول زمني/فصول...) من المعرّف اليتيم إليه.
-    const tRows = await db.pool.query(`SELECT id, username FROM users WHERE school='GIRLS'`);
-    const tableIds = new Set(tRows.rows.map(r => r.id));
-    if (Array.isArray(d.users)) {
-      const origUsers = d.users.filter(u => u && u.deleted !== true);
-      for (const u of origUsers) { if (u.school === 'BOYS') u.school = 'GIRLS'; delete u.deleted; }
-      // تحديد التكرارات حسب اسم المستخدم: الحقيقي (موجود بجدول users) يُبقي، والباقي يتيم
-      const byName = {};
-      for (const u of origUsers) (byName[u.username] = byName[u.username] || []).push(u);
-      const remap = {};
-      for (const list of Object.values(byName)) {
-        if (list.length === 1) continue;
-        const canonical = list.find(u => tableIds.has(u.id)) || list[0];
-        for (const u of list) if (u !== canonical) remap[u.id] = canonical.id;
-      }
-      // المرحلة 1: إعادة توجيه المرجعات في كامل الأقسام (فصول/جدول/...) ما عدا users.
-      // نفصل users مؤقتاً كي لا يُعاد كتابة معرّفات التوابيت المرتقبة.
-      d.users = [];
-      if (Object.keys(remap).length) {
-        let json = JSON.stringify(d);
-        for (const [oldId, newId] of Object.entries(remap)) json = json.split(oldId).join(newId);
-        const patched = JSON.parse(json);
-        for (const k of Object.keys(patched)) d[k] = patched[k];
-      }
-      // المرحلة 2: بناء قائمة المستخدمين — اليتيم «تومبستون» deleted:true بالمعرّف الأصلي
-      // (لاصق): أي جهاز قديم يدفع نسخة بمعرّف يتيم يُسقطها الدمج ولا يعود التكرار.
-      const seen = new Set();
-      d.users = [];
-      for (const u of origUsers) {
-        const nm = String(u.username || '');
-        if (remap[u.id] ||
-            (nm && seen.has(nm)) ||
-            (nm === '' && u.id && d.users.some(x => x.id === u.id))) {
-          d.users.push(Object.assign({}, u, { deleted: true }));
-          continue;
-        }
-        if (nm) seen.add(nm);
-        d.users.push(u);
-      }
-    }
+    // إزالة تكرار المعلمات عبر الدالة المركزية (تومبستون لاصق + إعادة توجيه المرجعات)
+    const normRes = await normalizeTeacherDuplicates('GIRLS', d);
     await db.setSchoolData('GIRLS', d, Date.now());
     const tombCount = d.users.filter(u => u && u.deleted).length;
-    res.json({ ok: true, classes: keepCls.length, grades: keepGrades.length, students: (d.students || []).length, users: d.users.filter(u => u && u.deleted !== true).length, tombstones: tombCount });
+    res.json({ ok: true, classes: keepCls.length, grades: keepGrades.length, students: (d.students || []).length, users: d.users.filter(u => u && u.deleted !== true).length, tombstones: tombCount, remapped: normRes.remapped, dropped: normRes.dropped });
   } catch (e) { console.error('[clean-girls]', e); res.status(500).json({ error: String(e && e.message || e) }); }
 });
 
