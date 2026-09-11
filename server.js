@@ -1464,6 +1464,20 @@ app.use((req,res,next)=>{
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   next();
 });
+
+// نقطة مؤقتة لإصلاح school في جدول users (تُشغّل مرة واحدة ثم تُحذف)
+app.post('/api/admin/fix-user-school', requireAuth, (req, res) => {
+  if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+  const { userId, newSchool } = req.body || {};
+  if (!userId || !newSchool) return res.status(400).json({ error: 'missing userId/newSchool' });
+  db.pool.query('UPDATE users SET school = $1 WHERE id = $2 RETURNING id, school', [newSchool, userId])
+    .then(r => {
+      if (!r.rows.length) return res.status(404).json({ error: 'user not found' });
+      res.json({ ok: true, user: r.rows[0] });
+    })
+    .catch(e => { console.error('[fix-user-school]', e); res.status(500).json({ error: 'db' }); });
+});
+
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));
 
 app.use((req, res) => res.status(404).json({ error: 'not_found' }));
