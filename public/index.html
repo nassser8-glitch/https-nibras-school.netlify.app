@@ -1884,17 +1884,9 @@ function renderApp(){
   if(!user){ app.innerHTML = renderLogin(); return; }
   if(hash === '#/login'){ location.hash = '#/'; return; }
   if(!localStorage.getItem(SCHOOL_KEY)){
-    if(user.firstLogin && user.role !== 'STUDENT'){
-      const us = getUserSchool() || 'GIRLS';
-      setActiveSchool(us);
-      renderApp();
-      return;
-    }
-    if(user.role !== 'ADMIN' && !(user.allSchools)){
-      const us = getUserSchool();
-      if(us){ setActiveSchool(us); renderApp(); return; }
-    }
-    app.innerHTML = renderSchoolSelect(); return;
+    setActiveSchool(getUserSchool() || 'GIRLS');
+    renderApp();
+    return;
   }
   // أول دخول لأي مستخدم: تعيين كلمة مرور قوية قبل استخدام النظام (الطلاب يستثنون)
   if(user.firstLogin && user.role !== 'STUDENT'){
@@ -2487,78 +2479,6 @@ function barMeter(value, max, color){
   const pct = max > 0 ? Math.min(value / max * 100, 100) : 0;
   return `<div style="background:#f3f4f6;border-radius:6px;height:8px;overflow:hidden;margin-top:4px"><div style="width:${pct}%;height:100%;background:${color};border-radius:6px;transition:width .3s"></div></div>`;
 }
-function renderSchoolSelect(){
-  const user = currentUser();
-  const userRole = user?.role || '';
-  const isAdmin = userRole === 'ADMIN';
-  // غير المدير: نحدد أي مدرسة ينتمي إليها
-  const userSchool = !isAdmin ? (() => {
-    const sessionId = localStorage.getItem(LOCAL_SESSION_KEY);
-    if(!sessionId) return null;
-    // نبحث في بنين وبنات
-    for(const s of ['BOYS','GIRLS']){
-      const d = JSON.parse(localStorage.getItem('nibras_'+s+'_db_v1') || 'null');
-      if(d && d.users.some(u => u.id === sessionId && u.active)) return s;
-    }
-    return null;
-  })() : null;
-  // الإداري الشامل (allSchools) يرى كلا القسمين كالمدير
-  const canAll = isAdmin || !!(user && user.allSchools);
-
-  const boys = null;
-  const girls = (canAll || userSchool === 'GIRLS') ? getSchoolOverview('GIRLS') : null;
-
-  function panelHtml(school, data){
-    if(!data) return '';
-    const isBoys = school === 'BOYS';
-    const label = isBoys ? 'البنين' : 'البنات';
-    const icon = isBoys ? '👦' : '👧';
-    const cls = isBoys ? 'boys' : 'girls';
-    const attRate = data.students ? (data.present + data.late) / data.students * 100 : 0;
-    const maxStudents = Math.max((boys&&boys.students)||0, (girls&&girls.students)||0, 1);
-    const maxClasses = Math.max((boys&&boys.classes)||0, (girls&&girls.classes)||0, 1);
-    const tls = t => isBoys ? t : (feminineLabels[t] || t);
-    return `
-      <div class="school-panel ${cls}" onclick="enterSchool('${school}')">
-        <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
-          <div style="flex-shrink:0">${donutChart(data.present, data.absent, data.late)}</div>
-          <div style="flex:1;min-width:0">
-            <div class="school-panel-header" style="margin-bottom:8px">
-              <span class="school-panel-icon">${icon}</span>
-              <h2 class="school-panel-title" style="font-size:17px">قسم ${label}</h2>
-            </div>
-            <div style="display:flex;flex-wrap:wrap;gap:4px 8px;font-size:12px;color:#6b7280">
-              <span><span style="color:#16a34a;font-weight:600">${data.present}</span> حاضر</span>
-              <span><span style="color:#dc2626;font-weight:600">${data.absent}</span> غائب</span>
-              <span><span style="color:#d97706;font-weight:600">${data.late}</span> متأخر</span>
-              <span style="font-weight:600;color:${attRate >= 90 ? '#16a34a' : attRate >= 70 ? '#d97706' : '#dc2626'}">${fmtRate(attRate)}</span>
-            </div>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-          <div class="school-stat-box"><span class="num">${data.students}</span><span class="lbl">${tls('الطلاب')}</span>${barMeter(data.students, maxStudents, isBoys?'#1d4ed8':'#be185d')}</div>
-          <div class="school-stat-box"><span class="num">${data.classes}</span><span class="lbl">الفصول</span>${barMeter(data.classes, maxClasses, isBoys?'#1d4ed8':'#be185d')}</div>
-          <div class="school-stat-box"><span class="num">${data.teachers}</span><span class="lbl">${tls('المعلمون')}</span></div>
-          <div class="school-stat-box"><span class="num">${data.pendingTransfers}</span><span class="lbl">التحويلات</span></div>
-        </div>
-        <button class="school-enter-btn">دخول إلى القسم</button>
-  </div>`;
-  }
-  return `
-  <div class="school-dash">
-    <div class="school-dash-header">
-      <h1>المدرسة السعودية في إسلام آباد</h1>
-    </div>
-    <div class="school-dash-grid">
-      ${panelHtml('GIRLS', girls)}
-    </div>
-    ${!boys && !girls ? `<p style="text-align:center;color:#dc2626;font-weight:600;margin-top:8px">ليست لديك صلاحية للدخول إلى أي قسم — تواصل مع مدير النظام</p>` : ''}
-    ${copyMessage ? `<div id="copyMsg" style="text-align:center;margin-top:16px;font-size:14px;font-weight:600;color:#16a34a">${copyMessage}</div>` : ''}
-    <div style="text-align:center;margin-top:20px">
-      <a style="color:#6b7280;font-size:13px;cursor:pointer;text-decoration:underline;line-height:36px" onclick="logout()">تسجيل الخروج</a>
-    </div>
-  </div>`;
-}
 /* ============ لوحة الأوائل للطالب ============ */
 function renderStudentLeaders(){
   const d = loadDB();
@@ -2651,27 +2571,6 @@ function ensureUserInDB(school, sessionId){
     saveDB(d);
   }
 }
-function enterSchool(school){
-  if(school !== 'GIRLS') school = 'GIRLS';
-  setActiveSchool(school);
-  const d = loadDB();
-  const sessionId = localStorage.getItem(LOCAL_SESSION_KEY);
-  ensureUserInDB(school, sessionId);
-  if(d.classes.length === 0 && d.grades.length === 0 && d.students.length === 0){
-    stages.forEach(stage => {
-      let grade = d.grades.find(g => g.name === stage.name);
-      if(!grade){ grade = { id:uid(), name:stage.name, order:stage.order }; d.grades.push(grade); }
-      if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ')){
-        d.classes.push({ id:uid(), gradeId:grade.id, name:'أ', campus:school, capacity:null, teacherIds:[] });
-      }
-    });
-    saveDB(d);
-    ensureUserInDB(school, sessionId);
-  }
-  location.hash = '#/';
-  renderApp();
-}
-
 /* ============ الإطار العام (القائمة الجانبية) ============ */
 function renderAbout(){
   const user = currentUser();
@@ -2850,7 +2749,6 @@ function renderLayout(user, hash){
               <div class="topbar-user-name">${escapeHtml(user.name)}</div>
               <div class="topbar-user-role">${roleLabel(user.role)}</div>
             </div>
-            ${(user.role==='ADMIN' || user.allSchools) ? `<button class="btn-secondary" style="padding:7px 12px" onclick="switchSchool()">🔀 تبديل القسم</button>` : ''}
             <button class="btn-secondary" style="padding:7px 12px" onclick="logout()">🚪 خروج</button>
           </div>
         </div>
@@ -2872,11 +2770,6 @@ function renderLayout(user, hash){
     </div>
     <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v55</span></footer>
   </div>`;
-}
-function switchSchool(){
-  localStorage.removeItem(SCHOOL_KEY);
-  location.hash = '#/';
-  renderApp();
 }
 function toggleSidebar(forceClose){
   const sb = document.getElementById('sidebar');
