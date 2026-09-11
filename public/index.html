@@ -5035,14 +5035,92 @@ function buildWeekChart(db, idsArr){
   const sig = weekDays.map(w => w.label+':'+w.present+':'+w.absent+':'+w.late+':'+w.rate).join('|');
   return { html, sig };
 }
-// تحديث الرسم الأسبوعي مباشرة من الخادم كل فترة — فلا تتأثر الإحصائية بتأخر/تعطل المزامنة المحلية
+// رسم شهري (مقارنة أسابيع الشهر) من أي نسخة قاعدة بيانات
+function buildMonthChart(db, idsArr){
+  const now = new Date();
+  const fmt = dt => dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+  const ids = Array.from(idsArr || []);
+  const year = now.getFullYear(), month = now.getMonth();
+  const monthStart = new Date(year, month, 1);
+  const monthEnd = new Date(year, month+1, 0);
+  const weeks = [];
+  let wkStart = new Date(monthStart);
+  while(wkStart <= monthEnd){
+    const wkEnd = new Date(wkStart); wkEnd.setDate(wkStart.getDate() + 6);
+    if(wkEnd > monthEnd) wkEnd.setTime(monthEnd.getTime());
+    let presentSum = 0, daysWithRecs = 0;
+    const dIter = new Date(wkStart);
+    while(dIter <= wkEnd){
+      const ds = fmt(dIter);
+      const cc = attCountsByDate(db, ds, ids);
+      if(cc.records > 0){ presentSum += cc.present + cc.late; daysWithRecs++; }
+      dIter.setDate(dIter.getDate() + 1);
+    }
+    const expected = daysWithRecs * ids.length;
+    weeks.push({ label:`${wkStart.getDate()}-${wkEnd.getDate()}`, rate:expected>0?Math.round(presentSum/expected*100):0, total:daysWithRecs });
+    wkStart.setDate(wkStart.getDate() + 7);
+  }
+  const html = weeks.length ? weeks.map(w => {
+    const pct = w.rate;
+    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <span style="width:42px;font-size:11px;color:#6b7280;text-align:left">${w.label}</span>
+      <div style="flex:1;height:14px;background:#f3f4f6;border-radius:999px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${pct>=75?'#16a34a':pct>=50?'#d97706':'#dc2626'};border-radius:999px;transition:width .3s"></div>
+      </div>
+      <span style="width:34px;font-size:11px;font-weight:600;color:#374151;text-align:center">${pct}%</span>
+    </div>`;
+  }).join('') : '';
+  const sig = weeks.map(w => w.label+':'+w.rate+':'+w.total).join('|');
+  return { html, sig };
+}
+// رسم فصلي (مقارنة أشهر الفصل الدراسي) من أي نسخة قاعدة بيانات
+function buildQuarterChart(db, idsArr){
+  const now = new Date();
+  const fmt = dt => dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+  const ids = Array.from(idsArr || []);
+  const year = now.getFullYear(), month = now.getMonth();
+  const quarter = Math.floor(month / 3);
+  const mNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  const qMonths = [];
+  for(let i=0; i<3; i++){
+    const m = quarter*3 + i;
+    const mStart = new Date(year, m, 1);
+    const mEnd = new Date(year, m+1, 0);
+    let presentSum = 0, daysWithRecs = 0;
+    const dIter = new Date(mStart);
+    while(dIter <= mEnd){
+      const ds = fmt(dIter);
+      const cc = attCountsByDate(db, ds, ids);
+      if(cc.records > 0){ presentSum += cc.present + cc.late; daysWithRecs++; }
+      dIter.setDate(dIter.getDate() + 1);
+    }
+    const expected = daysWithRecs * ids.length;
+    qMonths.push({ label:mNames[m], rate:expected>0?Math.round(presentSum/expected*100):0, total:daysWithRecs });
+  }
+  const html = qMonths.length ? qMonths.map(m => {
+    const pct = m.rate;
+    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <span style="width:48px;font-size:11px;color:#6b7280;text-align:left">${m.label}</span>
+      <div style="flex:1;height:14px;background:#f3f4f6;border-radius:999px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${pct>=75?'#16a34a':pct>=50?'#d97706':'#dc2626'};border-radius:999px;transition:width .3s"></div>
+      </div>
+      <span style="width:34px;font-size:11px;font-weight:600;color:#374151;text-align:center">${pct}%</span>
+    </div>`;
+  }).join('') : '';
+  const sig = qMonths.map(m => m.label+':'+m.rate+':'+m.total).join('|');
+  return { html, sig };
+}
+// تحديث الرسوم الثلاثة (أسبوعي/شهري/فصلي) مباشرة من الخادم كل فترة —
+// فلا تتأثر الإحصائيات بتأخر/تعطل المزامنة المحلية
 async function __refreshAnalyticsCharts(){
   if(!__serverEnabled()) return;
   const user = currentUser();
   if(!user || !isManager(user)) return;
   const school = user.school || getActiveSchool();
-  const box = document.getElementById('weekChartBox');
-  if(!box) return;
+  const boxW = document.getElementById('weekChartBox');
+  const boxM = document.getElementById('monthChartBox');
+  const boxQ = document.getElementById('quarterChartBox');
+  if(!boxW && !boxM && !boxQ) return;
   try{
     const resp = await fetch(SYNC_API + school);
     if(resp.status === 401){ __handleAuthError(resp); return; }
@@ -5051,10 +5129,20 @@ async function __refreshAnalyticsCharts(){
     if(!j || !j.data) return;
     const d = j.data;
     const ids = (Array.isArray(d.students) ? d.students : []).filter(s => s && s.active).map(s => s.id);
-    const res = buildWeekChart(d, ids);
-    if(res.sig !== (window.__weekChartSig || '')){
-      window.__weekChartSig = res.sig;
-      box.innerHTML = res.html;
+    const wRes = buildWeekChart(d, ids);
+    if(boxW && wRes.sig !== (window.__weekChartSig || '')){
+      window.__weekChartSig = wRes.sig;
+      boxW.innerHTML = wRes.html || '';
+    }
+    const mRes = buildMonthChart(d, ids);
+    if(boxM && mRes.sig !== (window.__monthChartSig || '')){
+      window.__monthChartSig = mRes.sig;
+      boxM.innerHTML = mRes.html || '<p class="muted small">لا توجد بيانات</p>';
+    }
+    const qRes = buildQuarterChart(d, ids);
+    if(boxQ && qRes.sig !== (window.__quarterChartSig || '')){
+      window.__quarterChartSig = qRes.sig;
+      boxQ.innerHTML = qRes.html || '<p class="muted small">لا توجد بيانات</p>';
     }
   }catch(e){}
 }
@@ -5075,70 +5163,12 @@ function renderCharts(d){
   const weekChart = weekRes.html;
 
   // 2) رسم بياني شهري (مقارنة أسابيع الشهر)
-  const year = now.getFullYear(), month = now.getMonth();
-  const monthStart = new Date(year, month, 1);
-  const monthEnd = new Date(year, month+1, 0);
-  const weeks = [];
-  let wkStart = new Date(monthStart);
-  while(wkStart <= monthEnd){
-    const wkEnd = new Date(wkStart); wkEnd.setDate(wkStart.getDate() + 6);
-    if(wkEnd > monthEnd) wkEnd.setTime(monthEnd.getTime());
-    const s = fmt(wkStart), e_ = fmt(wkEnd);
-    let presentSum = 0, daysWithRecs = 0;
-    const dIter = new Date(wkStart);
-    while(dIter <= wkEnd){
-      const ds = fmt(dIter);
-      const cc = attCountsByDate(d, ds, Array.from(visibleIds));
-      if(cc.records > 0){ presentSum += cc.present + cc.late; daysWithRecs++; }
-      dIter.setDate(dIter.getDate() + 1);
-    }
-    const expected = daysWithRecs * visibleIds.size;
-    weeks.push({ label:`${wkStart.getDate()}-${wkEnd.getDate()}`, rate:expected>0?Math.round(presentSum/expected*100):0, total:daysWithRecs });
-    wkStart.setDate(wkStart.getDate() + 7);
-  }
-  const maxWk = Math.max(...weeks.map(w=>w.rate||1));
-  const monthChart = weeks.map(w => {
-    const pct = w.rate;
-    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-      <span style="width:42px;font-size:11px;color:#6b7280;text-align:left">${w.label}</span>
-      <div style="flex:1;height:14px;background:#f3f4f6;border-radius:999px;overflow:hidden">
-        <div style="width:${pct}%;height:100%;background:${pct>=75?'#16a34a':pct>=50?'#d97706':'#dc2626'};border-radius:999px;transition:width .3s"></div>
-      </div>
-      <span style="width:34px;font-size:11px;font-weight:600;color:#374151;text-align:center">${pct}%</span>
-    </div>`;
-  }).join('');
+  const monthRes = buildMonthChart(d, Array.from(visibleIds));
+  const monthChart = monthRes.html;
 
   // 3) رسم بياني فصلي (مقارنة أشهر الفصل الدراسي)
-  const quarter = Math.floor(month / 3);
-  const qMonths = [];
-  for(let i=0; i<3; i++){
-    const m = quarter*3 + i;
-    const mStart = new Date(year, m, 1);
-    const mEnd = new Date(year, m+1, 0);
-    const s = fmt(mStart), e_ = fmt(mEnd);
-    let presentSum = 0, daysWithRecs = 0;
-    const dIter = new Date(mStart);
-    while(dIter <= mEnd){
-      const ds = fmt(dIter);
-      const cc = attCountsByDate(d, ds, Array.from(visibleIds));
-      if(cc.records > 0){ presentSum += cc.present + cc.late; daysWithRecs++; }
-      dIter.setDate(dIter.getDate() + 1);
-    }
-    const expected = daysWithRecs * visibleIds.size;
-    const mNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-    qMonths.push({ label:mNames[m], rate:expected>0?Math.round(presentSum/expected*100):0, total:daysWithRecs });
-  }
-  const maxQ = Math.max(...qMonths.map(m=>m.rate||1));
-  const qChart = qMonths.map(m => {
-    const pct = m.rate;
-    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-      <span style="width:48px;font-size:11px;color:#6b7280;text-align:left">${m.label}</span>
-      <div style="flex:1;height:14px;background:#f3f4f6;border-radius:999px;overflow:hidden">
-        <div style="width:${pct}%;height:100%;background:${pct>=75?'#16a34a':pct>=50?'#d97706':'#dc2626'};border-radius:999px;transition:width .3s"></div>
-      </div>
-      <span style="width:34px;font-size:11px;font-weight:600;color:#374151;text-align:center">${pct}%</span>
-    </div>`;
-  }).join('');
+  const quarterRes = buildQuarterChart(d, Array.from(visibleIds));
+  const qChart = quarterRes.html;
 
   return `
   <div class="card" style="padding:14px">
@@ -5150,11 +5180,11 @@ function renderCharts(d){
       </div>
       <div style="min-width:0">
         <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:4px">📆 شهري — مقارنة الأسابيع</div>
-        <div style="padding-top:6px">${monthChart||'<p class="muted small">لا توجد بيانات</p>'}</div>
+        <div id="monthChartBox" style="padding-top:6px">${monthChart||'<p class="muted small">لا توجد بيانات</p>'}</div>
       </div>
       <div style="min-width:0">
         <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:4px">🗓 فصلي — مقارنة الأشهر</div>
-        <div style="padding-top:6px">${qChart||'<p class="muted small">لا توجد بيانات</p>'}</div>
+        <div id="quarterChartBox" style="padding-top:6px">${qChart||'<p class="muted small">لا توجد بيانات</p>'}</div>
       </div>
     </div>
     <div style="display:flex;justify-content:center;gap:16px;margin-top:12px;padding-top:10px;border-top:1px dashed var(--border-color,#eef2f7);font-size:11px">
