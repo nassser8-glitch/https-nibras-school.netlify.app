@@ -994,6 +994,19 @@ async function __syncPull(school){
     // ندفع الاحتياطي أولاً ثم نعود للجلب لاحقاً.
     let pendExists = false;
     try{ pendExists = !!localStorage.getItem(pendKey); }catch(e){}
+    // إن كان الاحتياطي قديماً (لا يحوي تعديلات أحدث من التخزين الحالي)، فهو بقايا رفعٍ محجوب
+    // (403 انتظار تغيير كلمة المرور) علّقت السحبَ إلى الأبد — نزيله فنستعيد جلب بيانات الخادم.
+    if(pendExists){
+      let pendStale = false;
+      try{
+        const pend = JSON.parse(localStorage.getItem(pendKey));
+        pendStale = !pend || !local || __syncTS(pend) <= __syncTS(local);
+      }catch(e){ pendStale = true; }
+      if(pendStale){
+        try{ localStorage.removeItem(pendKey); }catch(e){}
+        pendExists = false;
+      }
+    }
     const localIsEmptySeed = local && Array.isArray(local.classes) && local.classes.length === 0 && Array.isArray(local.students) && local.students.length === 0;
     const serverHasData = (j.data.students && j.data.students.length > 0) || (j.data.classes && j.data.classes.length > 0);
     if(pendExists){
