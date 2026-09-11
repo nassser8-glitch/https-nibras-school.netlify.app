@@ -239,27 +239,72 @@ async function maintenanceBypassKey() {
   } catch (_) { return null; }
 }
 const MAINT_PAGE = `<!DOCTYPE html>
-<html lang="ar" dir="rtl"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>نبراس — صيانة</title>
-<style>
-  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-    font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#f3f6fb;color:#22304a}
-  .box{max-width:460px;background:#fff;border-radius:16px;padding:44px 40px;text-align:center;
-    box-shadow:0 10px 30px rgba(31,45,90,.12)}
-  .dot{width:58px;height:58px;margin:0 auto 22px;border-radius:50%;
-    background:#eef2fb;display:flex;align-items:center;justify-content:center;
-    font-size:30px;color:#3451b2}
-  h1{font-size:22px;margin:0 0 10px}
-  p{font-size:15px;line-height:1.8;color:#5a6a8a;margin:0}
-  .pill{margin-top:20px;font-size:12px;color:#8794b0;background:#f4f7fd;border-radius:999px;
-    padding:6px 14px;display:inline-block}
-</style></head><body><div class="box">
-  <div class="dot">&#9881;</div>
-  <h1>النظام في صيانة</h1>
-  <p>نعمل حالياً على إجراء تحسينات على النظام، وسيعود للعمل قريباً بإذن الله.<br>شكراً لصبركم.</p>
-  <div class="pill">نبراس — منصة إدارة المدارس</div>
-</div></body></html>`;
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الموقع تحت الصيانة | مدرسة النبراس</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+        .icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+            color: #2563eb;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 12px;
+            color: #1e293b;
+        }
+        p {
+            font-size: 16px;
+            color: #64748b;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+        .status {
+            display: inline-block;
+            background: #eff6ff;
+            color: #2563eb;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">&#128736;&#65039;</div>
+        <h1>الموقع قيد الصيانة حالياً</h1>
+        <p>نعمل حالياً على إجلاء بعض التحديثات وتحسين جودة الخدمة. سنعود للعمل قريباً جداً، شكراً لتفهمكم.</p>
+        <div class="status">سنعود خلال وقت قصير</div>
+    </div>
+</body>
+</html>`;
 app.use((req, res, next) => {
   maintenanceOn().then(on => {
     if (!on || req.path === '/api/health') return next();
