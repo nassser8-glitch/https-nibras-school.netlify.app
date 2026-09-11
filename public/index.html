@@ -1145,12 +1145,12 @@ async function syncPullAll(){
   if(!__serverEnabled()) return;
   const user = currentUser();
   if(!user) return;
-  const schools = user.role === 'ADMIN' ? ['BOYS','GIRLS'] : [user.school];
+  const schools = [user.school || 'GIRLS'];
   await Promise.all(schools.map(s => __syncPull(s)));
   await Promise.all(schools.filter(Boolean).map(s => __getSchoolSettings(s)));
   // عرض الإشعارات الجديدة فور وصولها دون انتظار تحديث يدوي للصفحة
   // (السحب الدوري يجلب الرسائل إلى التخزين، لكن بدون إعادة الرسم لا تظهر للوكيل/الموجهة/المدير)
-  const key = 'nibras_'+(user.school||'BOYS')+'_db_v1';
+  const key = 'nibras_'+(user.school||'GIRLS')+'_db_v1';
   let sig = '';
   try{
     const d = JSON.parse(localStorage.getItem(key) || 'null');
@@ -1295,7 +1295,7 @@ if(!__serverEnabled()){
         }catch(e){}
       }
     }
-    localStorage.setItem(SCHOOL_KEY, __sch || 'BOYS');
+    localStorage.setItem(SCHOOL_KEY, __sch || 'GIRLS');
   }
   try{ localStorage.removeItem('nibras_null_db_v1'); }catch(e){}
 }
@@ -1484,29 +1484,8 @@ function ensureDefaultAccounts(){
     return;
   }
   const defs = [
-    { school:'BOYS', name:'بخيت', email:'wakil@nibras.local', password:null, role:'AGENT' },
     { school:'GIRLS', name:'باسمه', email:'wakilah@nibras.local', password:null, role:'AGENT' },
-    { school:'BOYS', name:'بشار', email:'counselor@nibras.local', password:null, role:'COUNSELOR' },
     { school:'GIRLS', name:'خديجة', email:'counselor_girls@nibras.local', password:null, role:'COUNSELOR' },
-    { school:'BOYS', name:'بشار مصطفى محمود طنيش', email:'bishar@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'تركي حمدان عايد العنزي', email:'turki@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'خالد يوسف إبراهيم قاسم', email:'khaled@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'سلمان محمد محمد هاشم', email:'salman@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'سلوم صلاح شفيق حسن', email:'saloum@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'طارق مقصود ميان خورشيد', email:'tarek@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'عبد الواسع هارون الرشيد محمد الدين الحساس', email:'abdelwasea@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'عبدالحنان عبدالرؤوف بخش شير بلوج', email:'abdelhannan@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'عبدالرحمن محمد محسن حميدي', email:'abdelrahman@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'عبدالعزيز بن عبدالله بن سعيد حويس الزهراني', email:'abdelaziz@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'عبدالله عائش سميح النفيعي', email:'abdullah.n@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'عبدالمالك عبد القيوم', email:'abdelmalek@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'علاء عبدالمنعم عبدالسلام إبراهيم', email:'alaa@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'فهد عيد حصين اليامي', email:'fahad@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'مركز أحمد بابكر', email:'markaz@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'مساعد بداح فهد السهلي', email:'mosaed@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'منصور علي منصور الحميدي', email:'mansour@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'هاني فائق محمد شعشاعة', email:'hani@nibras.local', password:null, role:'TEACHER' },
-    { school:'BOYS', name:'يحيى مقصود أحمد حسين حسين', email:'yahya@nibras.local', password:null, role:'TEACHER' },
     { school:'GIRLS', name:'الشيماء سامي محمد العجمي', email:'alshaima@nibras.local', password:null, role:'TEACHER' },
     { school:'GIRLS', name:'آمال عبدالرحيم كامل شلقامي', email:'amal.a@nibras.local', password:null, role:'TEACHER' },
     { school:'GIRLS', name:'أمل عبدالكريم سعيد الشامي', email:'amal.s@nibras.local', password:null, role:'TEACHER' },
@@ -1546,7 +1525,7 @@ function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.get
 function escapeHtml(str){ return String(str??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ============ إدارة القسم المدرسي ============ */
-function getActiveSchool(){ return localStorage.getItem(SCHOOL_KEY) || 'BOYS'; }
+function getActiveSchool(){ return localStorage.getItem(SCHOOL_KEY) || 'GIRLS'; }
 function setActiveSchool(school){ localStorage.setItem(SCHOOL_KEY, school); }
 function dbKey(){ const s = getActiveSchool(); return 'nibras_' + s + '_db_v1'; }
 
@@ -1691,11 +1670,8 @@ async function login(login, password){
       if(r.status === 200 && r.j && r.j.user){
         __sessionUser = r.j.user;
         __mirrorSet(r.j.user);
-        if(r.j.user.role === 'ADMIN'){
-          localStorage.removeItem(SCHOOL_KEY);
-        } else {
-          localStorage.setItem(SCHOOL_KEY, r.j.user.school);
-        }
+        localStorage.setItem(SCHOOL_KEY, r.j.user.school || 'GIRLS');
+        try{ localStorage.removeItem('nibras_BOYS_db_v1'); }catch(e){}
         return { ok:true };
       }
       if(r.status === 429) return { ok:false, error:'rate_limited' };
@@ -1867,7 +1843,7 @@ function renderApp(){
   if(hash === '#/login'){ location.hash = '#/'; return; }
   if(!localStorage.getItem(SCHOOL_KEY)){
     if(user.firstLogin && user.role !== 'STUDENT'){
-      const us = getUserSchool() || 'BOYS';
+      const us = getUserSchool() || 'GIRLS';
       setActiveSchool(us);
       renderApp();
       return;
@@ -2485,7 +2461,7 @@ function renderSchoolSelect(){
   // الإداري الشامل (allSchools) يرى كلا القسمين كالمدير
   const canAll = isAdmin || !!(user && user.allSchools);
 
-  const boys = (canAll || userSchool === 'BOYS') ? getSchoolOverview('BOYS') : null;
+  const boys = null;
   const girls = (canAll || userSchool === 'GIRLS') ? getSchoolOverview('GIRLS') : null;
 
   function panelHtml(school, data){
@@ -2530,7 +2506,6 @@ function renderSchoolSelect(){
       <h1>المدرسة السعودية في إسلام آباد</h1>
     </div>
     <div class="school-dash-grid">
-      ${panelHtml('BOYS', boys)}
       ${panelHtml('GIRLS', girls)}
     </div>
     ${!boys && !girls ? `<p style="text-align:center;color:#dc2626;font-weight:600;margin-top:8px">ليست لديك صلاحية للدخول إلى أي قسم — تواصل مع مدير النظام</p>` : ''}
@@ -2633,24 +2608,10 @@ function ensureUserInDB(school, sessionId){
   }
 }
 function enterSchool(school){
+  if(school !== 'GIRLS') school = 'GIRLS';
   setActiveSchool(school);
   const d = loadDB();
   const sessionId = localStorage.getItem(LOCAL_SESSION_KEY);
-  // إن كانت البنات فارغة والبنين فيها بيانات → نسخ تلقائي
-  if(school === 'GIRLS' && d.students.length === 0 && d.grades.length === 0){
-    const prevKey = localStorage.getItem(SCHOOL_KEY);
-    localStorage.setItem(SCHOOL_KEY, 'BOYS');
-    const boysDB = loadDB();
-    localStorage.setItem(SCHOOL_KEY, school);
-    if(boysDB.students.length > 0){
-      copyBoysToGirls();
-      ensureUserInDB('GIRLS', sessionId);
-      setActiveSchool('GIRLS');
-      location.hash = '#/';
-      renderApp();
-      return;
-    }
-  }
   ensureUserInDB(school, sessionId);
   if(d.classes.length === 0 && d.grades.length === 0 && d.students.length === 0){
     stages.forEach(stage => {
