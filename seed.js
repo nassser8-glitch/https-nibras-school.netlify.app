@@ -26,7 +26,7 @@ async function ensureAdminAccount() {
   const hash = await bcrypt.hash(temp, BCRYPT_ROUNDS);
   await db.insertUser({
     id: 'id_admin_seed',
-    school: 'BOYS',
+    school: 'GIRLS',
     name: 'مدير النظام',
     email: 'admin@nibras.local',
     username: 'admin',

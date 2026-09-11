@@ -210,7 +210,7 @@ if (process.env.FORCE_HTTPS === '1') {
 
 /* ================= وضع الصيانة ================= */
 // واضح ومباشر: غيّر هذا المتغير إلى false عند الانتهاء.
-const isMaintenanceMode = true;
+const isMaintenanceMode = false;
 const MAINT_CACHE_MS = 5000;
 const MAINT_BYPASS_COOKIE = 'nibras_maint_bypass';
 const MAINT_BYPASS_TTL = 6 * 60 * 60 * 1000; // 6 ساعات

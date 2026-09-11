@@ -8,7 +8,7 @@ const DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres:Nibras@Pos
 
 const pool = new Pool({ connectionString: DATABASE_URL, max: 10 });
 
-const SCHOOLS = ['BOYS', 'GIRLS'];
+const SCHOOLS = ['GIRLS'];
 
 async function initSchema() {
   const client = await pool.connect();
