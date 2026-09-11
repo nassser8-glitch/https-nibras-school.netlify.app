@@ -2870,7 +2870,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v54</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v55</span></footer>
   </div>`;
 }
 function switchSchool(){
@@ -2987,6 +2987,18 @@ function notifItemsFor(user){
   if(!user) return [];
   const d = loadDB();
   const items = [];
+  // الطالبات: يظهر لهن إشعار بالجرس عن كل تكليف جديد صدر لفصلهن
+  if(user.role === 'STUDENT'){
+    const myStudent = (d.students||[]).find(s => s.id === user.id);
+    if(myStudent && myStudent.classId){
+      (d.assignments||[]).forEach(a => {
+        if(a && !a.deleted && a.classId === myStudent.classId && (a.created||0) > 0){
+          items.push({ kind:'assign', href:'#/assignments', title:'📝 تكليف جديد — ' + (a.title || 'بدون عنوان'), text:(a.subject||'') + (a.type ? ' · ' + a.type : '') + (a.date ? ' · ' + a.date : ''), ts:a.created, key:'assign-' + a.id });
+        }
+      });
+    }
+    return items.sort((x,y) => y.ts - x.ts);
+  }
   const isMgr = user.role === 'ADMIN' || user.role === 'AGENT';
   const seesMaint = isMgr || user.role === 'ADMINISTRATIVE' || user.role === 'COUNSELOR';
   if(seesMaint){
@@ -3037,7 +3049,7 @@ function setNotifSeenStamp(user, ts){
   try{ localStorage.setItem(NOTIF_SEEN_KEY + (user ? user.id : ''), String(ts || Date.now())); }catch(e){}
 }
 function renderNotifState(user){
-  if(!user || user.role === 'STUDENT') return '';
+  if(!user) return '';
   const items = notifItemsFor(user);
   const seen = notifSeenStamp(user);
   const unread = items.filter(x => x.ts > seen);
@@ -3096,7 +3108,7 @@ function markAllNotifRead(){
 }
 function checkNotifications(){
   const u = currentUser();
-  if(!u || u.role === 'STUDENT'){ __notifSoundLock = false; return; }
+  if(!u){ __notifSoundLock = false; return; }
   const items = notifItemsFor(u);
   const fresh = items.filter(x => x.ts > __notifLastPoll);
   if(fresh.length){
