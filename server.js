@@ -1566,31 +1566,58 @@ app.post('/api/ops/clean-girls', async (req, res) => {
       for (const u of d.users) {
         (byName[u.username] = byName[u.username] || []).push(u);
       }
-      const deduped = [];
+      // المرحلة 1: نحدد المرجعات (اليتيم -> الحقيقي) ونُزيل أزواج الدمج
+      const pairs = [];
       for (const list of Object.values(byName)) {
+        if (list.length === 1) continue;
         const canonical = list.find(u => tableIds.has(u.id)) || list[0];
         for (const u of list) {
-          if (u !== canonical) idRemap[u.id] = canonical.id;
+          if (u === canonical) continue;
+          idRemap[u.id] = canonical.id;
+          pairs.push({ orphanId: u.id, canonicalId: canonical.id });
         }
-        deduped.push(canonical);
       }
-      d.users = deduped;
-    }
-    // إعادة توجيه المرجعات القديمة عبر سلسلة JSON ثم إعادة البناء
-    if (Object.keys(idRemap).length) {
-      let json = JSON.stringify(d);
-      for (const [oldId, newId] of Object.entries(idRemap)) {
-        json = json.split(oldId).join(newId);
+      // المرحلة 2: إعادة توجيه كل المرجعات في البيانات (فصول/جدول/...)
+      if (Object.keys(idRemap).length) {
+        let json = JSON.stringify(d);
+        for (const [oldId, newId] of Object.entries(idRemap)) {
+          json = json.split(oldId).join(newId);
+        }
+        const patched = JSON.parse(json);
+        d = Object.assign({}, patched);
       }
-      const patched = JSON.parse(json);
-      d.classes = patched.classes;
-      d.grades = patched.grades;
-      d.students = patched.students;
-      d.timetable = patched.timetable;
-      d.users = patched.users;
+      // المرحلة 3: بناء قائمة المستخدمين المنظفة. بعد إعادة التوجيه الجماعية أصبح للنسختين
+      // المعرّف نفسه (canonicalId)، فنحتفظ بالنسخة الأولى حيّة ونحوّل أي تكرار لاحق
+      // إلى «تومبستون» deleted:true بالمعرّف اليتيم الأصلي — وهكذا إذا دفع جهاز قديم
+      // نسخة تحمل المعرّف اليتيم يُسقطها الدمج (tomb باليتيم) فلا يعود التكرار.
+      const finalUsers = [];
+      const seenCanon = new Set();       // معرفات canonical ظهرت بالفعل
+      const seenUsernames = new Set();   // أسماء مستخدمين ظهرت بالفعل
+      const orphanByCanon = new Map();   // canonical id -> أول معرّف يتيم ضُمّ إليه
+      for (const p of pairs) if (!orphanByCanon.has(p.canonicalId)) orphanByCanon.set(p.canonicalId, p.orphanId);
+      for (const u of d.users) {
+        if (!u) continue;
+        const nm = String(u.username || '').toLowerCase();
+        if (!nm) { finalUsers.push(u); continue; }
+        if (orphanByCanon.has(u.id)) {
+          // نسخة ضمن زوج مكرر: الأولى تُبقي حية، والثانية (أو إضافة قديمة بنفس المعرّف) تومبستون
+          if (seenCanon.has(u.id)) {
+            finalUsers.push(Object.assign({}, u, { id: orphanByCanon.get(u.id), deleted: true }));
+          } else {
+            seenCanon.add(u.id);
+            seenUsernames.add(nm);
+            finalUsers.push(u);
+          }
+          continue;
+        }
+        if (seenUsernames.has(nm)) { finalUsers.push(Object.assign({}, u, { deleted: true })); continue; }
+        seenUsernames.add(nm);
+        finalUsers.push(u);
+      }
+      d.users = finalUsers;
     }
     await db.setSchoolData('GIRLS', d, Date.now());
-    res.json({ ok: true, classes: keepCls.length, grades: keepGrades.length, students: (d.students || []).length, users: d.users.length, remapped: Object.keys(idRemap).length });
+    res.json({ ok: true, classes: keepCls.length, grades: keepGrades.length, students: (d.students || []).length, users: d.users.length, remapped: Object.keys(idRemap).length, tombstones: d.users.filter(u => u && u.deleted).length });
   } catch (e) { console.error('[clean-girls]', e); res.status(500).json({ error: 'db' }); }
 });
 
