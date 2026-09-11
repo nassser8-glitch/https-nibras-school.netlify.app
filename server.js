@@ -1449,6 +1449,13 @@ app.get('/api/diag/mail', async (req, res) => {
     res.json({ error: e.message, stack: String(e && e.stack || '').split('\n').slice(0, 6) });
   }
 });
+app.get('/api/diag/teacher-dup', async (req, res) => {
+  try {
+    const r = await db.pool.query(`SELECT id, school, username, name, role, active FROM users WHERE school='GIRLS' ORDER BY username`);
+    res.json({ total: r.rows.length, rows: r.rows });
+  } catch (e) { console.error(e); res.status(500).json({ error: String(e) }); }
+});
+
 app.get('/api/diag/db', async (req, res) => {
   try {
     const r = await db.pool.query('SELECT current_database() AS db, current_user AS usr, (SELECT count(*) FROM users) AS users');
