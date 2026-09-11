@@ -1508,6 +1508,7 @@ app.post('/api/ops/clean-girls', async (req, res) => {
     const rec = await db.getSchoolData('GIRLS');
     if (!rec.data) return res.json({ ok: false, error: 'no data' });
     const d = rec.data;
+    let data = d;
     const studentCounts = {};
     for (const s of (d.students || [])) {
       if (s && s.active !== false && s.classId) studentCounts[s.classId] = (studentCounts[s.classId] || 0) + 1;
@@ -1558,66 +1559,46 @@ app.post('/api/ops/clean-girls', async (req, res) => {
     // (الحقيقي)، ونعيد توجيه كل المرجعات (جدول زمني/فصول...) من المعرّف اليتيم إليه.
     const tRows = await db.pool.query(`SELECT id, username FROM users WHERE school='GIRLS'`);
     const tableIds = new Set(tRows.rows.map(r => r.id));
-    const idRemap = {};
     if (Array.isArray(d.users)) {
-      d.users = d.users.filter(u => u && u.deleted !== true);
-      for (const u of d.users) { if (u.school === 'BOYS') u.school = 'GIRLS'; delete u.deleted; }
+      const origUsers = d.users.filter(u => u && u.deleted !== true);
+      for (const u of origUsers) { if (u.school === 'BOYS') u.school = 'GIRLS'; delete u.deleted; }
+      // تحديد التكرارات حسب اسم المستخدم: الحقيقي (موجود بجدول users) يُبقي، والباقي يتيم
       const byName = {};
-      for (const u of d.users) {
-        (byName[u.username] = byName[u.username] || []).push(u);
-      }
-      // المرحلة 1: نحدد المرجعات (اليتيم -> الحقيقي) ونُزيل أزواج الدمج
-      const pairs = [];
+      for (const u of origUsers) (byName[u.username] = byName[u.username] || []).push(u);
+      const remap = {};
       for (const list of Object.values(byName)) {
         if (list.length === 1) continue;
         const canonical = list.find(u => tableIds.has(u.id)) || list[0];
-        for (const u of list) {
-          if (u === canonical) continue;
-          idRemap[u.id] = canonical.id;
-          pairs.push({ orphanId: u.id, canonicalId: canonical.id });
-        }
+        for (const u of list) if (u !== canonical) remap[u.id] = canonical.id;
       }
-      // المرحلة 2: إعادة توجيه كل المرجعات في البيانات (فصول/جدول/...)
-      if (Object.keys(idRemap).length) {
+      // المرحلة 1: إعادة توجيه المرجعات في كامل الأقسام (فصول/جدول/...) ما عدا users.
+      // نفصل users مؤقتاً كي لا يُعاد كتابة معرّفات التوابيت المرتقبة.
+      d.users = [];
+      if (Object.keys(remap).length) {
         let json = JSON.stringify(d);
-        for (const [oldId, newId] of Object.entries(idRemap)) {
-          json = json.split(oldId).join(newId);
-        }
+        for (const [oldId, newId] of Object.entries(remap)) json = json.split(oldId).join(newId);
         const patched = JSON.parse(json);
-        d = Object.assign({}, patched);
+        for (const k of Object.keys(patched)) d[k] = patched[k];
       }
-      // المرحلة 3: بناء قائمة المستخدمين المنظفة. بعد إعادة التوجيه الجماعية أصبح للنسختين
-      // المعرّف نفسه (canonicalId)، فنحتفظ بالنسخة الأولى حيّة ونحوّل أي تكرار لاحق
-      // إلى «تومبستون» deleted:true بالمعرّف اليتيم الأصلي — وهكذا إذا دفع جهاز قديم
-      // نسخة تحمل المعرّف اليتيم يُسقطها الدمج (tomb باليتيم) فلا يعود التكرار.
-      const finalUsers = [];
-      const seenCanon = new Set();       // معرفات canonical ظهرت بالفعل
-      const seenUsernames = new Set();   // أسماء مستخدمين ظهرت بالفعل
-      const orphanByCanon = new Map();   // canonical id -> أول معرّف يتيم ضُمّ إليه
-      for (const p of pairs) if (!orphanByCanon.has(p.canonicalId)) orphanByCanon.set(p.canonicalId, p.orphanId);
-      for (const u of d.users) {
-        if (!u) continue;
-        const nm = String(u.username || '').toLowerCase();
-        if (!nm) { finalUsers.push(u); continue; }
-        if (orphanByCanon.has(u.id)) {
-          // نسخة ضمن زوج مكرر: الأولى تُبقي حية، والثانية (أو إضافة قديمة بنفس المعرّف) تومبستون
-          if (seenCanon.has(u.id)) {
-            finalUsers.push(Object.assign({}, u, { id: orphanByCanon.get(u.id), deleted: true }));
-          } else {
-            seenCanon.add(u.id);
-            seenUsernames.add(nm);
-            finalUsers.push(u);
-          }
+      // المرحلة 2: بناء قائمة المستخدمين — اليتيم «تومبستون» deleted:true بالمعرّف الأصلي
+      // (لاصق): أي جهاز قديم يدفع نسخة بمعرّف يتيم يُسقطها الدمج ولا يعود التكرار.
+      const seen = new Set();
+      d.users = [];
+      for (const u of origUsers) {
+        const nm = String(u.username || '');
+        if (remap[u.id] ||
+            (nm && seen.has(nm)) ||
+            (nm === '' && u.id && d.users.some(x => x.id === u.id))) {
+          d.users.push(Object.assign({}, u, { deleted: true }));
           continue;
         }
-        if (seenUsernames.has(nm)) { finalUsers.push(Object.assign({}, u, { deleted: true })); continue; }
-        seenUsernames.add(nm);
-        finalUsers.push(u);
+        if (nm) seen.add(nm);
+        d.users.push(u);
       }
-      d.users = finalUsers;
     }
     await db.setSchoolData('GIRLS', d, Date.now());
-    res.json({ ok: true, classes: keepCls.length, grades: keepGrades.length, students: (d.students || []).length, users: d.users.length, remapped: Object.keys(idRemap).length, tombstones: d.users.filter(u => u && u.deleted).length });
+    const tombCount = d.users.filter(u => u && u.deleted).length;
+    res.json({ ok: true, classes: keepCls.length, grades: keepGrades.length, students: (d.students || []).length, users: d.users.filter(u => u && u.deleted !== true).length, tombstones: tombCount });
   } catch (e) { console.error('[clean-girls]', e); res.status(500).json({ error: String(e && e.message || e) }); }
 });
 
