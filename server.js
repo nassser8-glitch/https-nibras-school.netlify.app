@@ -1478,6 +1478,24 @@ app.post('/api/admin/fix-user-school', requireAuth, (req, res) => {
     .catch(e => { console.error('[fix-user-school]', e); res.status(500).json({ error: 'db' }); });
 });
 
+// نقطة مؤقتة: إنشاء مدير قسم البنات إذا غاب (تُستدعى مرة واحدة ثم تُحذف). مفتوحة عمداً لمرة واحدة
+app.post('/api/ops/ensure-girls-admin', async (req, res) => {
+  try {
+    const admins = await db.pool.query(`SELECT id, username FROM users WHERE school='GIRLS' AND role='ADMIN'`);
+    if (admins.rows.length > 0) return res.json({ ok: true, exist: admins.rows });
+    const bcrypt = require('bcryptjs');
+    const hash = await bcrypt.hash('7AyjDNVhKPee', 10);
+    const r = await db.pool.query(
+      `INSERT INTO users (id, school, name, email, username, password_hash, role, active, first_login, granted, data)
+       VALUES ($1,'GIRLS','مدير النظام','nasser8@gmail.com','admin',$2,'ADMIN',true,true,true,'{}')
+       ON CONFLICT (username) DO UPDATE SET school='GIRLS', password_hash=EXCLUDED.password_hash,
+         role='ADMIN', active=true, granted=true, first_login=true
+       RETURNING id, school, username, role`,
+      ['id_admin_seed', hash]);
+    res.json({ ok: true, created: r.rows[0] });
+  } catch (e) { console.error('[ensure-girls-admin]', e); res.status(500).json({ error: 'db' }); }
+});
+
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));
 
 app.use((req, res) => res.status(404).json({ error: 'not_found' }));
