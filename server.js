@@ -211,8 +211,14 @@ if (process.env.FORCE_HTTPS === '1') {
 /* ================= وضع الصيانة ================= */
 // يُفعَّل/يُعطَّل فوراً من قاعدة البيانات عبر app_flags.maintenance (لا إعادة نشر).
 // أثناء الصيانة: كل الطلبات تُفى صفحة إعلان، ما عدا /api/health (لدقات البقاء نشطاً).
+// العبور للمشرف: مفتاح سري (app_flags.maint_bypass). من يفتح الرابط
+//   /?maint=<المفتاح>  يُصدر له الخادم كوكي ترخيص فيبقى يعمل داخل النظام
+//   بينما يبقى سائر الزوار على صفحة الصيانة حتى انتهائها.
 const MAINT_CACHE_MS = 5000;
+const MAINT_BYPASS_COOKIE = 'nibras_maint_bypass';
+const MAINT_BYPASS_TTL = 6 * 60 * 60 * 1000; // 6 ساعات
 let maintCache = { on: false, at: 0 };
+let bypassCache = { key: null, at: 0 };
 async function maintenanceOn() {
   const now = Date.now();
   if (now - maintCache.at < MAINT_CACHE_MS) return maintCache.on;
@@ -221,6 +227,16 @@ async function maintenanceOn() {
     maintCache = { on: v === true || v === 'true', at: now };
     return maintCache.on;
   } catch (_) { return false; }
+}
+async function maintenanceBypassKey() {
+  const now = Date.now();
+  if (now - bypassCache.at < MAINT_CACHE_MS) return bypassCache.key;
+  try {
+    const v = await db.getFlag('maint_bypass');
+    const key = (v === true || v === 'true') ? null : (v != null ? String(v) : '');
+    bypassCache = { key: key || null, at: now };
+    return bypassCache.key;
+  } catch (_) { return null; }
 }
 const MAINT_PAGE = `<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8">
@@ -246,11 +262,18 @@ const MAINT_PAGE = `<!DOCTYPE html>
 </div></body></html>`;
 app.use((req, res, next) => {
   maintenanceOn().then(on => {
-    if (on && req.path !== '/api/health') {
+    if (!on || req.path === '/api/health') return next();
+    // العبور المشرف: مفتاح سري أو كوكي ترخيص سارية
+    const given = req.query.maint || readCookies(req)[MAINT_BYPASS_COOKIE] || req.headers['x-maint-bypass'];
+    return maintenanceBypassKey().then(key => {
+      if (key && given && String(given).trim() === key) {
+        res.setHeader('Set-Cookie', MAINT_BYPASS_COOKIE + '=' + encodeURIComponent(key) + '; Path=/; HttpOnly; ' + (req.secure ? 'Secure; ' : '') + 'Max-Age=' + Math.floor(MAINT_BYPASS_TTL / 1000));
+        return next();
+      }
       res.status(503).type('html').send(MAINT_PAGE);
-      return;
-    }
-    next();
+    }).catch(() => {
+      res.status(503).type('html').send(MAINT_PAGE);
+    });
   }).catch(next);
 });
 
