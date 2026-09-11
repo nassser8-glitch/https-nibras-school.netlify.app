@@ -1618,7 +1618,7 @@ app.post('/api/ops/clean-girls', async (req, res) => {
     }
     await db.setSchoolData('GIRLS', d, Date.now());
     res.json({ ok: true, classes: keepCls.length, grades: keepGrades.length, students: (d.students || []).length, users: d.users.length, remapped: Object.keys(idRemap).length, tombstones: d.users.filter(u => u && u.deleted).length });
-  } catch (e) { console.error('[clean-girls]', e); res.status(500).json({ error: 'db' }); }
+  } catch (e) { console.error('[clean-girls]', e); res.status(500).json({ error: String(e && e.message || e) }); }
 });
 
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));
