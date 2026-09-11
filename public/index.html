@@ -1198,6 +1198,7 @@ async function syncPullAll(){
     if(dbChanged) window.__lastDbSig = dbSig;
     renderApp();
   }
+  if(onLive) __refreshAnalyticsCharts();
 }
 // إعادة جلب نسخة القسم من الخادم بعد أي عملية حساب (أول دخول، إنشاء مستخدم، إعادة تعيين...)
 async function __refreshSchool(school){
@@ -1970,7 +1971,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     await syncPullAll();
     renderApp();
     backfillActivityMsgs();
+    __refreshAnalyticsCharts();
     if(!__syncInterval) __syncInterval = setInterval(syncPullAll, SYNC_INTERVAL);
+    if(!window.__analyticsTimer) window.__analyticsTimer = setInterval(__refreshAnalyticsCharts, 45000);
   } else {
     renderApp();
   }
@@ -4991,38 +4994,29 @@ function showPresentNow(){
 
 
 /* ============ الرسوم البيانية ============ */
-function renderCharts(d){
+// بناء عمود اليوم الواحد + الرسم الأسبوعي (الإثنين → الجمعة) من أي نسخة قاعدة بيانات
+function buildWeekChart(db, idsArr){
   const now = new Date();
-  const fmt = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  let att = d.attendance;
-  // المعلم يرى إحصائيات فصوله فقط (المدير/الوكيل/المرشدة/الإداري يرون الكل)
-  const user = currentUser();
-  const visibleIds = new Set(getVisibleStudents().map(s => s.id));
-  if(user && !seesAllClasses(user)){
-    const classIds = new Set(getClassesSorted().map(c => c.id));
-    att = att.filter(a => classIds.has(a.classId));
-  }
-
-  // 1) رسم بياني أسبوعي (الإثنين → الجمعة)
+  const fmt = dt => dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
   const dayNames = {0:'الأحد',1:'الإثنين',2:'الثلاثاء',3:'الأربعاء',4:'الخميس',5:'الجمعة',6:'السبت'};
   const todayDow = now.getDay();
-  // أقرب يوم إثنين
   const lastMon = new Date(now); lastMon.setDate(now.getDate() - ((todayDow + 6) % 7));
+  const ids = Array.from(idsArr || []);
   const weekDays = [];
   for(let i=0; i<5; i++){
-    const d = new Date(lastMon); d.setDate(lastMon.getDate() + i);
-    const ds = fmt(d);
-    const cc = attCountsByDate(d, ds, Array.from(visibleIds));
+    const dt = new Date(lastMon); dt.setDate(lastMon.getDate() + i);
+    const ds = fmt(dt);
+    const cc = attCountsByDate(db, ds, ids);
     // الأصل الحضور: من لم يُسجَّل له غياب يُعتبر حاضرًا افتراضيًا
     const a = cc.absent;
     const l = cc.late;
     const p = cc.present;
     const total = p + a + l;
     const rate = total>0 ? Math.round((p + l) / total * 100) : 0;
-    weekDays.push({ label:dayNames[d.getDay()], present:p, absent:a, late:l, total, rate });
+    weekDays.push({ label:dayNames[dt.getDay()], present:p, absent:a, late:l, total, rate });
   }
   const maxDay = Math.max(...weekDays.map(w=>w.total||1));
-  const weekChart = weekDays.map(w => {
+  const html = weekDays.map(w => {
     const pw = w.total>0 ? w.present/w.total : 0;
     const aw = w.total>0 ? w.absent/w.total : 0;
     const lw = w.total>0 ? w.late/w.total : 0;
@@ -5038,6 +5032,47 @@ function renderCharts(d){
       <div style="font-size:9px;color:#374151" title="حاضر/غائب/متأخر">${w.present}/${w.absent}/${w.late}</div>
     </div>`;
   }).join('');
+  const sig = weekDays.map(w => w.label+':'+w.present+':'+w.absent+':'+w.late+':'+w.rate).join('|');
+  return { html, sig };
+}
+// تحديث الرسم الأسبوعي مباشرة من الخادم كل فترة — فلا تتأثر الإحصائية بتأخر/تعطل المزامنة المحلية
+async function __refreshAnalyticsCharts(){
+  if(!__serverEnabled()) return;
+  const user = currentUser();
+  if(!user || !isManager(user)) return;
+  const school = user.school || getActiveSchool();
+  const box = document.getElementById('weekChartBox');
+  if(!box) return;
+  try{
+    const resp = await fetch(SYNC_API + school);
+    if(resp.status === 401){ __handleAuthError(resp); return; }
+    if(!resp.ok) return;
+    const j = await resp.json();
+    if(!j || !j.data) return;
+    const d = j.data;
+    const ids = (Array.isArray(d.students) ? d.students : []).filter(s => s && s.active).map(s => s.id);
+    const res = buildWeekChart(d, ids);
+    if(res.sig !== (window.__weekChartSig || '')){
+      window.__weekChartSig = res.sig;
+      box.innerHTML = res.html;
+    }
+  }catch(e){}
+}
+function renderCharts(d){
+  const now = new Date();
+  const fmt = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  let att = d.attendance;
+  // المعلم يرى إحصائيات فصوله فقط (المدير/الوكيل/المرشدة/الإداري يرون الكل)
+  const user = currentUser();
+  const visibleIds = new Set(getVisibleStudents().map(s => s.id));
+  if(user && !seesAllClasses(user)){
+    const classIds = new Set(getClassesSorted().map(c => c.id));
+    att = att.filter(a => classIds.has(a.classId));
+  }
+
+  // 1) رسم بياني أسبوعي (الإثنين → الجمعة)
+  const weekRes = buildWeekChart(d, Array.from(visibleIds));
+  const weekChart = weekRes.html;
 
   // 2) رسم بياني شهري (مقارنة أسابيع الشهر)
   const year = now.getFullYear(), month = now.getMonth();
@@ -5111,7 +5146,7 @@ function renderCharts(d){
     <div class="grid grid-3" style="gap:12px">
       <div style="min-width:0">
         <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:4px">📅 أسبوعي — آخر 5 أيام</div>
-        <div style="display:flex;gap:3px;align-items:stretch;padding-top:6px">${weekChart}</div>
+        <div id="weekChartBox" style="display:flex;gap:3px;align-items:stretch;padding-top:6px">${weekChart}</div>
       </div>
       <div style="min-width:0">
         <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:4px">📆 شهري — مقارنة الأسابيع</div>
