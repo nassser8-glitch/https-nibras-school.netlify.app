@@ -209,25 +209,12 @@ if (process.env.FORCE_HTTPS === '1') {
 }
 
 /* ================= وضع الصيانة ================= */
-// يُفعَّل/يُعطَّل فوراً من قاعدة البيانات عبر app_flags.maintenance (لا إعادة نشر).
-// أثناء الصيانة: كل الطلبات تُفى صفحة إعلان، ما عدا /api/health (لدقات البقاء نشطاً).
-// العبور للمشرف: مفتاح سري (app_flags.maint_bypass). من يفتح الرابط
-//   /?maint=<المفتاح>  يُصدر له الخادم كوكي ترخيص فيبقى يعمل داخل النظام
-//   بينما يبقى سائر الزوار على صفحة الصيانة حتى انتهائها.
+// واضح ومباشر: غيّر هذا المتغير إلى false عند الانتهاء.
+const isMaintenanceMode = true;
 const MAINT_CACHE_MS = 5000;
 const MAINT_BYPASS_COOKIE = 'nibras_maint_bypass';
 const MAINT_BYPASS_TTL = 6 * 60 * 60 * 1000; // 6 ساعات
-let maintCache = { on: false, at: 0 };
 let bypassCache = { key: null, at: 0 };
-async function maintenanceOn() {
-  const now = Date.now();
-  if (now - maintCache.at < MAINT_CACHE_MS) return maintCache.on;
-  try {
-    const v = await db.getFlag('maintenance');
-    maintCache = { on: v === true || v === 'true', at: now };
-    return maintCache.on;
-  } catch (_) { return false; }
-}
 async function maintenanceBypassKey() {
   const now = Date.now();
   if (now - bypassCache.at < MAINT_CACHE_MS) return bypassCache.key;
@@ -238,88 +225,20 @@ async function maintenanceBypassKey() {
     return bypassCache.key;
   } catch (_) { return null; }
 }
-const MAINT_PAGE = `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>الموقع تحت الصيانة | مدرسة النبراس</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        body {
-            background-color: #f4f7f6;
-            color: #333;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container {
-            background: #ffffff;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-            text-align: center;
-            max-width: 500px;
-            width: 100%;
-        }
-        .icon {
-            font-size: 60px;
-            margin-bottom: 20px;
-            color: #2563eb;
-        }
-        h1 {
-            font-size: 24px;
-            margin-bottom: 12px;
-            color: #1e293b;
-        }
-        p {
-            font-size: 16px;
-            color: #64748b;
-            line-height: 1.6;
-            margin-bottom: 24px;
-        }
-        .status {
-            display: inline-block;
-            background: #eff6ff;
-            color: #2563eb;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="icon">&#128736;&#65039;</div>
-        <h1>الموقع قيد الصيانة حالياً</h1>
-        <p>نعمل حالياً على إجلاء بعض التحديثات وتحسين جودة الخدمة. سنعود للعمل قريباً جداً، شكراً لتفهمكم.</p>
-        <div class="status">سنعود خلال وقت قصير</div>
-    </div>
-</body>
-</html>`;
 app.use((req, res, next) => {
-  maintenanceOn().then(on => {
-    if (!on || req.path === '/api/health') return next();
-    // العبور المشرف: مفتاح سري أو كوكي ترخيص سارية
-    const given = req.query.maint || readCookies(req)[MAINT_BYPASS_COOKIE] || req.headers['x-maint-bypass'];
-    return maintenanceBypassKey().then(key => {
-      if (key && given && String(given).trim() === key) {
-        res.setHeader('Set-Cookie', MAINT_BYPASS_COOKIE + '=' + encodeURIComponent(key) + '; Path=/; HttpOnly; ' + (req.secure ? 'Secure; ' : '') + 'Max-Age=' + Math.floor(MAINT_BYPASS_TTL / 1000));
-        return next();
-      }
-      res.status(503).type('html').send(MAINT_PAGE);
-    }).catch(() => {
-      res.status(503).type('html').send(MAINT_PAGE);
-    });
-  }).catch(next);
+  if (!isMaintenanceMode) return next();
+  if (req.path === '/maintenance.html' || req.path === '/api/health') return next();
+  // العبور المشرف: مفتاح سري أو كوكي ترخيص سارية
+  const given = req.query.maint || readCookies(req)[MAINT_BYPASS_COOKIE] || req.headers['x-maint-bypass'];
+  return maintenanceBypassKey().then(key => {
+    if (key && given && String(given).trim() === key) {
+      res.setHeader('Set-Cookie', MAINT_BYPASS_COOKIE + '=' + encodeURIComponent(key) + '; Path=/; HttpOnly; ' + (req.secure ? 'Secure; ' : '') + 'Max-Age=' + Math.floor(MAINT_BYPASS_TTL / 1000));
+      return next();
+    }
+    res.status(530).sendFile(path.join(__dirname, 'maintenance.html'));
+  }).catch(() => {
+    res.status(530).sendFile(path.join(__dirname, 'maintenance.html'));
+  });
 });
 
 /* ================= الحد من المعدل ================= */
