@@ -1911,7 +1911,7 @@ function renderApp(){
   updatePresentNow();
   touchTeacherPresence();
   checkMemoReminders();
-  if(!window.__presenceTimer){ window.__presenceTimer = setInterval(touchTeacherPresence, 60000); }
+  if(!window.__presenceTimer){ window.__presenceTimer = setInterval(() => { touchTeacherPresence(); updatePresentNow(); }, 30000); }
   if(!window.__memoReminderTimer){ window.__memoReminderTimer = setInterval(checkMemoReminders, 15000); }
 }
 window.addEventListener('hashchange', renderApp);
@@ -4845,20 +4845,20 @@ function renderWeather(){
     .catch(() => { el.innerHTML = frame('<p class="muted small" style="margin:0">🌤 تعذر تحميل الطقس — تحقق من الاتصال بالإنترنت</p>'); });
 }
 
-/* ============ المتواجدون الآن من المعلمين/المعلمات (للمدير والوكلاء) ============ */
+/* ============ المتواجدون الآن من المعلمين/المعلمات والطالبات (للمدير والوكلاء) ============ */
 function presentNowInfo(school){
   const db = JSON.parse(localStorage.getItem('nibras_' + school + '_db_v1') || 'null');
   if(!db) return { n: 0, names: [], absentNames: [] };
   const cutoff = Date.now() - 3 * 60 * 1000;
-  const teachers = (db.users || []).filter(u => u.role === 'TEACHER' && u.active);
-  const present = teachers.filter(u => u.lastSeenAt && new Date(u.lastSeenAt).getTime() >= cutoff);
-  const names = present.map(u => ({ name: u.name, online: true }));
-  const absentNames = teachers.filter(u => !u.lastSeenAt || new Date(u.lastSeenAt).getTime() < cutoff).map(u => u.name);
+  const people = (db.users || []).filter(u => (u.role === 'TEACHER' || u.role === 'STUDENT') && u.active);
+  const present = people.filter(u => u.lastSeenAt && new Date(u.lastSeenAt).getTime() >= cutoff);
+  const names = present.map(u => ({ name: u.name, role: u.role, online: true }));
+  const absentNames = people.filter(u => !u.lastSeenAt || new Date(u.lastSeenAt).getTime() < cutoff).map(u => u.name);
   return { n: names.length, names, absentNames };
 }
 function touchTeacherPresence(){
   const user = currentUser();
-  if(!user || user.role !== 'TEACHER') return;
+  if(!user || (user.role !== 'TEACHER' && user.role !== 'STUDENT')) return;
   const school = getUserSchool();
   if(!school) return;
   const key = 'nibras_' + school + '_db_v1';
@@ -4868,6 +4868,7 @@ function touchTeacherPresence(){
   if(t){
     t.lastSeenAt = new Date().toISOString();
     localStorage.setItem(key, JSON.stringify(d));
+    if(__serverEnabled()) __syncSchedule(school);
   }
 }
 function updatePresentNow(){
@@ -4877,24 +4878,28 @@ function updatePresentNow(){
   const school = getActiveSchool();
   const info = presentNowInfo(school);
   const schoolLabel = school === 'GIRLS' ? 'البنات' : 'البنين';
-  const teacherWord = school === 'GIRLS' ? 'معلمة' : 'معلم';
+  const tCount = info.names.filter(x => x.role === 'TEACHER').length;
+  const sCount = info.names.filter(x => x.role === 'STUDENT').length;
   el.innerHTML = `
     <div class="info-card" onclick="showPresentNow()" style="cursor:pointer" title="اضغط لعرض أسماء المتواجدين الآن">
       <div class="muted small" style="font-size:10.5px">🧑‍🏫 المتواجدون الآن — ${schoolLabel}</div>
       <div style="font-size:22px;font-weight:900;color:#4ade80;line-height:1.1">${info.n}</div>
-      <div style="font-size:11px;color:#86efac">${teacherWord}</div>
+      <div style="font-size:11px;color:#86efac">${tCount} ${school === 'GIRLS' ? 'معلمة' : 'معلم'} · ${sCount} ${school === 'GIRLS' ? 'طالبة' : 'طالب'}</div>
     </div>`;
 }
 function showPresentNow(){
   const school = getActiveSchool();
   const info = presentNowInfo(school);
   const schoolLabel = school === 'GIRLS' ? 'البنات' : 'البنين';
-  const teacherWord = school === 'GIRLS' ? 'معلمة' : 'معلم';
+  const tCount = info.names.filter(x => x.role === 'TEACHER').length;
+  const sCount = info.names.filter(x => x.role === 'STUDENT').length;
+  const roleIcon = r => r === 'TEACHER' ? '🧑‍🏫' : '👧';
+  const roleWord = r => r === 'TEACHER' ? (school === 'GIRLS' ? 'معلمة' : 'معلم') : (school === 'GIRLS' ? 'طالبة' : 'طالب');
   const list = info.n
-    ? info.names.map(t => `<li class="dl-item"><span>👤 ${escapeHtml(t.name)}</span><span class="muted" style="margin-inline-start:auto">${t.online ? '🟢 سجل الدخول اليوم' : '—'}</span></li>`).join('')
-    : `<li class="dl-empty">لا يوجد ${teacherWord}s متواجدون بعد</li>`;
+    ? info.names.map(t => `<li class="dl-item"><span>${roleIcon(t.role)} ${escapeHtml(t.name)}</span><span class="muted" style="margin-inline-start:auto">${roleWord(t.role)}</span></li>`).join('')
+    : `<li class="dl-empty">لا يوجد متواجدون بعد</li>`;
   const absent = info.absentNames.length ? `<p class="muted" style="margin-top:10px">غير متواجدين الآن: ${info.absentNames.map(escapeHtml).join('، ')}</p>` : '';
-  openDetails('🧑‍🏫 المتواجدون الآن — قسم ' + schoolLabel + ' (' + info.n + ' ' + teacherWord + ')', list + absent);
+  openDetails('🧑‍🏫 المتواجدون الآن — قسم ' + schoolLabel + ' (' + tCount + ' ' + (school === 'GIRLS' ? 'معلمة' : 'معلم') + '، ' + sCount + ' ' + (school === 'GIRLS' ? 'طالبة' : 'طالب') + ')', list + absent);
 }
 
 
