@@ -2808,6 +2808,54 @@ function switchActTab(key){
   document.querySelectorAll('.dash-tab[data-act]').forEach(b => b.classList.toggle('active', b.dataset.act === key));
   document.querySelectorAll('.act-pane').forEach(p => { p.style.display = p.dataset.act === key ? 'block' : 'none'; });
 }
+/* ===== إحصائية الدخول اليومي (التفاعل مع الموقع) ===== */
+let __dailyLogDay = null;
+function __dailyLogDateStr(){ return __dailyLogDay || todayStr(); }
+function setDailyLogDay(v){ __dailyLogDay = v || ''; renderApp(); }
+function resetDailyLogDay(){ __dailyLogDay = null; renderApp(); }
+function __logDayOf(ts){ try{ const dt = new Date(ts); if(isNaN(dt.getTime())) return ''; return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0'); }catch(e){ return ''; } }
+function __loggedOn(u, dayStr){ if(!u) return false; if(Array.isArray(u.loginHistory) && u.loginHistory.some(t => __logDayOf(t) === dayStr)) return true; return !!(u.lastLogin && __logDayOf(u.lastLogin) === dayStr); }
+function __dailyLogGroups(){
+  const isStaffRole = r => r !== 'STUDENT' && r !== 'ADMIN';
+  const dayStr = __dailyLogDateStr();
+  const sd = loadDB();
+  const userMap = new Map((sd.users||[]).map(u => [u.id, u]));
+  const acc = () => ({ total: 0, logged: 0, names: [], pend: [] });
+  const st = acc();
+  for(const s of (sd.students||[])){
+    if(!s.active) continue;
+    const u = userMap.get(s.id);
+    if(!u || u.role !== 'STUDENT') continue;
+    st.total++;
+    (__loggedOn(u, dayStr) ? (st.logged++, st.names.push(s.fullName || s.name)) : st.pend.push(s.fullName || s.name));
+  }
+  const teachers = acc(), admins = acc();
+  let totalLogins = 0;
+  for(const u of (sd.users||[])){
+    if(u.active === false) continue;
+    if(Array.isArray(u.loginHistory)) totalLogins += u.loginHistory.filter(t => __logDayOf(t) === dayStr).length;
+    else if(u.lastLogin && __logDayOf(u.lastLogin) === dayStr) totalLogins++;
+    if(u.role === 'TEACHER'){
+      teachers.total++;
+      (__loggedOn(u, dayStr) ? (teachers.logged++, teachers.names.push(u.name || u.username)) : teachers.pend.push(u.name || u.username));
+    } else if(isStaffRole(u.role)){
+      admins.total++;
+      (__loggedOn(u, dayStr) ? (admins.logged++, admins.names.push(u.name || u.username)) : admins.pend.push(u.name || u.username));
+    }
+  }
+  return { day: dayStr, totalLogins, students: st, teachers, admins };
+}
+/* عرض أسماء من دخلوا ومن لم يدخلوا في إحصائية الدخول اليومي */
+function showDayNames(grp){
+  const isAdmin = currentUser()?.role === 'ADMIN';
+  if(!isAdmin) return;
+  const g = __dailyLogGroups()[grp];
+  if(!g) return;
+  const roleLabel = grp === 'students' ? 'الطالبات' : (grp === 'teachers' ? 'المعلمات' : 'الإداريات والوكلاء والموجهات');
+  const li = arr => arr.length ? arr.sort((a,b)=>String(a).localeCompare(String(b),'ar')).map(n => `<li>${escapeHtml(n)}</li>`).join('') : '<li class="muted">لا يوجد</li>';
+  openDetails('الدخول اليومي — ' + roleLabel + ' (' + __dailyLogDateStr() + ')',
+    `<b style="font-weight:800;color:#2563eb">✅ دخلوا الموقع اليوم (${g.logged})</b><ul style="list-style:none;padding:0;margin:6px 0">${li(g.names)}</ul><b style="font-weight:800;color:#9ca3af">⏳ لم يدخلوا اليوم (${g.pend.length})</b><ul style="list-style:none;padding:0;margin:6px 0">${li(g.pend)}</ul>`);
+}
 /* عرض أسماء من دخلوا ومن لم يدخلوا حساباتهم (الطلاب أو المعلمون) لنطاق معيّن */
 function showActNames(gkey, grp){
   const isStaffRole = r => r !== 'STUDENT' && r !== 'ADMIN';
@@ -4033,6 +4081,49 @@ function renderDashboard(){
     </div>`;
   })();
 
+  // ====== إحصائية الدخول اليومي — نسبة من تفاعل مع الموقع في ذلك اليوم (دائرة نسب) ======
+  const dailyLogPanel = (() => {
+    if(!isAdmin) return '';
+    const g = __dailyLogGroups();
+    const donut = (label, grp) => {
+      const gr = g[grp];
+      const pct = gr.total ? Math.round((gr.logged / gr.total) * 100) : 0;
+      const pend = gr.total - gr.logged;
+      const donutBg = gr.total ? `conic-gradient(#2563eb 0 ${pct}%, #eef2f7 ${pct}% 100%)` : 'conic-gradient(#e4edf5 0 100%)';
+      return `
+        <div class="act-block">
+          <div style="font-weight:800;font-size:14px;color:#0f172a;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:5px" onclick="showDayNames('${grp}')" title="اضغط لعرض أسماء من دخلوا ومن لم يدخلوا">${label}: ${gr.logged}/${gr.total} <span style="font-size:11px;color:#2563eb">📋</span></div>
+          <div class="act-flex">
+            <div class="dash-donut" style="width:116px;height:116px;background:${donutBg};cursor:pointer" onclick="showDayNames('${grp}')" title="اضغط لعرض الأسماء">
+              <div class="dash-donut-center"><b>${pct}%</b><span>دخلوا اليوم</span></div>
+            </div>
+            <div class="att-legend">
+              <div class="row" style="cursor:pointer" onclick="showDayNames('${grp}')"><span class="swatch" style="background:#2563eb"></span>دخلوا اليوم <b>${gr.logged}</b></div>
+              <div class="row" style="cursor:pointer" onclick="showDayNames('${grp}')"><span class="swatch" style="background:#eef2f7"></span>لم يدخلوا <b>${pend}</b></div>
+            </div>
+          </div>
+        </div>`;
+    };
+    return `
+    <div class="dash-panel" style="margin-bottom:14px">
+      <div class="dash-panel-head">
+        <p class="dash-panel-title">📊 إحصائية الدخول اليومي</p>
+        <span class="dash-panel-more" style="cursor:default">عدد الدخول: ${g.totalLogins} دخولاً</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <input type="date" class="input" style="width:auto;padding:6px 10px" value="${g.day}" max="${todayStr()}" onchange="setDailyLogDay(this.value)" />
+        <button class="btn-secondary" style="padding:6px 12px" onclick="resetDailyLogDay()">اليوم</button>
+        <span class="muted small">اختر يومًا لعرض نسبة من تفاعل مع الموقع فيه</span>
+      </div>
+      <div class="act-grid">
+        ${donut('👧 الطالبات', 'students')}
+        ${donut('👩‍🏫 المعلمات', 'teachers')}
+        ${donut('🛡 الإداريات والوكيلات والموجهات', 'admins')}
+      </div>
+      <p class="muted small" style="margin:10px 0 0">تحتسب من سجل حقيقي للدخول (loginHistory) على الخادم. اضغط على الرقم أو الدائرة لعرض الأسماء.</p>
+    </div>`;
+  })();
+
   // لوحة الأوائل — المراحل (ابتدائي/متوسط/ثانوي)
   const ptsMap = studentPointsMap();
   const medals = ['🥇','🥈','🥉'];
@@ -4104,6 +4195,7 @@ function renderDashboard(){
   ${isTeacher ? teacherQuickCards : ''}
   ${attPanel}
   ${activationPanel}
+  ${dailyLogPanel}
   ${isTeacher ? (() => {
     const tst = teacherStats(user);
     // عدد أيام الدراسة المنقضية (الاثنين–الجمعة) منذ بداية السنة الدراسية
