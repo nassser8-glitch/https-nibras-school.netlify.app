@@ -1157,6 +1157,29 @@ async function __syncPull(school){
       ['students','classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
         if(Array.isArray(local[sec])) merged[sec] = locallyOnlyP(local[sec], merged[sec]);
       });
+      // تنقية الفصول على العميل: تمنع عودة الفصول الزائدة (مكررة/بدون مرحلة/بمرحلة وهمية بلا طلاب)
+      // التي تحملها النسخة المحلية لكن الخادم كرّسها (deleted). دون هذا يظهر العدد 24 بدل 12.
+      try {
+        if(Array.isArray(merged.classes)){
+          const gradeIds = new Set((Array.isArray(merged.grades) ? merged.grades : []).map(g => g && g.id).filter(Boolean));
+          const stuCount = {};
+          (Array.isArray(merged.students) ? merged.students : []).forEach(s => {
+            const cid = s && (s.classId || s.class_id || s.class);
+            if(cid) stuCount[cid] = (stuCount[cid] || 0) + 1;
+          });
+          const seenKeys = new Set();
+          merged.classes = merged.classes.filter(c => {
+            if(!c || typeof c !== 'object') return false;
+            if(c.deleted) return false;
+            if(!c.gradeId || !gradeIds.has(c.gradeId)) return false;
+            if(!stuCount[c.id]) return false;
+            const k = c.gradeId + '|' + (c.name||'');
+            if(seenKeys.has(k)) return false;
+            seenKeys.add(k);
+            return true;
+          });
+        }
+      } catch(_){}
       merged._ts = Math.max(__syncTS(server), __syncTS(local), Date.now());
       __origSetItem(key, JSON.stringify(merged));
     }
@@ -1186,7 +1209,7 @@ async function syncPullAll(){
     if(d2){
       const attArr = Array.isArray(d2.attendance) ? d2.attendance : [];
       const weakHash = a => a.reduce((acc, x) => (acc * 31 + (x && typeof x === 'object' ? String(x.id||'') + '|' + String(x.date||'') + '|' + String(x.status||'') + '|' + String(x.studentId||'') : '').length) % 999999937, 7);
-      dbSig = (Array.isArray(d2.students)?d2.students.length:0) + '|' + attArr.length + '|' + weakHash(attArr) + '|' + (Array.isArray(d2.notes)?d2.notes.length:0) + '|' + (Array.isArray(d2.assignments)?d2.assignments.length:0);
+      dbSig = (Array.isArray(d2.students)?d2.students.length:0) + '|' + (Array.isArray(d2.classes)?d2.classes.filter(c=>!c.deleted).length:0) + '|' + attArr.length + '|' + weakHash(attArr) + '|' + (Array.isArray(d2.notes)?d2.notes.length:0) + '|' + (Array.isArray(d2.assignments)?d2.assignments.length:0);
     }
   }catch(e){}
   const onLive = location.hash && location.hash !== '#/login';
