@@ -2970,10 +2970,10 @@ function showActNames(gkey, grp){
   if(!isAdmin) return;
   const hasLoggedIn = u => !!(u && (u.lastLogin || (u.loginCount || 0) > 0));
   const sdDate = v => { if(!v) return ''; const d = new Date(v); return (!isNaN(d) ? d.toLocaleDateString('ar') + ' ' + d.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}) : ''); };
-  const schools = ['GIRLS'];
-  const multi = false;
+  const schools = gkey === 'ALL' ? ['BOYS','GIRLS'] : (gkey === 'BOYS' ? ['BOYS'] : ['GIRLS']);
+  const multi = schools.length > 1;
   const actNames = [], pendNames = [];
-  const tag = () => '';
+  const tag = school => multi ? (school === 'BOYS' ? ' (بنين)' : ' (بنات)') : '';
   for(const school of schools){
     const sd = loadSchoolDB(school);
     const userMap = new Map((sd.users||[]).map(u => [u.id, u]));
@@ -2996,7 +2996,7 @@ function showActNames(gkey, grp){
     }
   }
   const roleLabel = grp === 'students' ? 'الطلاب' : (grp === 'teachers' ? 'المعلمون' : 'الإداريون والوكلاء والموجهون');
-  const rangeLabel = 'بنات';
+  const rangeLabel = gkey === 'ALL' ? 'المدرستين' : (gkey === 'BOYS' ? 'بنين' : 'بنات');
   const li = arr => arr.length ? arr.sort((a,b)=>a.localeCompare(b,'ar')).map(n => `<li>${escapeHtml(n)}</li>`).join('') : '<li class="muted">لا يوجد</li>';
   openDetails('تفعيل الحسابات — ' + roleLabel + ' (' + rangeLabel + ')',
     `<li style="font-weight:800;color:#16a34a">✅ دخلوا حسابهم (${actNames.length})</li>${li(actNames)}<li style="font-weight:800;color:#9ca3af;margin-top:6px">⏳ لم يدخلوا بعد (${pendNames.length})</li>${li(pendNames)}`);
@@ -4101,7 +4101,7 @@ function renderDashboard(){
     // "فعّل حسابه" = من دخل حسابَه فعلاً (سجّل دخولاً — لديه سجل/تاريخ آخر دخول)
     const hasLoggedIn = u => !!(u && (u.lastLogin || (u.loginCount || 0) > 0));
     const acc = () => ({ activated: 0, total: 0, actNames: [], pendNames: [] });
-    const schoolActs = ['GIRLS'].map(school => {
+    const schoolActs = ['BOYS','GIRLS'].map(school => {
       const sd = loadSchoolDB(school);
       const userMap = new Map((sd.users||[]).map(u => [u.id, u]));
       const st = acc();
@@ -4109,7 +4109,7 @@ function renderDashboard(){
         if(!s.active) continue;
         const u = userMap.get(s.id);
         if(!u || u.role !== 'STUDENT') continue;
-        const nm = (s.fullName || s.name);
+        const nm = (s.fullName || s.name) + (school === 'BOYS' ? ' (بنين)' : ' (بنات)');
         st.total++;
         if(hasLoggedIn(u)){ st.activated++; st.actNames.push(nm); } else { st.pendNames.push(nm); }
       }
@@ -4118,7 +4118,7 @@ function renderDashboard(){
       for(const u of (sd.users||[])){
         if(u.active === false) continue;
         if(u.role !== 'TEACHER') continue;
-        const nm = (u.name || u.username);
+        const nm = (u.name || u.username) + (school === 'BOYS' ? ' (بنين)' : ' (بنات)');
         teachers.total++;
         if(hasLoggedIn(u)){ teachers.activated++; teachers.actNames.push(nm); } else { teachers.pendNames.push(nm); }
       }
@@ -4127,7 +4127,7 @@ function renderDashboard(){
       for(const u of (sd.users||[])){
         if(u.active === false) continue;
         if(!isStaffRole(u.role) || u.role === 'TEACHER') continue;
-        const nm = (u.name || u.username);
+        const nm = (u.name || u.username) + (school === 'BOYS' ? ' (بنين)' : ' (بنات)');
         admins.total++;
         if(hasLoggedIn(u)){ admins.activated++; admins.actNames.push(nm); } else { admins.pendNames.push(nm); }
       }
@@ -4143,13 +4143,13 @@ function renderDashboard(){
     };
     const comb = key => ({
       key,
-      school: 'بنات',
+      school: key === 'ALL' ? 'الكل' : (key === 'BOYS' ? 'بنين' : 'بنات'),
       students: mergeAcc(schoolActs, 'students'),
       teachers: mergeAcc(schoolActs, 'teachers'),
       admins: mergeAcc(schoolActs, 'admins')
     });
     const all = comb('ALL');
-    const groups = [all];
+    const groups = [all, ...schoolActs.map(x => ({ key: x.key, school: x.school, students: x.students, teachers: x.teachers, admins: x.admins }))];
     const miniDonut = (label, g, gkey, grp) => {
       const pct = g.total ? Math.round((g.activated / g.total) * 100) : 0;
       const pend = g.total - g.activated;
