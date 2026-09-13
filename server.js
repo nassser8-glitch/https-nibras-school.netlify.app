@@ -1466,7 +1466,7 @@ app.post('/api/backups/import', requireAuth, (req, res) => {
   })().catch(fail(res));
 });
 // لقطة أولية عند الإقلاع ثم كل 30 دقيقة
-setInterval(takeBackups, 30 * 60 * 1000).unref();
+setInterval(takeBackups, 6 * 60 * 60 * 1000).unref();
 
 /* ================= صحة وأمان ================= */
 const net = require('net');

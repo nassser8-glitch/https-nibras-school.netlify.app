@@ -335,7 +335,7 @@ async function patchSchoolUserStats(school, userId, lastLoginIso, loginCount, hi
 }
 
 /* ===== النسخ الاحتياطي الدوري ===== */
-const BACKUP_KEEP = 200;
+const BACKUP_KEEP = 30;
 async function saveBackup(school, ts, data) {
   await pool.query(
     `INSERT INTO data_backups (school, ts, data) VALUES ($1,$2,$3)`,
