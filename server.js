@@ -887,6 +887,22 @@ function mergeClasses(prevCls, inCls) {
   return Array.from(map.values());
 }
 
+// حارس الفصول المكررة (يعمل على النتيجة النهائية قبل الحفظ): يحوّل أي صف مكرر إلى شاهد حذف
+function dedupeClasses(data){
+  const classes = data && data.classes;
+  if (!Array.isArray(classes)) return;
+  const gradeIds = new Set((Array.isArray(data.grades) ? data.grades : []).map(g => g && g.id).filter(Boolean));
+  const keyOf = c => ((c.gradeId || '') + '|' + (c.name || '') + '|' + (c.campus || ''));
+  const seen = new Set();
+  for (const c of classes) {
+    if (!c || typeof c !== 'object' || c.deleted) continue;
+    if (!c.gradeId || !gradeIds.has(c.gradeId)) { c.deleted = true; continue; }
+    const k = keyOf(c);
+    if (seen.has(k)) { c.deleted = true; continue; }
+    seen.add(k);
+  }
+}
+
 function mergeTimetable(prev, inb) {
   const out = {};
   const keys = new Set([...Object.keys(prev || {}), ...Object.keys(inb || {})]);
@@ -1280,6 +1296,11 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         data.notes = data.notes.filter(n => !((typeof n.points === 'number' && n.points < 0) && (n.createdAt || '').slice(0, 10) < cutDate));
       }
     } catch (_) {}
+
+    // حارس الفصول المكررة: أجهزة قديمة تعيد دفع نسخ فيها الفصل نفسه مكرراً (مثلاً 4 مرات، كانت 12
+    // فتحولت 48). أي صف مكرر في (المرحلة+الاسم)، أو بلا مرحلة، أو بمرحلة وهمية بلا طالبات فيه،
+    // يُحوَّل إلى شاهد حذف (deleted) فيبقى المكرر مخفياً ولا يعود العدد يصعد مع كل حفظ.
+    try { dedupeClasses(data); } catch (e) { console.warn('[dedupeClasses]', e.message); }
 
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
     const clean = JSON.parse(JSON.stringify(data));

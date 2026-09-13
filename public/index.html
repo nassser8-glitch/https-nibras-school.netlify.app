@@ -1785,7 +1785,7 @@ function userById(id){ return loadDB().users.find(u => u.id === id); }
 function getClassesSorted(){
   const d = loadDB();
   const user = currentUser();
-  let classes = d.classes;
+  let classes = d.classes.filter(c => !c.deleted);
   // غير الشموليين (معلم فقط) يرون الفصول المسندة إليهم؛ المدير/الوكيل/المرشدة/الإداري يرون الكل
   if(user && !seesAllClasses(user)){
     classes = classes.filter(c => (c.teacherIds||[]).includes(user.id));
@@ -2455,7 +2455,7 @@ function getSchoolOverview(school){
   const att = attCountsByDate(d, today, students.map(s => s.id));
   return {
     students: students.length,
-    classes: d.classes.length,
+    classes: d.classes.filter(c => !c.deleted).length,
     present: att.present,
     absent: att.absent,
     late: att.late,
@@ -6513,7 +6513,7 @@ function renderClasses(){
     stages.forEach(stage => {
       let grade = d.grades.find(g => g.name === stage.name);
       if(!grade){ grade = { id:uid(), name:stage.name, order:stage.order }; d.grades.push(grade); }
-      if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ')){
+      if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ' && !c.deleted)){
         d.classes.push({ id:uid(), gradeId:grade.id, name:'أ', campus, capacity:null, teacherIds:[] });
         added++;
       }
