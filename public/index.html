@@ -923,6 +923,8 @@ async function __syncPush(school){
     }catch(e){}
     const stillEmpty = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
     if(stillEmpty) return;
+    // حسابات الطوارئ المحلية (_emergencyOnly) لا تُرفع إلى الخادم أبداً — محلية للجهاز فقط
+    if(Array.isArray(obj.users) && obj.users.some(u => u && u._emergencyOnly)) obj.users = obj.users.filter(u => !(u && u._emergencyOnly));
     let attempt = 0;
     const respOf = await (async () => {
       for(; attempt < 3; attempt++){
@@ -2114,17 +2116,33 @@ async function emSetNew(){
   await emPinSet(p1);
   await emEnter();
 }
+function emergencyExit(){
+  localStorage.removeItem(LOCAL_SESSION_KEY);
+  localStorage.removeItem(SCHOOL_KEY);
+  __emExit();
+  location.hash = '#/login';
+  renderApp();
+}
+function emLocalAdmin(){
+  const d = loadDB() || { users: [] };
+  d.users = d.users || [];
+  let admin = d.users.find(u => u.role === 'ADMIN' && u.active) || d.users.find(u => u.role === 'ADMIN');
+  if(!admin){
+    admin = { id: uid(), name: 'مدير الطوارئ', email: 'admin@nibras.local', username: 'admin', password: null, role: 'ADMIN', active: true, granted: true, firstLogin: false, _emergencyOnly: true };
+    d.users.push(admin);
+    saveDB(d);
+  }
+  return admin;
+}
 async function emEnter(){
   const el = document.getElementById('emError');
   const pin = document.getElementById('emPin') ? document.getElementById('emPin').value : '';
   if(!pin){ el.style.display='block'; el.textContent='أدخل كلمة مرور الطوارئ'; return; }
   if(!(await emPinCheck(pin))){ el.style.display='block'; el.textContent='كلمة مرور الطوارئ غير صحيحة'; return; }
   localStorage.setItem(SCHOOL_KEY, 'GIRLS');
-  const d = loadDB() || { users: [] };
-  const admins = (d.users || []).filter(u => u.role === 'ADMIN');
-  const admin = admins.find(u => u.active) || admins[0];
+  const admin = emLocalAdmin();
   if(!admin){
-    el.style.display='block'; el.textContent='لا يوجد حساب مدير في نسخة هذا الجهاز — تعذّر الدخول';
+    el.style.display='block'; el.textContent='تعذّر إنشاء حساب مدير محلي';
     return;
   }
   localStorage.setItem(LOCAL_SESSION_KEY, admin.id);
@@ -2740,6 +2758,10 @@ function renderLayout(user, hash){
         </div>
       </aside>
       <main class="main">
+        ${__emRecovery ? `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;color:#92400e;font-size:13px;flex-wrap:wrap">
+          <span>🚨 <b>وضع الطوارئ</b> — قاعدة البيانات متوقفة مؤقتاً؛ تعرض هذه الصفحة بيانات هذا الجهاز فقط. ستُرفع أي تغييرات تلقائياً بعد عودة القاعدة.</span>
+          <button class="btn-secondary" style="padding:5px 10px;font-size:12px;margin-inline-start:auto" onclick="emergencyExit()">متابعة الدخول العادي</button>
+        </div>` : ''}
         <div id="page">${pageHtml}</div>
       </main>
     </div>
@@ -3857,7 +3879,17 @@ function renderDashboard(){
   const greetH = new Date().getHours();
   const greetWord = greetH < 12 ? 'صباح الخير' : (greetH < 17 ? 'طاب يومك' : 'مساء الخير');
 
+  const noLocalData = __emRecovery && d.students.length === 0 && d.classes.length === 0;
   const hero = `
+  ${noLocalData ? `
+  <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;margin-bottom:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;color:#b91c1c;font-size:13px">
+    <span style="font-size:18px">⚠️</span>
+    <div>
+      <b>هذا الجهاز بلا بيانات محفوظة</b> — الجهاز ليست عليه نسخة من قاعدة البيانات، لذا اللوحة فارغة والكثير من الأزرار لن تعرض معلومات.
+      لا تفقد بياناتك الحقيقية: افتح تطبيق المدرسة من <b>نفس جهاز المدير الذي كان تُدار منه المدرسة</b>، ثم دخل لمشاركة كلمة مرور الطوارئ هنا.
+      بعد عودة قاعدة النظام يمكنك <button class="btn-secondary" style="padding:4px 10px;font-size:12px;margin-inline-start:4px" onclick="emergencyExit()">متابعة الدخول العادي</button>.
+    </div>
+  </div>` : ''}
   <div class="dash-hero">
     <div class="dash-greet">
       <div class="dash-greet-icon">👋</div>
