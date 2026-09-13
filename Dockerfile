@@ -13,7 +13,9 @@ ENV PORT=3000
 ENV WEBROOT=public
 ENV TRUST_PROXY=1
 ENV FORCE_HTTPS=1
-ENV DATABASE_URL=postgresql://neondb_owner:npg_PJsqHUY9c5Zz@ep-bitter-rice-aerhp71v.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require
+# قاعدة البيانات تُمرَّر سراً من إعدادات Render (Environment → Secret File/Value: DATABASE_URL)
+# ولا تُضمّن في الملف أبداً — إن لم تُضبط، سيستخدم server.js اتصالاً افتراضياً محلياً ويفشل.
+# DATABASE_URL placeholder removed (previously contained a live Neon password).
 
 EXPOSE 3000
 

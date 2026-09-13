@@ -174,7 +174,6 @@ const SECTION_KEYS = ['users','grades','classes','students','attendance','notes'
 // (نسخة جهاز قديمة أو حفظ مدير بجهاز قديم كان يمسح الإسناد — هنا يُعاد فرضه قبل التخزين).
 const ALWAYS_TEACHER_IDS = {
   GIRLS: ['id_61e90132bc11ff7b'],                                            // تهاني «تهاني أحمد» — إدارية بنات
-  BOYS:  ['id_0449f163a8198447', 'id_6ef8036cc7f4c692'],                      // خالد يوسف + عبدالله فيصل — بنين
 };
 // حقول سرية لا تُخزن/تُعاد أبدًا
 const STRIP_FIELDS = ['password','password_hash','secret','initialSecret','resetCode','resetExpires','token_hash'];
@@ -313,7 +312,7 @@ function requireAuth(req, res, next) {
   }).catch(fail(res));
 }
 function sendUser(u, sessionRow, viewerRole) {
-  const user = { id: u.id, school: u.school, name: u.name, username: u.username, email: u.email, role: u.role, active: u.active, firstLogin: u.first_login, granted: u.granted !== false, ...(u.data || {}) };
+  const user = { id: u.id, school: 'GIRLS', name: u.name, username: u.username, email: u.email, role: u.role, active: u.active, firstLogin: u.first_login, granted: u.granted !== false, ...(u.data || {}) };
   if (viewerRole === 'ADMIN' && u.plain_password) user.plain_password = u.plain_password;
   STRIP_FIELDS.forEach(f => delete user[f]);
   if (sessionRow) user.session = { created: sessionRow.created_at, expires: sessionRow.expires_at };
@@ -361,6 +360,8 @@ app.post('/api/auth/login', (req, res) => {
       if (ok) { u = c; break; }
     }
     if (!u) { fails.count++; return res.status(401).json({ error: 'invalid' }); }
+    // إلغاء قسم البنين نهائياً: كل الحسابات تعمل ضمن قسم البنات مهما كان القسم في الجدول
+    u.school = 'GIRLS';
     // القيد الصارم: الدخول مسموح فقط للحسابات المُصدَّرة بيانات دخولها أو المضافة يدويًا من المدير
     if (u.role !== 'ADMIN' && u.granted !== true) {
       fails.count++;
@@ -535,7 +536,7 @@ app.post('/api/auth/admin/create-user', requireAuth, (req, res) => {
   (async () => {
     if (rateLimit('create', 60, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
     const reqSchool = String(req.body && req.body.school || '').toUpperCase();
-    const school = (reqSchool === 'BOYS' || reqSchool === 'GIRLS') ? reqSchool : req.session.school;
+    const school = (reqSchool === 'GIRLS') ? reqSchool : req.session.school;
     if (!canManageUsers(req.session, school)) return res.status(403).json({ error: 'forbidden' });
     const name = String(req.body && req.body.name || '').trim();
     const email = String(req.body && req.body.email || '').trim().toLowerCase();
@@ -949,18 +950,9 @@ function mergeStudentsLateOnly(prevStudents, inStudents) {
   return Array.from(map.values());
 }
 
-// ===== حارس تلوث القسمين (cross-section) =====
-// القسمان منفصلان تماماً (لا يوجد معرّف مستخدم مشترك بين GIRLS و BOYS إطلاقاً).
-// أي دفعة حفظ/استيراد/استرجاع تستحضر حسابات القسم الآخر = جهاز ملوِّث يدمج النسختين.
-// نرفضها 409 لتتوقف العودة الدورية لأرقام البنين داخل قسم البنات (والعكس).
+// ===== حارس تلوث القسم (كان ثنائي GIRLS/BOYS — أُلغي مع حذف قسم البنين) =====
 async function otherSchoolUserIds(school) {
-  const other = school === 'BOYS' ? 'GIRLS' : 'BOYS';
-  const rec = await db.getSchoolData(other);
-  const set = new Set();
-  if (rec && rec.data && Array.isArray(rec.data.users)) {
-    for (const u of rec.data.users) if (u && u.id) set.add(u.id);
-  }
-  return set;
+  return new Set();
 }
 // تساهل لعمليات النقل المشروعة: تحمّل حتى 3 معرّفات أجنبية (نقل حساب واحد) دون منع،
 // بينما دفعة منسوخة من قسم آخر تحمل العشرات — تُرفض قاطعة.
@@ -972,9 +964,7 @@ function foreignUserCount(users, otherIds) {
 
 // ===== مطابقة جدول المستخدمين (المصادقة) مع نسخة بيانات القسم بعد كتابة قسم users =====
 async function userPresentInOtherSchool(id, school) {
-  const other = school === 'BOYS' ? 'GIRLS' : 'BOYS';
-  const rec = await db.getSchoolData(other);
-  return rec.data && Array.isArray(rec.data.users) && rec.data.users.some(u => u.id === id);
+  return false;
 }
 async function reconcileUserTable(school, prevUsers, nextUsers) {
   // تصحيح الفعّل الإجباري قبل أي مقارنة: أي نسخة (من أي جهاز) تحاول تعطيل حساب
@@ -999,9 +989,8 @@ async function reconcileUserTable(school, prevUsers, nextUsers) {
   for (const p of (prevUsers || [])) {
     const n = nextMap.get(p.id);
     if (!n) {
-      // أُزيل من بيانات هذا القسم: إن وُجد في القسم الآخر فهو منقول، وإلا فهو محذوف
-      if (await userPresentInOtherSchool(p.id, school)) await db.setUserSchool(p.id, school === 'BOYS' ? 'GIRLS' : 'BOYS');
-      else await db.deactivateUser(p.id);
+      // أُزيل من بيانات هذا القسم: لم يعد هناك قسم آخر — يُعطَّل الحساب
+      await db.deactivateUser(p.id);
       continue;
     }
     const tbl = await db.userById(p.id);
@@ -1465,8 +1454,8 @@ app.post('/api/backups/import', requireAuth, (req, res) => {
     res.json({ ok: true, school, ts });
   })().catch(fail(res));
 });
-// لقطة أولية عند الإقلاع ثم كل 30 دقيقة
-setInterval(takeBackups, 30 * 60 * 1000).unref();
+// لقطة أولية عند الإقلاع ثم كل 6 ساعات (تخفيض استهلاك نقل بيانات القاعدة)
+setInterval(takeBackups, 6 * 60 * 60 * 1000).unref();
 
 /* ================= صحة وأمان ================= */
 const net = require('net');

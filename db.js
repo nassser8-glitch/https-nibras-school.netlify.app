@@ -335,7 +335,7 @@ async function patchSchoolUserStats(school, userId, lastLoginIso, loginCount, hi
 }
 
 /* ===== النسخ الاحتياطي الدوري ===== */
-const BACKUP_KEEP = 200;
+const BACKUP_KEEP = 40;
 async function saveBackup(school, ts, data) {
   await pool.query(
     `INSERT INTO data_backups (school, ts, data) VALUES ($1,$2,$3)`,
@@ -365,8 +365,8 @@ async function auditSync(rec) {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [rec.school, rec.ip || null, rec.ua || null, rec.user_id || null, rec.role || null,
        rec.n_assign || 0, rec.n_tomb || 0, JSON.stringify(rec.assign_ids || []), rec.data_ts || 0, rec.payload || 0]);
-    // إبقاء التدقيق محدوداً: آخر 5000 سطر فقط
-    await pool.query(`DELETE FROM sync_audit WHERE id NOT IN (SELECT id FROM sync_audit ORDER BY id DESC LIMIT 5000)`);
+    // إبقاء التدقيق محدوداً: آخر 500 سطر فقط (تخفيض استهلاك النقل/التخزين)
+    await pool.query(`DELETE FROM sync_audit WHERE id NOT IN (SELECT id FROM sync_audit ORDER BY id DESC LIMIT 500)`);
   } catch (e) {
     // فشل التدقيق لا يجب أن يكسر الحفظ
     console.error('auditSync failed:', e.message);
