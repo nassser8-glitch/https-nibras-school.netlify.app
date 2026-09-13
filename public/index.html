@@ -4053,7 +4053,7 @@ function renderDashboard(){
     // "فعّل حسابه" = من دخل حسابَه فعلاً (سجّل دخولاً — لديه سجل/تاريخ آخر دخول)
     const hasLoggedIn = u => !!(u && (u.lastLogin || (u.loginCount || 0) > 0));
     const acc = () => ({ activated: 0, total: 0, actNames: [], pendNames: [] });
-    const schoolActs = ['BOYS','GIRLS'].map(school => {
+    const schoolActs = ['GIRLS'].map(school => {
       const sd = loadSchoolDB(school);
       const userMap = new Map((sd.users||[]).map(u => [u.id, u]));
       const st = acc();
