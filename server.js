@@ -691,7 +691,13 @@ function mergeSection(prevVal, inVal) {
     const keyOf = r => (r && typeof r === 'object' && r.id) ? r.id : '__anon:' + JSON.stringify(r);
     // قائمة منع دائمة: تكليفات معتمة (مثل «1» و«11» لعبدالله) مُحذوفة نهائياً لا يمكن لأي
     // جهاز قديم إعادة إحيائها مهما دفع نسخته — فلترة مباشرة قبل الدمج.
-    const blockedKeys = new Set(['id_gmrt4bv0mtjke2qi', 'id_ualtqnkfmtjkhr43']);
+    const blockedKeys = new Set([
+      'id_gmrt4bv0mtjke2qi', 'id_ualtqnkfmtjkhr43',
+      // الأول الابتدائي: تكليفات حُذفت بأمر الإدارة (نقاطها السلبية تُحسب تلقائياً) —
+      // وسمها deleted في القاعدة وفلترتها هنا يمنع الأجهزة القديمة من إحيائها.
+      'id_5d17111nmtttorn5', 'id_wk9ojhlymtv7xr3g',
+      'id_srbjht5ymts4tp8s', 'id_92j0tg1amtsejasl'
+    ]);
     prevVal = prevVal.filter(r => !(r && typeof r === 'object' && blockedKeys.has(keyOf(r))));
     inVal = inVal.filter(r => !(r && typeof r === 'object' && blockedKeys.has(keyOf(r))));
     const tomb = new Set();
@@ -1301,6 +1307,18 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     // فتحولت 48). أي صف مكرر في (المرحلة+الاسم)، أو بلا مرحلة، أو بمرحلة وهمية بلا طالبات فيه،
     // يُحوَّل إلى شاهد حذف (deleted) فيبقى المكرر مخفياً ولا يعود العدد يصعد مع كل حفظ.
     try { dedupeClasses(data); } catch (e) { console.warn('[dedupeClasses]', e.message); }
+
+    // حارس التكليفات المُلغاة: أجهزة قديمة تعيد دفع تكليفات حذفتها الإدارة (نقاطها
+    // السلبية تُحتسب تلقائياً على من لم ينجزها) — أي وصول لها يُعاد وسمه deleted:true
+    // فيبقى مصدر التحميل منتعشاً ولا تهبط نقاط الطالبات من جديد.
+    try {
+      const BANNED_ASSIGN = ['id_5d17111nmtttorn5', 'id_wk9ojhlymtv7xr3g', 'id_srbjht5ymts4tp8s', 'id_92j0tg1amtsejasl'];
+      if (Array.isArray(data.assignments)) {
+        data.assignments.forEach(a => {
+          if (a && typeof a === 'object' && BANNED_ASSIGN.includes(a.id)) a.deleted = true;
+        });
+      }
+    } catch (e) { console.warn('[banAssign]', e.message); }
 
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
     const clean = JSON.parse(JSON.stringify(data));
