@@ -559,6 +559,153 @@ app.post('/api/auth/admin/create-user', requireAuth, (req, res) => {
   })().catch(fail(res));
 });
 
+// حذف نهائي لطالبة: يُعطّل حسابها (لا يمكنها الدخول)، ويحول سجلها إلى شاهد حذف
+// deleted ينتشر لكل الأجهزة، ويسجّل معرّفها في _blockedStudents فلا يعود اسمها لأي
+// جهاز قديم مهما دفع نسخته (تُسقط/تُفسد أي نسخة قادمة قبل الحفظ).
+app.post('/api/auth/admin/delete-student', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    if (rateLimit('delStu', 30, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+    const id = String(req.body && req.body.studentId || '').trim();
+    if (!id) return res.status(400).json({ error: 'missing_studentId' });
+    const school = String(req.body && req.body.school || '').toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!canManageUsers(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const target = await db.userById(id);
+    if (!target) return res.status(404).json({ error: 'not_found' });
+    if (target.role !== 'STUDENT' || target.school !== school)
+      return res.status(400).json({ error: 'not_student' });
+
+    // 1) تعطيل الحساب نهائيًا (منع الدخول) مع الإبقاء على الصف في users — وإلا
+    //    تفلتره guard_filter_mirror_data فلا يصل شاهدُ الحذف للأجهزة الأخرى فيعود الاسم.
+    try { await db.setUserActive(id, false); } catch (e) { console.warn('[del-stu] active', e.message); }
+    try { await db.deleteUserSessions(id); } catch (e) { console.warn('[del-stu] sessions', e.message); }
+
+    // 2) تحويل سجل الطالبة إلى شاهد حذف + تنقية سجلاتها من المرآة + تسجيل الحظر
+    const rec = await db.getSchoolData(school);
+    if (rec && rec.data) {
+      const d = rec.data;
+      const blockSet = new Set(Array.isArray(d._blockedStudents) ? d._blockedStudents.map(String) : []);
+      blockSet.add(id);
+      d._blockedStudents = [...blockSet];
+      if (Array.isArray(d.students)) {
+        d.students = d.students.map(s => {
+          if (!s) return s;
+          if (s.id !== id) return s;
+          const t = JSON.parse(JSON.stringify(s));
+          t.active = false; t.deleted = true;
+          return t;
+        });
+      }
+      if (Array.isArray(d.notes)) d.notes = d.notes.filter(n => n && n.studentId !== id);
+      if (Array.isArray(d.attendance)) d.attendance = d.attendance.filter(a => a && a.studentId !== id);
+      if (Array.isArray(d.assignments)) {
+        d.assignments.forEach(a => {
+          if (a && Array.isArray(a.completedBy)) a.completedBy = a.completedBy.filter(x => x !== id);
+        });
+      }
+      if (Array.isArray(d.users)) {
+        d.users = d.users.map(u => {
+          if (!u) return u;
+          if (u.id !== id) return u;
+          const c = JSON.parse(JSON.stringify(u));
+          c.active = false; c.deleted = true; c.lastLogin = undefined;
+          return c;
+        });
+      }
+      try { await db.setSchoolData(school, d, Math.max((rec && rec.ts) || 0, Date.now()) + 1); } catch (e) { console.warn('[del-stu] mirror', e.message); }
+    }
+
+    res.json({ ok: true, studentId: id, deleted: true });
+  })().catch(fail(res));
+});
+
+// حذف نهائي جماعي للطالبات (حذف الكل من إدارة الطلاب) — نفس حماية المفرد فوق كل واحدة.
+app.post('/api/auth/admin/delete-students', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    if (rateLimit('delStu', 30, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+    const ids = Array.isArray(req.body && req.body.studentIds) ? req.body.studentIds.map(String) : [];
+    if (!ids.length) return res.status(400).json({ error: 'missing_studentIds' });
+    const school = String(req.body && req.body.school || '').toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!canManageUsers(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+
+    const valid = [];
+    for (const id of ids) {
+      const t = await db.userById(id);
+      if (!t || t.role !== 'STUDENT' || t.school !== school) continue;
+      valid.push({ id, name: t.name });
+    }
+    for (const v of valid) {
+      try { await db.setUserActive(v.id, false); } catch (e) {}
+      try { await db.deleteUserSessions(v.id); } catch (e) {}
+    }
+    const idSet = new Set(valid.map(v => v.id));
+    if (idSet.size) {
+      const rec = await db.getSchoolData(school);
+      if (rec && rec.data) {
+        const d = rec.data;
+        const blockSet = new Set(Array.isArray(d._blockedStudents) ? d._blockedStudents.map(String) : []);
+        for (const id of idSet) blockSet.add(id);
+        d._blockedStudents = [...blockSet];
+        if (Array.isArray(d.students)) {
+          d.students = d.students.map(s => {
+            if (!s || !s.id) return s;
+            if (!idSet.has(s.id)) return s;
+            const t = JSON.parse(JSON.stringify(s));
+            t.active = false; t.deleted = true;
+            return t;
+          });
+        }
+        if (Array.isArray(d.notes)) d.notes = d.notes.filter(n => n && n.studentId && !idSet.has(n.studentId));
+        if (Array.isArray(d.attendance)) d.attendance = d.attendance.filter(a => a && a.studentId && !idSet.has(a.studentId));
+        if (Array.isArray(d.assignments)) {
+          d.assignments.forEach(a => {
+            if (a && Array.isArray(a.completedBy)) a.completedBy = a.completedBy.filter(x => !idSet.has(x));
+          });
+        }
+        if (Array.isArray(d.users)) {
+          d.users = d.users.map(u => {
+            if (!u || !u.id) return u;
+            if (!idSet.has(u.id)) return u;
+            const c = JSON.parse(JSON.stringify(u));
+            c.active = false; c.deleted = true; c.lastLogin = undefined;
+            return c;
+          });
+        }
+        try { await db.setSchoolData(school, d, Math.max((rec && rec.ts) || 0, Date.now()) + 1); } catch (e) { console.warn('[del-stus] mirror', e.message); }
+      }
+    }
+
+    res.json({ ok: true, count: valid.length, ids: valid.map(v => v.id) });
+  })().catch(fail(res));
+});
+
+// حارس بقاء الطالبات المحذوفات نهائيًا: أي نسخة قادمة تحملها تُفسد (deleted+غير نشطة)
+// قبل الدمج والحفظ، فلا تعود للإحياء أبدًا. يُطبَّق على النسخة الواصلة وعلى النتيجة النهائية.
+function applyBlockedStudents(data, keys) {
+  try {
+    const ids = keys instanceof Set ? keys : new Set(Array.isArray(data && data._blockedStudents) ? data._blockedStudents.map(String) : []);
+    if (!ids.size) return false;
+    let changed = false;
+    if (Array.isArray(data.students)) {
+      data.students = data.students.map(s => {
+        if (s && ids.has(String(s.id)) && s.active !== false) { changed = true; const t = JSON.parse(JSON.stringify(s)); t.active = false; t.deleted = true; return t; }
+        if (s && ids.has(String(s.id)) && !s.deleted) { changed = true; s.deleted = true; }
+        return s;
+      });
+    }
+    if (Array.isArray(data.users)) {
+      data.users = data.users.map(u => {
+        if (u && ids.has(String(u.id)) && u.role === 'STUDENT' && u.active !== false) { changed = true; const t = JSON.parse(JSON.stringify(u)); t.active = false; t.deleted = true; return t; }
+        return u;
+      });
+    }
+    return changed;
+  } catch (e) { console.warn('[blockedStudents]', e.message); return false; }
+}
+
 app.post('/api/auth/admin/reset-password', requireAuth, (req, res) => {
   (async () => {
     if (rateLimit('reset', 15, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
@@ -1320,6 +1467,13 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       }
     } catch (e) { console.warn('[banAssign]', e.message); }
 
+    // حارس الطالبات المحذوفات نهائيًا: أي نسخة قادمة تحمل طالبة أُزيل حسابها
+    // (من قِبل المدير عبر حذف نهائي) تُسقط سجلها واسمها قبل الحفظ — لا عودة أبدًا.
+    try {
+      const bset = new Set(Array.isArray(prev.data && prev.data._blockedStudents) ? prev.data._blockedStudents.map(String) : []);
+      applyBlockedStudents(data, bset);
+    } catch (e) { console.warn('[blockedStudents]', e.message); }
+
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
     const clean = JSON.parse(JSON.stringify(data));
     // تطبيع ثانٍ بعد الدمج: الدمج (mergeSection/mergeClasses...) قد يعيد مرجعات يتيمة
@@ -1370,6 +1524,17 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       clean.classes = clean.classes.filter(c => c && !inBlocked.has(c.id));
     }
     clean._blockedClasses = [...inBlocked];
+
+    // دمج قائمة الطالبات المحذوفة نهائيًا من نسخة الخادم (لو أتى جهاز قديم بلا قائمة)
+    // وتطبيق الحارس على النسخة النهائية قبل التخزين — لا يعود اسم محذوفة أبدًا.
+    try {
+      const pb = new Set(Array.isArray(prev.data && prev.data._blockedStudents) ? prev.data._blockedStudents.map(String) : []);
+      const ib = new Set(Array.isArray(clean._blockedStudents) ? clean._blockedStudents.map(String) : []);
+      for (const x of pb) ib.add(x);
+      clean._blockedStudents = [...ib];
+      applyBlockedStudents(clean, ib);
+    } catch (e) { console.warn('[blockedStudents#final]', e.message); }
+
     await db.setSchoolData(school, clean, nextTs);
     // مزامنة جدول المصادقة مع أي تغيير في قسم المستخدمين (حذف/نقل/تعطيل)
     if (['ADMIN','AGENT'].includes(req.session.role)) {

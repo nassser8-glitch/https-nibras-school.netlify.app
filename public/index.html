@@ -5568,19 +5568,42 @@ async function addStudent(){
   saveDB(d);
   renderApp();
 }
-function deleteStudent(id){
+async function deleteStudent(id){
   const s = studentById(id);
-  if(!confirm(`هل تريد حذف الطالب "${s?.fullName||''}"؟`)) return;
+  const school = getActiveSchool();
+  if(!confirm(`هل تريد حذف الطالب "${s?.fullName||''}" نهائيًا؟\nسيُحذف حسابها واسمها نهائيًا ولا يمكن استعادتها.`)) return;
+  if(__serverEnabled()){
+    const r = await __api('POST', 'admin/delete-student', { studentId: id, school });
+    if(r.status === 401){ __handleAuthError(r); return; }
+    if(r.status !== 200 || !r.j || !r.j.ok){ alert('تعذر الحذف النهائي: ' + (r?.j?.error || 'خطأ')); return; }
+  }
   const d = loadDB();
   const st = d.students.find(x => x.id === id);
-  if(st) st.active = false;
+  if(st){ st.active = false; st.deleted = true; }
+  // إسقاط سجلاتها (نقاط/حضور/إنجاز) من النسخة المحلية لئلا تُرفع لاحقًا
+  if(Array.isArray(d.notes)) d.notes = d.notes.filter(n => n && n.studentId !== id);
+  if(Array.isArray(d.attendance)) d.attendance = d.attendance.filter(a => a && a.studentId !== id);
+  if(Array.isArray(d.students) && d.students.some(x => x.id === id)){
+    const bs = new Set(Array.isArray(d._blockedStudents) ? d._blockedStudents.map(String) : []);
+    bs.add(id); d._blockedStudents = [...bs];
+  }
   saveDB(d);
   renderApp();
 }
-function deleteAllStudents(){
-  if(!confirm('هل أنت متأكد من حذف جميع الطلاب؟')) return;
+async function deleteAllStudents(){
+  if(!confirm('هل أنت متأكد من حذف جميع الطلاب نهائيًا؟')) return;
   const d = loadDB();
-  d.students.forEach(s => s.active = false);
+  const ids = d.students.filter(s => s.active).map(s => s.id);
+  if(ids.length && __serverEnabled()){
+    const r = await __api('POST', 'admin/delete-students', { studentIds: ids, school: getActiveSchool() });
+    if(r.status === 401){ __handleAuthError(r); return; }
+    if(r.status !== 200 || !r.j || !r.j.ok){ alert('تعذر الحذف النهائي: ' + (r?.j?.error || 'خطأ')); return; }
+  }
+  const bs = new Set(Array.isArray(d._blockedStudents) ? d._blockedStudents.map(String) : []);
+  d.students.forEach(s => { s.active = false; s.deleted = true; if(s.id) bs.add(String(s.id)); });
+  d._blockedStudents = [...bs];
+  d.notes = (d.notes || []).filter(n => n && n.studentId && !bs.has(String(n.studentId)));
+  d.attendance = (d.attendance || []).filter(a => a && a.studentId && !bs.has(String(a.studentId)));
   saveDB(d);
   renderApp();
 }
