@@ -5378,6 +5378,7 @@ function pointItems(d){
       if(date && attKeys.has(it.studentId + '|' + date + '|' + status)) return false;
     }
     if(it.kind === 'assign' && doneAssignKeys.has(it.studentId + '|' + (it.assignmentId||''))) return false;
+    if(it.createdBy && !d.users.some(u => u && u.id === it.createdBy)) return false;
     return true;
   });
 }
