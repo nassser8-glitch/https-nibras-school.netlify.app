@@ -5304,6 +5304,7 @@ function pointItems(d){
     if(!a.date || a.date > today) return;
     (d.students||[]).forEach(s => {
       if(!s.active || s.classId !== a.classId) return;
+      if(s.joinedAt && a.created && a.created < s.joinedAt) return;
       const completed = (a.completedBy||[]).includes(s.id);
       if(completed) return;
       const existingNote = d.notes.find(n => n.studentId === s.id && n.category === 'عدم إنجاز الواجب' && n.assignmentId === a.id);
@@ -5592,7 +5593,7 @@ async function addStudent(){
       return;
     }
   }
-  d.students.push({ id:newId, fullName, studentNo, classId, guardianName:'', guardianPhone:'', active:true });
+  d.students.push({ id:newId, fullName, studentNo, classId, guardianName:'', guardianPhone:'', active:true, joinedAt: Date.now() });
   saveDB(d);
   renderApp();
 }
@@ -5821,7 +5822,7 @@ function importStudents(evt){
       if(existing){
         existing.fullName = fullName; existing.active = true;
       } else {
-        d.students.push({ id:uid(), fullName, studentNo, classId:cls.id, guardianName:'', guardianPhone:'', active:true });
+        d.students.push({ id:uid(), fullName, studentNo, classId:cls.id, guardianName:'', guardianPhone:'', active:true, joinedAt: Date.now() });
       }
       created++;
     });
