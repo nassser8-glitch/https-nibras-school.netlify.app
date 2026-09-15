@@ -4135,7 +4135,7 @@ function renderDashboard(){
   const donutHTML = `
     <div class="att-card">
       ${attGroup('👨‍🎓 حضور الطلاب', present, absent, late, sPct, 'showTodayAttendance()')}
-      ${attGroup('👨‍🏫 حضور المعلمين', tPresent, absentTeachers.length, lateTeachers.length, tPct, canMgrT ? 'showTeacherAbsenceList()' : 'showTodayAttendance()', true)}
+      ${attGroup('👨‍🏫 حضور المعلمين والإداريين', tPresent, absentTeachers.length, lateTeachers.length, tPct, canMgrT ? 'showTeacherAbsenceList()' : 'showTodayAttendance()', true)}
       <button class="att-report-btn" onclick="showTodayAttendance()"><span>عرض تقرير الحضور</span><span>←</span></button>
     </div>`;
   const attPanel = `
