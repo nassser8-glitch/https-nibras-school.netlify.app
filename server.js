@@ -407,6 +407,37 @@ app.get('/api/auth/me', (req, res) => {
   }).catch(fail(res));
 });
 
+// نقطة التواجد (من فتح التطبيق الآن): يرسلها العميل كل دقيقة فتحدَّث lastSeenAt في
+// مصدر الحقيقة ونسخة القسم — حتى يرى المدير «المتواجدون الآن» ببيانات حقيقية من كل
+// الأجهزة (كانت تُكتب محلياً فقط فتُهمَل عند رفع غير المدير وتبقى البطاقة صفراً).
+app.post('/api/auth/presence', requireAuth, (req, res) => {
+  (async () => {
+    if (rateLimit('presence', 120, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+    const school = req.session.school;
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    const iso = Date.now();
+    await db.touchUserPresence(school, req.session.user_id, new Date(iso).toISOString());
+    res.json({ ok: true });
+  })().catch(fail(res));
+});
+
+// قائمة المتواجدين الآن (من فتحت التطبيق خلال آخر 3 دقائق) — للمدير/الوكيل/الإداري:
+// تُقرأ من نسخة القسم اللحظية (لا من localStorage الجهاز) فيرى المدير حضور كل الأجهزة.
+app.get('/api/auth/presence', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.query.school || req.session.school || '').toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (req.session.role !== 'ADMIN' && req.session.role !== 'AGENT')
+      return res.status(403).json({ error: 'forbidden' });
+    const rec = await db.getSchoolData(school);
+    const users = (rec && rec.data && Array.isArray(rec.data.users)) ? rec.data.users : [];
+    const out = users
+      .filter(u => u && !u.deleted)
+      .map(u => ({ id: u.id, name: u.name || u.id, role: u.role, active: u.active !== false, lastSeenAt: u.lastSeenAt || '' }));
+    res.json({ ok: true, school, now: Date.now(), users: out });
+  })().catch(fail(res));
+});
+
 app.post('/api/auth/change-password', requireAuth, (req, res) => {
   (async () => {
     if (rateLimit('chpwd', 6, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });

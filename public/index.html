@@ -4976,11 +4976,23 @@ function renderWeather(){
 }
 
 /* ============ المتواجدون الآن من المعلمين/المعلمات (للمدير والوكلاء) ============ */
-function presentNowInfo(school){
+// قائمة الحضور اللحظية من الخادم (كل أجهزة القسم) — الاحتياط: نسخة المتصفح المحلية
+let __presenceLive = null; // { at, users: [{id,name,role,active,lastSeenAt}, ...] }
+function presenceUsersFor(school){
+  if(__presenceLive && Date.now() - __presenceLive.at < 70000 && Array.isArray(__presenceLive.users)){
+    const head = JSON.parse(localStorage.getItem('nibras_' + school + '_db_v1') || 'null');
+    if(head && Array.isArray(head.users)){
+      const byId = new Map(head.users.map(u => [u.id, u.active !== false]));
+      return __presenceLive.users.map(su => Object.assign({}, su, { active: byId.has(su.id) ? byId.get(su.id) : su.active !== false }));
+    }
+    return __presenceLive.users;
+  }
   const db = JSON.parse(localStorage.getItem('nibras_' + school + '_db_v1') || 'null');
-  if(!db) return { n: 0, names: [], absentNames: [] };
+  return (db && Array.isArray(db.users)) ? db.users : [];
+}
+function presentNowInfo(school){
   const cutoff = Date.now() - 3 * 60 * 1000;
-  const teachers = (db.users || []).filter(u => u.role === 'TEACHER' && u.active);
+  const teachers = presenceUsersFor(school).filter(u => u.role === 'TEACHER' && u.active);
   const present = teachers.filter(u => u.lastSeenAt && new Date(u.lastSeenAt).getTime() >= cutoff);
   const names = present.map(u => ({ name: u.name, online: true }));
   const absentNames = teachers.filter(u => !u.lastSeenAt || new Date(u.lastSeenAt).getTime() < cutoff).map(u => u.name);
@@ -4999,6 +5011,23 @@ function touchUserPresence(){
     t.lastSeenAt = new Date().toISOString();
     localStorage.setItem(key, JSON.stringify(d));
   }
+  // إبلاغ الخادم بالتواجد ليراه المدير من كل الأجهزة (كان محلياً فقط فكانت البطاقة صفراً)
+  if(__serverEnabled()){
+    fetch(AUTH_API + 'presence', { method: 'POST', keepalive: true, headers: {} }).catch(() => {});
+  }
+}
+// جلب قائمة الحضور اللحظية من الخادم ثم إعادة رسم البطاقة
+async function refreshPresence(school){
+  if(!__serverEnabled() || !school) return;
+  // حارس ضد الحلقة: بعد نجاح حديث (أقل من 5 ثوانٍ) لا نعيد الاستدعاء
+  if(__presenceLive && Date.now() - __presenceLive.at < 5000) return;
+  try{
+    const r = await fetch(AUTH_API + 'presence?school=' + encodeURIComponent(school), { headers: {} });
+    if(!r.ok) return;
+    const j = await r.json();
+    if(j && j.ok && Array.isArray(j.users)){ __presenceLive = { at: Date.now(), users: j.users }; }
+    updatePresentNow();
+  }catch(e){}
 }
 function updatePresentNow(){
   const el = document.getElementById('presentNowBox');
@@ -5021,6 +5050,7 @@ function updatePresentNow(){
       <div style="font-size:22px;font-weight:900;color:#4ade80;line-height:1.1">${sinfo.n}</div>
       <div style="font-size:11px;color:#86efac">${studentWord}${sinfo.n ? ` <span style="color:#fca5a5">— الآن</span>` : ''}</div>
     </div>`;
+  refreshPresence(school);
 }
 function showPresentNow(){
   const school = getActiveSchool();
@@ -5035,10 +5065,8 @@ function showPresentNow(){
 }
 /* الطالبات المتواجدات في الموقع الآن (من فتحت التطبيق في آخر 3 دقائق) */
 function presentStudentsOnlineInfo(school){
-  const db = JSON.parse(localStorage.getItem('nibras_' + school + '_db_v1') || 'null');
-  if(!db) return { n: 0, names: [] };
   const cutoff = Date.now() - 3 * 60 * 1000;
-  const students = (db.users || []).filter(u => u.role === 'STUDENT' && u.active);
+  const students = presenceUsersFor(school).filter(u => u.role === 'STUDENT' && u.active);
   const present = students.filter(u => u.lastSeenAt && new Date(u.lastSeenAt).getTime() >= cutoff);
   return { n: present.length, names: present.map(u => ({ name: u.name, online: true })) };
 }

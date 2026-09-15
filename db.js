@@ -333,6 +333,22 @@ async function patchSchoolUserStats(school, userId, lastLoginIso, loginCount, hi
       WHERE school = $5`,
     [userId, lastLoginIso, loginCount, JSON.stringify(historyJsonArray), school]);
 }
+// تحديث مكان التواجد (lastSeenAt) في مصدر الحقيقة (جدول users) وفي نسخة القسم
+// المُرسلة للعملاء — ليرى المدير من المتواجد/المتواجدة الآن بالضغط على البطاقة.
+async function touchUserPresence(school, userId, isoNow) {
+  await pool.query(`UPDATE users SET data = data || $2::jsonb WHERE id = $1`, [userId, JSON.stringify({ lastSeenAt: isoNow })]);
+  await pool.query(
+    `UPDATE school_data
+        SET data = jsonb_set(data, '{users}', (
+          SELECT COALESCE(jsonb_agg(
+            CASE WHEN elem->>'id' = $1
+                 THEN elem || jsonb_build_object('lastSeenAt', to_jsonb($2::text))
+                 ELSE elem END), '[]'::jsonb)
+          FROM jsonb_array_elements(data->'users') elem
+        ), false)
+      WHERE school = $3`,
+    [userId, isoNow, school]);
+}
 
 /* ===== النسخ الاحتياطي الدوري ===== */
 const BACKUP_KEEP = 30;
@@ -394,7 +410,7 @@ module.exports = {
   updateUserPasswordHash, updateUserPlainPassword, updateUserProfile, grantUserAccess,
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,
-  getSchoolData, setSchoolData, patchSchoolUserStats,
+  getSchoolData, setSchoolData, patchSchoolUserStats, touchUserPresence,
   getSchoolSettings, setSchoolSettings,
   saveBackup, listBackups, getBackup,
   auditSync,
