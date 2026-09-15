@@ -4203,6 +4203,9 @@ function renderDashboard(){
     });
     const all = comb('ALL');
     const groups = [all, ...schoolActs.map(x => ({ key: x.key, school: x.school, students: x.students, teachers: x.teachers, admins: x.admins }))];
+    // عند قسم واحد فقط (بنات — كما هو الحال الآن) تُعرض البيانات مباشرة دون تبويبات
+    // "الكل/بنين/بنات" لأن الفلترة والإجمالي شيء واحد ولا داعي لتكرار التبويب.
+    const onlyGirls = schoolActs.length === 1 && groups.length === 2;
     const miniDonut = (label, g, gkey, grp) => {
       const pct = g.total ? Math.round((g.activated / g.total) * 100) : 0;
       const pend = g.total - g.activated;
@@ -4233,10 +4236,11 @@ function renderDashboard(){
         <p class="dash-panel-title">🔑 نسبة تفعيل الحسابات</p>
         <span class="dash-panel-more" style="cursor:default">آخر تحديث عند فتح اللوحة</span>
       </div>
-      <div class="dash-tabs" style="margin-bottom:12px">
+      ${onlyGirls ? `<div class="act-pane">${actTab(groups[1])}</div>`
+        : `<div class="dash-tabs" style="margin-bottom:12px">
         ${groups.map((g,i) => `<button class="dash-tab ${i===0?'active':''}" data-act="${g.key}" onclick="switchActTab('${g.key}')">${g.school}</button>`).join('')}
       </div>
-      ${groups.map(g => `<div class="act-pane" data-act="${g.key}" style="${g.key==='ALL'?'':'display:none'}">${actTab(g)}</div>`).join('')}
+      ${groups.map(g => `<div class="act-pane" data-act="${g.key}" style="${g.key==='ALL'?'':'display:none'}">${actTab(g)}</div>`).join('')}`}
       <p class="muted small" style="margin:10px 0 0">يُحتسب من دخل حسابَه لأول مرة (فعّل حسابه) — وليس مجرد إنشاء الحساب. اضغط على الرقم أو الدائرة لعرض الأسماء.</p>
     </div>`;
   })();
