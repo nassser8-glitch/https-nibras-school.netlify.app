@@ -1209,6 +1209,7 @@ async function reconcileUserTable(school, prevUsers, nextUsers) {
     if ((tbl.active ? true : false) !== (n.active !== false)) await db.setUserActive(p.id, n.active !== false);
     if (n.email && tbl.email !== n.email) await db.updateUserIdentity(p.id, { email: n.email });
     if (n.name && tbl.name !== n.name) await db.updateUserIdentity(p.id, { name: n.name });
+    if (n.username && tbl.username !== n.username) await db.updateUserIdentity(p.id, { username: n.username });
   }
   // مستخدم جديد في بيانات هذا القسم (مثلاً منقول إليه): إعادة تفعيل حسابه وتصحيح قسمه
   for (const n of (nextUsers || [])) {
