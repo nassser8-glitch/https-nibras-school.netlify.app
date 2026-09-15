@@ -898,6 +898,30 @@ function mergeSection(prevVal, inVal) {
   // لا دمج ممكن: الأحدث (الواصل) يرجح إن كان من نوع الكائن/أو يرجح الموجودة
   return inVal !== undefined ? inVal : prevVal;
 }
+// ===== دمج رسائل المدير/الإشعارات (adminMsgs) =====
+// دمج حسب id مع «إزالة تكرار المصدر»: تحويل/نشاط كان يُنشئ سابقاً نسختين متطابقتين
+// (نفس transferId/partReqId لجهتين مرسلتين) فتبقى بعد دمجها رسالةٌ شقيقة بنفس المحتوى
+// وتعاود الظهور بعد الضغط على «تم الاطلاع». هنا نُبقي آخر نسخة فقط من كل مصدر.
+function mergeAdminMsgs(prev, incoming) {
+  if (!Array.isArray(prev)) prev = [];
+  if (!Array.isArray(incoming)) incoming = [];
+  const keyOf = r => (r && typeof r === 'object' && r.id) ? r.id : '__anon:' + JSON.stringify(r);
+  const srcKeyOf = r => (r && typeof r === 'object')
+    ? ((r.senderRole === 'TRANSFER' && r.transferId) ? 't:' + r.transferId
+      : (r.senderRole === 'ACTIVITY' && r.partReqId) ? 'p:' + r.partReqId
+      : 'm:' + keyOf(r))
+    : 'm:' + keyOf(r);
+  // ندمج أولاً حسب id ثم نزيل إخوة كل مصدر (نُبقي الأحدث رجحاناً للنسخة ذات المعلومات).
+  const merged = mergeSection(prev, incoming);
+  const bySrc = new Map();
+  merged.forEach(m => {
+    if (!m || typeof m !== 'object') return;
+    const k = srcKeyOf(m);
+    const cur = bySrc.get(k);
+    if (!cur || String(cur.updatedAt || cur.createdAt || '') <= String(m.updatedAt || m.createdAt || '')) bySrc.set(k, m);
+  });
+  return Array.from(bySrc.values());
+}
 // ===== دمج قسم الحضور: آخر-كتابة-يفوز حسب (studentId, date) على طابع _t =====
 // كان الدمج العام حسب id فقط، فإذا دفع معلم/جهاز آخر نسخة قديمة تظهر الطالبة (حاضر)
 // تُستبدل نسخة الخادم ABSENT بموجب المفتاح id فيختفي الغياب بعد إعادة الفتح.
@@ -1424,6 +1448,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         // حتى يبقى الغياب المسجَّل قائماً ولا يختفي بأي نسخة قديمة من أي دور.
         if (key === 'attendance') { merged[key] = mergeAttendance(a, b); continue; }
         if (key === 'activities') { merged[key] = mergeActivities(a, b); continue; }
+        if (key === 'adminMsgs') { merged[key] = mergeAdminMsgs(a, b); continue; }
         if (key === 'classes') { merged[key] = mergeClasses(a, b); continue; }
         if (canEditU) { merged[key] = mergeSection(a, b); continue; }
         // غير المدير: يكتب الأقسام المصرَّح بها فقط، والباقي يبقى نسخة الخادم سليمة
@@ -1456,7 +1481,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           if (!jsonEqual(prev.data.attendance, cf.attendance)) cf.attendance = mergeAttendance(prev.data.attendance, cf.attendance);
           // الرسائل/الإعلان/الاقتراحات: تُدمج دائماً حتى مع استبدال المدير الكامل،
           // حتى لا يمسح حفظٌ إداري على جهاز قديم رسائلَ وصلت حديثاً للمعلمين من جهات أخرى.
-          if (Array.isArray(prev.data.adminMsgs) && !jsonEqual(prev.data.adminMsgs, cf.adminMsgs)) cf.adminMsgs = mergeSection(prev.data.adminMsgs, cf.adminMsgs);
+          if (Array.isArray(prev.data.adminMsgs) && !jsonEqual(prev.data.adminMsgs, cf.adminMsgs)) cf.adminMsgs = mergeAdminMsgs(prev.data.adminMsgs, cf.adminMsgs);
           if (Array.isArray(prev.data.announcements) && !jsonEqual(prev.data.announcements, cf.announcements)) cf.announcements = mergeSection(prev.data.announcements, cf.announcements);
           if (Array.isArray(prev.data.suggestions) && !jsonEqual(prev.data.suggestions, cf.suggestions)) cf.suggestions = mergeSection(prev.data.suggestions, cf.suggestions);
           data = cf;

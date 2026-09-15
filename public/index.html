@@ -3278,17 +3278,29 @@ function sendAdminMsg(){
 function dismissAdminMsg(id){
   const found = findAdminMsgAcross(id);
   if(!found) return;
-  const { school, arr, m } = found;
+  const { school, arr } = found;
   const u = currentUser();
-  m.seenBy = m.seenBy || {};
-  m.seenBy[u.id] = new Date().toISOString();
-  m.clearedBy = m.clearedBy || {};
-  m.clearedBy[u.id] = new Date().toISOString();
-  m.lastViewAt = new Date().toISOString();
-  m.lastViewByName = u.name || '';
-  m.lastViewBy = u.id;
-  m.read = true;
-  m.updatedAt = new Date().toISOString();
+  // لا تُحتسب بعضوٍ من النظام/المدير سوى على مجموعة الرسائل نفسها: إخفاء كل النسخ
+  // المكررة التي تخص نفس المصدر (transferId/partReqId/النص) حتى لا تبقى نسخة
+  // "تعاود الظهور" بعد اطلاع النسخة الأولى (كان التحويل يُنشئ نسختين متطابقتين).
+  let target = found.m;
+  const key = (m) => m.senderRole === 'TRANSFER' && m.transferId ? 't:' + m.transferId
+    : (m.senderRole === 'ACTIVITY' && m.partReqId ? 'p:' + m.partReqId
+    : 'm:' + (m.id));
+  const k = key(target);
+  const stamp = new Date().toISOString();
+  arr.forEach(m => {
+    if(key(m) !== k) return;
+    m.seenBy = m.seenBy || {};
+    m.seenBy[u.id] = stamp;
+    m.clearedBy = m.clearedBy || {};
+    m.clearedBy[u.id] = stamp;
+    m.lastViewAt = stamp;
+    m.lastViewByName = u.name || '';
+    m.lastViewBy = u.id;
+    m.read = true;
+    m.updatedAt = stamp;
+  });
   saveAdminMsgsFor(school, arr);
   renderApp();
 }
@@ -3453,12 +3465,25 @@ function renderAdminMsgAlerts(){
   const school = getActiveSchool();
   // المدير يرى إشعارات تحويل القسمين (بنين وبنات) معًا
   const combinedMsgs = (dismissed) => {
+    const dedup = (list) => {
+      // إزالة التكرار الناتج عن إنشاء التحويل/النشاط نسختين متطابقتين لنفس المصدر:
+      // نُبقي النسخة الأخيرة فقط لكل (transferId / partReqId / نص+مرسل+تاريخ) — فحتى لو
+      // بقي تكرار في القاعدة يُعرض إشعار واحد، واختفاء نسخة يختفي بحق مع كل أخواتها.
+      const seen = new Map();
+      list.forEach(m => {
+        const k = (m.senderRole === 'TRANSFER' && m.transferId) ? 't:' + m.transferId
+          : (m.senderRole === 'ACTIVITY' && m.partReqId) ? 'p:' + m.partReqId
+          : 'm:' + String(m.id) + '|' + String(m.createdAt || '') + '|' + String(m.teacherId || '') + '|' + String(m.text || '');
+        seen.set(k, m);
+      });
+      return Array.from(seen.values());
+    };
     if(isAdmin){
-      return ['BOYS','GIRLS'].map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s })))
+      return dedup(['BOYS','GIRLS'].map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s })))
         .flat().filter(m => m.senderRole === 'TRANSFER' && !m.dismissed && adminSeesTransferMsg(m))
-        .sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+        .sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))));
     }
-    let arr = adminMsgsFor(user.id).filter(m => !m.dismissed);
+    let arr = dedup(adminMsgsFor(user.id).filter(m => !m.dismissed));
     if(user.role !== 'TEACHER') arr = arr.filter(m => m.teacherId !== 'ALL');
     if(user.role === 'TEACHER' || user.role === 'AGENT' || user.role === 'COUNSELOR') arr = arr.filter(m => !(m.clearedBy && user.id && (user.id in m.clearedBy)));
     return arr;
@@ -6550,6 +6575,8 @@ function notifyTransferReceivers(d, tr){
   const studentLabel = isGirls ? 'الطالبات' : 'الطلاب';
   const text = `📨 تحويل ${studentLabel}: ${sName} — إلى: ${targetLabel(tr.target)} — السبب: ${tr.reason}`;
   d.users.filter(u => u.active && u.role === tr.target).forEach(r => {
+    // منع التكرار: إن وُجدت رسالة لنفس التحويل ونفس الموجه إليه (أجهزة مكررة) لا نُضيف أخرى
+    if(arr.some(m => m.transferId === tr.id && m.teacherId === r.id)) return;
     arr.push({
       id: uid(), teacherId: r.id, teacherName: r.name,
       text, createdAt: new Date().toISOString(), read:false, dismissed:false, views:0,
