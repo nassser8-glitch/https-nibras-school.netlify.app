@@ -2653,6 +2653,57 @@ function renderStudentLeaders(){
     </div>
   </div>`;
 }
+/* ============ نقاطي — صفحة الطالب ============ */
+function renderMyPoints(){
+  const d = loadDB();
+  const user = currentUser();
+  if(!user || user.role !== 'STUDENT') return '<h1 class="page-title">غير متاح</h1>';
+  const items = pointItems(d).filter(it => it.studentId === user.id);
+  items.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+  let pos = 0, neg = 0;
+  const rows = items.map(n => {
+    const pts = n.points;
+    if(pts >= 0) pos += pts; else neg += pts;
+    const by = userById(n.createdBy);
+    const sourceLabel = n.kind === 'att' ? '⏱' : (n.kind === 'assign' ? '📝' : '');
+    return `<tr>
+      <td style="color:${pts>=0?'#16a34a':'#dc2626'};white-space:nowrap">${pts>=0?'🟢 إيجابية':'🔴 سلبية'} ${sourceLabel}</td>
+      <td>${escapeHtml(n.category || '—')}</td>
+      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(n.description||'')}">${n.description ? escapeHtml(n.description) : '—'}</td>
+      <td style="white-space:nowrap">${escapeHtml(by?.name || 'النظام')} ${by ? `<span class="muted small">(${roleLabel(by.role)})</span>` : ''}</td>
+      <td class="muted small" style="white-space:nowrap">${n.createdAt ? new Date(n.createdAt).toLocaleDateString('ar-SA') : '—'}</td>
+      <td style="font-weight:800;color:${pts>=0?'#16a34a':'#dc2626'};white-space:nowrap">${pts>0?'+':''}${pts}</td>
+    </tr>`;
+  }).join('');
+  const net = pos + neg;
+  return `
+  <div class="header-row">
+    <h1 class="page-title">⭐ نقاطي</h1>
+    <a href="#/" class="btn-secondary" style="text-decoration:none">← العودة</a>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px">
+    <div class="card" style="padding:14px;text-align:center;border-top:3px solid #16a34a">
+      <p class="muted small">النقاط الإيجابية</p>
+      <p class="stat-value green" style="font-size:28px;margin:4px 0 0">+${pos}</p>
+    </div>
+    <div class="card" style="padding:14px;text-align:center;border-top:3px solid #dc2626">
+      <p class="muted small">النقاط السلبية</p>
+      <p class="stat-value red" style="font-size:28px;margin:4px 0 0">${neg}</p>
+    </div>
+    <div class="card" style="padding:14px;text-align:center;border-top:3px solid ${net>=0?'#16a34a':'#dc2626'}">
+      <p class="muted small">الصافي</p>
+      <p class="stat-value" style="font-size:28px;margin:4px 0 0;color:${net>=0?'#16a34a':'#dc2626'}">${net>0?'+':''}${net}</p>
+    </div>
+  </div>
+  <div style="text-align:center;margin-bottom:14px" class="muted small">⬇️ اضغط على أي صف لمعرفة لماذا حصلت على هذه النقاط — النقاط تُمنح من معلميك؛ استفسر منهم إن أردت المزيد من التوضيح من النظام.</div>
+  <div class="card" style="padding:8px 14px;overflow-x:auto">
+    ${items.length === 0 ? '<p class="muted" style="text-align:center;padding:18px">لا توجد نقاط مسجلة لك بعد</p>' : `
+    <table class="data-table" style="width:100%">
+      <thead><tr><th>النوع</th><th>التصنيف</th><th>البيان</th><th>من وضعها</th><th>التاريخ</th><th>النقاط</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`}
+  </div>`;
+}
 let copyMessage = '';
 function handleCopyBoysToGirls(){
   const result = copyBoysToGirls();
@@ -2761,6 +2812,7 @@ function renderLayout(user, hash){
   const isStudent = user.role === 'STUDENT';
   const groups = isStudent ? [
     { title:'طلبي', items:[
+      { href:'#/my-points', key:'my-points', label:'نقاطي', icon:'⭐' },
       { href:'#/timetable', key:'timetable', label:'جدولي', icon:'🗓' },
       { href:'#/notebook', key:'notebook', label:'المفكرة', icon:'📒' },
       { href:'#/student-activities', key:'student-activities', label:'أنشطتي', icon:'🎨' },
@@ -2838,6 +2890,7 @@ function renderLayout(user, hash){
   else if(page === 'activities' && user.role !== 'STUDENT') pageHtml = renderActivities();
   else if(page === 'student-activities' && user.role === 'STUDENT') pageHtml = renderStudentActivities();
   else if(page === 'student-leaders' && user.role === 'STUDENT') pageHtml = renderStudentLeaders();
+  else if(page === 'my-points' && user.role === 'STUDENT') pageHtml = renderMyPoints();
   else if(page.startsWith('activity/') && user.role !== 'STUDENT') pageHtml = renderActivityDetail(page.split('/')[1]);
   else if(page.startsWith('teacher/') && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderTeacherPage(page.split('/')[1]);
   else if(page === 'guide-msgs' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR')) pageHtml = renderGuideMsgs();
