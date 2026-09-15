@@ -1567,6 +1567,22 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       applyBlockedStudents(clean, ib);
     } catch (e) { console.warn('[blockedStudents#final]', e.message); }
 
+    // ===== حارس تاريخ الانضمام (joinedAt) =====
+    // أجهزة قديمة (localStorage بلا joinedAt) تستبدل قسم الطلاب كاملاً للمدير/الوكيل
+    // فيُفقد تاريخ انضمام الطالبات الجدد وتعود عقوبات تكليفات أُسندت قبل انضمامهن.
+    // نستعيد joinedAt من نسخة الخادم لأي طالبة ينقصها في النسخة الواردة قبل التخزين.
+    try {
+      const prevJoined = new Map();
+      if (prev.data && Array.isArray(prev.data.students)) {
+        prev.data.students.forEach(s => { if (s && s.id && s.joinedAt) prevJoined.set(s.id, s.joinedAt); });
+      }
+      if (prevJoined.size && Array.isArray(clean.students)) {
+        clean.students.forEach(s => {
+          if (s && s.id && !s.joinedAt && prevJoined.has(s.id)) s.joinedAt = prevJoined.get(s.id);
+        });
+      }
+    } catch (e) { console.warn('[joinedAt-preserve]', e.message); }
+
     await db.setSchoolData(school, clean, nextTs);
     // مزامنة جدول المصادقة مع أي تغيير في قسم المستخدمين (حذف/نقل/تعطيل)
     if (['ADMIN','AGENT'].includes(req.session.role)) {
