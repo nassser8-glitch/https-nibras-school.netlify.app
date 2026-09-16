@@ -4114,11 +4114,12 @@ function renderDashboard(){
     </a>`).join('') : '<p class="muted small" style="margin:4px 0">لا توجد أنشطة قادمة</p>';
 
   // الحضور اليوم — بطاقة الطلاب والمعلمين (تصميم الكود المرفق)
-  const attGroup = (title, present, absent, late, pct, click, flip) => {
-    const total = present + absent + late;
+  const attGroup = (title, present, absent, late, pct, click, flip, subLate) => {
+    // المتأخرون محسوبون ضمن الحاضرين (subLate): لا يضافون فوقهم حتى لا يُضاعف العدد
+    const total = subLate ? (present + absent) : (present + absent + late);
     const maxPart = Math.ceil(total*0.10);
     const dispAbsent = Math.min(absent, maxPart);
-    const dispLate = Math.min(late, maxPart);
+    const dispLate = subLate ? Math.min(late, Math.max(0, total - dispAbsent)) : Math.min(late, maxPart);
     const dispPresent = Math.max(0, total - dispAbsent - dispLate);
     const pPct = total ? Math.round(dispPresent/total*100) : 0;
     const aPct = total ? Math.round(dispAbsent/total*100) : 0;
@@ -4147,7 +4148,7 @@ function renderDashboard(){
   const donutHTML = `
     <div class="att-card">
       ${attGroup('👨‍🎓 حضور الطلاب', present, absent, late, sPct, 'showTodayAttendance()')}
-      ${attGroup('👨‍🏫 حضور المعلمين والإداريين', tPresent, absentTeachers.length, lateTeachers.length, tPct, canMgrT ? 'showTeacherAbsenceList()' : 'showTodayAttendance()', true)}
+      ${attGroup('👨‍🏫 حضور المعلمين والإداريين', tPresent, absentTeachers.length, lateTeachers.length, tPct, canMgrT ? 'showTeacherAbsenceList()' : 'showTodayAttendance()', true, true)}
       <button class="att-report-btn" onclick="showTodayAttendance()"><span>عرض تقرير الحضور</span><span>←</span></button>
     </div>`;
   const attPanel = `
