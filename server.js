@@ -155,8 +155,8 @@ const SECTION_RULES = {
   grades:      ['ADMIN', 'AGENT', 'COUNSELOR'],
   classes:     ['ADMIN', 'AGENT', 'COUNSELOR'],
   students:    ['ADMIN', 'AGENT', 'COUNSELOR'],
-  attendance:  ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
-  notes:       ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
+  attendance:  ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE', 'SCHOOL_AGENT'],
+  notes:       ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE', 'SCHOOL_AGENT'],
   transfers:   ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
   activities:  ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
   timetable:   ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER'],
@@ -558,7 +558,7 @@ function canManageUsers(user, targetSchool) {
   return false;
 }
 function validRoleFor(actor, role) {
-  if (actor.role === 'ADMIN') return ['ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE','STUDENT'].includes(role);
+  if (actor.role === 'ADMIN') return ['ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE','SCHOOL_AGENT','STUDENT'].includes(role);
   return ['COUNSELOR','TEACHER'].includes(role);
 }
 
@@ -1492,8 +1492,8 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       // بحقول التأخر فقط (lateMinutes/lateType) فلا يُرفض الحفظ ولا يمسح بيانات الطالب.
       data = applyMerged(prev.data, data, role, false);
     }
-    if (!canEditUsers && (role === 'TEACHER' || role === 'ADMINISTRATIVE') && incomingStudents) {
-      // المعلم والإداري: يُسمح لهما بتعديل حقول التأخر للطلاب (lateMinutes/lateType) فقط
+    if (!canEditUsers && (role === 'TEACHER' || role === 'ADMINISTRATIVE' || role === 'SCHOOL_AGENT') && incomingStudents) {
+      // المعلم والإداري ووكيل الشؤون المدرسية: يُسمح لهم بتعديل حقول التأخر للطلاب (lateMinutes/lateType) فقط
       data.students = mergeStudentsLateOnly(prev.data ? prev.data.students : [], incomingStudents);
     }
 

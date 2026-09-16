@@ -1415,7 +1415,7 @@ function dedupeTeacherAccounts(){
 if(!__serverEnabled()) dedupeTeacherAccounts();
 
 const campusLabels = { BOYS:'بنين', GIRLS:'بنات', MIXED:'مشترك' };
-const roleLabels = { ADMIN:'مدير', AGENT:'وكيل', COUNSELOR:'موجه طلابي', TEACHER:'معلم', ADMINISTRATIVE:'مساعد إداري' };
+const roleLabels = { ADMIN:'مدير', AGENT:'وكيل', COUNSELOR:'موجه طلابي', TEACHER:'معلم', ADMINISTRATIVE:'مساعد إداري', SCHOOL_AGENT:'وكيل الشؤون المدرسية' };
 const statusLabels = { PRESENT:'حاضر', ABSENT:'غائب', LATE:'متأخر' };
 const targetLabels = { AGENT:'الوكيل', COUNSELOR:'الموجه الطلابي', ADMIN:'المدير' };
 const priorityLabels = { LOW:'منخفضة', MEDIUM:'متوسطة', HIGH:'مرتفعة', URGENT:'عاجلة' };
@@ -1470,7 +1470,7 @@ const feminineLabels = {
   'طلابي':'طالباتي', 'فصولي':'فصولي',
   'ادخل الجدول':'ادخلي الجدول', 'جدول الحصص':'جدول الحصص', 'جدولي':'جدولي',
   'المعلمون':'المعلمات', 'معلم':'معلمة', 'المعلم':'المعلمة',
-  'وكيل':'وكيلة', 'الوكيل':'الوكيلة',
+  'وكيل':'وكيلة', 'الوكيل':'الوكيلة', 'وكيل الشؤون المدرسية':'وكيلة الشؤون المدرسية',
   'موجه طلابي':'موجهة طلابية', 'الموجه الطلابي':'الموجهة الطلابية',
   'مساعد إداري':'مساعدة إدارية', 'المساعد الإداري':'المساعدة الإدارية',
   'المعلم المسؤول':'المعلمة المسؤولة', 'عدد الطلاب':'عدد الطالبات',
@@ -1511,12 +1511,12 @@ function roleLabel(role){
 function teacherEmoji(){ return getActiveSchool() === 'GIRLS' ? '👩‍🏫' : '👨‍🏫'; }
 function isManager(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'COUNSELOR'); }
 // الإداري (ADMINISTRATIVE) دور مدرسي شامل يرى كل فصول/طلاب القسم (ويستثنى منه فلترة الفصول المسندة)
-function seesAllClasses(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE'); }
+function seesAllClasses(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE' || u.role === 'SCHOOL_AGENT'); }
 function canManageTeachers(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
 // من يُسمح له بتسجيل الغياب/التأخر لأيام دراسية سابقة: المدير (ADMIN)، الوكيل (AGENT)،
-// والإداري «عبدالله فيصل» (ADMINISTRATIVE — بنين)
-function canRecordPastAttendance(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.id === 'id_6ef8036cc7f4c692'); }
-function isAdminRole(role){ return (role === 'AGENT' || role === 'COUNSELOR' || role === 'ADMINISTRATIVE'); }
+// والإداري «عبدالله فيصل» (ADMINISTRATIVE — بنين)، ووكيل الشؤون المدرسية (SCHOOL_AGENT)
+function canRecordPastAttendance(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'SCHOOL_AGENT' || u.id === 'id_6ef8036cc7f4c692'); }
+function isAdminRole(role){ return (role === 'AGENT' || role === 'COUNSELOR' || role === 'ADMINISTRATIVE' || role === 'SCHOOL_AGENT'); }
 function canManageActivities(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
 function canManageVideos(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
 function ensureDefaultAccounts(){
@@ -2824,6 +2824,24 @@ function renderLayout(user, hash){
       { href:'#/account', key:'account', label:'حسابي', icon:'⚙️' },
       { href:'#/about', key:'about', label:'حول نبراس', icon:'ⓘ' },
     ]},
+  ] : (user.role === 'SCHOOL_AGENT' ? [
+    { title:'الإدارة', items:[
+      { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👥' },
+      { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
+    ]},
+    { title:'المتابعة', items:[
+      { href:'#/attendance', key:'attendance', label:'الحضور والغياب', icon:'✓' },
+      { href:'#/reports', key:'reports', label:'التقارير', icon:'▥' },
+      { href:'#/notes', key:'notes', label:'الملاحظات', icon:'★' },
+    ]},
+    { title:'المدرسة', items:[
+      { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉' },
+      { href:'#/memo', key:'memo', label:'المفكرة والتذكير', icon:'📒' },
+    ]},
+    { title:'النظام', items:[
+      { href:'#/settings', key:'settings', label:'الإعدادات', icon:'⚙️' },
+      { href:'#/about', key:'about', label:'حول نبراس', icon:'ⓘ' },
+    ]},
   ] : [
     { title:'الإدارة', items:[
       (user.role === 'ADMIN' || user.role === 'AGENT') ? { href:'#/users', key:'users', label:tl('المعلمون'), icon:'👤' } : null,
@@ -2852,7 +2870,7 @@ function renderLayout(user, hash){
       { href:'#/settings', key:'settings', label:'الإعدادات', icon:'⚙️' },
       { href:'#/about', key:'about', label:'حول نبراس', icon:'ⓘ' },
     ]},
-  ];
+  ]);
   const linkItem = l => `<a href="${l.href}" class="nav-link ${page===l.key?'active':''}"><span class="menu-icon">${l.icon}</span><span>${l.label}</span>${l.badge ? `<span class="msg-badge">${l.badge}</span>` : ''}</a>`;
   const nav = linkItem(homeLink) + groups.map(g =>
     `<div class="group-title">${g.title}</div>` + g.items.filter(Boolean).map(linkItem).join('')
@@ -6871,7 +6889,7 @@ function renderAdmins(){
   const isAdmin = cur?.role === 'ADMIN';
   const d = loadDB();
   const school = getActiveSchool();
-  const items = (d.users || []).filter(u => u.active && (u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE')).map(u => ({ u, schools: [school] }));
+  const items = (d.users || []).filter(u => u.active && (u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE' || u.role === 'SCHOOL_AGENT')).map(u => ({ u, schools: [school] }));
   const rows = items.map(({ u, schools }) => {
     const moveLabel = schools[0] === 'BOYS' ? 'البنات' : 'البنين';
     const isSelf = u.id === (cur && cur.id);
@@ -6903,7 +6921,7 @@ function renderAdmins(){
     <input id="uName" class="input" placeholder="الاسم" data-tip="الاسم الكامل للمستخدم" />
     <input id="uEmail" class="input" type="email" placeholder="بريد حقيقي (للاستعادة)" data-tip="بريد إلكتروني حقيقي يصل إليه رمز استعادة الرقم السري" />
     <input id="uPassword" class="input" type="password" placeholder="كلمة المرور الأولية (8 أحرف على الأقل)" data-tip="كلمة مرور أولية يغيّرها المستخدم عند أول دخول — 8 أحرف على الأقل" />
-    <select id="uRole" class="input"><option value="AGENT">${roleLabel('AGENT')}</option><option value="COUNSELOR">${roleLabel('COUNSELOR')}</option><option value="ADMINISTRATIVE">${roleLabel('ADMINISTRATIVE')}</option></select>
+    <select id="uRole" class="input"><option value="AGENT">${roleLabel('AGENT')}</option><option value="COUNSELOR">${roleLabel('COUNSELOR')}</option><option value="ADMINISTRATIVE">${roleLabel('ADMINISTRATIVE')}</option><option value="SCHOOL_AGENT">${roleLabel('SCHOOL_AGENT')}</option></select>
     <button class="btn-primary" onclick="addUser()">حفظ</button>
   </div>
   <div class="card table-card">
@@ -9193,9 +9211,12 @@ const reportViews = [
 const chartColors = ['#1d7fd6','#16a34a','#dc2626','#d97706','#7c3aed','#0d9488','#db2777','#64748b','#ca8a04','#0891b2'];
 function renderReports(){
   const classes = getClassesSorted();
-  const isAdmin = isManager(currentUser());
-  const types = reportTypes.filter(t => !t.adminOnly || isAdmin);
-  if(!isAdmin && reportTypes.find(t => t.value === reportState.type)?.adminOnly) reportState.type = types[0].value;
+  const user = currentUser();
+  const isAdmin = isManager(user);
+  // تقارير الحضور/الغياب/التأخر هي جوهر عمل «وكيل الشؤون المدرسية» — يراها مع فئات التقارير العامة
+  const repAllowedAdmin = t => t.adminOnly && (isAdmin || (user?.role === 'SCHOOL_AGENT' && (t.value === 'attendance' || t.value === 'absence' || t.value === 'late')));
+  const types = reportTypes.filter(t => !t.adminOnly || repAllowedAdmin(t));
+  if(types.length && !types.some(t => t.value === reportState.type)) reportState.type = types[0].value;
   const isEng = reportState.type === 'teacher_engagement';
   const periodOptions = [
     { value:'day', label:'اليوم' }, { value:'week', label:'هذا الأسبوع' }, { value:'month', label:'هذا الشهر' },
@@ -9228,8 +9249,8 @@ function computeReportRows(){
   // المعلم يرى بيانات فصوله فقط (المدير والوكيل يرون الكل)
   const user = currentUser();
   const isAdmin = isManager(user);
-  // تقرير الحضور والغياب والتأخر خاص بالمدير والوكيل فقط
-  if((type === 'attendance' || type === 'absence' || type === 'late') && !isAdmin) return [];
+  // تقرير الحضور والغياب والتأخر خاص بالمدير والوكيل — ويشمل «وكيل الشؤون المدرسية» لأنه يراها كلها
+  if((type === 'attendance' || type === 'absence' || type === 'late') && !isAdmin && user?.role !== 'SCHOOL_AGENT') return [];
   const visibleClassIds = new Set(getClassesSorted().map(c => c.id));
   const visibleStudentIds = new Set(getVisibleStudents().map(s => s.id));
   const canSeeClass = cid => isAdmin || visibleClassIds.has(cid);
