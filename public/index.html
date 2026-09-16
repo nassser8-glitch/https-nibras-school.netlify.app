@@ -2944,7 +2944,6 @@ function renderLayout(user, hash){
               <div class="topbar-user-name">${escapeHtml(user.name)}</div>
               <div class="topbar-user-role">${roleLabel(user.role)}</div>
             </div>
-            ${(user.role==='ADMIN' || user.allSchools) ? `<button class="btn-secondary" style="padding:7px 12px" onclick="switchSchool()">🔀 تبديل القسم</button>` : ''}
             <button class="btn-secondary" style="padding:7px 12px" onclick="logout()">🚪 خروج</button>
           </div>
         </div>
@@ -2966,11 +2965,6 @@ function renderLayout(user, hash){
     </div>
     <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v55</span></footer>
   </div>`;
-}
-function switchSchool(){
-  localStorage.removeItem(SCHOOL_KEY);
-  location.hash = '#/';
-  renderApp();
 }
 function toggleSidebar(forceClose){
   const sb = document.getElementById('sidebar');
@@ -5467,8 +5461,6 @@ function renderStudentBody(students){
   const isGirls = getActiveSchool() === 'GIRLS';
   const isAdmin = currentUser()?.role === 'ADMIN';
   const isTeacher = currentUser()?.role === 'TEACHER';
-  const moveFn = isGirls ? 'moveOneBoy' : 'moveOneGirl';
-  const moveLabel = isGirls ? '🚹 بنين' : '🚺 بنات';
   const ptsMap = studentPointsMap();
   const dUsers = loadDB().users || [];
   const dAssignments = loadDB().assignments || [];
@@ -5493,8 +5485,7 @@ function renderStudentBody(students){
         ${isAdmin ? (hasAccount ? `<button class="btn-secondary" style="padding:2px 8px;font-size:11px" onclick="resetStudentPassword('${s.id}','${escapeHtml(s.fullName)}')">🔄 إعادة تعيين</button>` : `<button class="btn-secondary" style="padding:2px 8px;font-size:11px" onclick="setStudentCreds('${s.id}','${escapeHtml(s.fullName)}')">🔑 تعيين</button>`) : ''}
       </td>
       <td>
-        ${isAdmin ? `<button class="del-btn" onclick="deleteStudent('${s.id}')">🗑 حذف</button>
-        <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="${moveFn}('${s.id}')">${moveLabel}</button>` : ''}
+        ${isAdmin ? `<button class="del-btn" onclick="deleteStudent('${s.id}')">🗑 حذف</button>` : ''}
       </td>
     </tr>`;
   }).join('');
@@ -5739,88 +5730,7 @@ async function deleteAllStudents(){
 }
 function saveDBRaw(key, d){ localStorage.setItem(key, JSON.stringify(d)); }
 function loadDBRaw(key){ return JSON.parse(localStorage.getItem(key)) || seedDB(); }
-function moveOneGirl(id){
-  const boys = loadDBRaw('nibras_BOYS_db_v1');
-  let girls = loadDBRaw('nibras_GIRLS_db_v1');
-  const idx = boys.students.findIndex(st => st.id === id);
-  if(idx === -1){ alert('الطالب غير موجود'); return; }
-  const s = boys.students[idx];
-  // نقل الصف والمرحلة
-  const boyClass = boys.classes.find(c => c.id === s.classId);
-  if(boyClass){
-    const bg = boys.grades.find(g => g.id === boyClass.gradeId);
-    if(bg && !girls.grades.some(g => g.name === bg.name)){
-      girls.grades.push({ id:uid(), name:bg.name, order:bg.order });
-    }
-    const gg = girls.grades.find(g => g.name === (bg?.name||''));
-    if(gg){
-      let gc = girls.classes.find(c => c.gradeId === gg.id && c.name === boyClass.name);
-      if(!gc){ gc = { id:uid(), gradeId:gg.id, name:boyClass.name, campus:'GIRLS', capacity:null, teacherIds:[] }; girls.classes.push(gc); }
-      s.classId = gc.id;
-    }
-  }
-  if(!__serverEnabled() && !girls.users.some(u => u.email === 'admin@nibras.local')){
-    girls.users.push({ id:'id_admin_girls', name:'مدير النظام', email:'admin@nibras.local', password:null, role:'ADMIN', active:true });
-  }
-  girls.students.push(JSON.parse(JSON.stringify(s)));
-  boys.students.splice(idx, 1);
-  localStorage.setItem('nibras_BOYS_db_v1', JSON.stringify(boys));
-  localStorage.setItem('nibras_GIRLS_db_v1', JSON.stringify(girls));
-  renderApp();
-}
-function moveOneBoy(id){
-  let girls = loadDBRaw('nibras_GIRLS_db_v1');
-  const boys = loadDBRaw('nibras_BOYS_db_v1');
-  const idx = girls.students.findIndex(st => st.id === id);
-  if(idx === -1){ alert('الطالب غير موجود'); return; }
-  const s = girls.students[idx];
-  // نقل الصف والمرحلة
-  const girlClass = girls.classes.find(c => c.id === s.classId);
-  if(girlClass){
-    const gg = girls.grades.find(g => g.id === girlClass.gradeId);
-    if(gg && !boys.grades.some(g => g.name === gg.name)){
-      boys.grades.push({ id:uid(), name:gg.name, order:gg.order });
-    }
-    const bg = boys.grades.find(g => g.name === (gg?.name||''));
-    if(bg){
-      let bc = boys.classes.find(c => c.gradeId === bg.id && c.name === girlClass.name);
-      if(!bc){ bc = { id:uid(), gradeId:bg.id, name:girlClass.name, campus:'BOYS', capacity:null, teacherIds:[] }; boys.classes.push(bc); }
-      s.classId = bc.id;
-    }
-  }
-  if(!__serverEnabled() && !boys.users.some(u => u.email === 'admin@nibras.local')){
-    boys.users.push({ id:'id_admin_boys', name:'مدير النظام', email:'admin@nibras.local', password:null, role:'ADMIN', active:true });
-  }
-  boys.students.push(JSON.parse(JSON.stringify(s)));
-  girls.students.splice(idx, 1);
-  localStorage.setItem('nibras_GIRLS_db_v1', JSON.stringify(girls));
-  localStorage.setItem('nibras_BOYS_db_v1', JSON.stringify(boys));
-  renderApp();
-}
-function moveOneTeacher(id){
-  const from = getActiveSchool();
-  const to = from === 'BOYS' ? 'GIRLS' : 'BOYS';
-  const targetLabel = from === 'BOYS' ? 'البنات' : 'البنين';
-  if(!confirm(`نقل هذا المعلم إلى قسم ${targetLabel}؟`)) return;
-  const fromDB = loadDBRaw('nibras_'+from+'_db_v1');
-  let toDB = loadDBRaw('nibras_'+to+'_db_v1');
-  const idx = fromDB.users.findIndex(u => u.id === id);
-  if(idx === -1){ alert('المعلم غير موجود'); return; }
-  const u = fromDB.users[idx];
-  // إلغاء إسناد الفصول التي كان مشرفًا عليها في القسم القديم
-  fromDB.classes.forEach(c => {
-    if(Array.isArray(c.teacherIds)) c.teacherIds = c.teacherIds.filter(t => t !== u.id);
-    else if(c.teacherId === u.id) c.teacherId = null;
-  });
-  // منع التكرار في القسم الجديد
-  if(!toDB.users.some(x => x.email === u.email)){
-    toDB.users.push(JSON.parse(JSON.stringify(u)));
-  }
-  fromDB.users.splice(idx, 1);
-  localStorage.setItem('nibras_'+from+'_db_v1', JSON.stringify(fromDB));
-  localStorage.setItem('nibras_'+to+'_db_v1', JSON.stringify(toDB));
-  renderApp();
-}
+/* أُزيلت دوال نقل الطلاب/المعلمين بين القسمين (لا يوجد سوى قسم البنات) */
 function downloadTeacherTemplate(){
   const ws = XLSX.utils.json_to_sheet([{ 'الاسم الكامل':'أحمد محمد', 'اسم المستخدم (اختياري)':'ahmed', 'البريد الإلكتروني':'ahmed@school.local', 'كلمة المرور (اختياري — محلي فقط)':'12345678' }]);
   const wb = XLSX.utils.book_new();
@@ -6835,7 +6745,6 @@ function renderUsers(){
     const assigned = d.classes.filter(c => (c.teacherIds||[]).includes(u.id));
     const assignedHtml = assigned.length ? assigned.map(c => classLabel(c)).join('، ') : '—';
     const school = getActiveSchool();
-    const moveLabel = school === 'BOYS' ? 'البنات' : 'البنين';
     const isSelf = u.id === currentUser().id;
     const nameCell = u.role === 'TEACHER'
       ? `<a href="#/teacher/${u.id}" style="font-weight:700;color:#2563eb;text-decoration:none;cursor:pointer" title="${tl('متابعة المعلم ورسائله')}">${escapeHtml(u.name)} 👁</a>`
@@ -6854,7 +6763,7 @@ function renderUsers(){
     <td>${roleLabel(u.role)}</td>
     <td>${authCell}</td>
     <td style="font-size:12px;color:#6b7280;max-width:200px">${u.role==='TEACHER'?assignedHtml:'—'}</td>
-    <td>${isSelf || !isAdmin ? '' : `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="showTeacherCreds('${u.id}','${escapeHtml(u.name)}','${escapeHtml(u.username||'')}')" title="عرض بيانات الدخول">🔑 بيانات الدخول</button> `}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="moveOneTeacher('${u.id}')">↔️ نقل إلى ${moveLabel}</button> ` : '')}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="resetTeacherSecret('${u.id}')">🔄 إعادة تعيين</button> ` : '')}${isSelf || !isAdmin ? '' : `<button class="del-btn" onclick="deleteUser('${u.id}')">🗑 حذف</button>`}</td>
+    <td>${isSelf || !isAdmin ? '' : `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="showTeacherCreds('${u.id}','${escapeHtml(u.name)}','${escapeHtml(u.username||'')}')" title="عرض بيانات الدخول">🔑 بيانات الدخول</button> `}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="resetTeacherSecret('${u.id}')">🔄 إعادة تعيين</button> ` : '')}${isSelf || !isAdmin ? '' : `<button class="del-btn" onclick="deleteUser('${u.id}')">🗑 حذف</button>`}</td>
   </tr>`;
   }).join('');
   const teacherMsg = window.__teacherMsg;
@@ -6891,7 +6800,6 @@ function renderAdmins(){
   const school = getActiveSchool();
   const items = (d.users || []).filter(u => u.active && (u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE' || u.role === 'SCHOOL_AGENT')).map(u => ({ u, schools: [school] }));
   const rows = items.map(({ u, schools }) => {
-    const moveLabel = schools[0] === 'BOYS' ? 'البنات' : 'البنين';
     const isSelf = u.id === (cur && cur.id);
     const schoolTxt = schools.map(s => `<span class="badge ${s === 'BOYS' ? 'badge-boys' : 'badge-girls'}" style="margin-left:6px">${campusLabels[s] || s}</span>`).join(' ');
     const nameCell = `<span style="font-weight:600">${escapeHtml(u.name)} <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="openRoleInbox('${u.id}','${schools[0]}')" title="${'متابعة هذا الحساب: آخر دخول وعدد مرات الدخول وتحويلاته وإشعاراته'}">👁</button></span>`;
@@ -6906,7 +6814,7 @@ function renderAdmins(){
     <td>${roleLabel(u.role)}</td>
     <td>${authCell}</td>
     <td>${schoolTxt}</td>
-    <td>${isSelf || !isAdmin ? '' : `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="showTeacherCreds('${u.id}','${escapeHtml(u.name)}','${escapeHtml(u.username||'')}')" title="عرض بيانات الدخول">🔑 بيانات الدخول</button> <button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="moveOneTeacher('${u.id}')">↔️ نقل إلى ${moveLabel}</button> <button class="del-btn" onclick="deleteUser('${u.id}')">🗑 حذف</button>`}</td>
+    <td>${isSelf || !isAdmin ? '' : `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="showTeacherCreds('${u.id}','${escapeHtml(u.name)}','${escapeHtml(u.username||'')}')" title="عرض بيانات الدخول">🔑 بيانات الدخول</button> <button class="del-btn" onclick="deleteUser('${u.id}')">🗑 حذف</button>`}</td>
   </tr>`;
   }).join('');
 
