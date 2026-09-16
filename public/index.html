@@ -9212,6 +9212,7 @@ const reportTypes = [
   { value:'activities', label:'تقرير الأنشطة والمشاركين', adminOnly:true },
   { value:'maintenance', label:'تقرير الصيانة', adminOnly:true },
   { value:'teacher_engagement', label:'تقرير تفاعل المعلمين', adminOnly:true },
+  { value:'teacher_logins', label:'تقرير دخول المعلمات', adminOnly:true },
 ];
 const reportViews = [
   { value:'table', label:'📋 جدول' }, { value:'bars', label:'📊 سلالم (أعمدة)' }, { value:'pie', label:'🍩 دائرة' },
@@ -9225,7 +9226,7 @@ function renderReports(){
   const repAllowedAdmin = t => t.adminOnly && (isAdmin || (user?.role === 'SCHOOL_AGENT' && (t.value === 'attendance' || t.value === 'absence' || t.value === 'late')));
   const types = reportTypes.filter(t => !t.adminOnly || repAllowedAdmin(t));
   if(types.length && !types.some(t => t.value === reportState.type)) reportState.type = types[0].value;
-  const isEng = reportState.type === 'teacher_engagement';
+  const isEng = reportState.type === 'teacher_engagement' || reportState.type === 'teacher_logins';
   const periodOptions = [
     { value:'day', label:'اليوم' }, { value:'week', label:'هذا الأسبوع' }, { value:'month', label:'هذا الشهر' },
     { value:'term', label:'هذا الفصل' }, { value:'year', label:'منذ بداية العام' },
@@ -9236,7 +9237,7 @@ function renderReports(){
     <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">نوع التقرير</label>
       <select id="rType" class="input" style="min-width:170px" onchange="reportState.type=this.value;reportState.rows=null;reportState.period='month'" data-tip="اختر نوع التقرير المطلوب">${types.map(t=>`<option value="${t.value}" ${t.value===reportState.type?'selected':''}>${t.label}</option>`).join('')}</select></div>
     ${isEng ? `<div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفترة</label>
-      <select id="rPeriod" class="input" style="min-width:170px" onchange="reportState.period=this.value" data-tip="اختر الفترة الزمنية لقياس تفاعل المعلمين — يُحسب النشاط الفعلي داخل النظام (الغياب والملاحظات والتحويلات والأنشطة والفيديوهات)">${periodOptions.map(p=>`<option value="${p.value}" ${p.value===reportState.period?'selected':''}>${p.label}</option>`).join('')}</select></div>` : `
+      <select id="rPeriod" class="input" style="min-width:170px" onchange="reportState.period=this.value" data-tip="${reportState.type === 'teacher_logins' ? 'اختر الفترة الزمنية لعدّ دخولات المعلمات (التحقق من النشاط/المداومة داخل النظام)' : 'اختر الفترة الزمنية لقياس تفاعل المعلمين — يُحسب النشاط الفعلي داخل النظام (الغياب والملاحظات والتحويلات والأنشطة والفيديوهات)'}">${periodOptions.map(p=>`<option value="${p.value}" ${p.value===reportState.period?'selected':''}>${p.label}</option>`).join('')}</select></div>` : `
     <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفصل (اختياري)</label>
       <select id="rClassId" class="input" style="min-width:170px" onchange="reportState.classId=this.value" data-tip="اختر فصلًا محددًا لعرض التقرير له فقط، أو اترك (كل الفصول) لعرض شامل"><option value="">كل الفصول</option>${classes.map(c=>`<option value="${c.id}" ${c.id===reportState.classId?'selected':''}>${escapeHtml(classLabel(c))}</option>`).join('')}</select></div>
     <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">من تاريخ</label><input type="date" id="rFrom" class="input" value="${reportState.from}" onchange="reportState.from=this.value" data-tip="بداية الفترة الزمنية المشمولة في التقرير" /></div>
@@ -9355,6 +9356,36 @@ function computeReportRows(){
         'المبلِّغ': m.createdByName || '—',
         'الوصف': m.description || '—'
       }));
+  } else if(type === 'teacher_logins'){
+    // تقرير دخول المعلمات: آخر دخول لكل معلمة + عدد الدخولات في الفترة المختارة
+    const pr = engagementPeriodRange(reportState.period);
+    const eIn = ds => (!pr.from || ds >= pr.from) && (!pr.to || ds <= pr.to);
+    const now = new Date();
+    const todayKey = localDateKey(now);
+    const teachers = d.users.filter(u => u.role === 'TEACHER' && u.active).sort((a,b) => String(a.name).localeCompare(String(b.name),'ar'));
+    rows = teachers.map(tc => {
+      const logins = (tc.loginHistory || []).slice();
+      const inPeriod = logins.filter(iso => eIn(String(iso).slice(0,10))).length;
+      const inToday = logins.filter(iso => String(iso).slice(0,10) === todayKey).length;
+      let lastLogin = null, lastTime = '—';
+      if(tc.lastLogin){
+        lastLogin = tc.lastLogin;
+        lastTime = fmtTime(lastLogin);
+      } else if(logins.length){
+        lastLogin = logins[logins.length-1];
+        lastTime = fmtTime(lastLogin);
+      }
+      return {
+        'المعلمة': tc.name,
+        'آخر دخول': lastTime,
+        'دخلت اليوم': inToday > 0 ? 'نعم' : 'لا',
+        'دخولات الفترة': inPeriod,
+        'إجمالي الدخولات': tc.loginCount || 0,
+        '__lastISO': lastLogin || '',
+      };
+    }).sort((a,b) => String(a['__lastISO']).localeCompare(String(b['__lastISO'])))
+    .reverse()
+    .map(({ __lastISO, ...r }) => r);
   } else if(type === 'teacher_engagement'){
     const pr = engagementPeriodRange(reportState.period);
     const eIn = ds => (!pr.from || ds >= pr.from) && (!pr.to || ds <= pr.to);
