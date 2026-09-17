@@ -5481,10 +5481,19 @@ function nibrasPioneerData(){
   const key = localDateKey(wkStart) + '|' + loginSig;
   if(nibrasCache.key === key && nibrasCache.ids) return nibrasCache;
   const activeStudIds = new Set((d.students||[]).filter(s => s.active === undefined || s.active).map(s => s.id));
+  // الحد الأقصى للدخولات المحسوبة للطالب في اليوم الواحد (منع التحايل بخروج/دخول متكرر)
+  const NIBRAS_MAX_LOGINS_PER_DAY = 2;
   const countMap = {};
   (d.users||[]).forEach(u => {
     if(!activeStudIds.has(u.id)) return;
-    (u.loginHistory||[]).forEach(iso => { if(String(iso) >= startISO) countMap[u.id] = (countMap[u.id]||0) + 1; });
+    const perDay = {};
+    (u.loginHistory||[]).forEach(iso => {
+      if(String(iso) >= startISO){
+        const day = String(iso).slice(0,10);
+        perDay[day] = (perDay[day]||0) + 1;
+      }
+    });
+    countMap[u.id] = Object.values(perDay).reduce((a,c) => a + Math.min(c, NIBRAS_MAX_LOGINS_PER_DAY), 0);
   });
   const studById = sid => (d.students||[]).find(s => s.id === sid);
   const list = Object.keys(countMap).map(id => ({ id, score: countMap[id], s: studById(id) }))
