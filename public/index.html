@@ -5466,6 +5466,16 @@ function studentPointsSplit(){
 const NIBRAS_TOP = 10;
 // يوم بداية الأسبوع المدرسي (0=الأحد … 6=السبت) — الاثنين افتراضياً
 const NIBRAS_WEEK_START_DOW = 1;
+// الحد الأقصى للدخولات المحسوبة للمستخدم في اليوم الواحد (منع التحايل بخروج/دخول متكرر) — للطلاب والمعلمات
+const MAX_LOGINS_PER_DAY = 2;
+function cappedLoginCount(isoList){
+  const perDay = {};
+  (isoList || []).forEach(iso => {
+    const day = String(iso).slice(0,10);
+    perDay[day] = (perDay[day] || 0) + 1;
+  });
+  return Object.values(perDay).reduce((a,c) => a + Math.min(c, MAX_LOGINS_PER_DAY), 0);
+}
 let nibrasCache = { key:'', ids:null, list:null };
 function nibrasWeekStart(){
   const now = new Date();
@@ -5481,19 +5491,10 @@ function nibrasPioneerData(){
   const key = localDateKey(wkStart) + '|' + loginSig;
   if(nibrasCache.key === key && nibrasCache.ids) return nibrasCache;
   const activeStudIds = new Set((d.students||[]).filter(s => s.active === undefined || s.active).map(s => s.id));
-  // الحد الأقصى للدخولات المحسوبة للطالب في اليوم الواحد (منع التحايل بخروج/دخول متكرر)
-  const NIBRAS_MAX_LOGINS_PER_DAY = 2;
   const countMap = {};
   (d.users||[]).forEach(u => {
     if(!activeStudIds.has(u.id)) return;
-    const perDay = {};
-    (u.loginHistory||[]).forEach(iso => {
-      if(String(iso) >= startISO){
-        const day = String(iso).slice(0,10);
-        perDay[day] = (perDay[day]||0) + 1;
-      }
-    });
-    countMap[u.id] = Object.values(perDay).reduce((a,c) => a + Math.min(c, NIBRAS_MAX_LOGINS_PER_DAY), 0);
+    countMap[u.id] = cappedLoginCount((u.loginHistory||[]).filter(iso => String(iso) >= startISO));
   });
   const studById = sid => (d.students||[]).find(s => s.id === sid);
   const list = Object.keys(countMap).map(id => ({ id, score: countMap[id], s: studById(id) }))
@@ -9374,8 +9375,9 @@ function computeReportRows(){
     const teachers = d.users.filter(u => u.role === 'TEACHER' && u.active).sort((a,b) => String(a.name).localeCompare(String(b.name),'ar'));
     rows = teachers.map(tc => {
       const logins = (tc.loginHistory || []).slice();
-      const inPeriod = logins.filter(iso => eIn(String(iso).slice(0,10))).length;
-      const inToday = logins.filter(iso => String(iso).slice(0,10) === todayKey).length;
+      const periodLogins = logins.filter(iso => eIn(String(iso).slice(0,10)));
+      const inPeriod = cappedLoginCount(periodLogins);
+      const inToday = logins.some(iso => String(iso).slice(0,10) === todayKey);
       let lastLogin = null, lastTime = '—';
       if(tc.lastLogin){
         lastLogin = tc.lastLogin;
@@ -9387,9 +9389,9 @@ function computeReportRows(){
       return {
         'المعلمة': tc.name,
         'آخر دخول': lastTime,
-        'دخلت اليوم': inToday > 0 ? 'نعم' : 'لا',
+        'دخلت اليوم': inToday ? 'نعم' : 'لا',
         'دخولات الفترة': inPeriod,
-        'إجمالي الدخولات': tc.loginCount || 0,
+        'إجمالي الدخولات (المحدود)': cappedLoginCount(logins),
         '__lastISO': lastLogin || '',
       };
     }).sort((a,b) => String(a['__lastISO']).localeCompare(String(b['__lastISO'])))
