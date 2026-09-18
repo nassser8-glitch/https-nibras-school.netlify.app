@@ -990,11 +990,14 @@ async function __syncPush(school){
     __syncLogAdd({ ev:'push-fail', school, notes:(obj && Array.isArray(obj.notes))?obj.notes.length:0, ts:__syncTS(obj), attempt });
     __syncTimers[school] = setTimeout(() => __syncPush(school), 15000);
     __uiToast('⚠️ تعذّر رفع حفظك للخادم الآن — سأعيد المحاولة تلقائياً ولا تختفي بياناتك.', true);
+    try{ __noteSaveBanner(true); }catch(e){}
   }catch(e){} finally {
     st.running = false;
   }
 }
 async function __syncPull(school){
+  const __PULL_PAUSE_KEY = 'nibras_pull_pause_until_'+school;
+  if(__syncPullPaused()) return; // قد يوقف المدير السحب مؤقتاً كي لا تهبط نسخةُ الخادم فوق عمل معلمٍ
   if(!__syncEnabled()) return;
   const st = __pushState(school);
   if(st.running) return;
@@ -6495,6 +6498,36 @@ function updateNoteCategoryUI(){
   const pts = notePoints(noteType, val);
   if(ptsEl){ ptsEl.textContent = (pts>0?'+':'')+pts; ptsEl.style.color = pts>=0 ? '#16a34a' : '#dc2626'; }
 }
+/* تأكيد بصري ثابت لا يعتمد على الـ Console: يُظهر للمعلمة فورَ الحفظ كم نقطة وكم طالبة
+   حُفظت محلياً، ويرفق حالة الرفع للخادم. إن تعذّر الرفع يظهر تحذيراً أحمر صريحاً مع تطمين
+   أن النقاط محفوظة على الجهاز وستُرفع تلقائياً — فينتهي «تختفي فوراً» كأنه أسطورة. */
+let __noteBannerEl = null, __noteBannerTimer = null;
+function __noteSaveBanner(msg, isErr){
+  try{
+    if(!__noteBannerEl){
+      __noteBannerEl = document.createElement('div');
+      __noteBannerEl.style.cssText = 'position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:99999;max-width:94%;width:auto;padding:13px 18px;border-radius:14px;font-size:14.5px;font-weight:700;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.25);font-family:inherit;line-height:1.7;pointer-events:none;transition:opacity .25s;opacity:0;';
+      document.body.appendChild(__noteBannerEl);
+    }
+    __noteBannerEl.style.background = isErr ? '#b91c1c' : '#065f46';
+    __noteBannerEl.style.color = '#fff';
+    __noteBannerEl.textContent = msg;
+    __noteBannerEl.style.opacity = '1';
+    clearTimeout(__noteBannerTimer);
+    __noteBannerTimer = setTimeout(() => { try{ __noteBannerEl.style.opacity = '0'; }catch(e){} }, isErr ? 9000 : 5500);
+  }catch(e){}
+}
+
+// عند نجاح الرفع للخادم: تُستبدل رسالة المعلمة بعلامة الطمأنة النهائية
+// (لا نُبقي «بانتظار الرفع» بعدما تأكد الوصول).
+function __notePushOkBanner(count){
+  __noteSaveBanner('✅ رُفعت نقاطك للخادم بنجاح — عدد النقاط المحفوظة: ' + (count||'') + ' ولن تختفي أبداً.', false);
+}
+// عند فشل رفعٍ متكرر للخادم: تحذير صريح — لكن مؤكّد المحلي محفوظ
+function __notePushFailBanner(){
+  __noteSaveBanner('⚠️ لم يصل خادم المدرسة الآن — لكن نقاطك محفوظة على هذا الجهاز ولن تختفي، وسأعيد الرفع تلقائياً كلما عاد الاتصال.', true);
+}
+
 function addNote(){
   const ids = getCheckedStudentIds('n');
   let category = document.getElementById('nCategory').value;
@@ -6532,6 +6565,11 @@ function addNote(){
     });
     saveDB(d);
     __syncLogAdd({ ev:'note-saved', school:getActiveSchool(), batch:batchId, count:ids.length, type:effType, cat:category, by:createdById, byName:(currentUser()||{}).name || '?' });
+    try{
+      const bn = ids.slice(0,3).map(sid => {(d.students||[]).find(s=>s.id===sid)?.name || ''}).filter(Boolean);
+      const more = ids.length > 3 ? '…' : '';
+      __noteSaveBanner('✅ حُفظت نقاط ' + ids.length + ' طالبة (' + (effType==='EXCELLENCE'?'تميّز/تفوق':effType==='ATTENDANCE'?'انضباط/حضور':'إنجاز/سلوك') + '): ' + bn.join('، ') + more + ' — موجودة الآن على هذا الجهاز وتُرفع للخادم تلقائياً.', false);
+    }catch(e){}
   } finally {
     savingNote = false;
   }
