@@ -615,6 +615,27 @@ function __syncSchedule(school, ms){
   clearTimeout(__syncTimers[school]);
   __syncTimers[school] = setTimeout(() => __syncPush(school), (ms === undefined) ? 700 : ms);
 }
+// سجل مزامنة تشخيصي (بدون Console): يُدوَّن كل حدث حفظ/رفع/سحب وسطوع في اللوحة من التقرير
+const __SYNC_LOG_KEY = 'nibras_synclog_v1';
+function __syncLogAdd(entry){
+  try{
+    let arr = [];
+    try{ arr = JSON.parse(localStorage.getItem(__SYNC_LOG_KEY) || '[]'); }catch(e){ arr = []; }
+    if(!Array.isArray(arr)) arr = [];
+    arr.push(Object.assign({ at: new Date().toISOString() }, entry));
+    if(arr.length > 500) arr = arr.slice(-500);
+    localStorage.setItem(__SYNC_LOG_KEY, JSON.stringify(arr));
+  }catch(e){}
+}
+function __syncLogRead(){
+  try{ const raw = localStorage.getItem(__SYNC_LOG_KEY); if(!raw) return []; const a = JSON.parse(raw); return Array.isArray(a) ? a : []; }catch(e){ return []; }
+}
+function eByCurrentUsers(entry){
+  if(!entry || !entry.by) return '';
+  const d = loadDB();
+  const u = (d && Array.isArray(d.users)) ? d.users.find(x => x && x.id === entry.by) : null;
+  return u ? u.name : '';
+}
 // قاعدة التأكيد المزدوج للغياب: الطالب يُحسب غائباً فور تسجيله، مهما سجّله معلم واحد أو اثنان.
 // شارة «⏳ بانتظار معلم ثانٍ» تنبيه إرشادي فقط (من سجّل المعلّمَين مختلفَيْن لا يزال يستفيد
 // منها كمعلومة)، لكنها لا تُخفي الغياب من العداد. السجلات القديمة (قبل القاعدة) بلا absClerks
@@ -958,6 +979,7 @@ async function __syncPush(school){
       const recovered = st.attempts > 0;
       st.attempts = 0;
       st.lastFail = 0;
+      __syncLogAdd({ ev:'push-ok', school, notes:(obj && Array.isArray(obj.notes))?obj.notes.length:0, att:(obj && Array.isArray(obj.attendance))?obj.attendance.length:0, ts:__syncTS(obj), err:(recovered?'recovered':'') });
       if(recovered) __uiToast('✅ عاد الاتصال — حُفظ ما لم يكن قد رُفع.');
       return;
     }
@@ -965,6 +987,7 @@ async function __syncPush(school){
     st.attempts++;
     st.lastFail = Date.now();
     try{ localStorage.setItem(pendKey, JSON.stringify(obj)); }catch(e){}
+    __syncLogAdd({ ev:'push-fail', school, notes:(obj && Array.isArray(obj.notes))?obj.notes.length:0, ts:__syncTS(obj), attempt });
     __syncTimers[school] = setTimeout(() => __syncPush(school), 15000);
     __uiToast('⚠️ تعذّر رفع حفظك للخادم الآن — سأعيد المحاولة تلقائياً ولا تختفي بياناتك.', true);
   }catch(e){} finally {
@@ -1023,6 +1046,7 @@ async function __syncPull(school){
     // وإلا محى السحبُ كلَ حفظِ المعلم بعد إعادة فتح التطبيق بمجرد صفر عدد الطلاب/الفصول.
     if(!local || localIsEmptySeed){
       __origSetItem(key, JSON.stringify(server));
+      __syncLogAdd({ ev:'pull-replace-fresh', school, notes:(Array.isArray(server.notes)?server.notes.length:0) });
     } else if(!(serverHasData) && Array.isArray(local.students) && local.students.length > 0){
       // الخادم فارغ والنُسخة المحلية ممتلئة: نُبقي المحلية سليمة ولا نكتب فوقها فارغاً؛
       // الرفع القادم سيملأ الخادم. البيانات المحلية تظل كما هي حتى ينتظم الخادم.
@@ -1183,6 +1207,7 @@ async function __syncPull(school){
         }
       } catch(_){}
       merged._ts = Math.max(__syncTS(server), __syncTS(local), Date.now());
+      __syncLogAdd({ ev:'pull-merged', school, notesLocal:(Array.isArray(local.notes)?local.notes.length:0), notesServer:(Array.isArray(server.notes)?server.notes.length:0), notesOut:(Array.isArray(merged.notes)?merged.notes.length:0), hasPending:true });
       __origSetItem(key, JSON.stringify(merged));
     }
   }catch(e){}
@@ -6506,6 +6531,7 @@ function addNote(){
       d.notes.push({ id:uid(), studentId:sid, type:effType, category, description, points, createdBy: createdById, createdAt: new Date().toISOString(), batchId });
     });
     saveDB(d);
+    __syncLogAdd({ ev:'note-saved', school:getActiveSchool(), batch:batchId, count:ids.length, type:effType, cat:category, by:createdById, byName:(currentUser()||{}).name || '?' });
   } finally {
     savingNote = false;
   }
@@ -9284,6 +9310,7 @@ const reportTypes = [
   { value:'teacher_engagement', label:'تقرير تفاعل المعلمين', adminOnly:true },
   { value:'teacher_logins', label:'تقرير دخول المعلمات', adminOnly:true },
   { value:'points_detail', label:'تفاصيل نقاط الطالبات (تشخيص)', adminOnly:true },
+  { value:'sync_log', label:'سجل الحفظ والرفع (تشخيص)', adminOnly:true },
 ];
 const reportViews = [
   { value:'table', label:'📋 جدول' }, { value:'bars', label:'📊 سلالم (أعمدة)' }, { value:'pie', label:'🍩 دائرة' },
@@ -9297,7 +9324,7 @@ function renderReports(){
   const repAllowedAdmin = t => t.adminOnly && (isAdmin || (user?.role === 'SCHOOL_AGENT' && (t.value === 'attendance' || t.value === 'absence' || t.value === 'late')));
   const types = reportTypes.filter(t => !t.adminOnly || repAllowedAdmin(t));
   if(types.length && !types.some(t => t.value === reportState.type)) reportState.type = types[0].value;
-  const isEng = reportState.type === 'teacher_engagement' || reportState.type === 'teacher_logins' || reportState.type === 'points_detail';
+  const isEng = reportState.type === 'teacher_engagement' || reportState.type === 'teacher_logins' || reportState.type === 'points_detail' || reportState.type === 'sync_log';
   const periodOptions = [
     { value:'day', label:'اليوم' }, { value:'week', label:'هذا الأسبوع' }, { value:'month', label:'هذا الشهر' },
     { value:'term', label:'هذا الفصل' }, { value:'year', label:'منذ بداية العام' },
@@ -9317,6 +9344,7 @@ function renderReports(){
       <select id="rView" class="input" style="min-width:150px" onchange="reportState.view=this.value" data-tip="طريقة عرض نتائج التقرير: جدول تفصيلي، أعمدة، أو دائرة بيانية">${reportViews.map(v=>`<option value="${v.value}" ${v.value===reportState.view?'selected':''}>${v.label}</option>`).join('')}</select></div>`}
     <button class="btn-secondary" onclick="previewReport()">🔍 عرض</button>
     <button class="btn-primary" onclick="exportReport()">⬇ تصدير Excel</button>
+    <button class="btn-secondary" onclick="__refreshSchool(getActiveSchool()); setTimeout(renderApp, 700)" title="يجلب من الخادم أحدث حالة الحسابات (أول دخول/مفعّل) وسجلات النقاط — تصحيح أي نسخة محلية قديمة">🔄 تحديث مباشر من الخادم</button>
   </div>
   <div id="reportResults">${reportState.rows ? renderReportResult(reportState.rows) : ''}</div>
   `;
@@ -9483,6 +9511,35 @@ function computeReportRows(){
       };
     }).sort((a,b) => String(b['__ts']).localeCompare(String(a['__ts'])))
     .map(({ __stuId, __ts, ...r }) => r);
+  } else if(type === 'sync_log'){
+    // تشخيص: سجل الحفظ والرفع من هذا المتصفح — يبيّن هل وصلت النقطة للخادم أم رُفضت/فشلت،
+    // ومتى أعاد سحبٌ الكتابة فوقها. يُدوَّن عبر __syncLogAdd أثناء addNote/__syncPush/__syncPull.
+    const evLabel = {
+      'note-saved': '💾 حفظ نقطة محلياً',
+      'push-ok': '☁️ رُفعت للخادم',
+      'push-fail': '❌ فشل رفع للخادم',
+      'pull-replace-fresh': '🔄 سحب استبدل النسخة المحلية',
+      'pull-merged': '🔀 سحب دمج مع الخادم',
+    };
+    rows = __syncLogRead().slice().reverse().slice(0, 300).map(e => {
+      const teacherName = (eByCurrentUsers(e)) || '';
+      const notePayload = e.ev === 'note-saved'
+        ? ('عدد النقاط: ' + (e.count || 0) + (e.cat ? ' — ' + e.cat : '') + (e.type ? ' (' + (e.type === 'NEGATIVE' ? 'سلبية' : 'إيجابية') + ')' : ''))
+        : (e.ev === 'push-ok' || e.ev === 'push-fail')
+          ? ('ملاحظات: ' + (e.notes ?? '?') + ' | حضور: ' + (e.att ?? '?'))
+          : (e.ev === 'pull-merged')
+            ? ('كان محلياً: ' + e.notesLocal + ' | في الخادم: ' + e.notesServer + ' | الناتج: ' + e.notesOut)
+            : (e.ev === 'pull-replace-fresh' ? ('ملاحظات الخادم: ' + (e.notes ?? '?')) : '');
+      return {
+        'الوقت': fmtTime(e.at),
+        'الحدث': evLabel[e.ev] || e.ev,
+        'التفاصيل': notePayload,
+        'المدرسة': e.school || '',
+        'بواسطة': (e.byName || teacherName || '—'),
+        '__at': e.at,
+      };
+    }).sort((a,b) => String(b['__at']).localeCompare(String(a['__at'])))
+    .map(({ __at, ...r }) => r);
   } else if(type === 'teacher_engagement'){
     const pr = engagementPeriodRange(reportState.period);
     const eIn = ds => (!pr.from || ds >= pr.from) && (!pr.to || ds <= pr.to);
