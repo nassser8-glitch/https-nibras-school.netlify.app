@@ -6914,7 +6914,7 @@ function renderAdmins(){
   const rows = items.map(({ u, schools }) => {
     const isSelf = u.id === (cur && cur.id);
     const schoolTxt = schools.map(s => `<span class="badge ${s === 'BOYS' ? 'badge-boys' : 'badge-girls'}" style="margin-left:6px">${campusLabels[s] || s}</span>`).join(' ');
-    const nameCell = `<span style="font-weight:600">${escapeHtml(u.name)} <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="openRoleInbox('${u.id}','${schools[0]}')" title="${'متابعة هذا الحساب: آخر دخول وعدد مرات الدخول وتحويلاته وإشعاراته'}">👁</button></span>`;
+    const nameCell = `<span style="font-weight:600">${escapeHtml(u.name)} <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="openRoleInbox('${u.id}','${schools[0]}')" title="${'متابعة هذا الحساب: آخر دخول وعدد مرات الدخول وتحويلاته وإشعاراته'}">👁</button> ${canManageTeachers(cur) ? `<button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="renameAdminUser('${u.id}')" title="${'تصحيح/تعديل اسم المستخدم — يُحفظ في الخادم وكل الأجهزة'}">✏️</button>` : ''}</span>`;
     const authCell = `<div style="font-size:12px;line-height:1.7">
         ${u.email ? `<span style="display:block;direction:ltr">📧 ${escapeHtml(u.email)}</span>` : '<span style="display:block;color:#9ca3af">📧 لا يوجد بريد</span>'}
         ${u.firstLogin ? '<span style="display:block;color:#b45309">⏳ بانتظار أول دخول</span>' : '<span style="display:block;color:#047857">✅ مفعّل</span>'}
@@ -6950,6 +6950,55 @@ function renderAdmins(){
   </div>`;
 }
 let __userBusy = false;
+// تصحيح/تعديل اسم مستخدم إداري: يُرسل النسخة الكاملة من الخادم مع الاسم الجديد عبر PUT
+// (لا تعديل مباشر على Postgres — يمر عبر API فيُراجع كل الحمايات ويُحدَّث جدول الحسابات والذاكرة).
+async function renameAdminUser(id){
+  const cur = currentUser();
+  if(!canManageTeachers(cur)){ alert('يسمح بهذا للمدير/الوكيل فقط'); return; }
+  if(!id || !__serverEnabled()){ alert('الخادم غير مفعّل'); return; }
+  const d = loadDB();
+  const u = (d.users || []).find(x => x.id === id);
+  if(!u){ alert('المستخدم غير موجود'); return; }
+  const school = getActiveSchool();
+  const fresh = prompt('الاسم الحالي:\n' + (u.name || '') + '\n\nأدخل الاسم الصحيح ثم اضغط موافق:', u.name || '');
+  if(fresh == null) return;
+  const cleanName = String(fresh).trim();
+  if(!cleanName){ alert('لا يمكن أن يكون الاسم فارغاً'); return; }
+  if(cleanName === u.name){ alert('الاسم لم يتغير'); return; }
+  if(!confirm('تعديل اسم «' + u.name + '» إلى «' + cleanName + '»؟ سيظهر الاسم الجديد لكل الأجهزة.')) return;
+  try{
+    const resp = await fetch(SYNC_API + school);
+    if(resp.status === 401){ __handleAuthError(resp); return; }
+    if(!resp.ok){ alert('تعذر جلب بيانات الخادم'); return; }
+    const j = await resp.json();
+    if(!j || !j.data){ alert('بيانات الخادم غير متاحة'); return; }
+    const data = JSON.parse(JSON.stringify(j.data));
+    const target = (data.users || []).find(x => x.id === id);
+    if(!target){ alert('المستخدم غير موجود في نسخة الخادم'); return; }
+    target.name = cleanName;
+    const put = await fetch(SYNC_API + school, { method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ ts: Date.now(), data }) });
+    if(put.status === 401){ __handleAuthError({ status: 401 }); return; }
+    if(!put.ok){
+      let msg = 'فشل الحفظ';
+      try{ const e = await put.json(); msg += ': ' + (e && e.error || '') + (e && e.reason ? ' (' + e.reason + ')' : ''); }catch(_){}
+      alert(msg); return;
+    }
+    // حدّث النسخة المحلية كي لا تحمل أي مزامنة لاحقة الاسم القديم
+    try{
+      const k = 'nibras_' + school + '_db_v1';
+      const raw = localStorage.getItem(k);
+      if(raw){
+        const lobj = JSON.parse(raw);
+        const lu = (lobj.users || []).find(x => x.id === id);
+        if(lu) lu.name = cleanName;
+        localStorage.setItem(k, JSON.stringify(lobj));
+      }
+    }catch(_){}
+    try{ __pushState(school).lastOkTs = 0; }catch(_){}
+    __uiToast('تم تعديل الاسم بنجاح');
+    renderApp();
+  }catch(e){ alert('خطأ: ' + (e && e.message || e)); }
+}
 function showTempList(creds){
   const box = document.getElementById('importTeacherResult');
   if(!box || !creds || !creds.length) return;
