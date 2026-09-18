@@ -9449,6 +9449,7 @@ function computeReportRows(){
       }
       return {
         'المعلمة': tc.name,
+        'الحساب': tc.firstLogin ? '⏳ بانتظار تغيير كلمة المرور' : 'مفعّل',
         'آخر دخول': lastTime,
         'دخلت اليوم': inToday ? 'نعم' : 'لا',
         'دخولات الفترة': inPeriod,
