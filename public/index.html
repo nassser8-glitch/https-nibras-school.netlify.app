@@ -995,6 +995,18 @@ async function __syncPush(school){
     st.running = false;
   }
 }
+function __syncPullPaused(){
+  // إيقاف مؤقت: يُضبَط من قبل المدير عبر localStorage لأي مدرسة على حدة (مفتاح
+  // nibras_pull_pause_until_<school> يحمل طابع زمني حتى متى يوقف السحب).
+  for(let __k of Object.keys(localStorage)){
+    if(__k.indexOf('nibras_pull_pause_until_') !== 0) continue;
+    try{
+      const __until = Number(localStorage.getItem(__k));
+      if(__until && __until > Date.now()) return true;
+    }catch(e){}
+  }
+  return false;
+}
 async function __syncPull(school){
   const __PULL_PAUSE_KEY = 'nibras_pull_pause_until_'+school;
   if(__syncPullPaused()) return; // قد يوقف المدير السحب مؤقتاً كي لا تهبط نسخةُ الخادم فوق عمل معلمٍ
