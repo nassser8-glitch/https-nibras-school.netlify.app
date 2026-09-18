@@ -9438,6 +9438,7 @@ function renderReports(){
     <button class="btn-secondary" onclick="previewReport()">🔍 عرض</button>
     <button class="btn-primary" onclick="exportReport()">⬇ تصدير Excel</button>
     <button class="btn-secondary" onclick="__refreshSchool(getActiveSchool()); setTimeout(renderApp, 700)" title="يجلب من الخادم أحدث حالة الحسابات (أول دخول/مفعّل) وسجلات النقاط — تصحيح أي نسخة محلية قديمة">🔄 تحديث مباشر من الخادم</button>
+    ${reportState.type === 'points_detail' ? `<button class="btn-secondary" style="color:#b91c1c" onclick="__cleanupOrphanPointRows()" title="مسح سجلات النقاط المعزولة: بلا طالبة أو بلا معلمة (بنين محذوفة/بيانات قديمة) — تبقى كل طالبة مسجلة كما هي">🧹 مسح المعزول</button>` : ''}
   </div>
   <div id="reportResults">${reportState.rows ? renderReportResult(reportState.rows) : ''}</div>
   `;
@@ -9590,15 +9591,19 @@ function computeReportRows(){
     rows = all.map(n => {
       const s = studById(n.studentId);
       const owner = userById(n.createdBy);
+      const isOrphan = !s || !owner;
       return {
         'التاريخ': n.createdAt ? String(n.createdAt).slice(0,10) : '—',
         'الطالبة': s ? (s.fullName || s.name) : (n.studentId || '—'),
         'الفصل': (s && classById(s.classId)) ? classLabel(classById(s.classId)) : '—',
+        'الحالة': s ? (owner ? '✅ مرتبطة' : '⚠️ بلا معلمة') : (owner ? '⚠️ بلا طالبة' : '⚠️ معرف بائد'),
         'الفئة': n.category || '—',
         'النوع': n.type === 'POSITIVE' ? '🟢 إيجابي' : (n.type === 'NEGATIVE' ? '🔴 سلبي' : (n.type||'—')),
         'النقاط': n.points,
         'المصدر': owner ? owner.name : (n.createdBy ? ('⚠️ ' + n.createdBy) : '—'),
         'وصف': escapeHtml(String(n.description||'').slice(0, 60)),
+        '_orphan': isOrphan,
+        '_noteId': n.id,
         '__stuId': n.studentId,
         '__ts': n.createdAt || '',
       };
@@ -9651,6 +9656,26 @@ function computeReportRows(){
     }).sort((a,b) => b['إجمالي التفاعل'] - a['إجمالي التفاعل'] || String(a['المعلم']).localeCompare(String(b['المعلم']),'ar'));
   }
   return rows;
+}
+function __cleanupOrphanPointRows(){
+  const d = loadDB();
+  const studIds = new Set((d.students||[]).map(s => s.id));
+  const userIds = new Set((d.users||[]).map(u => u.id));
+  const orphan = (d.notes||[]).filter(n => !studIds.has(n.studentId) || !userIds.has(n.createdBy));
+  const noteIds = new Set(orphan.map(n => n.id));
+  if(!orphan.length){ window.__teacherMsg = 'لا توجد سجلات معزولة — كل النقاط مرتبطة بطالبة ومعلمة مسجلتين بالبنات.'; renderApp(); return; }
+  if(!confirm(`🔄 أولاً آمن: عُزلت ${orphan.length} سجلَّات نقاط (بلا طالبة مسجلة أو بلا معلمة مسجلة في قسم البنات). مسحها يزيلها من الخادم نهائياً — ولا يمسّ أي طالبة مسجلة في قائمة البنات. متابعة؟`)) return;
+  if(!confirm(`تأكيد نهائي: حذف ${orphan.length} سجلّ صحيح؟ (عادة = بيانات بنين قديمة تلوّث البنات)`)) return;
+  d.notes = (d.notes||[]).filter(n => !noteIds.has(n.id));
+  saveDB(d);
+  const msg = `تم مسح ${orphan.length} سجلّاً معزولاً — الباقي كله أسماء طالبات مسجلات ومعلمات مسجلات.`;
+  if(__serverEnabled()){
+    __syncSchedule(getActiveSchool(), 0);
+    setTimeout(() => { window.__teacherMsg = msg + ' (جارٍ رفع الخادم)'; renderApp(); }, 350);
+  } else {
+    window.__teacherMsg = msg;
+    renderApp();
+  }
 }
 function engagementPeriodRange(period){
   const now = new Date();
