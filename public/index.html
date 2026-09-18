@@ -9283,6 +9283,7 @@ const reportTypes = [
   { value:'maintenance', label:'تقرير الصيانة', adminOnly:true },
   { value:'teacher_engagement', label:'تقرير تفاعل المعلمين', adminOnly:true },
   { value:'teacher_logins', label:'تقرير دخول المعلمات', adminOnly:true },
+  { value:'points_detail', label:'تفاصيل نقاط الطالبات (تشخيص)', adminOnly:true },
 ];
 const reportViews = [
   { value:'table', label:'📋 جدول' }, { value:'bars', label:'📊 سلالم (أعمدة)' }, { value:'pie', label:'🍩 دائرة' },
@@ -9296,7 +9297,7 @@ function renderReports(){
   const repAllowedAdmin = t => t.adminOnly && (isAdmin || (user?.role === 'SCHOOL_AGENT' && (t.value === 'attendance' || t.value === 'absence' || t.value === 'late')));
   const types = reportTypes.filter(t => !t.adminOnly || repAllowedAdmin(t));
   if(types.length && !types.some(t => t.value === reportState.type)) reportState.type = types[0].value;
-  const isEng = reportState.type === 'teacher_engagement' || reportState.type === 'teacher_logins';
+  const isEng = reportState.type === 'teacher_engagement' || reportState.type === 'teacher_logins' || reportState.type === 'points_detail';
   const periodOptions = [
     { value:'day', label:'اليوم' }, { value:'week', label:'هذا الأسبوع' }, { value:'month', label:'هذا الشهر' },
     { value:'term', label:'هذا الفصل' }, { value:'year', label:'منذ بداية العام' },
@@ -9457,6 +9458,30 @@ function computeReportRows(){
     }).sort((a,b) => String(a['__lastISO']).localeCompare(String(b['__lastISO'])))
     .reverse()
     .map(({ __lastISO, ...r }) => r);
+  } else if(type === 'points_detail'){
+    // تشخيص: تفاصيل سجلات النقاط (الملاحظات) لكل طالبة — بدون Console. يساعد في معرفة إن كانت
+    // النقاط محفوظة فعلاً ومصدرها، أو أن شيئاً من حسابها يسقطها.
+    const studById = sid => (d.students || []).find(s => s.id === sid);
+    const userById = uid2 => (d.users || []).find(u => u.id === uid2);
+    const classById = cid => (d.classes || []).find(c => c.id === cid);
+    const all = (d.notes || []).slice().sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0, 400);
+    rows = all.map(n => {
+      const s = studById(n.studentId);
+      const owner = userById(n.createdBy);
+      return {
+        'التاريخ': n.createdAt ? String(n.createdAt).slice(0,10) : '—',
+        'الطالبة': s ? (s.fullName || s.name) : (n.studentId || '—'),
+        'الفصل': (s && classById(s.classId)) ? classLabel(classById(s.classId)) : '—',
+        'الفئة': n.category || '—',
+        'النوع': n.type === 'POSITIVE' ? '🟢 إيجابي' : (n.type === 'NEGATIVE' ? '🔴 سلبي' : (n.type||'—')),
+        'النقاط': n.points,
+        'المصدر': owner ? owner.name : (n.createdBy ? ('⚠️ ' + n.createdBy) : '—'),
+        'وصف': escapeHtml(String(n.description||'').slice(0, 60)),
+        '__stuId': n.studentId,
+        '__ts': n.createdAt || '',
+      };
+    }).sort((a,b) => String(b['__ts']).localeCompare(String(a['__ts'])))
+    .map(({ __stuId, __ts, ...r }) => r);
   } else if(type === 'teacher_engagement'){
     const pr = engagementPeriodRange(reportState.period);
     const eIn = ds => (!pr.from || ds >= pr.from) && (!pr.to || ds <= pr.to);
