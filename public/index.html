@@ -6979,7 +6979,7 @@ function renderUsers(){
     <td>${roleLabel(u.role)}</td>
     <td>${authCell}</td>
     <td style="font-size:12px;color:#6b7280;max-width:200px">${u.role==='TEACHER'?assignedHtml:'—'}</td>
-    <td>${isSelf || !isAdmin ? '' : `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="showTeacherCreds('${u.id}','${escapeHtml(u.name)}','${escapeHtml(u.username||'')}')" title="عرض بيانات الدخول">🔑 بيانات الدخول</button> `}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="resetTeacherSecret('${u.id}')">🔄 إعادة تعيين</button> ` : '')}${isSelf || !isAdmin ? '' : `<button class="del-btn" onclick="deleteUser('${u.id}')">🗑 حذف</button>`}</td>
+    <td>${isSelf || !isAdmin ? '' : `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="showTeacherCreds('${u.id}','${escapeHtml(u.name)}','${escapeHtml(u.username||'')}')" title="عرض بيانات الدخول">🔑 بيانات الدخول</button> `}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="resetTeacherSecret('${u.id}')">🔄 إعادة تعيين</button> ` : '')}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' && u.firstLogin ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px;color:#047857" onclick="markUserActivated('${u.id}')" title="إزالة حالة «بانتظار أول دخول» — تُعامل كمعلمة فُعّلت بالفعل">✅ اعتبارها مُفعّلة</button> ` : '')}${isSelf || !isAdmin ? '' : `<button class="del-btn" onclick="deleteUser('${u.id}')">🗑 حذف</button>`}</td>
   </tr>`;
   }).join('');
   const teacherMsg = window.__teacherMsg;
@@ -7265,6 +7265,30 @@ async function resetTeacherSecret(id){
   t.firstLogin = true;
   saveDB(d);
   window.__teacherMsg = `تمت إعادة تعيين كلمة المرور للمعلم "${escapeHtml(u.name)}" — كلمة المرور المؤقتة: <b style="direction:ltr">${ns}</b>`;
+  renderApp();
+}
+async function markUserActivated(id){
+  const u = userById(id);
+  if(!u || u.role !== 'TEACHER') return;
+  if(!confirm(`اعتبار المعلمة "${u.name}" مُفعّلة (إزالة «بانتظار أول دخول»)؟ سيُسمح لها بالدخول مباشرة بما أنهت أول دخول فعلاً.`)) return;
+  if(__serverEnabled()){
+    const r = await __api('POST', 'admin/mark-activated', { userId: id });
+    if(r.status === 200 && r.j && r.j.ok){
+      await __refreshSchool(getActiveSchool());
+      window.__teacherMsg = `تم اعتبار المعلمة "${escapeHtml(u.name)}" مُفعّلة — لن يظهر لها «بانتظار أول دخول» بعد الآن.`;
+    } else {
+      const errEl = document.getElementById('userErr');
+      if(errEl) errEl.innerHTML = '<div class="card mb" style="color:#dc2626">تعذر التحديث — أعد المحاولة</div>';
+    }
+    renderApp();
+    return;
+  }
+  const d = loadDB();
+  const t = d.users.find(x => x.id === id);
+  if(!t) return;
+  t.firstLogin = false;
+  saveDB(d);
+  window.__teacherMsg = `تم اعتبار المعلمة "${escapeHtml(u.name)}" مُفعّلة.`;
   renderApp();
 }
 function addTeacherAbsenceFromList(){

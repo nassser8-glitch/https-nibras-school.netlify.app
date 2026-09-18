@@ -762,6 +762,21 @@ app.post('/api/auth/admin/reset-password', requireAuth, (req, res) => {
   })().catch(fail(res));
 });
 
+// اعتبار حساب معلمة «مُفعّلاً» بدون تغيير كلمة مرورها — يزيل «بانتظار أول دخول» لمن أنهت أول دخول فعلاً
+app.post('/api/auth/admin/mark-activated', requireAuth, (req, res) => {
+  (async () => {
+    if (rateLimit('markact', 30, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+    const userId = String(req.body && req.body.userId || '');
+    const target = await db.userById(userId);
+    if (!target) return res.status(404).json({ error: 'not_found' });
+    if (!canManageUsers(req.session, target.school)) return res.status(403).json({ error: 'forbidden' });
+    await db.grantUserAccess(target.id);
+    await updateSchoolUser(target.school, target.id, { firstLogin: false, granted: true });
+    await db.deleteUserSessions(target.id);
+    res.json({ ok: true, userId: target.id, name: target.name });
+  })().catch(fail(res));
+});
+
 // توليد كلمة مرور مؤقتة جديدة لكل معلم وإرجاع قائمة (الاسم، اسم المستخدم، كلمة المرور) ليتسلمها المدير
 app.post('/api/auth/admin/export-credentials', requireAuth, (req, res) => {
   (async () => {
