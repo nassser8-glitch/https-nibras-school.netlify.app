@@ -2019,20 +2019,35 @@ function setupPasswordToggles(){
   }catch(e){}
 }
 window.addEventListener('DOMContentLoaded', async () => {
-  if(__serverEnabled()){
-    await __restoreSession();
-    await syncPullAll();
-    renderApp();
-    backfillActivityMsgs();
-    __refreshAnalyticsCharts();
-    if(!__syncInterval) __syncInterval = setInterval(syncPullAll, SYNC_INTERVAL);
-    if(!window.__analyticsTimer) window.__analyticsTimer = setInterval(__refreshAnalyticsCharts, 45000);
-  } else {
-    renderApp();
+  try{
+    if(__serverEnabled()){
+      await __restoreSession();
+      await syncPullAll();
+      renderApp();
+      backfillActivityMsgs();
+      __refreshAnalyticsCharts();
+      if(!__syncInterval) __syncInterval = setInterval(syncPullAll, SYNC_INTERVAL);
+      if(!window.__analyticsTimer) window.__analyticsTimer = setInterval(__refreshAnalyticsCharts, 45000);
+    } else {
+      renderApp();
+    }
+    if(!window.__notifTimer) window.__notifTimer = setInterval(checkNotifications, 15000);
+    checkNotifications();
+    setupPasswordToggles();
+  }catch(__bootErr){
+    const __app = document.getElementById('app');
+    if(__app){
+      __app.innerHTML =
+        '<div style="max-width:560px;margin:60px auto;padding:22px;border:2px solid #dc2626;border-radius:14px;background:#fff;color:#111;font-family:inherit" dir="rtl">' +
+        '<div style="font-size:17px;font-weight:800;color:#b91c1c;margin-bottom:8px">⚠️ خطأ أثناء التحميل — انسَخ النص بالأسفل وأرسله لمدير النظام:</div>' +
+        '<pre style="white-space:pre-wrap;direction:ltr;text-align:left;font-size:12px;background:#f8fafc;padding:12px;border-radius:8px;overflow:auto;max-height:240px">' +
+        escapeHtml(String((__bootErr && __bootErr.stack) || __bootErr || 'خطأ غير معروف')) +
+        '</pre>' +
+        '<div style="margin-top:12px;font-size:13px;color:#334155">الإصدار: ' + __APP_VER + '</div>' +
+        '<button class="btn-primary" style="margin-top:14px" onclick="location.reload()">إعادة المحاولة</button>' +
+        '</div>';
+    }
   }
-  if(!window.__notifTimer) window.__notifTimer = setInterval(checkNotifications, 15000);
-  checkNotifications();
-  setupPasswordToggles();
 });
 
 /* ============ تسجيل الدخول ============ */
