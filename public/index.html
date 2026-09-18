@@ -5970,9 +5970,11 @@ function renderAttendance(){
   if(!attendanceState.date) attendanceState.date = todayStr();
   const allowPastDates = canRecordPastAttendance(currentUser());
   if(!allowPastDates && attendanceState.date < todayStr()) attendanceState.date = todayStr();
+  const isTeachers0 = canManageTeachers(currentUser()) && attendanceState.classId === 'TEACHERS';
+  if(classes.length === 0 && !isTeachers0) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : null;
+  else if(!attendanceState.classId || (!isTeachers0 && !classes.some(c => c.id === attendanceState.classId))) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : (classes[0] ? classes[0].id : null);
+  // بعد ضبط classId الافتراضي يجب إعادة حساب isTeachers حتى تظهر المعلمات فورًا عند أول فتح للصفحة
   const isTeachers = canManageTeachers(currentUser()) && attendanceState.classId === 'TEACHERS';
-  if(classes.length === 0 && !isTeachers) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : null;
-  else if(!attendanceState.classId || (!isTeachers && !classes.some(c => c.id === attendanceState.classId))) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : (classes[0] ? classes[0].id : null);
   const currentClass = classes.find(c => c.id === attendanceState.classId) || null;
   const isMgr = isManager(currentUser());
   const teacherList = isTeachers && isMgr ? d.users.filter(u => (u.role === 'TEACHER' || isAdminRole(u.role)) && u.active).sort((a,b)=>a.name.localeCompare(b.name,'ar')) : [];
