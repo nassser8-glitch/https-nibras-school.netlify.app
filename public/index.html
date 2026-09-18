@@ -2036,6 +2036,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* ============ تسجيل الدخول ============ */
+const __APP_VER = 'f1ac74c';
+function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
   const hint = __serverEnabled()
@@ -2057,6 +2059,7 @@ function renderLogin(){
         <p style="margin:8px 0 0;text-align:center"><button class="btn-secondary" style="padding:6px 12px;font-size:12px" onclick="openForgotModal()">نسيت كلمة المرور؟</button></p>
         <p class="muted" style="font-size:11px;margin-top:10px;text-align:center">أول دخول: يُطلب منك تعيين بريدك الحقيقي وكلمة مرور قوية جديدة قبل استخدام النظام. بيانات الدخول تُسلَّم من إدارة المدرسة.</p>
       </div>
+      ${__versionBadge()}
       
     </div>`;
   }
@@ -2075,6 +2078,7 @@ function renderLogin(){
       ${__serverEnabled() ? `<p style="margin:8px 0 0;text-align:center"><button class="btn-secondary" style="padding:6px 12px;font-size:12px" onclick="openForgotModal()">نسيت كلمة المرور؟</button></p>` : ''}
       <p class="muted" style="font-size:11px;margin-top:10px;text-align:center">أول دخول: يُطلب منك تعيين بريدك الحقيقي وكلمة مرور قوية جديدة قبل استخدام النظام.</p>
     </div>
+    ${__versionBadge()}
    </div>`;
 }
 function fillLoginEmail(email){
