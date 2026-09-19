@@ -834,11 +834,10 @@ async function __syncPush(school){
                 aByKey.set(k, r);
               }
             }
-            // 3) الملاحظات: نحتفظ بأي ملاحظة محلية غير موجودة بالخادم (حتى لا تُمسح ملاحظات هذا الجهاز)
-            if(Array.isArray(obj.notes)){
-              sd.notes = Array.isArray(sd.notes) ? sd.notes.slice() : [];
-              const nMap = new Map(sd.notes.map(n => [n.id, n]));
-              for(const n of obj.notes){ if(!nMap.has(n.id)){ nMap.set(n.id, n); sd.notes.push(n); } }
+            // 3) الملاحظات: دمج محترم — نحتفظ بأي ملاحظة محلية غير موجودة بالخادم
+            //    (حتى لا تُمسح ملاحظات هذا الجهاز)، ولا يُحِياء حذفٌ ناعم من جهازٍ آخر
+            if(Array.isArray(obj.notes) || Array.isArray(sd.notes)){
+              sd.notes = NRC_mergeNotes(Array.isArray(sd.notes) ? sd.notes : [], Array.isArray(obj.notes) ? obj.notes : []);
             }
             // 3.5) المستخدمون (غياب/تأخر المعلمين): نجعل نسخة الخادم أساساً لكن ندمج الغياب
             //    والتأخر المسجَّل محلياً فوقها — وإلا تُستبدل نسخة الخادمُ بتعديلاتِ هذا
@@ -1119,11 +1118,10 @@ async function __syncPull(school){
           else { const win = __attWinner(r, ex); if(win !== ex){ merged.attendance = merged.attendance.map(x => (x===ex)?win:x); bySD.set(sd, win); } }
         }
       }
-      // ملاحظات محلية جديدة (لم تُرفع) نضمن بقاءها
+      // ملاحظات محلية (جديدة أو محذوفة) نضمن بقاءها: دمج محترم للحذف الناعم —
+      // لا نستطيع الحذف الحقيقي لأن دمج الأجهزة إضافة فقط، فالمحذوفة تبقى شاهدَ قبر.
       if(Array.isArray(local.notes)){
-        merged.notes = Array.isArray(merged.notes) ? merged.notes.slice() : [];
-        const nMap = new Map(merged.notes.map(n => [n.id, n]));
-        for(const n of local.notes){ if(!nMap.has(n.id)){ nMap.set(n.id,n); merged.notes.push(n); } }
+        merged.notes = NRC_mergeNotes(Array.isArray(merged.notes) ? merged.notes : [], local.notes);
       }
       // تكليفات/نشاطات محلية غير مرفوعة بعد: نضمن بقاءها (لا تُمسح عند أخذ نسخة الخادم)
       const betterItemP = (a, b) => {
@@ -1323,9 +1321,8 @@ async function __refreshSchool(school){
         if(!Array.isArray(out.assignments) && Array.isArray(local.assignments)) out.assignments = [];
         if(Array.isArray(out.assignments)) out.assignments = mergeArr(out.assignments, local.assignments);
         if(Array.isArray(out.activities)) out.activities = mergeArr(out.activities, local.activities);
-        if(Array.isArray(out.notes) && Array.isArray(local.notes)){
-          const nMap = new Map(out.notes.map(n => [n.id, n]));
-          for(const n of local.notes){ if(!nMap.has(n.id)){ nMap.set(n.id, n); out.notes.push(n); } }
+        if(Array.isArray(out.notes) || Array.isArray(local.notes)){
+          out.notes = NRC_mergeNotes(Array.isArray(out.notes) ? out.notes : [], Array.isArray(local.notes) ? local.notes : []);
         }
         out._ts = Math.max((j.data && j.data._ts) || 0, (local && local._ts) || 0, Date.now());
         __origSetItem(key, JSON.stringify(out));
@@ -1501,6 +1498,15 @@ const notePointsMap = {
 function notePoints(type, category){
   if(notePointsMap[category] != null) return notePointsMap[category];
   return type === 'POSITIVE' ? 2 : -3; // لأخرى وتحرير
+}
+/* صلاحية حذف نقطة/ملاحظة: المعلمة لحقّ نقاطها (createdBy) والمدير لأي نقطة.
+   النقاط التلقائية من الغياب (بادئتها طولية بلا _auto) والتحويلات/تكليفات تُدار من شاشاتها
+   الخاصة — لا تحذف كملاحظات إلا نقاط الإضافة اليدوية. */
+function NRC_deletableNote(n, me){
+  if(!me) return false;
+  if(me.role === 'ADMIN') return true;
+  if(me.role !== 'TEACHER') return false;
+  return !!n && n.createdBy === me.id;
 }
 // خصم نقاط تلقائي حسب حالة الحضور (يتزايد مع دقائق التأخر)
 function attendancePoints(status, lateMins){
@@ -1728,6 +1734,8 @@ function loadDB(){
     const seenNotes = new Map();
     const uniqNotes = [];
     d.notes.forEach(n => {
+      // شاهد القبر (المحذوفة) يُحتفظ به دائماً حتى ينتشر الحذف — لا يُدمج ولا يُحذف هنا
+      if(n && n.deleted){ uniqNotes.push(n); return; }
       const key = n.studentId + '|' + n.type + '|' + n.category + '|' + (n.description||'') + '|' + n.createdBy + '|' + (n.points ?? '');
       const t = n.createdAt ? new Date(n.createdAt).getTime() : 0;
       const prev = seenNotes.get(key);
@@ -3733,7 +3741,7 @@ function renderStudentDashboard(){
     return { type: t, total: all.length, done: done.length, todo: all.length - done.length, color: typeColors[t], icon: typeIcons[t] };
   }).filter(s => s.total > 0);
   const maxAss = Math.max(...typeStats.map(s => s.total), 1);
-  const myNotes = (d.notes||[]).slice().filter(n => n.studentId === user.id).slice(-6).reverse();
+  const myNotes = (d.notes||[]).slice().filter(n => n.studentId === user.id && !n.deleted).slice(-6).reverse();
   const myTransfers = (d.transfers||[]).slice().filter(t => studentIdsOf(t).includes(user.id)).slice(-4).reverse();
   const attRecs = (d.attendance||[]).slice(-30);
   let present = 0, absent = 0, late = 0;
@@ -4603,7 +4611,7 @@ function renderStageLeaders(d){
   const teachers = d.users.filter(u => u.role === 'TEACHER' && u.active);
   const actionsOf = id => {
     const att = d.attendance.filter(a => a.createdBy === id).length;
-    const notes = d.notes.filter(n => n.createdBy === id).length;
+    const notes = d.notes.filter(n => n.createdBy === id && !n.deleted).length;
     const trans = d.transfers.filter(t => t.createdBy === id).length;
     return { att, notes, trans, total: att + notes + trans };
   };
@@ -5498,6 +5506,7 @@ function pointItems(d){
   const items = [];
   const today = todayStr();
   d.notes.forEach(n => {
+    if(n && n.deleted) return;
     items.push({ studentId:n.studentId, type:n.type, category:n.category, description:n.description, points:(n.points ?? notePoints(n.type, n.category)), createdBy:n.createdBy, createdAt:n.createdAt, kind:'note' });
   });
   d.attendance.forEach(a => {
@@ -5513,7 +5522,7 @@ function pointItems(d){
       if(s.joinedAt && a.created && a.created < s.joinedAt) return;
       const completed = (a.completedBy||[]).includes(s.id);
       if(completed) return;
-      const existingNote = d.notes.find(n => n.studentId === s.id && n.category === 'عدم إنجاز الواجب' && n.assignmentId === a.id);
+      const existingNote = d.notes.find(n => !n.deleted && n.studentId === s.id && n.category === 'عدم إنجاز الواجب' && n.assignmentId === a.id);
       if(!existingNote) items.push({ studentId:s.id, type:'NEGATIVE', category:'عدم إنجاز الواجب', description:'تكليف: ' + (a.title||'بدون عنوان') + ' (' + (a.date||'') + ')', points: UNDONE_DEDUCTION, createdBy:a.teacherId, createdAt:a.date+'T23:59:59.000Z', kind:'assign' });
     });
   });
@@ -6490,17 +6499,19 @@ function renderNotes(){
   const isStudent = user?.role === 'STUDENT';
   let notes;
   if(isStudent){
-    notes = d.notes.slice().reverse().filter(n => n.studentId === user.id);
+    notes = d.notes.slice().reverse().filter(n => n.studentId === user.id && !n.deleted);
   } else {
     const students = getVisibleStudents();
     const visibleIds = new Set(students.map(s => s.id));
-    notes = d.notes.slice().reverse().filter(n => visibleIds.has(n.studentId));
+    notes = d.notes.slice().reverse().filter(n => !n.deleted && visibleIds.has(n.studentId));
   }
   const ptsMapNotes = studentPointsMap();
-  const rows = notes.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">لا توجد ملاحظات بعد</td></tr>` :
+  const me = currentUser();
+  const rows = notes.length === 0 ? `<tr><td colspan="8" style="text-align:center;padding:24px;color:#9ca3af">لا توجد ملاحظات بعد</td></tr>` :
     notes.map(n => {
       const s = studentById(n.studentId); const by = userById(n.createdBy);
       const pts = n.points ?? notePoints(n.type, n.category);
+      const canDel = NRC_deletableNote(n, me);
       return `<tr>
         <td style="font-weight:600">${isStudent ? '' : studentNameLink(s, s ? (ptsMapNotes[s.id] || 0) : undefined)}</td>
         <td style="color:${n.type==='POSITIVE'?'#16a34a':'#dc2626'}">${n.type==='POSITIVE'?'🟢 إيجابية':'🔴 سلبية'}</td>
@@ -6509,6 +6520,7 @@ function renderNotes(){
         <td>${escapeHtml(by?.name||'—')}</td>
         <td class="muted small">${new Date(n.createdAt).toLocaleDateString('ar-SA')}</td>
         <td style="font-weight:700;color:${pts>=0?'#16a34a':'#dc2626'}">${pts>0?'+':''}${pts}</td>
+        <td>${canDel ? `<button class="del-btn" onclick="deleteNote('${n.id}')" title="حذف النقطة (عند الخطأ)">🗑</button>` : (isStudent ? '<span class="muted" style="font-size:11px">—</span>' : `<span class="muted" style="font-size:11px" title="يمكن لحاملة النقطة حذفها (أو المدير)">—</span>`)}</td>
       </tr>`;
     }).join('');
 
@@ -6533,7 +6545,7 @@ function renderNotes(){
     <button class="btn-primary" onclick="addNote()">حفظ</button>
   </div>`}
   <div class="card table-card">
-    <table class="data-table"><thead><tr><th>الطالب</th><th>النوع</th><th>الفئة</th><th>الوصف</th><th>بواسطة</th><th>التاريخ</th><th>النقاط</th></tr></thead>
+    <table class="data-table"><thead><tr><th>الطالب</th><th>النوع</th><th>الفئة</th><th>الوصف</th><th>بواسطة</th><th>التاريخ</th><th>النقاط</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table>
   </div>
   ${isStudent ? `<hr style="margin:26px 0;border:none;border-top:1px dashed var(--border,#e5e7eb)">
@@ -6646,6 +6658,48 @@ function addNote(){
   renderApp();
 }
 
+/* حذف نقطة/ملاحظة عند الخطأ — لكل المعلمات (من أضافت النقطة) وللمدير.
+   الحذف ناعم (علامة deleted كالتكليفات) لأن دمج الملاحظات عبر الأجهزة «إضافة فقط» —
+   الحذف الحقيقي من المصفوفة سيعيد النقطة عند سحب أي جهازٍ آخر. */
+function deleteNote(id){
+  const d = loadDB();
+  const me = currentUser();
+  const n = (d.notes || []).find(x => x && x.id === id);
+  if(!n){ alert('الملاحظة غير موجودة (ربما حُذفت بالفعل).'); return; }
+  if(n.deleted){ alert('هذه النقطة محذوفة بالفعل.'); return; }
+  // الصلاحية: المعلمة تحذف ما أضافته هي فقط، والمدير يحذف أي نقطة.
+  const canDel = me && (me.role === 'ADMIN' || n.createdBy === me.id);
+  if(!canDel){ alert('يمكنك حذف النقاط التي أضفتها أنت فقط — النقاط السلبية من الغياب/التحويلات تُدار من شاشاتها الخاصة.'); return; }
+  const pts = n.points ?? notePoints(n.type, n.category);
+  if(!confirm('هل تحذف هذه النقطة (' + (pts>0?'+':'') + pts + ')؟' + (d.students.find(s => s && s.id === n.studentId) ? ' من رصيد ' + d.students.find(s => s && s.id === n.studentId).fullName + '.' : '') + '\n\nسيُزال تأثيرها من رصيد الطالبة على كل الأجهزة.')) return;
+  n.deleted = true;
+  n.deletedAt = new Date().toISOString();
+  n.deletedBy = me.id;
+  saveDB(d);
+  __syncLogAdd({ ev:'note-deleted', school:getActiveSchool(), id, studentId:n.studentId, pts, by:me.id, byName:me.name || '?' });
+  try{ if(typeof __syncSchedule === 'function') __syncSchedule(getActiveSchool(), 0); }catch(e){}
+  renderApp();
+}
+/* دمج الملاحظات أثناء السحب/الرفع محترمٌ للحذف الناعم: المحذوفة تبقى (شاهد قبر disjoint)
+   ولا تُعاد النسخة الحية من جهازٍ آخر فوقها — وإلا عادت النقطة المحذوفة من كل جهاز لاحق.
+   نفس سياسة betterP للتكليفات: المحذوف يفوز، ثم إصدار أحدث (._v) إن وجد، ثم الأحدث زمنياً. */
+function NRC_mergeNotes(base, add){
+  if(!Array.isArray(base) || !Array.isArray(add)) return base || [];
+  const m = new Map();
+  for(const x of base) if(x && x.id != null) m.set(x.id, { n:x, v:0 });
+  for(const x of add){
+    if(!x || x.id == null) continue;
+    const ex = m.get(x.id);
+    const nv = (typeof x._v === 'number') ? x._v : 0;
+    if(!ex){ m.set(x.id, { n:x, v:nv }); continue; }
+    // المحذوف يفوز (لا يُعاد إحياء نقطة حُذفت عن قصد من أي جهاز)
+    if(!!x.deleted || !!ex.n.deleted){ m.set(x.id, { n: (x.deleted ? x : ex.n), v: Math.max(nv, ex.v) }); continue; }
+    if(nv !== ex.v){ m.set(x.id, nv > ex.v ? { n:x, v:nv } : ex); continue; }
+    const ta = x.updatedAt || x.createdAt || 0, tb = ex.n.updatedAt || ex.n.createdAt || 0;
+    m.set(x.id, (ta >= tb) ? { n:x, v:nv } : ex);
+  }
+  return Array.from(m.values()).map(o => o.n);
+}
 /* ============ التحويلات ============ */
 function renderTransfers(){
   const user = currentUser();
@@ -7523,7 +7577,7 @@ function buildTeacherDetail(type, teacherId){
     rows = list.length ? list.map(a => { const c = d.classes.find(x => x.id === a.classId); return dlRow(classLabel(c), fmtTime(a.createdAt || a.date)); }).join('') : DL_EMPTY;
   } else if(type === 'NOTES'){
     title = 'الملاحظات المسجلة';
-    const list = d.notes.filter(n => n.createdBy === teacherId).sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    const list = d.notes.filter(n => n.createdBy === teacherId && !n.deleted).sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     rows = list.length ? list.map(n => { const s = d.students.find(x => x.id === n.studentId); const nm = s ? s.fullName : '—'; const ic = n.type === 'POSITIVE' ? '⭐' : '⚠️'; return dlRow(`${ic} ${escapeHtml(nm)}`, `${escapeHtml(n.text || '')} · ${fmtTime(n.createdAt)}`); }).join('') : DL_EMPTY;
   } else if(type === 'ACTIVITIES'){
     title = tl('الأنشطة المشارك فيها');
@@ -9505,7 +9559,7 @@ function computeReportRows(){
         return { 'التاريخ':a.date, 'الطالب':s?.fullName||'—', 'الرقم':s?.studentNo||'—', 'الصف':g?.name||'—', 'الفصل':c?.name||'—', 'الحالة':statusLabels[__attEffStatus(a)] }; });
   } else if(type === 'notes'){
     rows = d.notes
-      .filter(n => { const s = studentById(n.studentId); return canSeeStudent(n.studentId) && (!classId || s?.classId===classId) && (!from && !to || inRange(n.createdAt.slice(0,10))); })
+      .filter(n => { const s = studentById(n.studentId); return !n.deleted && canSeeStudent(n.studentId) && (!classId || s?.classId===classId) && (!from && !to || inRange(n.createdAt.slice(0,10))); })
       .sort((a,b) => b.createdAt.localeCompare(a.createdAt))
       .map(n => { const s = studentById(n.studentId); const by = userById(n.createdBy);
         const pts = n.points ?? notePoints(n.type, n.category);
@@ -9625,7 +9679,7 @@ function computeReportRows(){
     const studById = sid => (d.students || []).find(s => s.id === sid);
     const userById = uid2 => (d.users || []).find(u => u.id === uid2);
     const classById = cid => (d.classes || []).find(c => c.id === cid);
-    const all = (d.notes || []).slice().sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0, 400);
+    const all = (d.notes || []).filter(n => !n.deleted).slice().sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0, 400);
     rows = all.map(n => {
       const s = studById(n.studentId);
       const owner = userById(n.createdBy);
@@ -9683,7 +9737,7 @@ function computeReportRows(){
     rows = teachers.map(tc => {
       const id = tc.id;
       const att = d.attendance.filter(a => a.createdBy === id && eIn(a.date)).length;
-      const notes = d.notes.filter(n => n.createdBy === id && eIn(n.createdAt.slice(0,10))).length;
+      const notes = d.notes.filter(n => n.createdBy === id && !n.deleted && eIn(n.createdAt.slice(0,10))).length;
       const trans = d.transfers.filter(t => t.createdBy === id && eIn(t.createdAt.slice(0,10))).length;
       const actsCreated = (d.activities || []).filter(a => a.createdBy === id && eIn((a.createdAt || '').slice(0,10))).length;
       const actsJoined = (d.activities || []).filter(a => isActivityParticipant(a, id) && eIn((a.createdAt || '').slice(0,10))).length;
@@ -9699,7 +9753,7 @@ function __cleanupOrphanPointRows(){
   const d = loadDB();
   const studIds = new Set((d.students||[]).map(s => s.id));
   const userIds = new Set((d.users||[]).map(u => u.id));
-  const orphan = (d.notes||[]).filter(n => !studIds.has(n.studentId) || !userIds.has(n.createdBy));
+  const orphan = (d.notes||[]).filter(n => !n.deleted && (!studIds.has(n.studentId) || !userIds.has(n.createdBy)));
   const noteIds = new Set(orphan.map(n => n.id));
   if(!orphan.length){ window.__teacherMsg = 'لا توجد سجلات معزولة — كل النقاط مرتبطة بطالبة ومعلمة مسجلتين بالبنات.'; renderApp(); return; }
   if(!confirm(`🔄 أولاً آمن: عُزلت ${orphan.length} سجلَّات نقاط (بلا طالبة مسجلة أو بلا معلمة مسجلة في قسم البنات). مسحها يزيلها من الخادم نهائياً — ولا يمسّ أي طالبة مسجلة في قائمة البنات. متابعة؟`)) return;
