@@ -204,6 +204,11 @@ async function insertUser(u) {
 async function grantUserAccess(id) {
   await pool.query('UPDATE users SET granted = true WHERE id = $1', [id]);
 }
+// إنهاء «بانتظار أول دخول» بدون تغيير كلمة المرور — للمدير حين يعتبر المعلمة مُفعّلة.
+// يضبط أول دخول في جدول الحسابات (مصدر الحقيقة) لا في نسخة القسم فقط.
+async function clearFirstLogin(id) {
+  await pool.query('UPDATE users SET first_login = false WHERE id = $1', [id]);
+}
 async function updateUserPasswordHash(id, hash, firstLogin) {
   await pool.query('UPDATE users SET password_hash=$2, first_login=$3 WHERE id=$1',
     [id, hash, firstLogin !== false]);
@@ -407,7 +412,7 @@ module.exports = {
   getFlag, setFlag,
   userByEmail, usersByEmail, userByUsername, usernameExists, generateUsername, baseUsername,
   userById, listUsers, listAllUsers, usersForLoginStats, usernamesByIds, countAdmins, insertUser,
-  updateUserPasswordHash, updateUserPlainPassword, updateUserProfile, grantUserAccess,
+  updateUserPasswordHash, updateUserPlainPassword, updateUserProfile, grantUserAccess, clearFirstLogin,
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,
   getSchoolData, setSchoolData, patchSchoolUserStats, touchUserPresence,

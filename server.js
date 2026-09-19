@@ -771,6 +771,9 @@ app.post('/api/auth/admin/mark-activated', requireAuth, (req, res) => {
     if (!target) return res.status(404).json({ error: 'not_found' });
     if (!canManageUsers(req.session, target.school)) return res.status(403).json({ error: 'forbidden' });
     await db.grantUserAccess(target.id);
+    // مصدر الحقيقة لِـ firstLogin هو جدول الحسابات (users.first_login) الذي تُبنى منه
+    // /api/db — فبدون ضبطه هنا تبقى «بانتظار أول دخول» رغم التفعيل.
+    await db.clearFirstLogin(target.id);
     await updateSchoolUser(target.school, target.id, { firstLogin: false, granted: true });
     await db.deleteUserSessions(target.id);
     res.json({ ok: true, userId: target.id, name: target.name });
