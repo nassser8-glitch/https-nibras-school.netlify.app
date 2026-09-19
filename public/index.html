@@ -4063,8 +4063,11 @@ function renderDashboard(){
   };
   const tDayAtt = isTeacher ? teacherDayAtt() : null;
   const mySubjects = isTeacher ? getTeacherSubjects(user, d) : [];
-  const myClassIds = [...new Set(mySubjects.map(s => s.classId))];
-  const myStudentsCount = [...new Set(d.students.filter(s => s.active && s.classId && myClassIds.includes(s.classId)).map(s => s.id))].length;
+  // عدّاد الطلاب: يعتمد الفصول المسندة رسميًا للمعلمة (teacherIds) وليس فصول
+  // جدول الحصص فقط — حتى يتطابق مع بطاقات الفصول وسجل الحضور (كان يظهر رقمان
+  // مختلفان: 93 من الجدول مقابل 57 من الفصول المسندة، و57 هو الصحيح).
+  const myStudentsCount = isTeacher ? [...new Set(d.students.filter(s => s.active && s.classId && (d.classes.find(c => c.id === s.classId && (c.teacherIds||[]).includes(user.id)))).map(s => s.id))].length : 0;
+  const myClassIds = isTeacher ? d.classes.filter(c => (c.teacherIds || []).includes(user.id)).map(c => c.id) : [];
   const myAssignments = isTeacher ? (d.assignments||[]).filter(a => myClassIds.includes(a.classId) && !(a && a.deleted)).sort((a,b) => (b.created||0)-(a.created||0)) : [];
   // الحصة القادمة اليوم (من جدول المعلم) حسب وقت اليوم
   const ttToday = isTeacher ? (((d.timetable||{})[user.id]||{})[timetableDay]) : null;
