@@ -730,6 +730,26 @@ function __pickMsg(a, b){
   );
   return t(b) >= t(a) ? b : a;
 }
+/* دمج نسختين من الرسالة نفسها دمجًا تزايديًا: مصفوفتا الاطلاع والإسقاط تُدمجان (لا
+   يُفقد إسقاط أحدهم لمجرد أن نسخة أخرى بمتصفح آخر عُرِضت بأحدث updatedAt)،
+   والأعلام الحساسة (قرئت/أُسقطت/أُظهرت) لا تتراجع أبدًا، والطوابع تُؤخذ الأحدث. */
+function __mergeMsg(a, b){
+  if(!a) return b;
+  if(!b) return a;
+  const out = { ...b, ...a };
+  const cA = a.clearedBy || {}, cB = b.clearedBy || {};
+  out.clearedBy = { ...cB, ...cA };
+  const sA = a.seenBy || {}, sB = b.seenBy || {};
+  out.seenBy = { ...sB, ...sA };
+  for(const k of ['read','revealed','dismissed']) out[k] = !!(a[k] || b[k]);
+  for(const k of ['updatedAt','editedAt','lastViewAt','dismissedAt','revealedAt','firstViewAt','createdAt']){
+    if(a[k] || b[k]) out[k] = String(b[k] || '') >= String(a[k] || '') ? (b[k] || a[k]) : (a[k] || b[k]);
+  }
+  if(!out.firstViewAt && (a.firstViewAt || b.firstViewAt)){
+    out.firstViewAt = String(a.firstViewAt || '') <= String(b.firstViewAt || '') ? (a.firstViewAt || b.firstViewAt) : (b.firstViewAt || a.firstViewAt);
+  }
+  return out;
+}
 async function __syncPush(school){
   if(!__syncEnabled()) return;
   const key = 'nibras_'+school+'_db_v1';
@@ -877,7 +897,7 @@ async function __syncPush(school){
               for(const x of (Array.isArray(locArr) ? locArr : [])){
                 if(!x || x.id == null) continue;
                 if(!m.has(x.id)) m.set(x.id, x);
-                else if(__pickMsg(m.get(x.id), x) === x) m.set(x.id, x);
+                else m.set(x.id, __mergeMsg(m.get(x.id), x));
               }
               return Array.from(m.values());
             };
@@ -1134,7 +1154,7 @@ async function __syncPull(school){
         for(const x of (Array.isArray(locArr) ? locArr : [])){
           if(!x || x.id == null) continue;
           if(!m.has(x.id)) m.set(x.id, x);
-          else if(__pickMsg(m.get(x.id), x) === x) m.set(x.id, x);
+          else m.set(x.id, __mergeMsg(m.get(x.id), x));
         }
         return Array.from(m.values());
       };
