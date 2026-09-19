@@ -3380,6 +3380,7 @@ function dismissAdminMsg(id){
     m.updatedAt = stamp;
   });
   saveAdminMsgsFor(school, arr);
+  if(__serverEnabled()) __syncSchedule(school, 0);
   renderApp();
 }
 function revealAdminMsg(id){
@@ -3392,14 +3393,20 @@ function revealAdminMsg(id){
     m.seenBy[u.id] = new Date().toISOString();
     if(!m.firstViewAt){ m.firstViewAt = new Date().toISOString(); m.firstViewByName = u.name || ''; m.firstViewBy = u.id; }
   }
-  m.lastViewAt = new Date().toISOString();
+  const stamp = new Date().toISOString();
+  m.lastViewAt = stamp;
   m.lastViewByName = u.name || '';
   m.lastViewBy = u.id;
   m.revealed = true;
   m.revealedBy = u.name || '';
   m.read = true;
-  m.updatedAt = new Date().toISOString();
+  // الاطلاع يُسقط الرسالة فوراً للاطَّلاع: تختفي من بطاقات المعلم مباشرة
+  // ولا تعود بعد السحب القادم (نُرفع للخادم فوراً).
+  m.clearedBy = m.clearedBy || {};
+  if(!(u.id in m.clearedBy)) m.clearedBy[u.id] = stamp;
+  m.updatedAt = stamp;
   saveAdminMsgsFor(school, arr);
+  if(__serverEnabled()) __syncSchedule(school, 0);
   renderApp();
 }
 function deleteAdminMsg(id){
