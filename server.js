@@ -338,6 +338,28 @@ async function updateSchoolUser(school, userId, fields) {
   STRIP_FIELDS.forEach(f => delete u[f]);
   await db.setSchoolData(school, rec.data, Date.now());
 }
+// تفعيل نسخ القسم (school_data.users) المطابقة بالمعرّف أو باسم المستخدم — يعالج المعرّف
+// اليتيم الناتج عن تطبيع التكرار، حيث يبقى في الواجهة معرّف لا وجود له في جدول الحسابات.
+async function markSchoolUsersActivated(school, userId, username) {
+  const rec = await db.getSchoolData(school);
+  if (!rec.data || !Array.isArray(rec.data.users)) return 0;
+  const uid = String(userId || '');
+  const uname = String(username || '').trim().toLowerCase();
+  let n = 0;
+  for (const u of rec.data.users) {
+    if (!u) continue;
+    const idMatch = uid && String(u.id) === uid;
+    const nameMatch = uname && String(u.username || '').trim().toLowerCase() === uname;
+    if (idMatch || nameMatch) {
+      u.firstLogin = false;
+      u.granted = true;
+      delete u.password;
+      n++;
+    }
+  }
+  if (n) await db.setSchoolData(school, rec.data, Date.now());
+  return n;
+}
 async function appendSchoolUser(school, userObj) {
   const rec = await db.getSchoolData(school);
   const data = rec.data || { users: [], grades: [], classes: [], students: [], attendance: [], notes: [], transfers: [] };
@@ -767,16 +789,25 @@ app.post('/api/auth/admin/mark-activated', requireAuth, (req, res) => {
   (async () => {
     if (rateLimit('markact', 30, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
     const userId = String(req.body && req.body.userId || '');
-    const target = await db.userById(userId);
-    if (!target) return res.status(404).json({ error: 'not_found' });
-    if (!canManageUsers(req.session, target.school)) return res.status(403).json({ error: 'forbidden' });
-    await db.grantUserAccess(target.id);
-    // مصدر الحقيقة لِـ firstLogin هو جدول الحسابات (users.first_login) الذي تُبنى منه
-    // /api/db — فبدون ضبطه هنا تبقى «بانتظار أول دخول» رغم التفعيل.
-    await db.clearFirstLogin(target.id);
-    await updateSchoolUser(target.school, target.id, { firstLogin: false, granted: true });
-    await db.deleteUserSessions(target.id);
-    res.json({ ok: true, userId: target.id, name: target.name });
+    const username = String(req.body && req.body.username || '').trim();
+    // بحث بالمعرّف أولاً، ثم باسم المستخدم: بعد تطبيع الأسماء المكررة قد يبقى في الواجهة
+    // معرّف يتيم غير موجود في جدول الحسابات، فيفشل db.userById ويبدو التفعيل بلا أثر.
+    let target = userId ? await db.userById(userId) : null;
+    if (!target && username) target = await db.userByUsername(username);
+    const school = String((target && target.school) || (req.body && req.body.school) || req.session.school || '').toUpperCase();
+    if (!school || !db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!canManageUsers(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    if (target) {
+      await db.grantUserAccess(target.id);
+      // مصدر الحقيقة لِـ firstLogin هو جدول الحسابات (users.first_login) الذي تُبنى منه
+      // /api/db — فبدون ضبطه هنا تبقى «بانتظار أول دخول» رغم التفعيل.
+      await db.clearFirstLogin(target.id);
+      await db.deleteUserSessions(target.id);
+    }
+    // مزامنة نسخ القسم كلها (بالمعرّف أو الاسم) حتى لو كان المعروض معرّفاً يتيماً.
+    const updated = await markSchoolUsersActivated(school, target ? target.id : userId, username || (target && target.username));
+    if (!target && !updated) return res.status(404).json({ error: 'not_found' });
+    res.json({ ok: true, userId: (target && target.id) || userId, name: (target && target.name) || '', updated });
   })().catch(fail(res));
 });
 

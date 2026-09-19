@@ -7364,7 +7364,7 @@ async function markUserActivated(id){
   if(!u || u.role !== 'TEACHER') return;
   if(!confirm(`اعتبار المعلمة "${u.name}" مُفعّلة (إزالة «بانتظار أول دخول»)؟ سيُسمح لها بالدخول مباشرة بما أنهت أول دخول فعلاً.`)) return;
   if(__serverEnabled()){
-    const r = await __api('POST', 'admin/mark-activated', { userId: id });
+    const r = await __api('POST', 'admin/mark-activated', { userId: id, username: u.username, school: getActiveSchool() });
     if(r.status === 200 && r.j && r.j.ok){
       await __refreshSchool(getActiveSchool());
       window.__teacherMsg = `تم اعتبار المعلمة "${escapeHtml(u.name)}" مُفعّلة — لن يظهر لها «بانتظار أول دخول» بعد الآن.`;
