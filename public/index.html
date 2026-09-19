@@ -944,7 +944,7 @@ async function __syncPush(school){
               return out;
             };
             ['students','classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
-              if(Array.isArray(local[sec])) sd[sec] = locallyOnly(local[sec], sd[sec]);
+              if(Array.isArray(obj[sec])) sd[sec] = locallyOnly(obj[sec], sd[sec]);
             });
             obj = sd;
             obj._ts = mergedTs || Date.now();

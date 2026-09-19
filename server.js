@@ -1540,6 +1540,9 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           if (Array.isArray(prev.data.adminMsgs) && !jsonEqual(prev.data.adminMsgs, cf.adminMsgs)) cf.adminMsgs = mergeAdminMsgs(prev.data.adminMsgs, cf.adminMsgs);
           if (Array.isArray(prev.data.announcements) && !jsonEqual(prev.data.announcements, cf.announcements)) cf.announcements = mergeSection(prev.data.announcements, cf.announcements);
           if (Array.isArray(prev.data.suggestions) && !jsonEqual(prev.data.suggestions, cf.suggestions)) cf.suggestions = mergeSection(prev.data.suggestions, cf.suggestions);
+          // نقاط المعلمات (notes): تُدمج دائماً حتى مع استبدال المدير الكامل، حتى لا يمسح
+          // حفظٌ إداري على جهازٍ قديم ملاحظاتِ معلمات أُضيفت حديثاً من جهات أخرى.
+          if (Array.isArray(prev.data.notes) && !jsonEqual(prev.data.notes, cf.notes)) cf.notes = mergeSection(prev.data.notes, cf.notes);
           data = cf;
         }
       }
