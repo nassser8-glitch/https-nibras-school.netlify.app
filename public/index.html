@@ -6627,7 +6627,14 @@ function addNote(){
     try{
       const bn = ids.slice(0,3).map(sid => {(d.students||[]).find(s=>s.id===sid)?.name || ''}).filter(Boolean);
       const more = ids.length > 3 ? '…' : '';
-      __noteSaveBanner('✅ حُفظت نقاط ' + ids.length + ' طالبة (' + (effType==='EXCELLENCE'?'تميّز/تفوق':effType==='ATTENDANCE'?'انضباط/حضور':'إنجاز/سلوك') + '): ' + bn.join('، ') + more + ' — موجودة الآن على هذا الجهاز وتُرفع للخادم تلقائياً.', false);
+      const dbgSchool = getActiveSchool();
+      const dbgMe = currentUser();
+      const dbgSid = ids[0] || '';
+      const dbgStud = (d.students||[]).find(s => s.id === dbgSid);
+      const dbgNotes = (d.notes||[]).filter(n => n.studentId === dbgSid);
+      const dbgTotal = dbgNotes.reduce((a,n) => a + (n.points ?? notePoints(n.type, n.category)), 0);
+      const dbgExists = dbgStud ? 'موجودة في قاعدة هذا الجهاز' : '⚠️ غير موجودة في قاعدة هذا الجهاز';
+      __noteSaveBanner('✅ حُفظت نقاط ' + ids.length + ' طالبة (' + (effType==='EXCELLENCE'?'تميّز/تفوق':effType==='ATTENDANCE'?'انضباط/حضور':'إنجاز/سلوك') + '): ' + bn.join('، ') + more + ' — رصيد أول طالبة بعد الحفظ: ' + dbgTotal + ' (' + dbgNotes.length + ' ملاحظة) — ' + dbgExists + ' | القسم: ' + dbgSchool + ' | المعلمة: ' + (dbgMe?.name || '—') + ' (المرسل: ' + (dbgMe?.id || '—') + ')', false);
     }catch(e){}
   } finally {
     savingNote = false;
