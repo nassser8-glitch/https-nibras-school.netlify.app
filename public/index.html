@@ -2063,7 +2063,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* ============ تسجيل الدخول ============ */
-const __APP_VER = 'f1ac74c';
+const __APP_VER = 'bf349e8';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3188,7 +3188,8 @@ function notifItemsFor(user){
       const adminId = adminIds[s];
       if(!adminId) return;
       (loadAdminMsgsFor(s) || []).forEach(m => {
-        if(m.teacherId === adminId && !m.dismissed && !m.revealed){
+        const viewedBy = m.clearedBy && user && user.id && (user.id in m.clearedBy);
+        if(m.teacherId === adminId && !m.dismissed && !viewedBy){
           items.push({ kind:'adminmsg', href:'#/guide-msgs', title:'📨 رسالة موجهة إليك', text:(m.teacherName || '') + ' · ' + (m.text || ''), ts: Date.parse(m.createdAt) || 0, key:'adminmsg-' + s + '-' + m.id });
         }
       });
