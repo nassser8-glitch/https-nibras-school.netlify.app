@@ -2091,7 +2091,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* ============ تسجيل الدخول ============ */
-const __APP_VER = 'fc7709a';
+const __APP_VER = '9d33c1b';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -6512,12 +6512,14 @@ function renderNotes(){
       const s = studentById(n.studentId); const by = userById(n.createdBy);
       const pts = n.points ?? notePoints(n.type, n.category);
       const canDel = NRC_deletableNote(n, me);
+      const byName = by?.name || n.createdByName || '—';
+      const byRole = n.createdByRole || by?.role || '';
       return `<tr>
         <td style="font-weight:600">${isStudent ? '' : studentNameLink(s, s ? (ptsMapNotes[s.id] || 0) : undefined)}</td>
         <td style="color:${n.type==='POSITIVE'?'#16a34a':'#dc2626'}">${n.type==='POSITIVE'?'🟢 إيجابية':'🔴 سلبية'}</td>
         <td>${escapeHtml(n.category)}</td>
         <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.description ? escapeHtml(n.description) : '—'}</td>
-        <td>${escapeHtml(by?.name||'—')}</td>
+        <td>${escapeHtml(byName)}${byRole ? ' <span class="muted small">(' + escapeHtml(byRole) + ')</span>' : ''}</td>
         <td class="muted small">${new Date(n.createdAt).toLocaleDateString('ar-SA')}</td>
         <td style="font-weight:700;color:${pts>=0?'#16a34a':'#dc2626'}">${pts>0?'+':''}${pts}</td>
         <td>${canDel ? `<button class="del-btn" onclick="deleteNote('${n.id}')" title="حذف النقطة (عند الخطأ)">🗑</button>` : (isStudent ? '<span class="muted" style="font-size:11px">—</span>' : `<span class="muted" style="font-size:11px" title="يمكن لحاملة النقطة حذفها (أو المدير)">—</span>`)}</td>
@@ -6635,7 +6637,9 @@ function addNote(){
       if(alias) createdById = alias.id;
     }
     ids.forEach(sid => {
-      d.notes.push({ id:uid(), studentId:sid, type:effType, category, description, points, createdBy: createdById, createdAt: new Date().toISOString(), batchId });
+      const stRec = (d.students || []).find(s => s && s.id === sid);
+      const me = currentUser();
+      d.notes.push({ id:uid(), studentId:sid, studentNo: stRec && stRec.studentNo != null ? String(stRec.studentNo) : '', studentName: stRec ? (stRec.fullName || stRec.name || '') : '', type:effType, category, description, points, createdBy: createdById, createdByName: me ? me.name : '', createdByRole: me ? me.role : '', createdAt: new Date().toISOString(), batchId });
     });
     saveDB(d);
     __syncLogAdd({ ev:'note-saved', school:getActiveSchool(), batch:batchId, count:ids.length, type:effType, cat:category, by:createdById, byName:(currentUser()||{}).name || '?' });
@@ -6798,7 +6802,9 @@ function addTransfer(){
   if(ded !== 0){
     tr.deductedPoints = ded;
     ids.forEach(sid => {
-      d.notes.push({ id:uid(), studentId:sid, type:'NEGATIVE', category: reason, description: 'تحويل إلى ' + targetLabel(target) + ' (خصم تلقائي)', points: ded, createdBy: currentUser().id, createdAt: new Date().toISOString(), transferId: tr.id, batchId: tr.id });
+      const stRec = (d.students || []).find(s => s && s.id === sid);
+      const me = currentUser();
+      d.notes.push({ id:uid(), studentId:sid, studentNo: stRec && stRec.studentNo != null ? String(stRec.studentNo) : '', studentName: stRec ? (stRec.fullName || stRec.name || '') : '', type:'NEGATIVE', category: reason, description: 'تحويل إلى ' + targetLabel(target) + ' (خصم تلقائي)', points: ded, createdBy: currentUser().id, createdByName: me ? me.name : '', createdByRole: me ? me.role : '', createdAt: new Date().toISOString(), transferId: tr.id, batchId: tr.id });
     });
   }
   saveDB(d);
