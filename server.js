@@ -1220,7 +1220,7 @@ function mergeStudentsLateOnly(prevStudents, inStudents) {
   for (const s of inStudents) {
     if (!s || !s.id) continue;
     const p = map.get(s.id);
-    if (!p) continue; // لا ينشئ المعلم طلاباً
+    if (!p) { map.set(s.id, s); continue; } // طالبة جديدة: نُبقيها ونضيفها (بدل إسقاط إضافة المدير حديثاً) // لا ينشئ المعلم طلاباً
     // دمج حقول التأخر فقط
     if (s.lateMinutes && typeof s.lateMinutes === 'object') p.lateMinutes = s.lateMinutes;
     if (s.lateType && typeof s.lateType === 'object') p.lateType = s.lateType;
