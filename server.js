@@ -1483,16 +1483,31 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     } catch (e) { console.warn('[normalizeTeacherDuplicates]', e.message); }
     const prev = await db.getSchoolData(school);
     const prevUsers = (prev.data && Array.isArray(prev.data.users)) ? prev.data.users : [];
-    // لا نسمح بإنشاء نقطة جديدة باسم مالك مختلف عن هوية جلسة HTTP الموثقة.
-    // السجلات الموجودة تُحمى لاحقاً داخل mergeNotesOwnershipSafe، لذلك لا تتغير
-    // ملكية البيانات التاريخية عند وصول نسخة عميل متأخرة.
-    const prevNoteIds = new Set((prev.data && Array.isArray(prev.data.notes) ? prev.data.notes : []).map(n => n && n.id).filter(Boolean));
+    // المزامنة تحمل لقطة كاملة من الجهاز، لذلك قد تحتوي على عمليات نقاط
+    // صحيحة للمستخدم الحالي إلى جانب سجل جديد أُنشئ بهوية أخرى. نعزل السجلات
+    // غير المصرح بها بدلاً من رفض الدفعة كلها؛ أما السجلات الموجودة فيحمي
+    // مالكها الأصلي mergeNotesOwnershipSafe أثناء الدمج.
+    const prevNotes = (prev.data && Array.isArray(prev.data.notes)) ? prev.data.notes : [];
+    const prevNotesById = new Map(prevNotes.filter(n => n && n.id).map(n => [n.id, n]));
+    const sessionUserId = req.session.user_id;
+    const canManageAllNotes = req.session.role === 'ADMIN';
     const incomingNotes = Array.isArray(data.notes) ? data.notes : [];
-    const foreignNewNote = incomingNotes.find(n =>
-      n && n.id && !prevNoteIds.has(n.id) && n.createdBy !== req.session.user_id
-    );
-    if (foreignNewNote) {
-      return res.status(403).json({ error: 'note_owner_mismatch' });
+    let ignoredUnauthorizedNotes = 0;
+    data.notes = incomingNotes.filter(note => {
+      if (!note || !note.id) return false;
+      const existing = prevNotesById.get(note.id);
+      const allowed = canManageAllNotes
+        ? (!existing ? note.createdBy === sessionUserId : true)
+        : (existing ? existing.createdBy === sessionUserId : note.createdBy === sessionUserId);
+      if (!allowed) ignoredUnauthorizedNotes++;
+      return allowed;
+    });
+    if (ignoredUnauthorizedNotes) {
+      console.warn('[note-sync] تجاهل سجلات نقاط غير مصرح بها:', {
+        school,
+        user_id: sessionUserId,
+        count: ignoredUnauthorizedNotes
+      });
     }
     // ===== حارس ضد المسح الفارغ (wipe-guard) =====
     // متصفح/جهاز جديد يفتح التطبيق أول مرة يكون تخزينه المحلي فارغاً، ومع خوارزميات
