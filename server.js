@@ -954,6 +954,43 @@ function mergeSection(prevVal, inVal) {
   // لا دمج ممكن: الأحدث (الواصل) يرجح إن كان من نوع الكائن/أو يرجح الموجودة
   return inVal !== undefined ? inVal : prevVal;
 }
+
+// ملاحظات النقاط لها ملكية ثابتة. عند دمج نسختين للسجل نفسه، نطابقه بالـ id
+// فقط ونحتفظ بـ createdBy الموجود مسبقاً؛ لا يجوز لاسم الحساب أو لنسخة عميل
+// متأخرة أن تنقل ملكية النقطة.
+function mergeNotesOwnershipSafe(prevVal, inVal) {
+  const prev = Array.isArray(prevVal) ? prevVal : [];
+  const incoming = Array.isArray(inVal) ? inVal : [];
+  const keyOf = r => (r && typeof r === 'object' && r.id) ? r.id : '__anon:' + JSON.stringify(r);
+  const map = new Map();
+  const tomb = new Set();
+  for (const note of prev) {
+    if (!note || typeof note !== 'object') continue;
+    const key = keyOf(note);
+    map.set(key, note);
+    if (note.deleted) tomb.add(key);
+  }
+  for (const note of incoming) {
+    if (!note || typeof note !== 'object') continue;
+    const key = keyOf(note);
+    const existing = map.get(key);
+    if (tomb.has(key) && !note.deleted) continue;
+    if (!existing) {
+      map.set(key, note);
+      if (note.deleted) tomb.add(key);
+      continue;
+    }
+    const merged = { ...existing, ...note };
+    if (existing.createdBy) {
+      merged.createdBy = existing.createdBy;
+      if (existing.createdByName) merged.createdByName = existing.createdByName;
+      if (existing.createdByRole) merged.createdByRole = existing.createdByRole;
+    }
+    if (note.deleted) tomb.add(key);
+    map.set(key, merged);
+  }
+  return Array.from(map.values());
+}
 // ===== دمج رسائل المدير/الإشعارات (adminMsgs) =====
 // دمج حسب id مع «إزالة تكرار المصدر»: تحويل/نشاط كان يُنشئ سابقاً نسختين متطابقتين
 // (نفس transferId/partReqId لجهتين مرسلتين) فتبقى بعد دمجها رسالةٌ شقيقة بنفس المحتوى
@@ -1385,7 +1422,23 @@ async function normalizeTeacherDuplicates(school, data) {
   }
   const dropped = live.length - out.filter(u => u && u.deleted !== true).length;
   data.users = out;
+  // احتفظ بملكية النقاط قبل إعادة توجيه مراجع الحسابات الأخرى. لا يجوز
+  // لتطبيع الحسابات المكررة أن يغيّر createdBy لسجل نقطة قديم.
+  const noteOwners = new Map(
+    (Array.isArray(data.notes) ? data.notes : [])
+      .filter(n => n && n.id != null && n.createdBy)
+      .map(n => [n.id, { createdBy: n.createdBy, createdByName: n.createdByName, createdByRole: n.createdByRole }])
+  );
   const remapped = Object.keys(remap).length ? remapJsonRefs(data, remap) : 0;
+  if (noteOwners.size && Array.isArray(data.notes)) {
+    for (const note of data.notes) {
+      const owner = note && noteOwners.get(note.id);
+      if (!owner) continue;
+      note.createdBy = owner.createdBy;
+      if (owner.createdByName !== undefined) note.createdByName = owner.createdByName;
+      if (owner.createdByRole !== undefined) note.createdByRole = owner.createdByRole;
+    }
+  }
   return { remapped, dropped };
 }
 // إعادة توجيه معرّفات يتيمة في كل أقسام data ما عدا users (التي سبق بناؤها)
@@ -1430,6 +1483,17 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     } catch (e) { console.warn('[normalizeTeacherDuplicates]', e.message); }
     const prev = await db.getSchoolData(school);
     const prevUsers = (prev.data && Array.isArray(prev.data.users)) ? prev.data.users : [];
+    // لا نسمح بإنشاء نقطة جديدة باسم مالك مختلف عن هوية جلسة HTTP الموثقة.
+    // السجلات الموجودة تُحمى لاحقاً داخل mergeNotesOwnershipSafe، لذلك لا تتغير
+    // ملكية البيانات التاريخية عند وصول نسخة عميل متأخرة.
+    const prevNoteIds = new Set((prev.data && Array.isArray(prev.data.notes) ? prev.data.notes : []).map(n => n && n.id).filter(Boolean));
+    const incomingNotes = Array.isArray(data.notes) ? data.notes : [];
+    const foreignNewNote = incomingNotes.find(n =>
+      n && n.id && !prevNoteIds.has(n.id) && n.createdBy !== req.session.user_id
+    );
+    if (foreignNewNote) {
+      return res.status(403).json({ error: 'note_owner_mismatch' });
+    }
     // ===== حارس ضد المسح الفارغ (wipe-guard) =====
     // متصفح/جهاز جديد يفتح التطبيق أول مرة يكون تخزينه المحلي فارغاً، ومع خوارزميات
     // الوقت القديمة يُرى «أحدث» فيدفع القسم فارغاً فيمسح قسمَ المدرسة كله (users=students=classes=0).
@@ -1504,6 +1568,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         // حتى يبقى الغياب المسجَّل قائماً ولا يختفي بأي نسخة قديمة من أي دور.
         if (key === 'attendance') { merged[key] = mergeAttendance(a, b); continue; }
         if (key === 'activities') { merged[key] = mergeActivities(a, b); continue; }
+        if (key === 'notes') { merged[key] = mergeNotesOwnershipSafe(a, b); continue; }
         if (key === 'adminMsgs') { merged[key] = mergeAdminMsgs(a, b); continue; }
         if (key === 'classes') { merged[key] = mergeClasses(a, b); continue; }
         if (canEditU) { merged[key] = mergeSection(a, b); continue; }
@@ -1542,7 +1607,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           if (Array.isArray(prev.data.suggestions) && !jsonEqual(prev.data.suggestions, cf.suggestions)) cf.suggestions = mergeSection(prev.data.suggestions, cf.suggestions);
           // نقاط المعلمات (notes): تُدمج دائماً حتى مع استبدال المدير الكامل، حتى لا يمسح
           // حفظٌ إداري على جهازٍ قديم ملاحظاتِ معلمات أُضيفت حديثاً من جهات أخرى.
-          if (Array.isArray(prev.data.notes) && !jsonEqual(prev.data.notes, cf.notes)) cf.notes = mergeSection(prev.data.notes, cf.notes);
+          if (Array.isArray(prev.data.notes) && !jsonEqual(prev.data.notes, cf.notes)) cf.notes = mergeNotesOwnershipSafe(prev.data.notes, cf.notes);
           data = cf;
         }
       }

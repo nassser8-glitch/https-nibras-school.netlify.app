@@ -1423,55 +1423,9 @@ if(!__serverEnabled()){
   }
   try{ localStorage.removeItem('nibras_null_db_v1'); }catch(e){}
 }
-/* تنظيف تلقائي: إزالة حسابات المعلمين المكررة بالاسم (يبقى الحساب الرسمي @nibras.local أو صاحب الفصول) مع دمج فصوله وجدوله وملاحظاته — يعمل في النسخ المحلية فقط */
-function __normName(s){ return String(s||'').replace(/[\u064B-\u0652\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/\s+/g,' ').trim(); }
-function dedupeTeacherAccounts(){
-  if(__serverEnabled()) return;
-  let changedAny = false;
-  ['BOYS','GIRLS'].forEach(school => {
-    const key = 'nibras_'+school+'_db_v1';
-    let d = null;
-    try{ d = JSON.parse(localStorage.getItem(key) || 'null'); }catch(e){}
-    if(!d || !Array.isArray(d.users)) return;
-    const groups = {};
-    (d.users||[]).forEach(u => { if(u && u.role === 'TEACHER'){ const n = __normName(u.name); (groups[n] = groups[n] || []).push(u); } });
-    const dupNames = Object.keys(groups).filter(n => groups[n].length > 1);
-    if(!dupNames.length) return;
-    const removed = [];
-    dupNames.forEach(n => {
-      const list = groups[n];
-      const score = u =>
-        (u.email && /@nibras\.local$/i.test(u.email) ? 4 : 0) +
-        (u.active !== false ? 2 : 0) +
-        ((d.classes||[]).some(c => (c.teacherIds||[]).includes(u.id)) ? 3 : 0) +
-        ((d.timetable||{})[u.id] ? 2 : 0) +
-        ((d.notes||[]).some(x => x.createdBy === u.id) ? 1 : 0);
-      list.sort((a,b) => (score(b)-score(a)) || (a.id < b.id ? 1 : -1));
-      const keep = list[0];
-      list.slice(1).forEach(dup => {
-        (d.classes||[]).forEach(c => {
-          if(!Array.isArray(c.teacherIds)) return;
-          const before = c.teacherIds;
-          c.teacherIds = before.map(t => t === dup.id ? keep.id : t);
-          if(c.teacherIds.some((t,i) => t === keep.id && before[i] === dup.id)) c.teacherIds = [...new Set(c.teacherIds)];
-        });
-        if(d.timetable && d.timetable[dup.id]){
-          d.timetable[keep.id] = d.timetable[keep.id] || {};
-          for(const day of Object.keys(d.timetable[dup.id])) d.timetable[keep.id][day] = Object.assign(d.timetable[keep.id][day] || {}, d.timetable[dup.id][day]);
-          delete d.timetable[dup.id];
-        }
-        (d.notes||[]).forEach(x => { if(x.createdBy === dup.id) x.createdBy = keep.id; });
-        removed.push(dup.id);
-      });
-    });
-    if(!removed.length) return;
-    d.users = d.users.filter(u => !removed.includes(u.id));
-    __origSetItem(key, JSON.stringify(d));
-    changedAny = true;
-  });
-  return changedAny;
-}
-if(!__serverEnabled()) dedupeTeacherAccounts();
+/* لا يوجد دمج تلقائي لحسابات المعلمين المتشابهة. تشابه الاسم لا يثبت
+   أن الحسابين واحد، ولا يجوز أن يغيّر ملكية النقاط أو إسنادات الحسابات. */
+function dedupeTeacherAccounts(){ return false; }
 
 const campusLabels = { BOYS:'بنين', GIRLS:'بنات', MIXED:'مشترك' };
 const roleLabels = { ADMIN:'مدير', AGENT:'وكيل', COUNSELOR:'موجه طلابي', TEACHER:'معلم', ADMINISTRATIVE:'مساعد إداري', SCHOOL_AGENT:'وكيل الشؤون المدرسية' };
@@ -6628,17 +6582,16 @@ function addNote(){
     }
     const points = notePoints(effType, category);
     const batchId = uid();
-    // المعرّف الرسمي الفعلي للمنشئ: إن كان معرّف الجلسة قديماً/يتيماً (بعد إعادة توجيه
-    // معلمات مكررة)، نربط النقطة بمعرّف المستخدم الموجود فعلاً في قائمة القسم.
-    let createdById = currentUser() && currentUser().id;
-    if(createdById && !d.users.some(u => u && u.id === createdById)){
-      const me = currentUser();
-      const alias = (d.users || []).find(u => u && u.name === me.name && (u.role === me.role));
-      if(alias) createdById = alias.id;
+    // ملكية النقطة تعتمد على المعرّف الثابت للجلسة فقط. لا نستخدم الاسم
+    // أو alias عند فقدان/عدم صلاحية المعرّف.
+    const me = currentUser();
+    const createdById = me && me.id;
+    if(!createdById || (Array.isArray(d.users) && d.users.length && !d.users.some(u => u && u.id === createdById))){
+      alert('لا يمكن حفظ النقطة لأن معرّف المستخدم الحالي غير صالح.');
+      return;
     }
     ids.forEach(sid => {
       const stRec = (d.students || []).find(s => s && s.id === sid);
-      const me = currentUser();
       d.notes.push({ id:uid(), studentId:sid, studentNo: stRec && stRec.studentNo != null ? String(stRec.studentNo) : '', studentName: stRec ? (stRec.fullName || stRec.name || '') : '', type:effType, category, description, points, createdBy: createdById, createdByName: me ? me.name : '', createdByRole: me ? me.role : '', createdAt: new Date().toISOString(), batchId });
     });
     saveDB(d);
@@ -6696,11 +6649,15 @@ function NRC_mergeNotes(base, add){
     const ex = m.get(x.id);
     const nv = (typeof x._v === 'number') ? x._v : 0;
     if(!ex){ m.set(x.id, { n:x, v:nv }); continue; }
+    const keepOwner = (record) => {
+      const owner = ex.n.createdBy || record.createdBy;
+      return owner ? { ...record, createdBy: owner, createdByName: ex.n.createdByName || record.createdByName, createdByRole: ex.n.createdByRole || record.createdByRole } : record;
+    };
     // المحذوف يفوز (لا يُعاد إحياء نقطة حُذفت عن قصد من أي جهاز)
-    if(!!x.deleted || !!ex.n.deleted){ m.set(x.id, { n: (x.deleted ? x : ex.n), v: Math.max(nv, ex.v) }); continue; }
-    if(nv !== ex.v){ m.set(x.id, nv > ex.v ? { n:x, v:nv } : ex); continue; }
+    if(!!x.deleted || !!ex.n.deleted){ m.set(x.id, { n: keepOwner(x.deleted ? x : ex.n), v: Math.max(nv, ex.v) }); continue; }
+    if(nv !== ex.v){ m.set(x.id, nv > ex.v ? { n:keepOwner(x), v:nv } : ex); continue; }
     const ta = x.updatedAt || x.createdAt || 0, tb = ex.n.updatedAt || ex.n.createdAt || 0;
-    m.set(x.id, (ta >= tb) ? { n:x, v:nv } : ex);
+    m.set(x.id, (ta >= tb) ? { n:keepOwner(x), v:nv } : ex);
   }
   return Array.from(m.values()).map(o => o.n);
 }
@@ -10422,4 +10379,3 @@ setTimeout(function(){ maybeShowInstallHint(false); }, 1200);
 </script>
 </body>
 </html>
-
