@@ -943,7 +943,8 @@ async function __syncPush(school){
               }
               return out;
             };
-            ['students','classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
+            sd.students = __mergeLocalStudents(sd.students, obj.students);
+            ['classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
               if(Array.isArray(obj[sec])) sd[sec] = locallyOnly(obj[sec], sd[sec]);
             });
             obj = sd;
@@ -1213,7 +1214,8 @@ async function __syncPull(school){
         }
         return out;
       };
-      ['students','classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
+      merged.students = __mergeLocalStudents(merged.students, local.students);
+      ['classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
         if(Array.isArray(local[sec])) merged[sec] = locallyOnlyP(local[sec], merged[sec]);
       });
       // تنقية الفصول على العميل: تمنع عودة الفصول الزائدة (مكررة/بدون مرحلة/بمرحلة وهمية بلا طلاب)
@@ -1318,6 +1320,7 @@ async function __refreshSchool(school){
           return Array.from(m.values());
         };
         const out = JSON.parse(JSON.stringify(j.data));
+        out.students = __mergeLocalStudents(out.students, local.students);
         if(!Array.isArray(out.assignments) && Array.isArray(local.assignments)) out.assignments = [];
         if(Array.isArray(out.assignments)) out.assignments = mergeArr(out.assignments, local.assignments);
         if(Array.isArray(out.activities)) out.activities = mergeArr(out.activities, local.activities);
@@ -1331,6 +1334,17 @@ async function __refreshSchool(school){
       }
     }
   }catch(e){}
+}
+// لا تستبدل سحبٌ قديم طالباً أُضيف محلياً ولم يصل الخادم بعد.
+function __mergeLocalStudents(serverStudents, localStudents){
+  const out = Array.isArray(serverStudents) ? serverStudents.slice() : [];
+  const seen = new Set(out.map(s => s && s.id).filter(Boolean));
+  for(const student of (Array.isArray(localStudents) ? localStudents : [])){
+    if(!student || !student.id || seen.has(student.id)) continue;
+    out.push(JSON.parse(JSON.stringify(student)));
+    seen.add(student.id);
+  }
+  return out;
 }
 // غلاف حفظ: كل كتابة لقاعدة بيانات أي قسم تُختم بزمن وتُرفع تلقائياً — وفي وضع الخادم تُحذف بيانات الاعتماد من النسخة المحلية
 localStorage.setItem = function(k, v){
@@ -5851,6 +5865,7 @@ async function addStudent(){
   }
   d.students.push({ id:newId, fullName, studentNo, classId, guardianName:'', guardianPhone:'', active:true, joinedAt: Date.now() });
   saveDB(d);
+  __syncSchedule(getActiveSchool(), 0);
   renderApp();
 }
 async function deleteStudent(id){

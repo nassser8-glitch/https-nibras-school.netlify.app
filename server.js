@@ -1747,6 +1747,23 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       }
     } catch (e) { console.warn('[joinedAt-preserve]', e.message); }
 
+    // لا تسمح كتابة متأخرة بمحو طالبة أضيفت في PUT متزامن بعد قراءة `prev`.
+    // نُبقي أي سجل طالب موجود في أحدث لقطة قبل التخزين، بينما تبقى الحذفيات
+    // الصريحة محكومة بقائمة _blockedStudents والحارس النهائي أدناه.
+    try {
+      const latest = await db.getSchoolData(school);
+      const latestStudents = latest.data && Array.isArray(latest.data.students) ? latest.data.students : [];
+      const cleanIds = new Set((Array.isArray(clean.students) ? clean.students : []).map(s => s && s.id).filter(Boolean));
+      if (latestStudents.length && Array.isArray(clean.students)) {
+        for (const student of latestStudents) {
+          if (!student || !student.id || cleanIds.has(student.id)) continue;
+          if (student.deleted || (Array.isArray(clean._blockedStudents) && clean._blockedStudents.includes(student.id))) continue;
+          clean.students.push(JSON.parse(JSON.stringify(student)));
+          cleanIds.add(student.id);
+        }
+      }
+    } catch (e) { console.warn('[student-preserve-before-write]', e.message); }
+
     await db.setSchoolData(school, clean, nextTs);
     // مزامنة جدول المصادقة مع أي تغيير في قسم المستخدمين (حذف/نقل/تعطيل)
     if (['ADMIN','AGENT'].includes(req.session.role)) {
