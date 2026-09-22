@@ -3000,7 +3000,6 @@ function renderLayout(user, hash){
     { title:'الإدارة', items:[
       { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👥' },
       { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
-      (user.role === 'ADMIN') ? { href:'#/supervision', key:'supervision', label:'🛡️ الإشراف اليومي', icon:'🛡️' } : null,
     ]},
     { title:'المتابعة', items:[
       { href:'#/attendance', key:'attendance', label:'الحضور والغياب', icon:'✓' },
@@ -3021,6 +3020,7 @@ function renderLayout(user, hash){
       (user.role === 'ADMIN' || user.role === 'AGENT') ? { href:'#/admins', key:'admins', label:'الإداريون', icon:'🛡' } : null,
       { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👥' },
       { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
+      (user.role === 'ADMIN') ? { href:'#/supervision', key:'supervision', label:'🛡️ الإشراف اليومي', icon:'🛡️' } : null,
     ]},
     { title:'المتابعة', items:[
       { href:'#/attendance', key:'attendance', label:'الحضور والغياب', icon:'✓' },
