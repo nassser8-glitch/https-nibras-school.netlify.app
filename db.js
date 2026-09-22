@@ -97,6 +97,26 @@ async function initSchema() {
       )`);
     await client.query(`CREATE INDEX IF NOT EXISTS sync_audit_school_idx ON sync_audit(school)`);
     await client.query(`CREATE INDEX IF NOT EXISTS sync_audit_time_idx ON sync_audit(created_at)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS teacher_supervision_schedule (
+        school       TEXT NOT NULL CHECK (school IN ('BOYS','GIRLS')),
+        day_of_week  SMALLINT NOT NULL CHECK (day_of_week BETWEEN 1 AND 5),
+        teacher_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        enabled      BOOLEAN NOT NULL DEFAULT true,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (school, day_of_week, teacher_id)
+      )`);
+    await client.query(`CREATE INDEX IF NOT EXISTS teacher_supervision_schedule_teacher_idx ON teacher_supervision_schedule(teacher_id)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS teacher_supervision_checkins (
+        school        TEXT NOT NULL CHECK (school IN ('BOYS','GIRLS')),
+        teacher_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        day_of_week   SMALLINT NOT NULL CHECK (day_of_week BETWEEN 1 AND 5),
+        checkin_date  DATE NOT NULL,
+        checked_in_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (school, teacher_id, checkin_date)
+      )`);
+    await client.query(`CREATE INDEX IF NOT EXISTS teacher_supervision_checkins_date_idx ON teacher_supervision_checkins(school, checkin_date)`);
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
@@ -512,6 +532,114 @@ async function sweepSessions() {
   await pool.query('DELETE FROM sessions WHERE expires_at <= now()');
 }
 
+const SUPERVISION_DAYS = new Set([1, 2, 3, 4, 5]);
+
+async function getSupervisionSchedule(school) {
+  const r = await pool.query(
+    `SELECT s.day_of_week, s.teacher_id, s.enabled, u.name, u.active
+       FROM teacher_supervision_schedule s
+       JOIN users u ON u.id = s.teacher_id
+      WHERE s.school = $1
+      ORDER BY s.day_of_week, u.name`,
+    [school]);
+  return r.rows;
+}
+
+async function replaceSupervisionSchedule(school, assignments) {
+  if (!Array.isArray(assignments)) throw new Error('invalid_schedule');
+  const unique = new Set();
+  for (const item of assignments) {
+    const day = Number(item && item.dayOfWeek);
+    const teacherId = String(item && item.teacherId || '');
+    const key = `${day}:${teacherId}`;
+    if (!SUPERVISION_DAYS.has(day) || !teacherId || unique.has(key)) throw new Error('invalid_schedule');
+    unique.add(key);
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (assignments.length) {
+      const ids = [...new Set(assignments.map(item => String(item.teacherId || '')))];
+      const valid = await client.query(
+        `SELECT id FROM users WHERE school = $1 AND role = 'TEACHER' AND active = true AND id = ANY($2::text[])`,
+        [school, ids]);
+      if (valid.rows.length !== ids.length) throw new Error('invalid_teacher');
+    }
+    await client.query('DELETE FROM teacher_supervision_schedule WHERE school = $1', [school]);
+    for (const item of assignments) {
+      await client.query(
+        `INSERT INTO teacher_supervision_schedule (school, day_of_week, teacher_id, enabled)
+         VALUES ($1,$2,$3,true)`,
+        [school, Number(item.dayOfWeek), String(item.teacherId)]);
+    }
+    await client.query('COMMIT');
+    return getSupervisionSchedule(school);
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function getSupervisionForDate(school, dayOfWeek, date) {
+  if (!SUPERVISION_DAYS.has(Number(dayOfWeek))) return [];
+  const r = await pool.query(
+    `SELECT s.day_of_week, s.teacher_id, u.name, c.checked_in_at
+       FROM teacher_supervision_schedule s
+       JOIN users u ON u.id = s.teacher_id AND u.active = true
+       LEFT JOIN teacher_supervision_checkins c
+         ON c.school = s.school AND c.teacher_id = s.teacher_id AND c.checkin_date = $3::date
+      WHERE s.school = $1 AND s.day_of_week = $2 AND s.enabled = true
+      ORDER BY u.name`,
+    [school, Number(dayOfWeek), date]);
+  return r.rows;
+}
+
+async function checkInSupervision(school, teacherId, dayOfWeek, date) {
+  if (!SUPERVISION_DAYS.has(Number(dayOfWeek))) throw new Error('no_supervision_today');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const assigned = await client.query(
+      `SELECT 1 FROM teacher_supervision_schedule
+        WHERE school = $1 AND day_of_week = $2 AND teacher_id = $3 AND enabled = true`,
+      [school, Number(dayOfWeek), teacherId]);
+    if (!assigned.rows.length) throw new Error('not_assigned');
+    const result = await client.query(
+      `INSERT INTO teacher_supervision_checkins (school, teacher_id, day_of_week, checkin_date)
+       VALUES ($1,$2,$3,$4::date)
+       ON CONFLICT (school, teacher_id, checkin_date) DO NOTHING
+       RETURNING teacher_id, day_of_week, checkin_date, checked_in_at`,
+      [school, teacherId, Number(dayOfWeek), date]);
+    await client.query('COMMIT');
+    return { created: result.rows.length > 0, record: result.rows[0] || null };
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function getSupervisionHistory(school, limit) {
+  const r = await pool.query(
+    `SELECT d::date AS supervision_date, EXTRACT(ISODOW FROM d)::int AS day_of_week,
+            s.teacher_id, u.name, c.checked_in_at
+       FROM generate_series(current_date - INTERVAL '90 days', current_date, INTERVAL '1 day') d
+       JOIN teacher_supervision_schedule s
+         ON s.school = $1 AND s.day_of_week = EXTRACT(ISODOW FROM d)::int AND s.enabled = true
+       JOIN users u ON u.id = s.teacher_id
+       LEFT JOIN teacher_supervision_checkins c
+         ON c.school = s.school AND c.teacher_id = s.teacher_id
+        AND c.checkin_date = d::date
+      WHERE EXTRACT(ISODOW FROM d) BETWEEN 1 AND 5
+      ORDER BY supervision_date DESC, day_of_week, u.name
+      LIMIT $2`,
+    [school, Math.min(Math.max(Number(limit) || 200, 1), 1000)]);
+  return r.rows;
+}
+
 /* ===== بيانات الأقسام ===== */
 async function getSchoolData(school) {
   const r = await pool.query('SELECT data, ts FROM school_data WHERE school = $1', [school]);
@@ -633,6 +761,8 @@ module.exports = {
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,
   repairTeacherFirstLoginFromEvidence, activateTeachersSafely,
+  getSupervisionSchedule, replaceSupervisionSchedule, getSupervisionForDate,
+  checkInSupervision, getSupervisionHistory,
   getSchoolData, setSchoolData, patchSchoolUserStats, touchUserPresence,
   getSchoolSettings, setSchoolSettings,
   saveBackup, listBackups, getBackup,
