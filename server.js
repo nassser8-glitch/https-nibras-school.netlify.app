@@ -619,6 +619,46 @@ app.post('/api/auth/admin/create-user', requireAuth, (req, res) => {
   })().catch(fail(res));
 });
 
+// إنشاء طالبة وحسابها ومرآتهما في معاملة PostgreSQL واحدة.
+app.post('/api/auth/admin/create-student', requireAuth, (req, res) => {
+  (async () => {
+    if (rateLimit('createStudent', 60, 15 * 60 * 1000, req))
+      return res.status(429).json({ error: 'rate_limited' });
+    const reqSchool = String(req.body && req.body.school || '').toUpperCase();
+    const school = (reqSchool === 'BOYS' || reqSchool === 'GIRLS') ? reqSchool : req.session.school;
+    if (!canManageUsers(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const id = String(req.body && req.body.studentId || '').trim();
+    const name = String(req.body && req.body.name || '').trim();
+    const studentNo = String(req.body && req.body.studentNo || '').trim();
+    const username = String(req.body && req.body.username || '').trim();
+    const password = String(req.body && req.body.password || '');
+    const classId = String(req.body && req.body.classId || '').trim() || null;
+    if (!id || !name || !studentNo || !username || !PASSWORD_RE.test(password))
+      return res.status(400).json({ error: 'invalid', min: PASSWORD_MIN });
+    const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const result = await db.createStudentAccountAndRecord({
+      id, school, name, username, password, passwordHash: hash,
+      email: username + '@nibras.school',
+      student: {
+        fullName: name, studentNo, classId, guardianName: '', guardianPhone: '',
+        active: true, joinedAt: Date.now(),
+      },
+    });
+    res.status(201).json({
+      ok: true, id: result.id, name: result.name, grade: result.grade,
+      class: result.class, username: result.username, student: result.student,
+    });
+  })().catch(error => {
+    if (error && error.code === 'username_exists')
+      return res.status(409).json({ error: 'username_exists' });
+    if (error && error.code === 'duplicate_student')
+      return res.status(409).json({ error: 'duplicate_student' });
+    if (error && error.code === 'student_number_exists')
+      return res.status(409).json({ error: 'student_number_exists' });
+    fail(res)(error);
+  });
+});
+
 // حذف نهائي لطالبة: يُعطّل حسابها (لا يمكنها الدخول)، ويحول سجلها إلى شاهد حذف
 // deleted ينتشر لكل الأجهزة، ويسجّل معرّفها في _blockedStudents فلا يعود اسمها لأي
 // جهاز قديم مهما دفع نسخته (تُسقط/تُفسد أي نسخة قادمة قبل الحفظ).

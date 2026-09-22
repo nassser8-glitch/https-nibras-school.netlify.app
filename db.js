@@ -200,6 +200,89 @@ async function insertUser(u) {
     [u.id, u.school, u.name, String(u.email).toLowerCase().trim(), u.username ? String(u.username).trim().toLowerCase() : null,
      u.password_hash, u.plain_password || null, u.role, u.active !== false, !!u.first_login, u.granted === true, JSON.stringify(u.data || {})]);
 }
+
+// إنشاء حساب طالبة ومرآته وسجلها في معاملة واحدة؛ لا تستخدم هذه العملية
+// generateUsername ولا تُجري أي كتابة قبل اكتمال جميع فحوصات التكرار.
+async function createStudentAccountAndRecord(input) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const id = String(input.id);
+    const username = String(input.username);
+    const school = String(input.school);
+    const existingUser = await client.query('SELECT 1 FROM users WHERE id = $1', [id]);
+    if (existingUser.rows.length) {
+      const err = new Error('duplicate_student');
+      err.code = 'duplicate_student';
+      throw err;
+    }
+    const existingUsername = await client.query(
+      'SELECT 1 FROM users WHERE lower(username) = lower($1) LIMIT 1', [username]);
+    if (existingUsername.rows.length) {
+      const err = new Error('username_exists');
+      err.code = 'username_exists';
+      throw err;
+    }
+
+    await client.query(
+      'INSERT INTO school_data (school, data, ts) VALUES ($1, $2::jsonb, $3) ON CONFLICT (school) DO NOTHING',
+      [school, JSON.stringify({ users: [], grades: [], classes: [], students: [], notes: [], points: [] }), Date.now()]);
+    const schoolRow = await client.query(
+      'SELECT data FROM school_data WHERE school = $1 FOR UPDATE', [school]);
+    const data = schoolRow.rows[0].data || {};
+    const students = Array.isArray(data.students) ? data.students.slice() : [];
+    if (students.some(student => student && String(student.id) === id)) {
+      const err = new Error('duplicate_student');
+      err.code = 'duplicate_student';
+      throw err;
+    }
+    if (input.student.studentNo && students.some(student =>
+      student && student.active !== false && String(student.studentNo) === String(input.student.studentNo))) {
+      const err = new Error('student_number_exists');
+      err.code = 'student_number_exists';
+      throw err;
+    }
+
+    const student = Object.assign({}, input.student, { id });
+    students.push(student);
+    const users = Array.isArray(data.users) ? data.users.slice() : [];
+    users.push({
+      id, school, name: input.name, username, email: input.email, role: 'STUDENT',
+      active: true, firstLogin: false, granted: true,
+    });
+    const nextData = Object.assign({}, data, { users, students });
+
+    await client.query(
+      `INSERT INTO users
+        (id, school, name, email, username, password_hash, plain_password, role, active, first_login, granted, data)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'STUDENT',true,false,true,'{}'::jsonb)`,
+      [id, school, input.name, input.email, username, input.passwordHash, input.password,]);
+    await client.query(
+      `UPDATE school_data SET data = $2::jsonb, ts = $3, updated_at = now() WHERE school = $1`,
+      [school, JSON.stringify(nextData), Date.now()]);
+    await client.query('COMMIT');
+
+    const cls = Array.isArray(data.classes)
+      ? data.classes.find(item => item && item.id === student.classId)
+      : null;
+    const grade = cls && Array.isArray(data.grades)
+      ? data.grades.find(item => item && item.id === cls.gradeId)
+      : null;
+    return {
+      id, name: input.name, grade: grade ? grade.name : null,
+      class: cls ? cls.name : null, username, student,
+    };
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    if (error && error.code === '23505') {
+      if (String(error.constraint || '').indexOf('username') >= 0) error.code = 'username_exists';
+      else if (String(error.constraint || '').indexOf('users_pkey') >= 0) error.code = 'duplicate_student';
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 // منح حق الدخول لحساب (بعد تصدير بيانات دخوله أو إنشائه يدويًا من المدير)
 async function grantUserAccess(id) {
   await pool.query('UPDATE users SET granted = true WHERE id = $1', [id]);
@@ -412,6 +495,7 @@ module.exports = {
   getFlag, setFlag,
   userByEmail, usersByEmail, userByUsername, usernameExists, generateUsername, baseUsername,
   userById, listUsers, listAllUsers, usersForLoginStats, usernamesByIds, countAdmins, insertUser,
+  createStudentAccountAndRecord,
   updateUserPasswordHash, updateUserPlainPassword, updateUserProfile, grantUserAccess, clearFirstLogin,
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,

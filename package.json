@@ -4,7 +4,8 @@
   "description": "خادم نظام المدرسة — مزامنة قواعد البيانات للمستخدمين المتعددين",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
   },
   "license": "UNLICENSED",
   "private": true,

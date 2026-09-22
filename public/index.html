@@ -5887,17 +5887,31 @@ async function addStudent(){
   const d = loadDB();
   if(d.students.some(s => s.studentNo === studentNo && s.active)){ alert('الرقم الأكاديمي مستخدم مسبقًا'); return; }
   const newId = uid();
-  const username = inputUsername || generateUsername(fullName);
+  if(__serverEnabled() && !inputUsername){ alert('اسم المستخدم مطلوب'); return; }
+  const username = inputUsername;
+  let createdStudent = null;
   if(__serverEnabled() && inputPassword){
-    const r = await __api('POST', 'admin/create-user', { name: fullName, username, password: inputPassword, role: 'STUDENT', studentId: newId, email: '' });
-    if(!r || r.status !== 200 || !r.j || !r.j.ok){
+    const r = await __api('POST', 'admin/create-student', {
+      name: fullName, studentNo, classId, username, password: inputPassword,
+      studentId: newId, school: getActiveSchool(),
+    });
+    if(!r || r.status !== 201 || !r.j || !r.j.ok){
       alert(r?.j?.error === 'username_exists' ? 'اسم المستخدم مستخدم مسبقًا' : 'تعذر إنشاء حساب الطالب');
       return;
     }
+    createdStudent = r.j.student || {
+      id: r.j.id, fullName: r.j.name, studentNo, classId,
+      guardianName: '', guardianPhone: '', active: true, joinedAt: Date.now(),
+    };
   }
-  d.students.push({ id:newId, fullName, studentNo, classId, guardianName:'', guardianPhone:'', active:true, joinedAt: Date.now() });
+  d.students.push(createdStudent || { id:newId, fullName, studentNo, classId, guardianName:'', guardianPhone:'', active:true, joinedAt: Date.now() });
+  if(__serverEnabled()){
+    if(!Array.isArray(d.users)) d.users = [];
+    d.users.push({ id:newId, school:getActiveSchool(), name:fullName, username, role:'STUDENT', active:true, firstLogin:false, granted:true });
+  }
   saveDB(d);
   renderApp();
+  if(__serverEnabled()) await __refreshSchool(getActiveSchool());
 }
 async function deleteStudent(id){
   const s = studentById(id);
@@ -10422,4 +10436,3 @@ setTimeout(function(){ maybeShowInstallHint(false); }, 1200);
 </script>
 </body>
 </html>
-
