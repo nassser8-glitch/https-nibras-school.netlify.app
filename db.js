@@ -423,7 +423,6 @@ async function repairTeacherFirstLoginFromEvidence(school, apply) {
     const r = await pool.query(query, [school]);
     return { candidateIds: r.rows.map(row => row.id), updatedIds: [] };
   }
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -448,6 +447,87 @@ async function repairTeacherFirstLoginFromEvidence(school, apply) {
       [school, ids]);
     await client.query('COMMIT');
     return { candidateIds: ids, updatedIds: ids };
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+async function activateTeachersSafely(school, apply) {
+  const query = `
+    SELECT id, active, first_login,
+           (
+             data->>'lastLogin' IS NOT NULL
+             OR (jsonb_typeof(data->'loginHistory') = 'array' AND jsonb_array_length(data->'loginHistory') > 0)
+             OR (data->>'loginCount') ~ '^[1-9][0-9]*$'
+           ) AS has_login_evidence
+      FROM users
+     WHERE school = $1
+       AND role = 'TEACHER'
+     ORDER BY id`;
+  if (!apply) {
+    const r = await pool.query(query, [school]);
+    return {
+      candidates: r.rows.map(row => ({
+        id: row.id,
+        activate: row.active !== true,
+        clearFirstLogin: row.first_login === true && row.has_login_evidence === true,
+      })),
+      updated: [],
+    };
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const r = await client.query(query + ' FOR UPDATE', [school]);
+    const rows = r.rows;
+    const activateIds = rows.filter(row => row.active !== true).map(row => row.id);
+    const clearFirstLoginIds = rows
+      .filter(row => row.first_login === true && row.has_login_evidence === true)
+      .map(row => row.id);
+    const changedIds = [...new Set([...activateIds, ...clearFirstLoginIds])];
+    if (activateIds.length) {
+      await client.query('UPDATE users SET active = true WHERE id = ANY($1::text[])', [activateIds]);
+    }
+    if (clearFirstLoginIds.length) {
+      await client.query('UPDATE users SET first_login = false WHERE id = ANY($1::text[])', [clearFirstLoginIds]);
+    }
+    if (changedIds.length) {
+      const schoolUpdate = await client.query(
+        `UPDATE school_data
+            SET data = jsonb_set(data, '{users}', (
+              SELECT COALESCE(jsonb_agg(
+                CASE WHEN elem->>'id' = ANY($2::text[])
+                     THEN elem
+                       || CASE WHEN elem->>'id' = ANY($3::text[])
+                               THEN jsonb_build_object('active', true)
+                               ELSE '{}'::jsonb END
+                       || CASE WHEN elem->>'id' = ANY($4::text[])
+                               THEN jsonb_build_object('firstLogin', false)
+                               ELSE '{}'::jsonb END
+                     ELSE elem END), '[]'::jsonb)
+              FROM jsonb_array_elements(data->'users') elem
+            ), false),
+                updated_at = now()
+          WHERE school = $1`,
+        [school, changedIds, activateIds, clearFirstLoginIds]);
+      if (schoolUpdate.rowCount !== 1) throw new Error('school_data_not_found');
+    }
+    await client.query('COMMIT');
+    return {
+      candidates: rows.map(row => ({
+        id: row.id,
+        activate: row.active !== true,
+        clearFirstLogin: row.first_login === true && row.has_login_evidence === true,
+      })),
+      updated: changedIds.map(id => ({
+        id,
+        active: activateIds.includes(id),
+        ...(clearFirstLoginIds.includes(id) ? { firstLogin: false } : {}),
+      })),
+    };
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     throw error;
@@ -580,6 +660,7 @@ module.exports = {
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,
   repairTeacherFirstLoginFromEvidence,
+  activateTeachersSafely,
   getSchoolData, setSchoolData, patchSchoolUserStats, touchUserPresence,
   getSchoolSettings, setSchoolSettings,
   saveBackup, listBackups, getBackup,
