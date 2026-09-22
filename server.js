@@ -864,6 +864,31 @@ app.post('/api/auth/admin/repair-first-login', requireAuth, (req, res) => {
   })().catch(fail(res));
 });
 
+// معاينة/تفعيل المعلمات: active=true للجميع، وfirstLogin=false لمن ثبت دخولهن فقط.
+// المعاينة افتراضية؛ التطبيق يتطلب apply=true ويستخدم معرّفات جدول users فقط.
+app.post('/api/auth/admin/activate-teachers-safely', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const school = String(req.body && req.body.school || req.session.school || '').toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    const apply = req.body && req.body.apply === true;
+    const result = await db.activateTeachersSafely(school, apply);
+    const activationCandidates = result.candidates.filter(item => item.activate);
+    const firstLoginCandidates = result.candidates.filter(item => item.clearFirstLogin);
+    res.json({
+      ok: true,
+      school,
+      apply,
+      teacherCount: result.candidates.length,
+      activationCount: activationCandidates.length,
+      firstLoginClearCount: firstLoginCandidates.length,
+      activationIds: activationCandidates.map(item => item.id),
+      firstLoginClearIds: firstLoginCandidates.map(item => item.id),
+      updated: result.updated,
+    });
+  })().catch(fail(res));
+});
+
 // توليد كلمة مرور مؤقتة جديدة لكل معلم وإرجاع قائمة (الاسم، اسم المستخدم، كلمة المرور) ليتسلمها المدير
 app.post('/api/auth/admin/export-credentials', requireAuth, (req, res) => {
   (async () => {
