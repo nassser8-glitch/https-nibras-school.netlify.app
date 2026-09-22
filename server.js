@@ -411,9 +411,8 @@ app.post('/api/auth/login', (req, res) => {
       loginCount, lastLoginIso, hist);
 
     req._sessionToken = token;
-    // أول دخول فعلي ينهي «بانتظار أول دخول» في نسخة القسم التي تعرضها لوحة المدير:
-    // نسخة school_data كانت لا تتحدّث عند الدخول فتبقى بعض الحسابات «بانتظار» رغم دخولهم.
-    updateSchoolUser(u.school, u.id, { firstLogin: false }).catch(() => {});
+    // finalizeLogin يحفظ first_login=false في users ونسخة school_data ذرياً.
+    u.first_login = false;
     res.setHeader('Set-Cookie', cookieOpts(req));
     res.json({ ok: true, user: sendUser(u, row || { created_at: lastLoginIso, expires_at: new Date(nowMs + SESSION_TTL_MS).toISOString() }, u.role) });
   })().catch(fail(res));
@@ -848,6 +847,20 @@ app.post('/api/auth/admin/mark-activated', requireAuth, (req, res) => {
     const updated = await markSchoolUsersActivated(school, target ? target.id : userId, username || (target && target.username));
     if (!target && !updated) return res.status(404).json({ error: 'not_found' });
     res.json({ ok: true, userId: (target && target.id) || userId, name: (target && target.name) || '', updated });
+  })().catch(fail(res));
+});
+
+// إصلاح محدود للحسابات التي تحمل first_login=true رغم وجود دليل دخول موثوق.
+// المعاينة هي الوضع الافتراضي؛ التطبيق يتطلب apply=true ويطابق الحسابات بالمعرّف.
+app.post('/api/auth/admin/repair-first-login', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const school = String(req.body && req.body.school || req.session.school || '').toUpperCase();
+    if (!db.SCHOOLS.includes(school) || !canManageUsers(req.session, school))
+      return res.status(403).json({ error: 'forbidden' });
+    const apply = req.body && req.body.apply === true;
+    const result = await db.repairTeacherFirstLoginFromEvidence(school, apply);
+    res.json({ ok: true, school, apply, candidateIds: result.candidateIds, updatedIds: result.updatedIds });
   })().catch(fail(res));
 });
 

@@ -351,13 +351,16 @@ async function finalizeLogin(userId, school, tokenHash, ttlMs, ip, ua, userDataJ
     `WITH del AS (
         DELETE FROM sessions WHERE user_id = $1
      ), upd AS (
-        UPDATE users SET data = $4::jsonb WHERE id = $1
+        UPDATE users
+           SET data = $4::jsonb, first_login = false
+         WHERE id = $1
      ), sc AS (
         UPDATE school_data
            SET data = jsonb_set(data, '{users}', (
              SELECT COALESCE(jsonb_agg(
                CASE WHEN elem->>'id' = $1
                     THEN elem || jsonb_build_object(
+                           'firstLogin', to_jsonb(false),
                            'lastLogin', to_jsonb($5::text),
                            'loginCount', to_jsonb($3::int),
                            'loginHistory', COALESCE($6::jsonb, '[]'::jsonb))
@@ -374,6 +377,56 @@ async function finalizeLogin(userId, school, tokenHash, ttlMs, ip, ua, userDataJ
     [userId, school, loginCount, JSON.stringify(userDataJson), lastLoginIso, JSON.stringify(historyJson),
      tokenHash, ttlMs, ip, ua]);
   return r.rows[0] || null;
+}
+async function repairTeacherFirstLoginFromEvidence(school, apply) {
+  const query = `
+    SELECT id
+      FROM users
+     WHERE school = $1
+       AND role = 'TEACHER'
+       AND active = true
+       AND first_login = true
+       AND (
+         data->>'lastLogin' IS NOT NULL
+         OR (jsonb_typeof(data->'loginHistory') = 'array' AND jsonb_array_length(data->'loginHistory') > 0)
+         OR (data->>'loginCount') ~ '^[1-9][0-9]*$'
+       )
+     ORDER BY id`;
+  if (!apply) {
+    const r = await pool.query(query, [school]);
+    return { candidateIds: r.rows.map(row => row.id), updatedIds: [] };
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const candidates = await client.query(query, [school]);
+    const ids = candidates.rows.map(row => row.id);
+    if (!ids.length) {
+      await client.query('COMMIT');
+      return { candidateIds: [], updatedIds: [] };
+    }
+    await client.query('UPDATE users SET first_login = false WHERE id = ANY($1::text[])', [ids]);
+    await client.query(
+      `UPDATE school_data
+          SET data = jsonb_set(data, '{users}', (
+            SELECT COALESCE(jsonb_agg(
+              CASE WHEN elem->>'id' = ANY($2::text[])
+                   THEN elem || jsonb_build_object('firstLogin', false)
+                   ELSE elem END), '[]'::jsonb)
+            FROM jsonb_array_elements(data->'users') elem
+          ), false),
+              updated_at = now()
+        WHERE school = $1`,
+      [school, ids]);
+    await client.query('COMMIT');
+    return { candidateIds: ids, updatedIds: ids };
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 async function sweepSessions() {
   await pool.query('DELETE FROM sessions WHERE expires_at <= now()');
@@ -499,6 +552,7 @@ module.exports = {
   updateUserPasswordHash, updateUserPlainPassword, updateUserProfile, grantUserAccess, clearFirstLogin,
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
   createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,
+  repairTeacherFirstLoginFromEvidence,
   getSchoolData, setSchoolData, patchSchoolUserStats, touchUserPresence,
   getSchoolSettings, setSchoolSettings,
   saveBackup, listBackups, getBackup,
