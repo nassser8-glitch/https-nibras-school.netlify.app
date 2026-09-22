@@ -177,6 +177,33 @@ async function listAllUsers() {
   const r = await pool.query('SELECT id, school, name, email, username, role, active, first_login FROM users ORDER BY school, role, name');
   return r.rows;
 }
+async function findDiagnosticUsers(usernames) {
+  const names = Array.from(new Set((usernames || [])
+    .map(username => String(username || '').trim().toLowerCase())
+    .filter(Boolean)));
+  if (!names.length) return [];
+  const r = await pool.query(
+    `SELECT u.id, u.username, u.school, u.role, u.active, u.name,
+       EXISTS (
+         SELECT 1
+           FROM school_data sd
+          CROSS JOIN LATERAL jsonb_array_elements(COALESCE(sd.data->'users', '[]'::jsonb)) AS item
+          WHERE sd.school = u.school
+            AND ((item->>'id') = u.id OR lower(item->>'username') = lower(u.username))
+       ) AS school_data_user_exists,
+       EXISTS (
+         SELECT 1
+           FROM school_data sd
+          CROSS JOIN LATERAL jsonb_array_elements(COALESCE(sd.data->'students', '[]'::jsonb)) AS item
+          WHERE sd.school = u.school
+            AND ((item->>'id') = u.id OR lower(item->>'username') = lower(u.username))
+       ) AS school_data_student_exists
+      FROM users u
+     WHERE lower(u.username) = ANY($1::text[])
+     ORDER BY lower(u.username), u.school, u.id`,
+    [names]);
+  return r.rows;
+}
 async function usernamesByIds(ids) {
   const r = await pool.query('SELECT id, username FROM users WHERE id = ANY($1::text[]) AND username IS NOT NULL', [ids]);
   const m = new Map();
@@ -494,7 +521,7 @@ module.exports = {
   initSchema,
   getFlag, setFlag,
   userByEmail, usersByEmail, userByUsername, usernameExists, generateUsername, baseUsername,
-  userById, listUsers, listAllUsers, usersForLoginStats, usernamesByIds, countAdmins, insertUser,
+  userById, listUsers, listAllUsers, findDiagnosticUsers, usersForLoginStats, usernamesByIds, countAdmins, insertUser,
   createStudentAccountAndRecord,
   updateUserPasswordHash, updateUserPlainPassword, updateUserProfile, grantUserAccess, clearFirstLogin,
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,

@@ -1906,6 +1906,32 @@ app.get('/api/diag/db', async (req, res) => {
   }
 });
 
+// نقطة تشخيص مؤقتة للمدير فقط — قراءة محدودة للحسابين المطلوبين دون أسرار.
+app.get('/api/diag/orphan-accounts', requireAuth, async (req, res) => {
+  if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+  if (rateLimit('diag-orphan-accounts', 10, 60 * 1000, req))
+    return res.status(429).json({ error: 'rate_limited' });
+  try {
+    const rows = await db.findDiagnosticUsers(['noura2', 'nwrh']);
+    res.json({
+      ok: true,
+      rows: rows.map(row => ({
+        id: row.id,
+        username: row.username,
+        school: row.school,
+        role: row.role,
+        active: row.active,
+        name: row.name,
+        schoolDataUserExists: row.school_data_user_exists === true,
+        schoolDataStudentExists: row.school_data_student_exists === true,
+      })),
+    });
+  } catch (e) {
+    console.error('[diag-orphan-accounts]', e);
+    res.status(500).json({ error: 'db' });
+  }
+});
+
 app.use((req,res,next)=>{
   const p = (req.path || '').split('?')[0];
   if (p === '/' || p === '/index.html' || p === '/sw.js' || p === '/manifest.webmanifest')
