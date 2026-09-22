@@ -477,18 +477,25 @@ function supervisionToday() {
 
 app.get('/api/supervision/today', requireAuth, (req, res) => {
   (async () => {
+    const role = req.session.role;
+    if (!db.canViewSupervisionToday(role)) return res.status(403).json({ error: 'forbidden' });
     const school = String(req.query.school || req.session.school || '').toUpperCase();
-    if (!db.SCHOOLS.includes(school) || !schoolAccess(req.session, school))
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'invalid_school' });
+    if (role === 'ADMIN') {
+      if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    } else if (school !== req.session.school) {
       return res.status(403).json({ error: 'forbidden' });
+    }
     const today = supervisionToday();
     const rows = await db.getSupervisionForDate(school, today.dayOfWeek, today.date);
+    const visibleRows = db.filterSupervisionAssignments(role, rows, req.session.user_id);
     res.json({
       ok: true, school, date: today.date, dayOfWeek: today.dayOfWeek,
-      assigned: rows.map(row => ({
+      assigned: visibleRows.map(row => ({
         teacherId: row.teacher_id, name: row.name, dayOfWeek: row.day_of_week,
         checkedInAt: row.checked_in_at,
       })),
-      managerView: req.session.role !== 'TEACHER',
+      managerView: role === 'ADMIN',
     });
   })().catch(fail(res));
 });

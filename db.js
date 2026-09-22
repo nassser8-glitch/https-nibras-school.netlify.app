@@ -533,6 +533,19 @@ async function sweepSessions() {
 }
 
 const SUPERVISION_DAYS = new Set([1, 2, 3, 4, 5]);
+const SUPERVISION_VISIBLE_ROLES = new Set(['ADMIN', 'TEACHER']);
+
+// من يملك حق استدعاء /api/supervision/today أصلًا (بقية الأدوار تُرفض فورًا).
+function canViewSupervisionToday(role) {
+  return SUPERVISION_VISIBLE_ROLES.has(role);
+}
+
+// المدير يرى جميع مشرفات اليوم؛ المعلمة ترى تكليفها هي فقط وليس زميلاتها.
+function filterSupervisionAssignments(role, rows, userId) {
+  if (role === 'ADMIN') return rows;
+  if (role === 'TEACHER') return rows.filter(row => row.teacher_id === userId);
+  return [];
+}
 
 async function getSupervisionSchedule(school) {
   const r = await pool.query(
@@ -763,6 +776,7 @@ module.exports = {
   repairTeacherFirstLoginFromEvidence, activateTeachersSafely,
   getSupervisionSchedule, replaceSupervisionSchedule, getSupervisionForDate,
   checkInSupervision, getSupervisionHistory,
+  canViewSupervisionToday, filterSupervisionAssignments,
   getSchoolData, setSchoolData, patchSchoolUserStats, touchUserPresence,
   getSchoolSettings, setSchoolSettings,
   saveBackup, listBackups, getBackup,

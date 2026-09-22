@@ -4164,13 +4164,12 @@ function renderDashboard(){
       ${statTile('✅', (tDayAtt?tDayAtt.present:0) + '/' + ((tDayAtt?tDayAtt.present:0)+(tDayAtt?tDayAtt.absent:0)+(tDayAtt?tDayAtt.late:0)), 'حضور اليوم', (tDayAtt&&tDayAtt.absent) ? tDayAtt.absent + ' غائب' : 'الكل حاضر', 'showTodayAttendance()')}
       ${statTile('📝', myAssignments.length, 'التكليفات', 'مفتوحة لفصلي', 'location.hash=\'#/assignments\'')}
     </div>
-    ${(() => { const sup = supervisionForUser(user); if(!sup) return ''; const partners = sup.roster.filter(u => u.teacherId !== user.id); return `
+    ${(() => { const sup = supervisionForUser(user); if(!sup) return ''; return `
     <div class="card mb" style="padding:14px 18px;border:none;border-radius:16px;background:linear-gradient(135deg,#0f4f88,#1d4ed8);color:#fff;display:flex;align-items:center;gap:14px;animation:supBg 1.6s ease-in-out infinite">
       <div style="width:48px;height:48px;border-radius:14px;background:rgba(255,191,36,.25);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;animation:supShield 1.8s ease-in-out infinite">🛡️</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;opacity:.92;font-weight:700">🛡️ الإشراف اليومي — ${sup.label} ${escapeHtml(sup.date || '')}</div>
         <div style="font-weight:800;font-size:16px;margin-top:1px">أنتِ من مشرفات المدرسة اليوم.</div>
-        <div style="font-size:12px;opacity:.95;margin-top:2px">${partners.map(p => escapeHtml((p.name || '').split(' ')[0])).join('، ') || 'لا توجد مشرفات أخريات'}</div>
       </div>
       ${sup.checkedInAt ? '<span style="background:#16a34a;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:800;white-space:nowrap">🟢 باشرت</span>' : '<button class="btn-primary" style="white-space:nowrap" onclick="__checkInSupervision()">تسجيل مباشرة الإشراف</button>'}
     </div>`; })()}
@@ -7935,14 +7934,12 @@ const SUPERVISION_DAYS = [
 function supervisionForUser(user){
   if(!user || user.role !== 'TEACHER') return null;
   const today = __supervisionToday;
-  if(!today || !Array.isArray(today.assigned) || !today.assigned.some(x => x.teacherId === user.id)) return null;
+  // الخادم يعيد للمعلمة تكليفها هي فقط (لا تفاصيل زميلاتها)
+  const mine = today && Array.isArray(today.assigned) ? today.assigned.find(x => x.teacherId === user.id) : null;
+  if(!mine) return null;
   const day = SUPERVISION_DAYS.find(x => x.dow === today.dayOfWeek);
   if(!day) return null;
-  return {
-    dayKey: day.key, label: day.label, date: today.date,
-    roster: today.managerView ? today.assigned : today.assigned,
-    checkedInAt: today.assigned.find(x => x.teacherId === user.id)?.checkedInAt || null,
-  };
+  return { dayKey: day.key, label: day.label, date: today.date, checkedInAt: mine.checkedInAt || null };
 }
 const TIMETABLE_PERIOD_NAMES = ['الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة'];
 /* جميع المواد الممكنة حسب المراحل ليختار منها المعلم عند إدخال حصته */
