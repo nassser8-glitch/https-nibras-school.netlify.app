@@ -539,6 +539,8 @@ let __supervisionScheduleLoading = false;
 let __supervisionScheduleFailed = false;
 let __supervisionScheduleAttempts = 0;
 let __supervisionHistory = null;
+let __supervisionDraftSchedule = null; // مسودة العميل: { [dayOfWeek]: Set<teacherId> } — تُبنى من __supervisionSchedule وتُصفَّر بعد الحفظ الناجح
+let __supervisionAddOpenDay = null; // اليوم الذي تُعرض له قائمة "+ إضافة مشرفة" حاليًا، أو null
 const SUPERVISION_MAX_ATTEMPTS = 3; // حد أقصى لمحاولات إعادة التحميل التلقائية لكل تحميل صفحة — يمنع أي حلقة لا نهائية
 
 async function __loadSupervisionToday(force){
@@ -574,17 +576,47 @@ async function __loadSupervisionSchedule(force){
 async function __saveSupervisionSchedule(){
   const user = currentUser();
   if(!user || user.role !== 'ADMIN') return;
-  const schedule = [...document.querySelectorAll('[data-supervision-day] input:checked')].map(input => ({
-    dayOfWeek: Number(input.closest('[data-supervision-day]').dataset.supervisionDay),
-    teacherId: input.value,
-  }));
+  __ensureSupervisionDraft();
+  const schedule = [];
+  SUPERVISION_DAYS.forEach(day => {
+    (__supervisionDraftSchedule[day.dow] || new Set()).forEach(teacherId => {
+      schedule.push({ dayOfWeek: day.dow, teacherId });
+    });
+  });
   const r = await fetch(SUPERVISION_API + 'schedule', {
     method:'PUT', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ school:getActiveSchool(), schedule }),
   });
   if(!r.ok){ alert('تعذر حفظ جدول الإشراف'); return; }
   __supervisionSchedule = await r.json();
+  __supervisionDraftSchedule = null; // إعادة بناء المسودة من نسخة الخادم المحفوظة فعليًا
+  __supervisionAddOpenDay = null;
   alert('تم حفظ جدول الإشراف ✅');
+  renderApp();
+}
+// يبني مسودة العمل (يوم -> مجموعة معرفات المعلمات) من آخر جدول محمّل من الخادم؛ لا يعيد البناء إذا كانت المسودة موجودة أصلًا حتى لا تُفقد تعديلات لم تُحفظ بعد
+function __ensureSupervisionDraft(){
+  if(__supervisionDraftSchedule) return;
+  __supervisionDraftSchedule = {};
+  SUPERVISION_DAYS.forEach(day => { __supervisionDraftSchedule[day.dow] = new Set(); });
+  (__supervisionSchedule && __supervisionSchedule.schedule || []).forEach(x => {
+    if(__supervisionDraftSchedule[x.dayOfWeek]) __supervisionDraftSchedule[x.dayOfWeek].add(x.teacherId);
+  });
+}
+function __supervisionToggleAddPicker(dow){
+  __supervisionAddOpenDay = (__supervisionAddOpenDay === dow) ? null : dow;
+  renderApp();
+}
+function __supervisionAddSelected(dow){
+  __ensureSupervisionDraft();
+  const boxes = document.querySelectorAll(`[data-supervision-picker="${dow}"] input:checked`);
+  boxes.forEach(input => { __supervisionDraftSchedule[dow].add(input.value); });
+  __supervisionAddOpenDay = null;
+  renderApp();
+}
+function __supervisionRemoveTeacher(dow, teacherId){
+  __ensureSupervisionDraft();
+  __supervisionDraftSchedule[dow].delete(teacherId);
   renderApp();
 }
 async function __checkInSupervision(){
@@ -7929,14 +7961,30 @@ function renderSupervisionAdmin(){
   }
   const db = loadDB();
   const teachers = (db.users || []).filter(u => u.role === 'TEACHER' && u.active !== false);
-  const selected = new Set((__supervisionSchedule.schedule || []).map(x => `${x.dayOfWeek}:${x.teacherId}`));
-  const days = SUPERVISION_DAYS.map(day => `
+  __ensureSupervisionDraft();
+  const teacherName = (id) => { const t = teachers.find(x => x.id === id); return t ? (t.name || t.username || t.id) : id; };
+  const days = SUPERVISION_DAYS.map(day => {
+    const assignedIds = [...__supervisionDraftSchedule[day.dow]];
+    const assignedList = assignedIds
+      .map(id => ({ id, name: teacherName(id) }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    const available = teachers.filter(t => !__supervisionDraftSchedule[day.dow].has(t.id));
+    const pickerOpen = __supervisionAddOpenDay === day.dow;
+    return `
     <div class="panel" data-supervision-day="${day.dow}" style="margin-bottom:12px">
       <h3>🛡️ ${day.label}</h3>
-      <div class="grid-2">
-        ${teachers.map(t => `<label class="check-row"><input type="checkbox" value="${escapeHtml(t.id)}" ${selected.has(`${day.dow}:${t.id}`)?'checked':''}> ${escapeHtml(t.name || t.username || t.id)}</label>`).join('')}
-      </div>
-    </div>`).join('');
+      <button type="button" class="btn-secondary" onclick="__supervisionToggleAddPicker(${day.dow})">${pickerOpen ? '✕ إغلاق' : '+ إضافة مشرفة'}</button>
+      ${pickerOpen ? `
+        <div class="grid-2" data-supervision-picker="${day.dow}" style="margin-top:8px">
+          ${available.length ? available.map(t => `<label class="check-row"><input type="checkbox" value="${t.id}"> ${escapeHtml(t.name || t.username || t.id)}</label>`).join('') : '<p class="muted">تمت إضافة جميع المعلمات لهذا اليوم</p>'}
+        </div>
+        ${available.length ? `<button type="button" class="btn-primary" style="margin-top:8px" onclick="__supervisionAddSelected(${day.dow})">إضافة المحددات</button>` : ''}
+      ` : ''}
+      <ul style="margin:10px 0 0;padding-inline-start:18px">
+        ${assignedList.length ? assignedList.map(x => `<li style="padding:4px 0">${escapeHtml(x.name)} <button type="button" class="btn-secondary" style="padding:2px 8px;font-size:12px;margin-inline-start:6px" onclick="__supervisionRemoveTeacher(${day.dow},'${x.id}')">حذف</button></li>`).join('') : '<li class="muted">لا توجد مشرفات مكلفات بعد</li>'}
+      </ul>
+    </div>`;
+  }).join('');
   const today = __supervisionToday;
   const todayRows = today && today.assigned ? today.assigned : [];
   const todayBlock = `<div class="panel"><h3>🛡️ مشرفات اليوم – ${escapeHtml((SUPERVISION_DAYS.find(x=>x.dow===today?.dayOfWeek)||{}).label || 'لا يوجد إشراف')}</h3>
