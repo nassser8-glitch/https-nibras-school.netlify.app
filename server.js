@@ -517,8 +517,10 @@ app.put('/api/supervision/schedule', requireAuth, (req, res) => {
     const school = String(req.body && req.body.school || req.session.school || '').toUpperCase();
     if (req.session.role !== 'ADMIN' || !db.SCHOOLS.includes(school) || !canManageUsers(req.session, school))
       return res.status(403).json({ error: 'forbidden' });
-    const schedule = await db.replaceSupervisionSchedule(school, req.body && req.body.schedule);
-    res.json({ ok: true, school, schedule });
+    const rows = await db.replaceSupervisionSchedule(school, req.body && req.body.schedule);
+    res.json({ ok: true, school, schedule: rows.map(row => ({
+      dayOfWeek: row.day_of_week, teacherId: row.teacher_id, enabled: row.enabled, name: row.name,
+    })) });
   })().catch(error => {
     if (error && ['invalid_schedule', 'invalid_teacher'].includes(error.message))
       return res.status(400).json({ error: error.message });
