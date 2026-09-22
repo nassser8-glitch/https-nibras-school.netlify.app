@@ -532,29 +532,43 @@ let __sessionUser = null; // المستخدم الحالي (من الخادم) �
 let __syncTimers = {};
 let __supervisionToday = null;
 let __supervisionTodayLoading = false;
+let __supervisionTodayFailed = false;
+let __supervisionTodayAttempts = 0;
 let __supervisionSchedule = null;
 let __supervisionScheduleLoading = false;
+let __supervisionScheduleFailed = false;
+let __supervisionScheduleAttempts = 0;
 let __supervisionHistory = null;
+const SUPERVISION_MAX_ATTEMPTS = 3; // حد أقصى لمحاولات إعادة التحميل التلقائية لكل تحميل صفحة — يمنع أي حلقة لا نهائية
 
 async function __loadSupervisionToday(force){
   if(!__serverEnabled() || __supervisionTodayLoading) return __supervisionToday;
   const todayKey = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Karachi'}).format(new Date());
   if(!force && __supervisionToday && __supervisionToday.date === todayKey) return __supervisionToday;
+  if(force){ __supervisionTodayFailed = false; __supervisionTodayAttempts = 0; }
+  // بعد الوصول للحد الأقصى من المحاولات الفاشلة، لا تُعد المحاولة تلقائيًا (تمنع حلقة renderApp اللانهائية)
+  if(__supervisionTodayFailed && __supervisionTodayAttempts >= SUPERVISION_MAX_ATTEMPTS) return __supervisionToday;
   __supervisionTodayLoading = true;
+  __supervisionTodayAttempts++;
   try{
     const r = await fetch(SUPERVISION_API + 'today');
-    if(r.ok) __supervisionToday = await r.json();
-  }catch(e){} finally { __supervisionTodayLoading = false; }
+    if(r.ok){ __supervisionToday = await r.json(); __supervisionTodayFailed = false; }
+    else { __supervisionTodayFailed = true; }
+  }catch(e){ __supervisionTodayFailed = true; } finally { __supervisionTodayLoading = false; }
   return __supervisionToday;
 }
 async function __loadSupervisionSchedule(force){
   if(!__serverEnabled() || __supervisionScheduleLoading) return __supervisionSchedule;
   if(!force && __supervisionSchedule) return __supervisionSchedule;
+  if(force){ __supervisionScheduleFailed = false; __supervisionScheduleAttempts = 0; }
+  if(__supervisionScheduleFailed && __supervisionScheduleAttempts >= SUPERVISION_MAX_ATTEMPTS) return __supervisionSchedule;
   __supervisionScheduleLoading = true;
+  __supervisionScheduleAttempts++;
   try{
     const r = await fetch(SUPERVISION_API + 'schedule');
-    if(r.ok) __supervisionSchedule = await r.json();
-  }catch(e){} finally { __supervisionScheduleLoading = false; }
+    if(r.ok){ __supervisionSchedule = await r.json(); __supervisionScheduleFailed = false; }
+    else { __supervisionScheduleFailed = true; }
+  }catch(e){ __supervisionScheduleFailed = true; } finally { __supervisionScheduleLoading = false; }
   return __supervisionSchedule;
 }
 async function __saveSupervisionSchedule(){
@@ -2065,7 +2079,11 @@ function renderApp(){
 
   app.innerHTML = renderLayout(user, hash);
   if(__serverEnabled() && (user.role === 'TEACHER' || user.role === 'ADMIN')){
-    if(!__supervisionToday) __loadSupervisionToday().then(() => renderApp());
+    // إعادة render فقط عند نجاح التحميل — الفشل (401/403/شبكة) لا يستدعي renderApp مرة أخرى
+    if(!__supervisionToday && !__supervisionTodayLoading &&
+       (!__supervisionTodayFailed || __supervisionTodayAttempts < SUPERVISION_MAX_ATTEMPTS)){
+      __loadSupervisionToday().then((result) => { if(result) renderApp(); });
+    }
   }
   document.body?.classList?.remove('sidebar-locked');
   renderWeather();
@@ -7900,7 +7918,13 @@ const TIMETABLE_DAYS = [
 ];
 function renderSupervisionAdmin(){
   if(!__supervisionSchedule){
-    if(!__supervisionScheduleLoading) __loadSupervisionSchedule().then(() => renderApp());
+    if(__supervisionScheduleFailed && __supervisionScheduleAttempts >= SUPERVISION_MAX_ATTEMPTS){
+      return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">تعذر تحميل بيانات الإشراف. تحقق من الاتصال ثم أعد المحاولة.</p><button class="btn-secondary" onclick="__loadSupervisionSchedule(true).then(renderApp)">إعادة المحاولة</button></section>`;
+    }
+    // إعادة render فقط عند نجاح التحميل — الفشل لا يستدعي renderApp مرة أخرى (لا حلقة لا نهائية)
+    if(!__supervisionScheduleLoading){
+      __loadSupervisionSchedule().then((result) => { if(result) renderApp(); });
+    }
     return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">جار تحميل جدول الإشراف...</p></section>`;
   }
   const db = loadDB();
