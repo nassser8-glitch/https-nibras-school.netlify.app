@@ -91,6 +91,23 @@ test('prevents duplicate student ids before writing', async () => {
   assert.equal(state.schoolData.students.length, 1);
 });
 
+test('rejects duplicate studentNo for an active student without changing existing data', async () => {
+  const state = fixture();
+  const originalStudent = { id: 'original-student', fullName: 'طالبة أصلية', studentNo: '100', active: true };
+  state.schoolData.students.push(originalStudent);
+  const originalNotes = JSON.parse(JSON.stringify(state.schoolData.notes));
+  const originalPoints = JSON.parse(JSON.stringify(state.schoolData.points));
+  installPool(state);
+  await assert.rejects(
+    db.createStudentAccountAndRecord(input({ student: { fullName: 'طالبة ثانية', studentNo: '100', active: true } })),
+    { code: 'student_number_exists' },
+  );
+  assert.equal(state.users.length, 0);
+  assert.deepEqual(state.schoolData.students, [originalStudent]);
+  assert.deepEqual(state.schoolData.notes, originalNotes);
+  assert.deepEqual(state.schoolData.points, originalPoints);
+});
+
 test('rejects an existing account id', async () => {
   const state = fixture();
   state.users.push({ id: 'student-1', username: 'other' });
