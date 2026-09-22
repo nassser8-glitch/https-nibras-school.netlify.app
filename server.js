@@ -466,6 +466,88 @@ app.get('/api/auth/presence', requireAuth, (req, res) => {
   })().catch(fail(res));
 });
 
+function supervisionToday() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Karachi', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.filter(p => p.type !== 'literal').map(p => [p.type, p.value]));
+  const dayOfWeek = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[values.weekday] || 0;
+  return { date: `${values.year}-${values.month}-${values.day}`, dayOfWeek };
+}
+
+app.get('/api/supervision/today', requireAuth, (req, res) => {
+  (async () => {
+    const role = req.session.role;
+    if (!db.canViewSupervisionToday(role)) return res.status(403).json({ error: 'forbidden' });
+    const school = String(req.query.school || req.session.school || '').toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'invalid_school' });
+    if (role === 'ADMIN') {
+      if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    } else if (school !== req.session.school) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    const today = supervisionToday();
+    const rows = await db.getSupervisionForDate(school, today.dayOfWeek, today.date);
+    const visibleRows = db.filterSupervisionAssignments(role, rows, req.session.user_id);
+    res.json({
+      ok: true, school, date: today.date, dayOfWeek: today.dayOfWeek,
+      assigned: visibleRows.map(row => ({
+        teacherId: row.teacher_id, name: row.name, dayOfWeek: row.day_of_week,
+        checkedInAt: row.checked_in_at,
+      })),
+      managerView: role === 'ADMIN',
+    });
+  })().catch(fail(res));
+});
+
+app.get('/api/supervision/schedule', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.query.school || req.session.school || '').toUpperCase();
+    if (req.session.role !== 'ADMIN' || !db.SCHOOLS.includes(school) || !canManageUsers(req.session, school))
+      return res.status(403).json({ error: 'forbidden' });
+    const rows = await db.getSupervisionSchedule(school);
+    res.json({ ok: true, school, schedule: rows.map(row => ({
+      dayOfWeek: row.day_of_week, teacherId: row.teacher_id, enabled: row.enabled, name: row.name,
+    })) });
+  })().catch(fail(res));
+});
+
+app.put('/api/supervision/schedule', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.body && req.body.school || req.session.school || '').toUpperCase();
+    if (req.session.role !== 'ADMIN' || !db.SCHOOLS.includes(school) || !canManageUsers(req.session, school))
+      return res.status(403).json({ error: 'forbidden' });
+    const schedule = await db.replaceSupervisionSchedule(school, req.body && req.body.schedule);
+    res.json({ ok: true, school, schedule });
+  })().catch(error => {
+    if (error && ['invalid_schedule', 'invalid_teacher'].includes(error.message))
+      return res.status(400).json({ error: error.message });
+    fail(res)(error);
+  });
+});
+
+app.post('/api/supervision/check-in', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.role !== 'TEACHER') return res.status(403).json({ error: 'forbidden' });
+    const today = supervisionToday();
+    const result = await db.checkInSupervision(req.session.school, req.session.user_id, today.dayOfWeek, today.date);
+    res.json({ ok: true, alreadyCheckedIn: !result.created, checkIn: result.record });
+  })().catch(error => {
+    if (error && ['no_supervision_today', 'not_assigned'].includes(error.message))
+      return res.status(403).json({ error: error.message });
+    fail(res)(error);
+  });
+});
+
+app.get('/api/supervision/history', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.query.school || req.session.school || '').toUpperCase();
+    if (req.session.role !== 'ADMIN' || !db.SCHOOLS.includes(school) || !canManageUsers(req.session, school))
+      return res.status(403).json({ error: 'forbidden' });
+    res.json({ ok: true, school, history: await db.getSupervisionHistory(school, req.query.limit) });
+  })().catch(fail(res));
+});
+
 app.post('/api/auth/change-password', requireAuth, (req, res) => {
   (async () => {
     if (rateLimit('chpwd', 6, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });

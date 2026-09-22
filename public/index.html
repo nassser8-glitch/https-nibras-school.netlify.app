@@ -525,10 +525,67 @@ const SESS_MIRROR_KEY = 'nibras_secure_session_v1';
 const AUTH_API = '/api/auth/';
 const SYNC_API = '/api/db/';
 const SETTINGS_API = '/api/settings/';
+const SUPERVISION_API = '/api/supervision/';
 const SYNC_INTERVAL = 300000;
 const __origSetItem = localStorage.setItem.bind(localStorage);
 let __sessionUser = null; // المستخدم الحالي (من الخادم) — المرجع الوحيد للصلاحيات
 let __syncTimers = {};
+let __supervisionToday = null;
+let __supervisionTodayLoading = false;
+let __supervisionSchedule = null;
+let __supervisionScheduleLoading = false;
+let __supervisionHistory = null;
+
+async function __loadSupervisionToday(force){
+  if(!__serverEnabled() || __supervisionTodayLoading) return __supervisionToday;
+  const todayKey = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Karachi'}).format(new Date());
+  if(!force && __supervisionToday && __supervisionToday.date === todayKey) return __supervisionToday;
+  __supervisionTodayLoading = true;
+  try{
+    const r = await fetch(SUPERVISION_API + 'today');
+    if(r.ok) __supervisionToday = await r.json();
+  }catch(e){} finally { __supervisionTodayLoading = false; }
+  return __supervisionToday;
+}
+async function __loadSupervisionSchedule(force){
+  if(!__serverEnabled() || __supervisionScheduleLoading) return __supervisionSchedule;
+  if(!force && __supervisionSchedule) return __supervisionSchedule;
+  __supervisionScheduleLoading = true;
+  try{
+    const r = await fetch(SUPERVISION_API + 'schedule');
+    if(r.ok) __supervisionSchedule = await r.json();
+  }catch(e){} finally { __supervisionScheduleLoading = false; }
+  return __supervisionSchedule;
+}
+async function __saveSupervisionSchedule(){
+  const user = currentUser();
+  if(!user || user.role !== 'ADMIN') return;
+  const schedule = [...document.querySelectorAll('[data-supervision-day] input:checked')].map(input => ({
+    dayOfWeek: Number(input.closest('[data-supervision-day]').dataset.supervisionDay),
+    teacherId: input.value,
+  }));
+  const r = await fetch(SUPERVISION_API + 'schedule', {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ school:getActiveSchool(), schedule }),
+  });
+  if(!r.ok){ alert('تعذر حفظ جدول الإشراف'); return; }
+  __supervisionSchedule = await r.json();
+  alert('تم حفظ جدول الإشراف ✅');
+  renderApp();
+}
+async function __checkInSupervision(){
+  const r = await fetch(SUPERVISION_API + 'check-in', { method:'POST' });
+  if(!r.ok){ alert('لا توجد مهمة إشراف مسجلة لك اليوم'); return; }
+  await __loadSupervisionToday(true);
+  renderApp();
+}
+async function __loadSupervisionHistory(){
+  try{
+    const r = await fetch(SUPERVISION_API + 'history');
+    if(r.ok) __supervisionHistory = await r.json();
+  }catch(e){}
+  renderApp();
+}
 
 // وضع الخادم = الجلسة الحقيقية وبيانات قاعدة البيانات؛ وضع العرض/المحلي = نسخة المتصفح فقط
 function __serverEnabled(){ return !DEMO_MODE && location.protocol.indexOf('http') === 0; }
@@ -2007,6 +2064,9 @@ function renderApp(){
   }
 
   app.innerHTML = renderLayout(user, hash);
+  if(__serverEnabled() && (user.role === 'TEACHER' || user.role === 'ADMIN')){
+    if(!__supervisionToday) __loadSupervisionToday().then(() => renderApp());
+  }
   document.body?.classList?.remove('sidebar-locked');
   renderWeather();
   updatePresentNow();
@@ -2922,6 +2982,7 @@ function renderLayout(user, hash){
     { title:'الإدارة', items:[
       { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👥' },
       { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
+      (user.role === 'ADMIN') ? { href:'#/supervision', key:'supervision', label:'🛡️ الإشراف اليومي', icon:'🛡️' } : null,
     ]},
     { title:'المتابعة', items:[
       { href:'#/attendance', key:'attendance', label:'الحضور والغياب', icon:'✓' },
@@ -3009,6 +3070,7 @@ function renderLayout(user, hash){
   else if(page === 'settings') pageHtml = renderSettings();
   else if(page === 'daily-msg') pageHtml = renderDailyMsg();
   else if(page === 'backup' && user.role === 'ADMIN') pageHtml = renderBackup();
+  else if(page === 'supervision' && user.role === 'ADMIN') pageHtml = renderSupervisionAdmin();
   else if(page === 'notebook') pageHtml = renderNotebookPage();
   else if(page === 'about') pageHtml = renderAbout();
   else pageHtml = renderDashboard();
@@ -4102,15 +4164,14 @@ function renderDashboard(){
       ${statTile('✅', (tDayAtt?tDayAtt.present:0) + '/' + ((tDayAtt?tDayAtt.present:0)+(tDayAtt?tDayAtt.absent:0)+(tDayAtt?tDayAtt.late:0)), 'حضور اليوم', (tDayAtt&&tDayAtt.absent) ? tDayAtt.absent + ' غائب' : 'الكل حاضر', 'showTodayAttendance()')}
       ${statTile('📝', myAssignments.length, 'التكليفات', 'مفتوحة لفصلي', 'location.hash=\'#/assignments\'')}
     </div>
-    ${(() => { const sup = supervisionForUser(user); if(!sup) return ''; const partners = sup.roster.filter(u => u.id !== user.id); return `
+    ${(() => { const sup = supervisionForUser(user); if(!sup) return ''; return `
     <div class="card mb" style="padding:14px 18px;border:none;border-radius:16px;background:linear-gradient(135deg,#0f4f88,#1d4ed8);color:#fff;display:flex;align-items:center;gap:14px;animation:supBg 1.6s ease-in-out infinite">
       <div style="width:48px;height:48px;border-radius:14px;background:rgba(255,191,36,.25);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;animation:supShield 1.8s ease-in-out infinite">🛡️</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:12px;opacity:.92;font-weight:700">إشرافك اليوم — ${sup.label}</div>
-        <div style="font-weight:800;font-size:16px;margin-top:1px">معك في الإشراف:</div>
-        <div style="font-size:12px;opacity:.95;margin-top:2px">${partners.map(p => escapeHtml(p.name.split(' ')[0])).join('، ')}</div>
+        <div style="font-size:12px;opacity:.92;font-weight:700">🛡️ الإشراف اليومي — ${sup.label} ${escapeHtml(sup.date || '')}</div>
+        <div style="font-weight:800;font-size:16px;margin-top:1px">أنتِ من مشرفات المدرسة اليوم.</div>
       </div>
-      <span style="background:rgba(255,255,255,.22);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:800;white-space:nowrap">${sup.roster.length} مشرفين</span>
+      ${sup.checkedInAt ? '<span style="background:#16a34a;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:800;white-space:nowrap">🟢 باشرت</span>' : '<button class="btn-primary" style="white-space:nowrap" onclick="__checkInSupervision()">تسجيل مباشرة الإشراف</button>'}
     </div>`; })()}
     ${tpct !== null ? `
     <div class="card mb" style="padding:14px 16px">
@@ -7837,35 +7898,48 @@ const TIMETABLE_DAYS = [
   { key:'THURSDAY', label:'الخميس', dow:4 },
   { key:'FRIDAY', label:'الجمعة', dow:5 }
 ];
-/* ===== جدول الإشراف اليومي الأسبوعي (ينوب 4 معلمين كل يوم) ===== */
-/* كل يوم يسرد هويات المعلمين المشرفين (أو اسمهم — يُضاف الحساب لاحقًا) */
+function renderSupervisionAdmin(){
+  if(!__supervisionSchedule){
+    if(!__supervisionScheduleLoading) __loadSupervisionSchedule().then(() => renderApp());
+    return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">جار تحميل جدول الإشراف...</p></section>`;
+  }
+  const db = loadDB();
+  const teachers = (db.users || []).filter(u => u.role === 'TEACHER' && u.active !== false);
+  const selected = new Set((__supervisionSchedule.schedule || []).map(x => `${x.dayOfWeek}:${x.teacherId}`));
+  const days = SUPERVISION_DAYS.map(day => `
+    <div class="panel" data-supervision-day="${day.dow}" style="margin-bottom:12px">
+      <h3>🛡️ ${day.label}</h3>
+      <div class="grid-2">
+        ${teachers.map(t => `<label class="check-row"><input type="checkbox" value="${escapeHtml(t.id)}" ${selected.has(`${day.dow}:${t.id}`)?'checked':''}> ${escapeHtml(t.name || t.username || t.id)}</label>`).join('')}
+      </div>
+    </div>`).join('');
+  const today = __supervisionToday;
+  const todayRows = today && today.assigned ? today.assigned : [];
+  const todayBlock = `<div class="panel"><h3>🛡️ مشرفات اليوم – ${escapeHtml((SUPERVISION_DAYS.find(x=>x.dow===today?.dayOfWeek)||{}).label || 'لا يوجد إشراف')}</h3>
+    ${todayRows.length ? todayRows.map(x => `<div>${x.checkedInAt ? '🟢 باشرت الإشراف' : '🟡 لم تسجل المباشرة'} — ${escapeHtml(x.name || x.teacherId)}${x.checkedInAt ? ` <span class="muted">${escapeHtml(x.checkedInAt)}</span>` : ''}</div>`).join('') : '<p class="muted">لا توجد مشرفات اليوم</p>'}</div>`;
+  const history = __supervisionHistory && __supervisionHistory.history;
+  const historyBlock = history ? `<div class="panel"><h3>📜 سجل الإشراف</h3>${history.length ? history.map(x => `<div style="padding:7px 0;border-bottom:1px solid #eee">${escapeHtml(x.supervision_date || x.checkin_date || x.date || '')} — ${escapeHtml(x.name || x.teacher_id || '')} — ${x.checked_in_at || x.checkin_time ? '🟢 ' + escapeHtml(x.checked_in_at || x.checkin_time) : '🟡 لم تسجل المباشرة'}</div>`).join('') : '<p class="muted">لا توجد سجلات بعد</p>'}</div>` : '<button class="btn-secondary" onclick="__loadSupervisionHistory()">عرض سجل الإشراف</button>';
+  return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">جدول أسبوعي ثابت يتكرر تلقائيًا من الاثنين إلى الجمعة.</p><button class="btn-primary" onclick="__saveSupervisionSchedule()">حفظ جدول الإشراف</button></section>${todayBlock}${days}${historyBlock}`;
+}
+
+/* ===== جدول الإشراف اليومي الأسبوعي (مصدره الخادم) ===== */
 const SUPERVISION_DAYS = [
-  { key:'MONDAY', label:'الاثنين', refs:['id_456dd3f95755b462','id_2afe9dd515171d10','id_81dc0acd1fde3501','id_d172e54424f6f92f'] },
-  { key:'TUESDAY', label:'الثلاثاء', refs:['id_4796558a54b0c430','id_8eb0fad8767b9b71','id_d41b704a9a2a0723','id_ec3fe44ed2d41d03'] },
-  { key:'WEDNESDAY', label:'الأربعاء', refs:['id_b9fa8cd671d2b6bb','id_7ef93851497c92a3','id_db5090aa05914b44','id_b66b2d68e06fa1e5'] },
-  { key:'THURSDAY', label:'الخميس', refs:['id_e5e0692f7e99fb41','id_997be57741e83d6f','id_89d446202da30319','id_5a71b62656667b0b'] },
-  { key:'FRIDAY', label:'الجمعة', refs:['id_4adb92fb6dcb0936','id_1818262198c756d9','id_0fce45f1ea09','خالد'] }
+  { key:'MONDAY', label:'الاثنين', dow:1 },
+  { key:'TUESDAY', label:'الثلاثاء', dow:2 },
+  { key:'WEDNESDAY', label:'الأربعاء', dow:3 },
+  { key:'THURSDAY', label:'الخميس', dow:4 },
+  { key:'FRIDAY', label:'الجمعة', dow:5 }
 ];
-/* يحسم إن كان معلم معين مُشرِفًا اليوم، ويعيد بقية زملاء نوبته */
+/* يحسم إن كانت المعلمة مكلفة اليوم من بيانات الخادم، لا من الاسم أو التخمين */
 function supervisionForUser(user){
   if(!user || user.role !== 'TEACHER') return null;
-  const day = TIMETABLE_DAYS.find(x => x.dow === new Date().getDay());
+  const today = __supervisionToday;
+  // الخادم يعيد للمعلمة تكليفها هي فقط (لا تفاصيل زميلاتها)
+  const mine = today && Array.isArray(today.assigned) ? today.assigned.find(x => x.teacherId === user.id) : null;
+  if(!mine) return null;
+  const day = SUPERVISION_DAYS.find(x => x.dow === today.dayOfWeek);
   if(!day) return null;
-  const slot = SUPERVISION_DAYS.find(s => s.key === day.key);
-  if(!slot) return null;
-  const d = typeof loadDB === 'function' ? loadDB() : null;
-  const users = (d && d.users) ? d.users : [];
-  const resolve = ref => {
-    if(ref === (user.id || '')) return user;                       // الهوية نفسها
-    const byId = users.find(u => u.id === ref);
-    if(byId) return byId;
-    const byName = users.find(u => (u.name||'').includes(String(ref)));
-    return byName || null;
-  };
-  const roster = slot.refs.map(resolve).filter(Boolean);
-  const me = roster.find(u => u.id === user.id);
-  if(!me) return null;
-  return { dayKey:day.key, label:slot.label, roster };
+  return { dayKey: day.key, label: day.label, date: today.date, checkedInAt: mine.checkedInAt || null };
 }
 const TIMETABLE_PERIOD_NAMES = ['الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة'];
 /* جميع المواد الممكنة حسب المراحل ليختار منها المعلم عند إدخال حصته */
