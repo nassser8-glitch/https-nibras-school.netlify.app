@@ -575,7 +575,7 @@ async function __loadSupervisionSchedule(force){
 }
 async function __saveSupervisionSchedule(){
   const user = currentUser();
-  if(!user || user.role !== 'ADMIN') return;
+  if(!user || user.role !== 'ADMIN') return false;
   __ensureSupervisionDraft();
   const schedule = [];
   SUPERVISION_DAYS.forEach(day => {
@@ -583,16 +583,22 @@ async function __saveSupervisionSchedule(){
       schedule.push({ dayOfWeek: day.dow, teacherId });
     });
   });
-  const r = await fetch(SUPERVISION_API + 'schedule', {
-    method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ school:getActiveSchool(), schedule }),
-  });
-  if(!r.ok){ alert('تعذر حفظ جدول الإشراف'); return; }
-  __supervisionSchedule = await r.json();
-  __supervisionDraftSchedule = null; // إعادة بناء المسودة من نسخة الخادم المحفوظة فعليًا
-  __supervisionAddOpenDay = null;
-  alert('تم حفظ جدول الإشراف ✅');
-  renderApp();
+  try {
+    const r = await fetch(SUPERVISION_API + 'schedule', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ school:getActiveSchool(), schedule }),
+    });
+    if(!r.ok){ alert('تعذر حفظ جدول الإشراف'); return false; }
+    __supervisionSchedule = await r.json();
+    __supervisionDraftSchedule = null; // إعادة بناء المسودة من نسخة الخادم المحفوظة فعليًا
+    __supervisionAddOpenDay = null;
+    alert('تم حفظ جدول الإشراف ✅');
+    renderApp();
+    return true;
+  } catch(error) {
+    alert('تعذر حفظ جدول الإشراف'); // فشل fetch أو قراءة JSON أو أي استثناء أثناء الحفظ
+    return false;
+  }
 }
 // يبني مسودة العمل (يوم -> مجموعة معرفات المعلمات) من آخر جدول محمّل من الخادم؛ لا يعيد البناء إذا كانت المسودة موجودة أصلًا حتى لا تُفقد تعديلات لم تُحفظ بعد
 function __ensureSupervisionDraft(){
@@ -614,10 +620,14 @@ function __supervisionAddSelected(dow){
   __supervisionAddOpenDay = null;
   renderApp();
 }
-function __supervisionRemoveTeacher(dow, teacherId){
+async function __supervisionRemoveTeacher(dow, teacherId){
   __ensureSupervisionDraft();
   __supervisionDraftSchedule[dow].delete(teacherId);
-  renderApp();
+  if(await __saveSupervisionSchedule() === false){
+    // فشل الحفظ: التراجع عن الحذف في المسودة حتى لا يبدو الحذف محفوظًا في قاعدة البيانات
+    __supervisionDraftSchedule[dow].add(teacherId);
+    renderApp();
+  }
 }
 async function __checkInSupervision(){
   const r = await fetch(SUPERVISION_API + 'check-in', { method:'POST' });

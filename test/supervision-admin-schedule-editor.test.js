@@ -50,7 +50,7 @@ function buildSandbox({ fetchImpl, checkedIdsByDay = {} } = {}) {
   const ensureDraftSrc = extractFunctionSource(src, 'function __ensureSupervisionDraft(){');
   const togglePickerSrc = extractFunctionSource(src, 'function __supervisionToggleAddPicker(dow){');
   const addSelectedSrc = extractFunctionSource(src, 'function __supervisionAddSelected(dow){');
-  const removeTeacherSrc = extractFunctionSource(src, 'function __supervisionRemoveTeacher(dow, teacherId){');
+  const removeTeacherSrc = extractFunctionSource(src, 'async function __supervisionRemoveTeacher(dow, teacherId){');
   const saveScheduleSrc = extractFunctionSource(src, 'async function __saveSupervisionSchedule(){');
   const supervisionDaysSrc = extractArrayLiteral(src, 'const SUPERVISION_DAYS = [');
 
