@@ -1407,6 +1407,32 @@ function mergeStudentsLateOnly(prevStudents, inStudents) {
   return Array.from(map.values());
 }
 
+// ===== حقول حضور المعلمات/الإداريين داخل سجلّ المستخدم =====
+// غياب/تأخر المعلم والإداري ليسا قسماً مستقلاً، بل حقول على كائن المستخدم
+// (absences/markedLate/lateMinutes/lateType). يسمح هذا الدمج لأدوار مدرسية
+// (وكيلة الشؤون المدرسية) بتسجيل حضور المعلمات/الإداريين فقط، دون أن تمسّ
+// أي حقل حساس آخر في الحساب (الدور، كلمة المرور، الإلغاء، الاسم...).
+const USER_ATTENDANCE_FIELDS = ['absences', 'markedLate', 'lateMinutes', 'lateType'];
+function mergeUsersAttendanceOnly(prevUsers, inUsers) {
+  if (!Array.isArray(prevUsers)) prevUsers = [];
+  if (!Array.isArray(inUsers)) inUsers = [];
+  // نبدأ من نسخة الخادم كما هي: أي حقل لا يُرسل هنا يبقى كما هو على الخادم.
+  const map = new Map(prevUsers.map(u => [u && u.id, Object.assign({}, u)]));
+  for (const u of inUsers) {
+    if (!u || !u.id) continue;
+    const p = map.get(u.id);
+    // حساب غير موجود على الخادم: يُتجاهل تماماً (لا إضافة ولا حذف حسابات).
+    if (!p) continue;
+    for (const f of USER_ATTENDANCE_FIELDS) {
+      const v = u[f];
+      if (Array.isArray(v)) p[f] = v.filter(x => typeof x === 'string');
+      else if (v && typeof v === 'object') p[f] = Object.assign({}, v);
+      else delete p[f];
+    }
+  }
+  return Array.from(map.values());
+}
+
 // ===== حارس تلوث القسمين (cross-section) =====
 // القسمان منفصلان تماماً (لا يوجد معرّف مستخدم مشترك بين GIRLS و BOYS إطلاقاً).
 // أي دفعة حفظ/استيراد/استرجاع تستحضر حسابات القسم الآخر = جهاز ملوِّث يدمج النسختين.
@@ -1645,10 +1671,17 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     // ===== تحقق الصلاحيات لكل قسم تغيّر =====
     // المدير/الوكيل: يمكنه تعديل قسم المستخدمين، والبقية يحفظون أقسامهم (حضور/غياب...) فقط.
     const canEditUsers = (req.session.role === 'ADMIN' || req.session.role === 'AGENT');
+    // وكيل الشؤون المدرسية: يُسجّل حضور المعلمات/الإداريين (حقول الغياب/التأخر) فقط.
+    const canEditUserAttendance = (req.session.role === 'SCHOOL_AGENT');
     if (!canEditUsers) {
-      // لا يحق لهذا الدور تعديل الحسابات: نتجاهل أي تغيير أرسله على قسم users
-      // ونُبقي نسخة الخادم الموثوقة سليمة، دون فقدان بقية الأقسام المشروعة (مثل الحضور).
-      data.users = JSON.parse(JSON.stringify(prevUsers));
+      if (canEditUserAttendance) {
+        // يُقبل تغيّر حقول الحضور على سجلات المستخدمين، ويبقى سائر الحقول نسخة الخادم.
+        data.users = mergeUsersAttendanceOnly(prevUsers, data.users);
+      } else {
+        // لا يحق لهذا الدور تعديل الحسابات: نتجاهل أي تغيير أرسله على قسم users
+        // ونُبقي نسخة الخادم الموثوقة سليمة، دون فقدان بقية الأقسام المشروعة (مثل الحضور).
+        data.users = JSON.parse(JSON.stringify(prevUsers));
+      }
     }
     for (const key of SECTION_KEYS) {
       const a = prev.data ? prev.data[key] : undefined;
@@ -1664,7 +1697,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     // طازجة الزمن، بل تُدمج تعديلاتها حسب الصلاحيات داخل نسخة الخادم الحالية (مزج حسب المفتاح).
     // هكذا لا يمسح معلم (جدول/حضور/ملاحظات/تكليفات...) بيانات زملائه ولا يمسح أحد القسم ككل،
     // وخلايا الجدول المضافة تبقى محفوظة بعد التحديث/إعادة الدخول.
-    const applyMerged = (base, src, role, canEditU) => {
+    const applyMerged = (base, src, role, canEditU, attOnlyU) => {
       const merged = JSON.parse(JSON.stringify(base));
       delete merged._ts;
       const allKeys = new Set([...SECTION_KEYS, ...Object.keys(src || {})]);
@@ -1675,6 +1708,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         if (jsonEqual(a, b)) continue;
         if (key === 'users') {
           if (canEditU) merged[key] = mergeSection(a, b);
+          else if (attOnlyU) merged[key] = mergeUsersAttendanceOnly(prevUsers, b);
           else merged[key] = JSON.parse(JSON.stringify(prevUsers));
           continue;
         }
@@ -1703,7 +1737,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       // يُدمجان دائماً حتى لا يمسح جهاز إداري حصة/غياباً سجّله المعلمون حديثاً.
       if (prev.data && prev.data.hasOwnProperty) {
         if (stale) {
-          data = applyMerged(prev.data, data, role, true);
+          data = applyMerged(prev.data, data, role, true, false);
         } else {
           const cf = JSON.parse(JSON.stringify(data));
           // التكليفات/النشاطات (وشواهد الحذف فيها) تُدمج دائماً حتى للمدير/الوكيل:
@@ -1727,7 +1761,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     } else if (prev.data && prev.data.hasOwnProperty) {
       // كل الباقين: دمج دائماً (لا خسارة لبيانات أحد). قسم الطلاب للمعلم يُدمج
       // بحقول التأخر فقط (lateMinutes/lateType) فلا يُرفض الحفظ ولا يمسح بيانات الطالب.
-      data = applyMerged(prev.data, data, role, false);
+      data = applyMerged(prev.data, data, role, false, canEditUserAttendance);
     }
     if (!canEditUsers && (role === 'TEACHER' || role === 'ADMINISTRATIVE' || role === 'SCHOOL_AGENT') && incomingStudents) {
       // المعلم والإداري ووكيل الشؤون المدرسية: يُسمح لهم بتعديل حقول التأخر للطلاب (lateMinutes/lateType) فقط

@@ -1692,7 +1692,10 @@ function teacherEmoji(){ return getActiveSchool() === 'GIRLS' ? '👩‍🏫' : 
 function isManager(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'COUNSELOR'); }
 // الإداري (ADMINISTRATIVE) دور مدرسي شامل يرى كل فصول/طلاب القسم (ويستثنى منه فلترة الفصول المسندة)
 function seesAllClasses(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE' || u.role === 'SCHOOL_AGENT'); }
-function canManageTeachers(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
+// من يُسجّل غياب/تأخر المعلمات والإداريين: المدير (ADMIN)، الوكيل (AGENT)،
+// ووكيلة الشؤون المدرسية (SCHOOL_AGENT) —Gravida يُسجّل حقول حضور المعلمات فقط
+// على الخادم (absences/markedLate) دون حقول الحساب الحسّاسة.
+function canManageTeachers(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'SCHOOL_AGENT'); }
 // من يُسمح له بتسجيل الغياب/التأخر لأيام دراسية سابقة: المدير (ADMIN)، الوكيل (AGENT)،
 // والإداري «عبدالله فيصل» (ADMINISTRATIVE — بنين)، ووكيل الشؤون المدرسية (SCHOOL_AGENT)
 function canRecordPastAttendance(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'SCHOOL_AGENT' || u.id === 'id_6ef8036cc7f4c692'); }
@@ -6216,8 +6219,7 @@ function renderAttendance(){
   // بعد ضبط classId الافتراضي يجب إعادة حساب isTeachers حتى تظهر المعلمات فورًا عند أول فتح للصفحة
   const isTeachers = canManageTeachers(currentUser()) && attendanceState.classId === 'TEACHERS';
   const currentClass = classes.find(c => c.id === attendanceState.classId) || null;
-  const isMgr = isManager(currentUser());
-  const teacherList = isTeachers && isMgr ? d.users.filter(u => (u.role === 'TEACHER' || isAdminRole(u.role)) && u.active).sort((a,b)=>a.name.localeCompare(b.name,'ar')) : [];
+  const teacherList = isTeachers ? d.users.filter(u => (u.role === 'TEACHER' || isAdminRole(u.role)) && u.active).sort((a,b)=>a.name.localeCompare(b.name,'ar')) : [];
 
   const students = !isTeachers && attendanceState.classId
     ? d.students.filter(s => s.active && s.classId === attendanceState.classId).sort((a,b)=>a.fullName.localeCompare(b.fullName,'ar'))
