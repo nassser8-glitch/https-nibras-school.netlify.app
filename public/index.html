@@ -4359,9 +4359,8 @@ function renderDashboard(){
     const donut = `<div class="dash-donut" style="background:${donutBg}">
           <div class="dash-donut-center"><b style="color:${donutLabelColor}">${total}</b><span>مسجّل اليوم</span></div>
         </div>`;
-    const pctNum = parseFloat(String(pct));
-    const pctColor = (total && !isNaN(pctNum)) ? (pctNum >= 75 ? '#059669' : pctNum >= 50 ? '#f59e0b' : '#ef4444') : 'var(--muted)';
-    const pctBlock = `<div class="att-pct" onclick="${click}" title="عرض التفاصيل"><b style="color:${pctColor}">${pct}</b><span>حضور</span></div>`;
+    // نسبة الحضور تُلوَّن بالأخضر دائمًا لأنها نسبة الحضور نفسها (يُرجَع اللون للغياب/التأخر في الدائرة والأرقام)
+    const pctBlock = `<div class="att-pct" onclick="${click}" title="عرض التفاصيل"><b>${pct}</b><span>حضور</span></div>`;
     const maxCount = Math.max(present, absent, late);
     const attNum = (n, color) => {
       const top = (n === maxCount && n > 0) ? 'font-size:14px;font-weight:900;' : 'font-size:12px;font-weight:800;';
