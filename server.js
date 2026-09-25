@@ -1152,9 +1152,26 @@ function mergeAttendance(prev, incoming) {
   // الغياب/التأخر «معلومات حاسمة» — لا يمحوها تسجيلُ حُضورٍ اعتيادي (افتراضي/خطأ) من معلمٍ آخر
   // في الفصول المشتركة (عدة معلمين يفتحون نفس قائمة الطلاب). PRESENT أقل إفادة من ABSENT/LATE.
   const inf = r => (r && typeof r === 'object' && (r.status === 'ABSENT' || r.status === 'LATE')) ? 1 : 0;
+  // الغيابُ «المعلَّق» (سجّله معلم واحد فقط — بانتظار معلمٍ ثانٍ): سجلٌّ افتراضي قابل للتصحيح
+  // من صاحبِ التسجيل أو مديرٍ مخوَّل — الحاضرُ الأحدث زمناً (إلغاءٌ صريح) يهزمه، فيُحفَظ
+  // الإلغاءُ حتى مع دمج أجهزة/معلمين (لا تُعاد الطالبةُ غائبةً بعد محاولة الحذف). أما
+  // الغيابُ المؤكَّد (مؤكِّدان فعليان أو سجلٌ قديم بشارة LEADY) فيبقى يفوز على الحاضر دائماً.
+  const clerkCount = r => {
+    if (!r || typeof r !== 'object') return 0;
+    if (!Array.isArray(r.absClerks)) return r.status === 'ABSENT' ? 1 : 0; // قديم بلا قائمة = مؤكد
+    return r.absClerks.filter(c => c && c !== LEGACY_ABS).length;
+  };
+  const __attIsPending = r => !!(r && typeof r === 'object' && r.status === 'ABSENT'
+    && Array.isArray(r.absClerks) && r.absClerks.indexOf(LEGACY_ABS) === -1 && clerkCount(r) < 2);
   // اختيار السجل الفائز: الغائب/المتأخر على الحاضر مهما تقدم زمنه، وإلا الأعلى _t
   const better = (a, b) => {
-    if (inf(a) !== inf(b)) return inf(a) > inf(b) ? a : b;
+    if (inf(a) !== inf(b)) {
+      // استثناء الإلغاء الصريح: حضورٌ أحدث زمناً يهزم غياباً «معلَّقاً» أقدم (معلم واحد فقط)
+      const absentSide = inf(a) === 1 ? a : b;
+      const presentSide = absentSide === a ? b : a;
+      if (__attIsPending(absentSide) && (typeof presentSide._t === 'number') && (typeof absentSide._t === 'number') && presentSide._t > absentSide._t) return presentSide;
+      return inf(a) > inf(b) ? a : b;
+    }
     return tOf(a) >= tOf(b) ? a : b;
   };
   // اتحاد قوائم مؤكِّدي الغياب: عند تطابق سجلّي غياب لنفس الطالب/اليوم (من معلّمين/أجهزة مختلفة)

@@ -778,7 +778,16 @@ function __attWinner(a, b){
   if(!!a.deleted !== !!b.deleted) return a.deleted ? a : b;
   const infA = (a.status === 'ABSENT' || a.status === 'LATE') ? 1 : 0;
   const infB = (b.status === 'ABSENT' || b.status === 'LATE') ? 1 : 0;
-  let win = infA !== infB ? (infA > infB ? a : b) : a;
+  let win;
+  if(infA !== infB){
+    // استثناء الإلغاء الصريح: الحاضرُ الأحدث زمناً (تصحيح صريح من المعلم صاحب التسجيل أو
+    // من المدير/الوكيل المُخوّل) يهزم الغيابَ «المعلَّق» الأقدم (سجّله معلم واحد فقط).
+    // الغيابُ المؤكَّد (مؤكِّدان فعليان أو سجلٌ قديم) يبقى يفوز على الحاضر مهما اختلف الزمن.
+    const absentSide = infA === 1 ? a : b;
+    const presentSide = absentSide === a ? b : a;
+    if(__attPendingConfirm(absentSide) && (typeof presentSide._t === 'number') && (typeof absentSide._t === 'number') && presentSide._t > absentSide._t) win = presentSide;
+    else win = infA > infB ? a : b;
+  } else win = a;
   if(win === a && infA === infB){
     const ta = (typeof a._t === 'number') ? a._t : 0;
     const tb = (typeof b._t === 'number') ? b._t : 0;
@@ -10582,3 +10591,4 @@ setTimeout(function(){ maybeShowInstallHint(false); }, 1200);
 </script>
 </body>
 </html>
+
