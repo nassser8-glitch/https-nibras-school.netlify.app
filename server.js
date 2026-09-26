@@ -328,46 +328,57 @@ function sendUser(u, sessionRow, viewerRole) {
 
 // ===== مزامنة بيانات المستخدم في نسخة القسم (school_data.users) مع أي تغيير حسابي =====
 // حتى لا تتعارض الجداول (users) مع نسخة البيانات التي تعرضها الواجهة
+// ملاحظة حرجة: تُنفَّذ كلها عبر db.mutateSchoolData (BEGIN + SELECT..FOR UPDATE).
+// السبب: القراءة في db.getSchoolData ثم إعادة كتابة الصف كاملاً بـ db.setSchoolData
+// كانتا تفتحان نافذة سباق: أي حفظ أحدث يجري بينهما يُكتب فوقه بلقطة قديمة —
+// وهو ما كان يُمحّي دفعات الطلاب (172 -> 162) من school_data عند كل تسجيل دخول/تفعيل.
+// التعديل الآن على الصف المقفول، وts رتيب، فلا تُمحى بيانات أقدم... بل الأحدث.
 async function updateSchoolUser(school, userId, fields) {
-  const rec = await db.getSchoolData(school);
-  if (!rec.data || !Array.isArray(rec.data.users)) return;
-  const u = rec.data.users.find(x => x.id === userId);
-  if (!u) return;
-  Object.assign(u, fields);
-  STRIP_FIELDS.forEach(f => delete u[f]);
-  await db.setSchoolData(school, rec.data, Date.now());
+  const r = await db.mutateSchoolData(school, (d) => {
+    if (!d || !Array.isArray(d.users)) return { changed: false, value: false };
+    const u = d.users.find(x => x.id === userId);
+    if (!u) return { changed: false, value: false };
+    Object.assign(u, fields);
+    STRIP_FIELDS.forEach(f => delete u[f]);
+    return { changed: true, value: true };
+  });
+  if (!r.written && r.reason === 'stale') console.warn('[updateSchoolUser] رفض كتابة قديمة', school, userId);
+  return r.written;
 }
 // تفعيل نسخ القسم (school_data.users) المطابقة بالمعرّف أو باسم المستخدم — يعالج المعرّف
 // اليتيم الناتج عن تطبيع التكرار، حيث يبقى في الواجهة معرّف لا وجود له في جدول الحسابات.
 async function markSchoolUsersActivated(school, userId, username) {
-  const rec = await db.getSchoolData(school);
-  if (!rec.data || !Array.isArray(rec.data.users)) return 0;
-  const uid = String(userId || '');
-  const uname = String(username || '').trim().toLowerCase();
-  let n = 0;
-  for (const u of rec.data.users) {
-    if (!u) continue;
-    const idMatch = uid && String(u.id) === uid;
-    const nameMatch = uname && String(u.username || '').trim().toLowerCase() === uname;
-    if (idMatch || nameMatch) {
-      u.firstLogin = false;
-      u.granted = true;
-      delete u.password;
-      n++;
+  const r = await db.mutateSchoolData(school, (d) => {
+    if (!d || !Array.isArray(d.users)) return { changed: false, value: 0 };
+    const uid = String(userId || '');
+    const uname = String(username || '').trim().toLowerCase();
+    let n = 0;
+    for (const u of d.users) {
+      if (!u) continue;
+      const idMatch = uid && String(u.id) === uid;
+      const nameMatch = uname && String(u.username || '').trim().toLowerCase() === uname;
+      if (idMatch || nameMatch) {
+        u.firstLogin = false;
+        u.granted = true;
+        delete u.password;
+        n++;
+      }
     }
-  }
-  if (n) await db.setSchoolData(school, rec.data, Date.now());
-  return n;
+    return { changed: n > 0, value: n };
+  });
+  return r.value == null ? 0 : r.value;
 }
 async function appendSchoolUser(school, userObj) {
-  const rec = await db.getSchoolData(school);
-  const data = rec.data || { users: [], grades: [], classes: [], students: [], attendance: [], notes: [], transfers: [] };
-  if (!Array.isArray(data.users)) data.users = [];
-  const clean = Object.assign({}, userObj);
-  STRIP_FIELDS.forEach(f => delete clean[f]);
-  const i = data.users.findIndex(x => x.id === clean.id);
-  if (i >= 0) data.users[i] = clean; else data.users.push(clean);
-  await db.setSchoolData(school, data, Date.now());
+  const r = await db.mutateSchoolData(school, (d) => {
+    if (!Array.isArray(d.users)) d.users = [];
+    const clean = Object.assign({}, userObj);
+    STRIP_FIELDS.forEach(f => delete clean[f]);
+    const i = d.users.findIndex(x => x.id === clean.id);
+    if (i >= 0) d.users[i] = clean; else d.users.push(clean);
+    return { changed: true, value: true };
+  });
+  if (!r.written && r.reason === 'stale') console.warn('[appendSchoolUser] رفض كتابة قديمة', school);
+  return r.written;
 }
 
 /* ================= /api/auth ================= */
@@ -762,9 +773,11 @@ app.post('/api/auth/admin/delete-student', requireAuth, (req, res) => {
     try { await db.deleteUserSessions(id); } catch (e) { console.warn('[del-stu] sessions', e.message); }
 
     // 2) تحويل سجل الطالبة إلى شاهد حذف + تنقية سجلاتها من المرآة + تسجيل الحظر
-    const rec = await db.getSchoolData(school);
-    if (rec && rec.data) {
-      const d = rec.data;
+    // على الصف المقفول (BEGIN + FOR UPDATE): الحذف يجب أن يُطبَّق على أحدث نسخة،
+    // لا أن يمحو أي حفظ جديد بكتابة لقطة قديمة فوقه.
+    try {
+      await db.mutateSchoolData(school, (d) => {
+      if (!d) return { changed: false, value: false };
       const blockSet = new Set(Array.isArray(d._blockedStudents) ? d._blockedStudents.map(String) : []);
       blockSet.add(id);
       d._blockedStudents = [...blockSet];
@@ -793,8 +806,9 @@ app.post('/api/auth/admin/delete-student', requireAuth, (req, res) => {
           return c;
         });
       }
-      try { await db.setSchoolData(school, d, Math.max((rec && rec.ts) || 0, Date.now()) + 1); } catch (e) { console.warn('[del-stu] mirror', e.message); }
-    }
+      return { changed: true, value: true };
+      });
+    } catch (e) { console.warn('[del-stu] mirror', e.message); }
 
     res.json({ ok: true, studentId: id, deleted: true });
   })().catch(fail(res));
@@ -823,9 +837,10 @@ app.post('/api/auth/admin/delete-students', requireAuth, (req, res) => {
     }
     const idSet = new Set(valid.map(v => v.id));
     if (idSet.size) {
-      const rec = await db.getSchoolData(school);
-      if (rec && rec.data) {
-        const d = rec.data;
+      // على الصف المقفول (BEGIN + FOR UPDATE) — نفس حماية الحذف المفرد.
+      try {
+        await db.mutateSchoolData(school, (d) => {
+        if (!d) return { changed: false, value: false };
         const blockSet = new Set(Array.isArray(d._blockedStudents) ? d._blockedStudents.map(String) : []);
         for (const id of idSet) blockSet.add(id);
         d._blockedStudents = [...blockSet];
@@ -854,8 +869,9 @@ app.post('/api/auth/admin/delete-students', requireAuth, (req, res) => {
             return c;
           });
         }
-        try { await db.setSchoolData(school, d, Math.max((rec && rec.ts) || 0, Date.now()) + 1); } catch (e) { console.warn('[del-stus] mirror', e.message); }
-      }
+        return { changed: true, value: true };
+        });
+      } catch (e) { console.warn('[del-stus] mirror', e.message); }
     }
 
     res.json({ ok: true, count: valid.length, ids: valid.map(v => v.id) });
@@ -1470,13 +1486,15 @@ async function reconcileUserTable(school, prevUsers, nextUsers) {
       if (n && FORCE_ACTIVE.has(n.id) && n.active === false) { n.active = true; forcedChanged = true; }
     }
     if (forcedChanged && school) {
-      const rec = await db.getSchoolData(school);
-      if (rec && rec.data && Array.isArray(rec.data.users)) {
-        for (const u of rec.data.users) {
-          if (u && FORCE_ACTIVE.has(u.id) && u.active === false) u.active = true;
+      // تعديل على الصف المقفول (نفس سبب تحديث المستخدمين أعلاه) — لا لقطة كاملة قديمة.
+      await db.mutateSchoolData(school, (d) => {
+        if (!d || !Array.isArray(d.users)) return { changed: false, value: false };
+        let hit = false;
+        for (const u of d.users) {
+          if (u && FORCE_ACTIVE.has(u.id) && u.active === false) { u.active = true; hit = true; }
         }
-        await db.setSchoolData(school, rec.data, Date.now());
-      }
+        return { changed: hit, value: hit };
+      });
     }
   }
   const nextMap = new Map((nextUsers || []).map(u => [u.id, u]));
@@ -1870,7 +1888,10 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       }
     } catch (e) { console.warn('[joinedAt-preserve]', e.message); }
 
-    await db.setSchoolData(school, clean, nextTs);
+    const putRes = await db.setSchoolData(school, clean, nextTs);
+    // nextTs = max(saneTs, prev.ts)+1 فيلزم أن يسبق الصف المخزَّن. إن رُفضت الكتابة
+    // فهناك كاتب أحدث سباقنا بين القراءة والكتابة — ولم تُمحَ بيانات أحدث.
+    if (!putRes.written) console.warn('[db-put] رفض حفظ ts أقدم لـ', school, '— كاتب أحدث متزامن');
     // مزامنة جدول المصادقة مع أي تغيير في قسم المستخدمين (حذف/نقل/تعطيل)
     if (['ADMIN','AGENT'].includes(req.session.role)) {
       if (!jsonEqual(prevUsers, clean.users)) await reconcileUserTable(school, prevUsers, clean.users);
@@ -2122,9 +2143,10 @@ app.post('/api/ops/ensure-girls-admin', async (req, res) => {
 // حذف الفصول الميتة والمواد المكررة بلا طلاب). تُستدعى مرة واحدة ثم تُحذف.
 app.post('/api/ops/clean-girls', async (req, res) => {
   try {
-    const rec = await db.getSchoolData('GIRLS');
-    if (!rec.data) return res.json({ ok: false, error: 'no data' });
-    const d = rec.data;
+    // على الصف المقفول (BEGIN + SELECT..FOR UPDATE) — نفس سبب تحديث المستخدمين أعلاه:
+    // لا تُحسب الإحصاءات على لقطة أقدم مما سيُكتب فعلاً.
+    const out = await db.mutateSchoolData('GIRLS', async (d) => {
+    if (!d) return { changed: false, value: null };
     let data = d;
     const studentCounts = {};
     for (const s of (d.students || [])) {
@@ -2174,9 +2196,18 @@ app.post('/api/ops/clean-girls', async (req, res) => {
     d.grades = keepGrades;
     // إزالة تكرار المعلمات عبر الدالة المركزية (تومبستون لاصق + إعادة توجيه المرجعات)
     const normRes = await normalizeTeacherDuplicates('GIRLS', d);
-    await db.setSchoolData('GIRLS', d, Date.now());
-    const tombCount = d.users.filter(u => u && u.deleted).length;
-    res.json({ ok: true, classes: keepCls.length, grades: keepGrades.length, students: (d.students || []).length, users: d.users.filter(u => u && u.deleted !== true).length, tombstones: tombCount, remapped: normRes.remapped, dropped: normRes.dropped });
+    return { changed: true, value: {
+      classes: keepCls.length,
+      grades: keepGrades.length,
+      students: (d.students || []).length,
+      users: (d.users || []).filter(u => u && u.deleted !== true).length,
+      tombstones: (d.users || []).filter(u => u && u.deleted).length,
+      remapped: normRes.remapped,
+      dropped: normRes.dropped,
+    } };
+    });
+    if (!out.written) return res.json({ ok: false, error: 'no data', reason: out.reason });
+    res.json({ ok: true, ...out.value });
   } catch (e) { console.error('[clean-girls]', e); res.status(500).json({ error: String(e && e.message || e) }); }
 });
 

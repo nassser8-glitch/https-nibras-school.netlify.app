@@ -697,13 +697,79 @@ async function getSchoolData(school) {
   if (!r.rows.length) return { data: null, ts: 0 };
   return { data: r.rows[0].data, ts: Number(r.rows[0].ts) || 0 };
 }
+// كتابة محمية زمنياً: لا تُستبدل نسخة ذات ts أحدث بنسخة ts أقدم.
+// السبب: school_data صف واحد لكل قسم ويحوي النظام كله (users/classes/students...).
+// أي كاتب يتأخر带着 لقطة قديمة كان يكتبها فوق أحدث نسخة فيرجع ts للخلف.
+// مع ON CONFLICT..WHERE يصبح ts رتيباً دائماً: الأقدم فقط هو الفائز.
+// يُرجع { written, storedTs } — written=false تعني رفضَ كتابة قديمة (لا استبدال).
 async function setSchoolData(school, data, ts) {
   assertSupportedSchool(school); // يمنع إنشاء/كتابة صف BOYS (بلا migration)
-  await pool.query(
+  const nextTs = Number(ts) || 0;
+  const r = await pool.query(
     `INSERT INTO school_data (school, data, ts, updated_at)
      VALUES ($1,$2,$3, now())
-     ON CONFLICT (school) DO UPDATE SET data=EXCLUDED.data, ts=EXCLUDED.ts, updated_at=now()`,
-    [school, JSON.stringify(data), ts]);
+     ON CONFLICT (school) DO UPDATE SET data=EXCLUDED.data, ts=EXCLUDED.ts, updated_at=now()
+     WHERE school_data.ts < EXCLUDED.ts`,
+    [school, JSON.stringify(data), nextTs]);
+  return { written: r.rowCount > 0, storedTs: nextTs };
+}
+
+// تعديل جزئي داخل معاملة واحدة: BEGIN -> SELECT ... FOR UPDATE -> تعديل المطلوب -> UPDATE -> COMMIT.
+// تُغلق نافذة السباق التي كانت تسمح لكاتب قديم بإعادة كتابة لقطة كاملة.
+// السبب الجذري: updateSchoolUser/markSchoolUsersActivated/appendSchoolUser كانت
+//   (1) تقرأ الصف كاملاً  (2) تعدّل users فقط  (3) تعيد كتابة الصف كاملاً بلقطة قديمة
+// فيُلغى أي حفظ أحدث تم بين (1) و(3) — وهو سبب ضياع دفعات الطلاب.
+// mutator يستقبل كائن البيانات المعدَّل في مكانه ويُرجع:
+//   { changed:boolean, value:any }  أو  true/false  أو  undefined (=لا تغيير)
+// يدعم الدوال غير المتزامنة (async) — تُنتظر نتيجتها قبل الحسم.
+// ts يُحسب رتيباً: max(Date.now(), storedTs+1) فلا يتراجع أبداً.
+const EMPTY_SKELETON = () => ({ users: [], grades: [], classes: [], students: [], attendance: [], notes: [], transfers: [] });
+function _normMutatorOut(out) {
+  if (out && typeof out === 'object') return { changed: out.changed === true, value: ('value' in out) ? out.value : null };
+  if (out === true) return { changed: true, value: true };
+  if (out === false || out === undefined || out === null) return { changed: false, value: null };
+  return { changed: true, value: out };
+}
+async function mutateSchoolData(school, mutator) {
+  assertSupportedSchool(school);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const sel = await client.query('SELECT data, ts FROM school_data WHERE school = $1 FOR UPDATE', [school]);
+    if (!sel.rows.length) {
+      // لا صف بعد: لا توجد لقطة أقدم يمكن الكتابة فوقها — ننشئ الصف (نفس سلوك setSchoolData السابق).
+      const data = EMPTY_SKELETON();
+      const n = _normMutatorOut(await mutator(data));
+      if (!n.changed) { await client.query('ROLLBACK'); return { written: false, value: n.value, reason: 'no_change' }; }
+      const nextTs = Math.max(Date.now(), 1);
+      const ins = await client.query(
+        `INSERT INTO school_data (school, data, ts, updated_at) VALUES ($1,$2,$3, now())
+         ON CONFLICT (school) DO UPDATE SET data=EXCLUDED.data, ts=EXCLUDED.ts, updated_at=now()
+         WHERE school_data.ts < EXCLUDED.ts`,
+        [school, JSON.stringify(data), nextTs]);
+      if (!ins.rowCount) { await client.query('ROLLBACK'); return { written: false, value: n.value, reason: 'stale' }; }
+      await client.query('COMMIT');
+      return { written: true, value: n.value, ts: nextTs };
+    }
+    const data = sel.rows[0].data;
+    const storedTs = Number(sel.rows[0].ts) || 0;
+    const n = _normMutatorOut(await mutator(data));
+    if (!n.changed) { await client.query('ROLLBACK'); return { written: false, value: n.value, reason: 'no_change' }; }
+    // ts رتيب: لا نسمح لأي كتابة بأن تُرجع الساعة للخلف مقارنة بالصف المقفول.
+    const nextTs = Math.max(Date.now(), storedTs + 1);
+    const upd = await client.query(
+      `UPDATE school_data SET data = $2::jsonb, ts = $3, updated_at = now()
+        WHERE school = $1 AND ts < $3`,
+      [school, JSON.stringify(data), nextTs]);
+    if (!upd.rowCount) { await client.query('ROLLBACK'); return { written: false, value: n.value, reason: 'stale' }; }
+    await client.query('COMMIT');
+    return { written: true, value: n.value, ts: nextTs };
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 // تحديث إحصاءات الدخول داخل نسخة القسم (school_data.users) بتعديل جزئي على الخادم
 // دون نقل ملف البيانات الكامل (348KB) إلى العميل — أسرع بكثير في كل دخول.
@@ -817,7 +883,7 @@ module.exports = {
   getSupervisionSchedule, replaceSupervisionSchedule, getSupervisionForDate,
   checkInSupervision, getSupervisionHistory,
   canViewSupervisionToday, filterSupervisionAssignments,
-  getSchoolData, setSchoolData, patchSchoolUserStats, touchUserPresence,
+  getSchoolData, setSchoolData, mutateSchoolData, patchSchoolUserStats, touchUserPresence,
   getSchoolSettings, setSchoolSettings,
   saveBackup, listBackups, getBackup,
   auditSync,
