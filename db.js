@@ -4,7 +4,8 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres:Nibras@Postgres_2026@127.0.0.1:5432/nibras';
+const DATABASE_URL = process.env.DATABASE_URL;
+if(!DATABASE_URL && process.env.NODE_ENV === 'production'){ throw new Error('DATABASE_URL is required: set it in the platform environment'); }
 
 const pool = new Pool({ connectionString: DATABASE_URL, max: 10 });
 

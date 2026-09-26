@@ -12,3 +12,6 @@ tailwind.config.ts
 tsconfig.json
 tsconfig.tsbuildinfo
 _listusers.js
+*.env
+.env.*
+!.env.example
