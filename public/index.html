@@ -2980,9 +2980,9 @@ function enterSchool(school){
   if(d.classes.length === 0 && d.grades.length === 0 && d.students.length === 0){
     stages.forEach(stage => {
       let grade = d.grades.find(g => g.name === stage.name);
-      if(!grade){ grade = { id:uid(), name:stage.name, order:stage.order }; d.grades.push(grade); }
+      if(!grade){ grade = { id:stage.id, name:stage.name, order:stage.order }; d.grades.push(grade); }
       if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ')){
-        d.classes.push({ id:uid(), gradeId:grade.id, name:'أ', campus:school, capacity:null, teacherIds:[] });
+        d.classes.push({ id:__stageClassId(grade.id), gradeId:grade.id, name:'أ', campus:school, capacity:null, teacherIds:[] });
       }
     });
     saveDB(d);
@@ -6204,7 +6204,7 @@ function importStudents(evt){
       if(!fullName || !gradeName){ skipped++; errors.push(`السطر ${i+2}: الاسم أو الصف فارغ`); return; }
 
       let grade = d.grades.find(g => g.name === gradeName);
-      if(!grade){ grade = { id:uid(), name:gradeName, order: __stageOrder(gradeName, d.grades.length) }; d.grades.push(grade); }
+      if(!grade){ grade = { id:__stageId(gradeName), name:gradeName, order: __stageOrder(gradeName, d.grades.length) }; d.grades.push(grade); }
       const campus = getActiveSchool();
       let cls = d.classes.find(c => c.gradeId===grade.id && c.name==='أ');
       if(!cls){ cls = { id:uid(), gradeId:grade.id, name:'أ', campus, capacity:null, teacherIds:[] }; d.classes.push(cls); }
@@ -7069,16 +7069,31 @@ function saveTransferSolution(id){
 }
 
 /* ============ الفصول ============ */
+// المعرّفات ثابتة عمداً: الخادم يدمج الأقسام بمفتاح id (server.js mergeSection)، فمعرّف
+// عشوائي (uid) من جهازين ينتج صفّين بنفس الاسم بدل صف واحد. المعرّفات b_g1..b_g12 هي
+// نفسها الموجودة في قواعد المدارس، فيتّفق الجهاز الجديد مع الصفوف القائمة بدل أن يfork منها.
 const stages = [
-  { name:'التمهيدي', order:-1 },
-  { name:'الأول الابتدائي', order:0 }, { name:'الثاني الابتدائي', order:1 }, { name:'الثالث الابتدائي', order:2 },
-  { name:'الرابع الابتدائي', order:3 }, { name:'الخامس الابتدائي', order:4 }, { name:'السادس الابتدائي', order:5 },
-  { name:'الأول المتوسط', order:6 }, { name:'الثاني المتوسط', order:7 }, { name:'الثالث المتوسط', order:8 },
-  { name:'الأول الثانوي', order:9 }, { name:'الثاني الثانوي', order:10 }, { name:'الثالث الثانوي', order:11 },
+  { id:'kg_g0', name:'التمهيدي', order:-1 },
+  { id:'b_g1', name:'الأول الابتدائي', order:0 }, { id:'b_g2', name:'الثاني الابتدائي', order:1 }, { id:'b_g3', name:'الثالث الابتدائي', order:2 },
+  { id:'b_g4', name:'الرابع الابتدائي', order:3 }, { id:'b_g5', name:'الخامس الابتدائي', order:4 }, { id:'b_g6', name:'السادس الابتدائي', order:5 },
+  { id:'b_g7', name:'الأول المتوسط', order:6 }, { id:'b_g8', name:'الثاني المتوسط', order:7 }, { id:'b_g9', name:'الثالث المتوسط', order:8 },
+  { id:'b_g10', name:'الأول الثانوي', order:9 }, { id:'b_g11', name:'الثاني الثانوي', order:10 }, { id:'b_g12', name:'الثالث الثانوي', order:11 },
 ];
+function __stage(name){
+  return stages.find(x => x.name === name) || null;
+}
 function __stageOrder(name, fallback){
-  const s = stages.find(x => x.name === name);
+  const s = __stage(name);
   return s ? s.order : fallback;
+}
+function __stageId(name){
+  const s = __stage(name);
+  return s ? s.id : uid();
+}
+// معرّف فصل «أ» مشتق من معرّف الصف: جهازان ينشآنه لصفٍ ناقص فيتّفقان على id واحد
+// فيدمجهما الخادم في سجل واحد بدل فصلين فارغين.
+function __stageClassId(gradeId){
+  return gradeId + '_a';
 }
 function renderClasses(){
   const d = loadDB();
@@ -7094,9 +7109,9 @@ function renderClasses(){
     const addedNames = [];
     stages.forEach(stage => {
       let grade = d.grades.find(g => g.name === stage.name);
-      if(!grade){ grade = { id:uid(), name:stage.name, order:stage.order }; d.grades.push(grade); }
+      if(!grade){ grade = { id:stage.id, name:stage.name, order:stage.order }; d.grades.push(grade); }
       if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ' && !c.deleted)){
-        d.classes.push({ id:uid(), gradeId:grade.id, name:'أ', campus, capacity:null, teacherIds:[] });
+        d.classes.push({ id:__stageClassId(grade.id), gradeId:grade.id, name:'أ', campus, capacity:null, teacherIds:[] });
         added++;
         addedNames.push(stage.name);
       }
@@ -7216,10 +7231,10 @@ function generateDefaultStructure(){
   let createdCount = 0;
   stages.forEach(stage => {
     let grade = d.grades.find(g => g.name === stage.name);
-    if(!grade){ grade = { id:uid(), name:stage.name, order:stage.order }; d.grades.push(grade); }
+    if(!grade){ grade = { id:stage.id, name:stage.name, order:stage.order }; d.grades.push(grade); }
 
     if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ')){
-      d.classes.push({ id:uid(), gradeId:grade.id, name:'أ', campus, capacity:null, teacherIds:[] });
+      d.classes.push({ id:__stageClassId(grade.id), gradeId:grade.id, name:'أ', campus, capacity:null, teacherIds:[] });
       createdCount++;
     }
   });

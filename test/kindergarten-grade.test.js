@@ -65,6 +65,7 @@ function loadStages() {
   vm.createContext(context);
   const literal = extractBlock('const stages = [', '];');
   vm.runInContext(literal + '\nglobalThis.__stages = stages;', context);
+  vm.runInContext(extractFn('__stage') + '\nglobalThis.__stage = __stage;', context);
   vm.runInContext(extractFn('__stageOrder') + '\nglobalThis.__stageOrder = __stageOrder;', context);
   return context;
 }
@@ -109,10 +110,22 @@ test('أسماء الصفوف القائمة لم تُعدّل (لا إضافة 
   assert.deepEqual(extras, [KINDERGARTEN], 'الصف الجديد الوحيد هو التمهيدي');
 });
 
-test('قيمة ترتيب الصفوف الجديدة لا تغيّر أي بيانات محفوظة (لا migration ولا ids في التعريف)', () => {
+test('معرّفات الصفوف ثابتة ومتطابقة مع قواعد المدارس (لا uid عشوائي)', () => {
   const { __stages } = loadStages();
   __stages.forEach(s => {
-    assert.deepEqual(Object.keys(s).sort(), ['name', 'order'], 'تعريف الصف بلا معرّف ولا بيانات مرتبطة');
+    assert.deepEqual(Object.keys(s).sort(), ['id', 'name', 'order'], 'تعريف الصف: id + name + order فقط');
+    assert.equal(typeof s.id, 'string', 'لكل صف معرّف نصي');
+    assert.ok(s.id.length > 0 && !/\s/.test(s.id), 'معرّف صالح بلا مسافات: ' + s.id);
+  });
+  const ids = __stages.map(s => s.id);
+  assert.equal(new Set(ids).size, ids.length, 'لا معرّف مكرّر بين الصفوف');
+  // الخادم يدمج حسب id، فثبات المعرّف هو ما يمنع تكرار الصفوف بين الأجهزة.
+  const again = loadStages().__stages.map(s => s.id);
+  assert.deepEqual(Array.from(again), Array.from(ids), 'المعرّفات نفسها في كل تحميل للصفحة');
+  const kg = __stages.find(s => s.name === KINDERGARTEN);
+  assert.equal(kg.id, 'kg_g0', 'معرّف التمهيدي الثابت');
+  PRE_EXISTING.forEach((name, i) => {
+    assert.equal(__stages.find(s => s.name === name).id, 'b_g' + (i + 1), name + ' يطابق المعرّف الموجود في قواعد المدارس');
   });
 });
 
@@ -174,6 +187,7 @@ test('الإكمال التلقائي للصفوف يضيف التمهيدي ف�
   context.campus = 'GIRLS';
   context.added = 0;
   context.addedNames = [];
+  vm.runInContext(extractFn('__stageClassId'), context);
   vm.runInContext(extractAutoRepairBlock(), context);
 
   const kg = context.d.grades.find(g => g.name === KINDERGARTEN);
@@ -202,6 +216,7 @@ test('الإكمال التلقائي لا يكرر شيئًا عند تشغيل
   };
   context.stages = Array.from(__stages);
   const block = extractAutoRepairBlock();
+  vm.runInContext(extractFn('__stageClassId'), context);
   vm.runInContext(block, context);
   const gradesAfterFirst = context.d.grades.length;
   const classesAfterFirst = context.d.classes.length;
@@ -211,6 +226,64 @@ test('الإكمال التلقائي لا يكرر شيئًا عند تشغيل
   assert.equal(context.d.grades.length, gradesAfterFirst, 'لا صفوف مكررة');
   assert.equal(context.d.classes.length, classesAfterFirst, 'لا فصول مكررة');
   assert.equal(context.added, 0, 'لا رسائل إضافة');
+});
+
+// ===== سبب تكرار الصفوف: جهازان ينشآن الصف الناقص في الوقت نفسه =====
+// الإنتاج فيه 37 صفًا لـ13 اسمًا (12 اسمًا ×3 نسخ) لأن الت retrofit كان يستعمل uid()
+// العشوائي: معرّفان مختلفان لنفس الاسم ⇒ دمج الخادم (بمفتاح id) يبقي الاثنتين.
+// هذا الاختبار ينفّذ الإصلاح من زاوية الضجيرة: جهازان مستقلان + دمج على طريقة الخادم.
+test('جهازان ينشآن الصف الناقص في وقت واحد: معرّف واحد ⇒ لا تكرار بعد الدمج', () => {
+  const { __stages } = loadStages();
+  const existing = Array.from(__stages).filter(s => s.name !== KINDERGARTEN)
+    .map(s => ({ id: s.id, name: s.name, order: s.order }));
+
+  // جهازان: كلٌّ بنسخة فيها الصفوف الاثني عشر لكن بلا تمهيدي، و uid() مختلف في كل جهاز.
+  const makeDevice = () => {
+    const ctx = {
+      console, JSON, Array, Object, Map, Set, Date, isFinite,
+      uid: (() => { let n = 0; return () => 'id_' + (++n) + '_' + Math.random().toString(36).slice(2, 8); })(),
+    };
+    vm.createContext(ctx);
+    ctx.d = { grades: existing.map(g => Object.assign({}, g)), classes: [], students: [] };
+    ctx.stages = Array.from(__stages);
+    ctx.campus = 'GIRLS';
+    ctx.added = 0;
+    ctx.addedNames = [];
+    vm.runInContext(extractFn('__stageClassId'), ctx);
+    vm.runInContext(extractAutoRepairBlock(), ctx);
+    return ctx;
+  };
+  const a = makeDevice();
+  const b = makeDevice();
+
+  const kgA = a.d.grades.find(g => g.name === KINDERGARTEN);
+  const kgB = b.d.grades.find(g => g.name === KINDERGARTEN);
+  const clsA = a.d.classes.find(c => c.gradeId === kgA.id);
+  const clsB = b.d.classes.find(c => c.gradeId === kgB.id);
+
+  assert.equal(kgA.id, kgB.id, 'الجهازان أعطيا نفس معرّف الصف: ' + kgA.id + ' / ' + kgB.id);
+  assert.equal(clsA.id, clsB.id, 'الجهازان أعطيا نفس معرّف الفصل: ' + clsA.id + ' / ' + clsB.id);
+
+  // دمج الخادم: الخريطة بمفتاح id، والواصل يرجّح (server.js mergeSection).
+  const mergeById = (prev, incoming) => {
+    const map = new Map();
+    for (const r of prev) map.set(r.id, r);
+    for (const r of incoming) map.set(r.id, r);
+    return Array.from(map.values());
+  };
+  const mergedGrades = mergeById(a.d.grades, b.d.grades);
+  const mergedClasses = mergeById(a.d.classes, b.d.classes);
+
+  const kgRows = mergedGrades.filter(g => g.name === KINDERGARTEN);
+  const kgClasses = mergedClasses.filter(c => c.gradeId === kgA.id);
+  assert.equal(kgRows.length, 1, 'صف تمهيدي واحد بعد الدمج (كان 3 قبل الإصلاح)');
+  assert.equal(kgClasses.length, 1, 'فصل «أ» واحد بعد الدمج (كان 3 قبل الإصلاح)');
+  assert.equal(mergedGrades.filter(g => g.name === FIRST_ELEMENTARY).length, 1, 'بقية الصفوف لا تتكرر أيضاً');
+  assert.deepEqual(
+    mergedGrades.map(g => g.name).sort(),
+    [KINDERGARTEN].concat(PRE_EXISTING).sort(),
+    'الدمج لا يفقد ولا يضيف صفًا'
+  );
 });
 
 test('نوافذ المراحل في لوحة الأوائل تشمل التمهيدي ضمن الابتدائي', () => {
