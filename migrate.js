@@ -1,5 +1,5 @@
 'use strict';
-// نبراس — ترحيل بيانات localStorage القديمة (server/data/BOYS.json + GIRLS.json) إلى PostgreSQL
+// نبراس — ترحيل بيانات localStorage القديمة (server/data/GIRLS.json) إلى PostgreSQL
 // الاستخدام: node migrate.js  (ينشئ الجداول ثم يستورد؛ آمن لإعادة التشغيل)
 const path = require('path');
 const bcrypt = require('bcryptjs');

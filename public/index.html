@@ -138,7 +138,6 @@
   .class-mini { position:relative; transition:transform .12s, box-shadow .12s; }
   .class-mini:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,.10); }
   .badge { font-size:11px; padding:3px 10px; border-radius:999px; font-weight:600; }
-  .badge-boys { background:#eff6ff; color:#1d4ed8; }
   .badge-girls { background:#fdf2f8; color:#be185d; }
   .badge-mixed { background:#f5f3ff; color:#6d28d9; }
   .badge-green { color:#16a34a; } .badge-red { color:#dc2626; }
@@ -220,14 +219,6 @@
   }
 
   /* ===== الثيمات ===== */
-  .theme-boys {
-    --primary:#0f4f88; --primary-light:#eef7ff; --accent:#1d7fd6;
-    --bg-subtle:#f0f7ff; --border-color:#e0edf7;
-    --sidebar-bg:#f8fbff; --sidebar-border:#e0edf7;
-    --announce-bg:linear-gradient(135deg,#dbeafe,#eff6ff);
-    --announce-color:#0369a1; --announce-border:#bae6fd;
-    --announce-shadow:rgba(59,130,246,0.15);
-  }
   .theme-girls {
     --primary:#be185d; --primary-light:#fdf2f8; --accent:#db2777;
     --bg-subtle:#fff0f7; --border-color:#fce7f3;
@@ -236,10 +227,6 @@
     --announce-color:#9d174d; --announce-border:#f9a8d4;
     --announce-shadow:rgba(219,39,119,0.15);
   }
-  .theme-boys .sidebar { background:var(--sidebar-bg); border-left:1px solid var(--sidebar-border); }
-  .theme-boys .sidebar-top { border-bottom:1px solid var(--sidebar-border); }
-  .theme-boys .sidebar-top h1 { color:var(--primary); }
-  .theme-boys .sidebar-bottom { border-top:1px solid var(--sidebar-border); }
   .theme-girls .sidebar { background:var(--sidebar-bg); border-left:1px solid var(--sidebar-border); }
   .theme-girls .sidebar-top { border-bottom:1px solid var(--sidebar-border); }
   .theme-girls .sidebar-top h1 { color:var(--primary); }
@@ -322,7 +309,6 @@
     .tt-tabs .tt-tab { padding:6px 12px; font-size:13px; }
     .modal-box .dl-item { flex-wrap:wrap; }
   }
-  .announce-boys { background:var(--announce-bg); color:var(--announce-color); text-align:center; padding:24px 16px; border-radius:12px; overflow:hidden; position:relative; border:2px solid var(--announce-border); font-size:18px; font-weight:700; box-shadow:0 4px 12px var(--announce-shadow); }
   .announce-girls { background:var(--announce-bg); color:var(--announce-color); text-align:center; padding:24px 16px; border-radius:12px; overflow:hidden; position:relative; border:2px solid var(--announce-border); font-size:18px; font-weight:700; box-shadow:0 4px 12px var(--announce-shadow); }
   .announce-dash .scroll-text { display:inline-block; white-space:nowrap; animation: scrollAnnounce 14s linear infinite; }
   @keyframes scrollAnnounce { 0%{transform:translateX(-120%)} 100%{transform:translateX(120%)} }
@@ -345,30 +331,23 @@
   @media (max-width:700px) { .school-dash-grid { grid-template-columns:1fr; } }
   .school-panel { border-radius:16px; padding:24px; cursor:pointer; transition:all .2s; border:2px solid transparent; }
   .school-panel:hover { transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,.1); }
-  .school-panel.boys { background:#eff6ff; border-color:#bfdbfe; }
-  .school-panel.boys:hover { border-color:#1d4ed8; }
   .school-panel.girls { background:#fdf2f8; border-color:#fbcfe8; }
   .school-panel.girls:hover { border-color:#be185d; }
   .school-panel-header { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
   .school-panel-icon { font-size:36px; }
   .school-panel-title { font-size:20px; font-weight:800; margin:0; }
-  .school-panel.boys .school-panel-title { color:#1d4ed8; }
   .school-panel.girls .school-panel-title { color:#be185d; }
   .school-panel-stats { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
   .school-stat-box { background:rgba(255,255,255,.7); border-radius:10px; padding:10px 12px; text-align:center; }
   .school-stat-box .num { font-size:22px; font-weight:800; display:block; }
   .school-stat-box .lbl { font-size:11px; color:#6b7280; font-weight:600; }
-  .school-panel.boys .school-stat-box .num { color:#1d4ed8; }
   .school-panel.girls .school-stat-box .num { color:#be185d; }
   .school-enter-btn { display:block; width:100%; padding:10px; border-radius:10px; border:none; font-size:15px; font-weight:700; cursor:pointer; text-align:center; }
-  .school-panel.boys .school-enter-btn { background:#1d4ed8; color:#fff; }
-  .school-panel.boys .school-enter-btn:hover { background:#1e40af; }
   .school-panel.girls .school-enter-btn { background:#be185d; color:#fff; }
   .school-panel.girls .school-enter-btn:hover { background:#9d174d; }
   .school-logout-link { text-align:center; margin-top:24px; }
   .school-logout-link a { color:#6b7280; font-size:13px; cursor:pointer; text-decoration:underline; }
   .school-badge { display:inline-block; padding:3px 12px; border-radius:999px; font-size:12px; font-weight:700; margin-right:8px; vertical-align:middle; }   .build-badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:700; margin-right:6px; vertical-align:middle; background:#ecfdf5; color:#047857; }
-  .school-badge.boys { background:#eff6ff; color:#1d4ed8; }
   .school-badge.girls { background:#fdf2f8; color:#be185d; }
   .tt-tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px; }
   .tt-tab { padding:8px 16px; border-radius:999px; border:1px solid #e5e7eb; background:#fff; color:#374151; font-size:14px; font-weight:700; cursor:pointer; transition:all .15s; }
@@ -1476,7 +1455,7 @@ async function __refreshSchool(school){
 }
 // غلاف حفظ: كل كتابة لقاعدة بيانات أي قسم تُختم بزمن وتُرفع تلقائياً — وفي وضع الخادم تُحذف بيانات الاعتماد من النسخة المحلية
 localStorage.setItem = function(k, v){
-  const m = /^nibras_(BOYS|GIRLS)_db_v1$/.exec(k);
+  const m = /^nibras_GIRLS_db_v1$/.exec(k);
   if(m && __syncEnabled()){
     try{
       const obj = JSON.parse(v);
@@ -1498,7 +1477,7 @@ localStorage.setItem = function(k, v){
 /* ============ وضع التشغيل ============ */
 // النسخة الحقيقية (هذا الملف): DEMO_MODE=false تحفظ فعلياً في المتصفح — والنسخة التجريبية تُبنى منه عبر build_demo.js (تدمج DEMO_SEED وتفعّل DEMO_MODE)
 const DEMO_MODE = false; // true = نسخة العرض التجريبي
-const DEMO_SEED = null;  // { BOYS:{...}, GIRLS:{...} } — يُملأ في نسخة العرض التجريبي فقط
+const DEMO_SEED = null;  // { GIRLS:{...} } — يُملأ في نسخة العرض التجريبي فقط
 const DEMO_ANCHOR = null; // تاريخ مرجعي (آخر يوم دراسة عند البناء) لتحديث تواريخ العرض التجريبي تلقائياً
 const PERSIST_FIRST_SEED = true; // أول تشغيل فقط: زرع البيانات المتوفرة (DEMO_SEED إن وُجد) في التخزين الحقيقي
 function __demoYmd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -1554,7 +1533,7 @@ if(!__serverEnabled()){
   if(!localStorage.getItem(SCHOOL_KEY)){
     let __sch = null;
     if(__sid){
-      for(const __s of ['BOYS','GIRLS']){
+      for(const __s of ['GIRLS']){
         try{
           const __d = JSON.parse(localStorage.getItem('nibras_'+__s+'_db_v1') || 'null');
           if(__d && __d.users && __d.users.some(u => u.id === __sid && u.active)){ __sch = __s; break; }
@@ -1570,7 +1549,7 @@ function __normName(s){ return String(s||'').replace(/[\u064B-\u0652\u0640]/g,''
 function dedupeTeacherAccounts(){
   if(__serverEnabled()) return;
   let changedAny = false;
-  ['BOYS','GIRLS'].forEach(school => {
+  ['GIRLS'].forEach(school => {
     const key = 'nibras_'+school+'_db_v1';
     let d = null;
     try{ d = JSON.parse(localStorage.getItem(key) || 'null'); }catch(e){}
@@ -1615,7 +1594,7 @@ function dedupeTeacherAccounts(){
 }
 if(!__serverEnabled()) dedupeTeacherAccounts();
 
-const campusLabels = { BOYS:'بنين', GIRLS:'بنات', MIXED:'مشترك' };
+const campusLabels = { GIRLS:'بنات', MIXED:'مشترك' };
 const roleLabels = { ADMIN:'مدير', AGENT:'وكيل', COUNSELOR:'موجه طلابي', TEACHER:'معلم', ADMINISTRATIVE:'مساعد إداري', SCHOOL_AGENT:'وكيل الشؤون المدرسية' };
 const statusLabels = { PRESENT:'حاضر', ABSENT:'غائب', LATE:'متأخر' };
 const targetLabels = { AGENT:'الوكيل', COUNSELOR:'الموجه الطلابي', ADMIN:'المدير' };
@@ -1673,7 +1652,7 @@ function pointsCutoffDate(){
   }catch(e){}
   return POINTS_START_FROM;
 }
-const schoolNames = { BOYS:'قسم البنين', GIRLS:'قسم البنات' };
+const schoolNames = { GIRLS:'قسم البنات' };
 
 const feminineLabels = {
   'الطلاب':'الطالبات', 'طالب':'طالبة', 'الطالب':'الطالبة',
@@ -1738,7 +1717,7 @@ function ensureDefaultAccounts(){
     // نسخة العرض: دمج حسابات البذرة في التخزين المحلي لضمان ظهور كل المعلمين/المعلمات
     // في الدخول السريع — دون الكتابة فوق كلمات المرور التي غيّرها المستخدم.
     if(DEMO_SEED){
-      ['BOYS','GIRLS'].forEach(school => {
+      ['GIRLS'].forEach(school => {
         const seed = DEMO_SEED[school];
         if(!seed || !seed.users) return;
         const key = 'nibras_' + school + '_db_v1';
@@ -1803,8 +1782,10 @@ function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.get
 function escapeHtml(str){ return String(str??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ============ إدارة القسم المدرسي ============ */
-function getActiveSchool(){ return localStorage.getItem(SCHOOL_KEY) || 'GIRLS'; }
-function setActiveSchool(school){ localStorage.setItem(SCHOOL_KEY, school); }
+// نظام GIRLS فقط: لا يُقرأ القسم من التخزين ولا يُقبل أي قيمة غير GIRLS،
+// فتصبح أي بقايا قديمة من SCHOOL_KEY غير قابلة للاستخدام.
+function getActiveSchool(){ return 'GIRLS'; }
+function setActiveSchool(school){ if(school === 'GIRLS') localStorage.setItem(SCHOOL_KEY, school); }
 function dbKey(){ const s = getActiveSchool(); return 'nibras_' + s + '_db_v1'; }
 
 function seedDBFor(school){ if(DEMO_MODE && DEMO_SEED && DEMO_SEED[school]) return JSON.parse(JSON.stringify(DEMO_SEED[school]));
@@ -1913,7 +1894,7 @@ function saveDB(d){
   if(DEMO_MODE && !window.__demoLSOverridden) return; // حماية احتياطية: لا حفظ في نسخة العرض
   localStorage.setItem(dbKey(), JSON.stringify(d));
 }
-function dbKeyFor(school){ return 'nibras_' + school + '_db_v1'; }
+function dbKeyFor(school){ return 'nibras_GIRLS_db_v1'; } // نظام قسم واحد: GIRLS
 function loadDBFor(school){
   const raw = localStorage.getItem(dbKeyFor(school));
   return raw ? JSON.parse(raw) : seedDBFor(school);
@@ -1934,7 +1915,7 @@ function currentUser(){
     const u = d.users.find(u => u.id === id && u.active);
     if(u) return u;
   }
-  for(const s of ['BOYS','GIRLS']){
+  for(const s of ['GIRLS']){
     if(s === school) continue;
     localStorage.setItem(SCHOOL_KEY, s);
     const d = loadDB();
@@ -1950,8 +1931,7 @@ async function login(login, password){
       if(r.status === 200 && r.j && r.j.user){
         __sessionUser = r.j.user;
         __mirrorSet(r.j.user);
-        localStorage.setItem(SCHOOL_KEY, r.j.user.school || 'GIRLS');
-        try{ localStorage.removeItem('nibras_BOYS_db_v1'); }catch(e){}
+        setActiveSchool(r.j.user.school);
         return { ok:true };
       }
       if(r.status === 429) return { ok:false, error:'rate_limited' };
@@ -1961,7 +1941,7 @@ async function login(login, password){
     return { ok:false };
   }
   // النسخة المحلية
-  const SCHOOLS = ['BOYS','GIRLS'];
+  const SCHOOLS = ['GIRLS'];
   for(const s of SCHOOLS){
     localStorage.setItem(SCHOOL_KEY, s);
     const d = loadDB();
@@ -1992,7 +1972,7 @@ function logout(){
     __mirrorClear();
     localStorage.removeItem(SCHOOL_KEY);
     // الخادم هو مصدر البيانات: لا تُترك نسخة من بيانات المدرسة في المتصفح بعد الخروج
-    ['BOYS','GIRLS'].forEach(s => { try{ localStorage.removeItem(dbKeyFor(s)); }catch(e){} });
+    ['GIRLS'].forEach(s => { try{ localStorage.removeItem(dbKeyFor(s)); }catch(e){} });
     location.hash = '#/login';
     renderApp();
     return;
@@ -2053,7 +2033,7 @@ function getUserSchool(){
   }
   const id = localStorage.getItem(LOCAL_SESSION_KEY);
   if(!id) return null;
-  for(const s of ['BOYS','GIRLS']){
+  for(const s of ['GIRLS']){
     const d = JSON.parse(localStorage.getItem('nibras_'+s+'_db_v1') || 'null');
     if(d && d.users.some(u => u.id === id && u.active)) return s;
   }
@@ -2309,7 +2289,7 @@ async function handleLogin(){
       if(__serverEnabled()){
         await syncPullAll();
         const u = currentUser();
-        const schools = u && u.role === 'ADMIN' ? ['BOYS','GIRLS'] : [u && u.school];
+        const schools = u && u.role === 'ADMIN' ? ['GIRLS'] : [u && u.school];
         await Promise.all(schools.filter(Boolean).map(s => __getSchoolSettings(s)));
       }
       location.hash = '#/';
@@ -2647,60 +2627,6 @@ function feminizeText(text){
   t = t.replace(/مسؤول\b/g, 'مسؤولة');
   return t;
 }
-function copyBoysToGirls(){
-  const oldKey = localStorage.getItem(SCHOOL_KEY);
-  localStorage.setItem(SCHOOL_KEY, 'BOYS');
-  const boysDB = loadDB();
-  localStorage.setItem(SCHOOL_KEY, 'GIRLS');
-  const girlsDB = loadDB();
-  if(oldKey) localStorage.setItem(SCHOOL_KEY, oldKey); else localStorage.removeItem(SCHOOL_KEY);
-
-  const nameMap = {};
-
-  girlsDB.grades = JSON.parse(JSON.stringify(boysDB.grades));
-  girlsDB.classes = JSON.parse(JSON.stringify(boysDB.classes));
-  girlsDB.attendance = [];
-  girlsDB.notes = [];
-  girlsDB.transfers = [];
-  girlsDB.students = boysDB.students.filter(s => s.active).map((s, i) => {
-    const newName = feminizeName(s.fullName);
-    nameMap[s.id] = { newId: uid(), newName };
-    const cls = classById(s.classId);
-    return {
-      id: nameMap[s.id].newId, fullName: newName, studentNo: s.studentNo + '-ب',
-      classId: s.classId, guardianName: feminizeName(s.guardianName), guardianPhone: s.guardianPhone, active: true
-    };
-  });
-
-  const girlStudentIds = new Set(girlsDB.students.map(s => s.id));
-
-  girlsDB.attendance = boysDB.attendance.filter(a => nameMap[a.studentId]).map(a => ({
-    ...a, id: uid(), studentId: nameMap[a.studentId].newId
-  }));
-
-  girlsDB.notes = boysDB.notes.filter(n => studentIdsOf(n).some(id => nameMap[id])).map(n => {
-    const mapped = studentIdsOf(n).map(id => nameMap[id] ? nameMap[id].newId : null).filter(Boolean);
-    return {
-      ...n, id: uid(), studentId: mapped[0], studentIds: mapped,
-      description: feminizeText(n.description), createdAt: new Date().toISOString()
-    };
-  });
-
-  girlsDB.transfers = boysDB.transfers.filter(t => studentIdsOf(t).some(id => nameMap[id])).map(t => {
-    const mapped = studentIdsOf(t).map(id => nameMap[id] ? nameMap[id].newId : null).filter(Boolean);
-    return {
-      ...t, id: uid(), studentId: mapped[0], studentIds: mapped,
-      reason: feminizeText(t.reason), createdAt: new Date().toISOString()
-    };
-  });
-
-  girlsDB.users = boysDB.users.map(u => ({
-    ...u, id: uid(), name: feminizeName(u.name), email: u.email
-  }));
-
-  saveDBToSchool(girlsDB, 'GIRLS');
-  return { students: girlsDB.students.length, classes: girlsDB.classes.length, attendance: girlsDB.attendance.length };
-}
 function saveDBToSchool(d, school){
   const oldKey = localStorage.getItem(SCHOOL_KEY);
   localStorage.setItem(SCHOOL_KEY, school);
@@ -2708,7 +2634,7 @@ function saveDBToSchool(d, school){
   if(oldKey) localStorage.setItem(SCHOOL_KEY, oldKey); else localStorage.removeItem(SCHOOL_KEY);
 }
 
-/* ============ اختيار القسم (بنين / بنات) ============ */
+/* ============ القسم النشط: GIRLS فقط ============ */
 function getSchoolOverview(school){
   const oldKey = localStorage.getItem(SCHOOL_KEY);
   localStorage.setItem(SCHOOL_KEY, school);
@@ -2759,29 +2685,26 @@ function renderSchoolSelect(){
   const userSchool = !isAdmin ? (() => {
     const sessionId = localStorage.getItem(LOCAL_SESSION_KEY);
     if(!sessionId) return null;
-    // نبحث في بنين وبنات
-    for(const s of ['BOYS','GIRLS']){
+    for(const s of ['GIRLS']){
       const d = JSON.parse(localStorage.getItem('nibras_'+s+'_db_v1') || 'null');
       if(d && d.users.some(u => u.id === sessionId && u.active)) return s;
     }
     return null;
   })() : null;
-  // الإداري الشامل (allSchools) يرى كلا القسمين كالمدير
+  // الإداري الشامل (allSchools) يُعامَل كالمدير (قسم واحد)
   const canAll = isAdmin || !!(user && user.allSchools);
 
-  const boys = null;
   const girls = (canAll || userSchool === 'GIRLS') ? getSchoolOverview('GIRLS') : null;
 
   function panelHtml(school, data){
     if(!data) return '';
-    const isBoys = school === 'BOYS';
-    const label = isBoys ? 'البنين' : 'البنات';
-    const icon = isBoys ? '👦' : '👧';
-    const cls = isBoys ? 'boys' : 'girls';
+    const label = 'البنات';
+    const icon = '👧';
+    const cls = 'girls';
     const attRate = data.students ? (data.present + data.late) / data.students * 100 : 0;
-    const maxStudents = Math.max((boys&&boys.students)||0, (girls&&girls.students)||0, 1);
-    const maxClasses = Math.max((boys&&boys.classes)||0, (girls&&girls.classes)||0, 1);
-    const tls = t => isBoys ? t : (feminineLabels[t] || t);
+    const maxStudents = Math.max((girls&&girls.students)||0, 1);
+    const maxClasses = Math.max((girls&&girls.classes)||0, 1);
+    const tls = t => feminineLabels[t] || t;
     return `
       <div class="school-panel ${cls}" onclick="enterSchool('${school}')">
         <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
@@ -2800,8 +2723,8 @@ function renderSchoolSelect(){
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-          <div class="school-stat-box"><span class="num">${data.students}</span><span class="lbl">${tls('الطلاب')}</span>${barMeter(data.students, maxStudents, isBoys?'#1d4ed8':'#be185d')}</div>
-          <div class="school-stat-box"><span class="num">${data.classes}</span><span class="lbl">الفصول</span>${barMeter(data.classes, maxClasses, isBoys?'#1d4ed8':'#be185d')}</div>
+          <div class="school-stat-box"><span class="num">${data.students}</span><span class="lbl">${tls('الطلاب')}</span>${barMeter(data.students, maxStudents, '#be185d')}</div>
+          <div class="school-stat-box"><span class="num">${data.classes}</span><span class="lbl">الفصول</span>${barMeter(data.classes, maxClasses, '#be185d')}</div>
           <div class="school-stat-box"><span class="num">${data.teachers}</span><span class="lbl">${tls('المعلمون')}</span></div>
           <div class="school-stat-box"><span class="num">${data.pendingTransfers}</span><span class="lbl">التحويلات</span></div>
         </div>
@@ -2816,8 +2739,7 @@ function renderSchoolSelect(){
     <div class="school-dash-grid">
       ${panelHtml('GIRLS', girls)}
     </div>
-    ${!boys && !girls ? `<p style="text-align:center;color:#dc2626;font-weight:600;margin-top:8px">ليست لديك صلاحية للدخول إلى أي قسم — تواصل مع مدير النظام</p>` : ''}
-    ${copyMessage ? `<div id="copyMsg" style="text-align:center;margin-top:16px;font-size:14px;font-weight:600;color:#16a34a">${copyMessage}</div>` : ''}
+    ${!girls ? `<p style="text-align:center;color:#dc2626;font-weight:600;margin-top:8px">ليست لديك صلاحية للدخول إلى القسم — تواصل مع مدير النظام</p>` : ''}
     <div style="text-align:center;margin-top:20px">
       <a style="color:#6b7280;font-size:13px;cursor:pointer;text-decoration:underline;line-height:36px" onclick="logout()">تسجيل الخروج</a>
     </div>
@@ -2950,24 +2872,11 @@ function renderMyPoints(){
     </table>`}
   </div>`;
 }
-let copyMessage = '';
-function handleCopyBoysToGirls(){
-  const result = copyBoysToGirls();
-  copyMessage = `✅ تم نسخ ${result.students} طالبة و ${result.classes} فصل و ${result.attendance} سجل حضور إلى قسم البنات`;
-  renderApp();
-  setTimeout(() => { copyMessage = ''; const el = document.getElementById('copyMsg'); if(el) el.textContent = ''; }, 5000);
-}
 function ensureUserInDB(school, sessionId){
   setActiveSchool(school);
   const d = loadDB();
   if(sessionId && !d.users.find(u => u.id === sessionId)){
-    const other = school === 'BOYS' ? 'GIRLS' : 'BOYS';
-    const prevKey = localStorage.getItem(SCHOOL_KEY);
-    localStorage.setItem(SCHOOL_KEY, other);
-    const otherDB = loadDB();
-    const existing = otherDB.users.find(u => u.id === sessionId);
-    if(existing){ d.users.push({ ...existing }); }
-    localStorage.setItem(SCHOOL_KEY, school);
+    // نظام قسم واحد: لا يوجد «قسم آخر» تُبحث فيه عن الحساب.
     saveDB(d);
   }
 }
@@ -3167,7 +3076,7 @@ function renderLayout(user, hash){
   else if(page === 'about') pageHtml = renderAbout();
   else pageHtml = renderDashboard();
 
-  const themeClass = school === 'GIRLS' ? 'theme-girls' : 'theme-boys';
+  const themeClass = 'theme-girls';
   const searchLive = `oninput="goSearchLive(this.value)"`;
   return `
   <div class="layout ${themeClass}">
@@ -3258,10 +3167,10 @@ function showActNames(gkey, grp){
   if(!isAdmin) return;
   const hasLoggedIn = u => !!(u && (u.lastLogin || (u.loginCount || 0) > 0));
   const sdDate = v => { if(!v) return ''; const d = new Date(v); return (!isNaN(d) ? d.toLocaleDateString('ar') + ' ' + d.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}) : ''); };
-  const schools = gkey === 'ALL' ? ['BOYS','GIRLS'] : (gkey === 'BOYS' ? ['BOYS'] : ['GIRLS']);
+  const schools = ['GIRLS'];
   const multi = schools.length > 1;
   const actNames = [], pendNames = [];
-  const tag = school => multi ? (school === 'BOYS' ? ' (بنين)' : ' (بنات)') : '';
+  const tag = school => multi ? ' (بنات)' : '';
   for(const school of schools){
     const sd = loadSchoolDB(school);
     const userMap = new Map((sd.users||[]).map(u => [u.id, u]));
@@ -3284,7 +3193,7 @@ function showActNames(gkey, grp){
     }
   }
   const roleLabel = grp === 'students' ? 'الطلاب' : (grp === 'teachers' ? 'المعلمون' : 'الإداريون والوكلاء والموجهون');
-  const rangeLabel = gkey === 'ALL' ? 'المدرستين' : (gkey === 'BOYS' ? 'بنين' : 'بنات');
+  const rangeLabel = 'بنات';
   const li = arr => arr.length ? arr.sort((a,b)=>a.localeCompare(b,'ar')).map(n => `<li>${escapeHtml(n)}</li>`).join('') : '<li class="muted">لا يوجد</li>';
   openDetails('تفعيل الحسابات — ' + roleLabel + ' (' + rangeLabel + ')',
     `<li style="font-weight:800;color:#16a34a">✅ دخلوا حسابهم (${actNames.length})</li>${li(actNames)}<li style="font-weight:800;color:#9ca3af;margin-top:6px">⏳ لم يدخلوا بعد (${pendNames.length})</li>${li(pendNames)}`);
@@ -3359,14 +3268,14 @@ function notifItemsFor(user){
   // أي رسالة موجهة للمدير مباشرةً → تنبيه على الجرس (يرى رسائل القسمين معًا)
   if(user.role === 'ADMIN'){
     const adminIds = {};
-    ['BOYS','GIRLS'].forEach(s => {
+    ['GIRLS'].forEach(s => {
       try{
         const db = JSON.parse(localStorage.getItem('nibras_'+s+'_db_v1') || 'null');
         const adm = db && db.users && db.users.find(u => u.role === 'ADMIN' && u.active);
         adminIds[s] = adm ? adm.id : null;
       }catch(e){ adminIds[s] = null; }
     });
-    ['BOYS','GIRLS'].forEach(s => {
+    ['GIRLS'].forEach(s => {
       const adminId = adminIds[s];
       if(!adminId) return;
       (loadAdminMsgsFor(s) || []).forEach(m => {
@@ -3479,7 +3388,7 @@ function __persistMsgs(school, arr){
 /* البحث عن رسالة في كلا القسمين (للمدير) أو القسم النشط فقط */
 function findAdminMsgAcross(id){
   const user = currentUser();
-  const schools = user?.role === 'ADMIN' ? ['BOYS','GIRLS'] : [getActiveSchool()];
+  const schools = user?.role === 'ADMIN' ? ['GIRLS'] : [getActiveSchool()];
   for(const s of schools){
     const arr = loadAdminMsgsFor(s);
     const m = arr.find(x => x.id === id);
@@ -3499,12 +3408,12 @@ function unreadForSchool(school, email){
 }
 function msgMonitorBadge(user){
   if(!user) return 0;
+  // نظام GIRLS فقط: حساب واحد لكل دور.
   const g = unreadForSchool('GIRLS', 'counselor_girls@nibras.local');
-  const b = unreadForSchool('BOYS', 'wakil@nibras.local');
   const gh = unreadForSchool('GIRLS', 'wakilah@nibras.local');
-  if(user.role === 'ADMIN') return g + b + gh;
+  if(user.role === 'ADMIN') return g + gh;
   if(user.role === 'AGENT') return g;
-  if(user.role === 'COUNSELOR') return b + gh;
+  if(user.role === 'COUNSELOR') return gh;
   return 0;
 }
 function adminMsgsFor(teacherId){
@@ -3619,15 +3528,15 @@ function renderGuideMsgs(){
   const isAdmin = user.role === 'ADMIN';
   const active = getActiveSchool();
   // المدير يرى معلمي ورسائل القسمين (بنين وبنات) معًا
-  const teacherSources = isAdmin ? ['BOYS','GIRLS'] : [active];
+  const teacherSources = isAdmin ? ['GIRLS'] : [active];
   const teachers = teacherSources.map(s => loadSchoolDB(s).users.filter(u => u.role === 'TEACHER' && u.active).map(t => ({ ...t, _school: s })))
     .flat().sort((a,b)=>a.name.localeCompare(b.name,'ar'));
-  const msgSources = isAdmin ? ['BOYS','GIRLS'] : [active];
+  const msgSources = isAdmin ? ['GIRLS'] : [active];
   const all = msgSources.map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s }))).flat();
   // المدير يرى جميع الرسائل المرسلة للمعلمين (من أي مرسل)، وغيره يرى رسائله فقط
   const msgs = all.filter(m => (isAdmin ? (m.senderRole !== 'TRANSFER' || adminSeesTransferMsg(m)) : m.senderId === user.id)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   const transIn = all.filter(m => m.senderRole === 'TRANSFER' && m.teacherId === user.id && !m.dismissed && (isAdmin ? adminSeesTransferMsg(m) : true)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  const schoolBadge = (s) => `<span class="badge ${s === 'BOYS' ? 'badge-boys' : 'badge-girls'}" style="margin-left:6px">${campusLabels[s] || s}</span>`;
+  const schoolBadge = (s) => `<span class="badge badge-girls" style="margin-left:6px">${campusLabels[s] || s}</span>`;
   const targetOpts = isAdmin
     ? [`<option value="${active}:ALL">${tl('جميع المعلمين')} (${campusLabels[active]})</option>`]
         .concat(teachers.map(t => `<option value="${t._school}:${t.id}">${escapeHtml(t.name)} — ${campusLabels[t._school]}</option>`))
@@ -3747,7 +3656,7 @@ function renderAdminMsgAlerts(){
       return Array.from(seen.values());
     };
     if(isAdmin){
-      return dedup(['BOYS','GIRLS'].map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s })))
+      return dedup(['GIRLS'].map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s })))
         .flat().filter(m => m.senderRole === 'TRANSFER' && !m.dismissed && adminSeesTransferMsg(m))
         .sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))));
     }
@@ -3801,7 +3710,7 @@ function renderAdminMsgAlerts(){
       const colText = fromEscape ? '#7f1d1d' : (fromTransfer ? '#4c1d95' : (fromActivity ? '#134e4a' : (fromCounselor ? '#14532d' : (fromAgent ? '#9a3412' : '#7f1d1d'))));
       const bg = fromEscape ? 'linear-gradient(135deg,#fef2f2,#fecaca)' : (fromTransfer ? 'linear-gradient(135deg,#f5f3ff,#ede9fe)' : (fromActivity ? 'linear-gradient(135deg,#f0fdfa,#ccfbf1)' : (fromCounselor ? 'linear-gradient(135deg,#f0fdf4,#dcfce7)' : (fromAgent ? 'linear-gradient(135deg,#fff7ed,#ffedd5)' : 'linear-gradient(135deg,#fef2f2,#fee2e2)'))));
       const senderLabel = fromEscape ? '🔔 تنبيه هروب من الحصة' : (fromTransfer ? '📨 إشعار تحويل' : (fromActivity ? '🎨 طلب مشاركة في نشاط' : (fromCounselor ? ('💬 رسالة من ' + tl(targetLabels.COUNSELOR)) : (fromAgent ? ('🚨 رسالة من ' + tl(targetLabels.AGENT)) : '🚨 رسالة مهمة من المدير'))));
-      const badgeLabel = fromEscape ? 'عاجل' : (fromTransfer ? (m._school ? (m._school === 'BOYS' ? 'تحويل بنين' : 'تحويل بنات') : 'تحويل') : (fromActivity ? 'نشاط' : (fromCounselor ? tl(targetLabels.COUNSELOR) : (fromAgent ? tl(targetLabels.AGENT) : 'مهمة'))));
+      const badgeLabel = fromEscape ? 'عاجل' : (fromTransfer ? (m._school ? 'تحويل بنات' : 'تحويل') : (fromActivity ? 'نشاط' : (fromCounselor ? tl(targetLabels.COUNSELOR) : (fromAgent ? tl(targetLabels.AGENT) : 'مهمة'))));
       if(!m.revealed && m.senderRole !== 'ACTIVITY' && !(user.role === 'ADMIN' && m.senderRole === 'TRANSFER')){
         return `
         <div style="flex:${flexW(m)} 1 0;min-width:200px;background:${bg};border:2px solid ${col};border-radius:12px;padding:10px 12px;box-shadow:0 2px 10px rgba(220,38,38,.2);animation:msgPulse 1.5s infinite;display:flex;flex-direction:column">
@@ -4165,7 +4074,7 @@ function renderDashboard(){
   const present = dayAttCounts.present;
   const rate = students.length ? (present + late) / students.length * 100 : null;
   const pendingTransfers = (isAdmin
-    ? ['BOYS','GIRLS'].reduce((n,s) => n + loadSchoolDB(s).transfers.filter(t => t.status === 'PENDING' && transferForMe(t)).length, 0)
+    ? ['GIRLS'].reduce((n,s) => n + loadSchoolDB(s).transfers.filter(t => t.status === 'PENDING' && transferForMe(t)).length, 0)
     : d.transfers.filter(t => t.status === 'PENDING' && transferForMe(t)).length);
 
   // إحصائية المعلم لكل فصل يدرسه (تُطبق على المعلمات أيضًا)
@@ -4446,7 +4355,7 @@ function renderDashboard(){
         if(!s.active) continue;
         const u = userMap.get(s.id);
         if(!u || u.role !== 'STUDENT') continue;
-        const nm = (s.fullName || s.name) + (school === 'BOYS' ? ' (بنين)' : ' (بنات)');
+        const nm = (s.fullName || s.name) + ' (بنات)';
         st.total++;
         if(hasLoggedIn(u)){ st.activated++; st.actNames.push(nm); } else { st.pendNames.push(nm); }
       }
@@ -4455,7 +4364,7 @@ function renderDashboard(){
       for(const u of (sd.users||[])){
         if(u.active === false) continue;
         if(u.role !== 'TEACHER') continue;
-        const nm = (u.name || u.username) + (school === 'BOYS' ? ' (بنين)' : ' (بنات)');
+        const nm = (u.name || u.username) + ' (بنات)';
         teachers.total++;
         if(hasLoggedIn(u)){ teachers.activated++; teachers.actNames.push(nm); } else { teachers.pendNames.push(nm); }
       }
@@ -4464,12 +4373,12 @@ function renderDashboard(){
       for(const u of (sd.users||[])){
         if(u.active === false) continue;
         if(!isStaffRole(u.role) || u.role === 'TEACHER') continue;
-        const nm = (u.name || u.username) + (school === 'BOYS' ? ' (بنين)' : ' (بنات)');
+        const nm = (u.name || u.username) + ' (بنات)';
         admins.total++;
         if(hasLoggedIn(u)){ admins.activated++; admins.actNames.push(nm); } else { admins.pendNames.push(nm); }
       }
       return {
-        key: school, school: school === 'BOYS' ? 'بنين' : 'بنات',
+        key: school, school: 'بنات',
         students: st, teachers, admins
       };
     });
@@ -4480,7 +4389,7 @@ function renderDashboard(){
     };
     const comb = key => ({
       key,
-      school: key === 'ALL' ? 'الكل' : (key === 'BOYS' ? 'بنين' : 'بنات'),
+      school: key === 'ALL' ? 'الكل' : 'بنات',
       students: mergeAcc(schoolActs, 'students'),
       teachers: mergeAcc(schoolActs, 'teachers'),
       admins: mergeAcc(schoolActs, 'admins')
@@ -4849,7 +4758,7 @@ function showTodayAttendance(){
 function openRoleInbox(uid, school){
   const me = currentUser();
   if(!me || me.role !== 'ADMIN') return;
-  const candidates = (school ? [school] : ['BOYS','GIRLS']);
+  const candidates = (school ? [school] : ['GIRLS']);
   let u = null;
   const uSchools = [];
   candidates.forEach(s => {
@@ -4858,7 +4767,7 @@ function openRoleInbox(uid, school){
     if(found){ if(!u) u = found; if(!uSchools.includes(s)) uSchools.push(s); }
   });
   if(!u) return;
-  const sources = ['BOYS','GIRLS'].map(s => ({ school: s, d: loadSchoolDB(s) }));
+  const sources = ['GIRLS'].map(s => ({ school: s, d: loadSchoolDB(s) }));
   const pending = [];
   const msgs = [];
   sources.forEach(({ school, d }) => {
@@ -4868,7 +4777,7 @@ function openRoleInbox(uid, school){
   pending.sort((a,b) => (b.t.createdAt||'').localeCompare(a.t.createdAt||''));
   msgs.sort((a,b) => (b.m.createdAt||'').localeCompare(a.m.createdAt||''));
   const priorityColor = { LOW:'#6b7280', MEDIUM:'#1d4ed8', HIGH:'#d97706', URGENT:'#dc2626' };
-  const schoolBadge = (school) => `<span class="badge ${school === 'BOYS' ? 'badge-boys' : 'badge-girls'}" style="margin-left:6px">${campusLabels[school] || school}</span>`;
+  const schoolBadge = (school) => `<span class="badge badge-girls" style="margin-left:6px">${campusLabels[school] || school}</span>`;
   const pendRows = pending.length === 0 ? `<tr><td colspan="4" style="text-align:center;padding:18px;color:#9ca3af">لا توجد تحويلات معلّقة</td></tr>` :
     pending.map(({ t, school, d }) => {
       const ss = studentIdsOf(t).map(id => d.students.find(st => st.id === id)).filter(Boolean);
@@ -4892,7 +4801,7 @@ function openRoleInbox(uid, school){
   overlay.innerHTML = `
     <div class="card" style="width:min(720px,100%);max-height:86vh;overflow:auto;padding:20px">
       <div class="header-row">
-        <h3 style="margin:0">👁 متابعة: ${escapeHtml(u.name)} <span class="muted small">(${roleLabel(u.role)})</span>${uSchools.map(s => `<span class="badge ${s === 'BOYS' ? 'badge-boys' : 'badge-girls'}" style="margin-left:6px">${campusLabels[s] || s}</span>`).join(' ')}</h3>
+        <h3 style="margin:0">👁 متابعة: ${escapeHtml(u.name)} <span class="muted small">(${roleLabel(u.role)})</span>${uSchools.map(s => `<span class="badge badge-girls" style="margin-left:6px">${campusLabels[s] || s}</span>`).join(' ')}</h3>
         <button class="btn-secondary" onclick="this.closest('.card').parentElement.remove()">✕ إغلاق</button>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px">
@@ -4918,7 +4827,7 @@ function showPendingTransfers(){
   const user = currentUser();
   const isAdmin = user?.role === 'ADMIN';
   const active = getActiveSchool();
-  const sources = isAdmin ? ['BOYS','GIRLS'].map(s => ({ school: s, d: loadSchoolDB(s) })) : [{ school: active, d: loadDB() }];
+  const sources = isAdmin ? ['GIRLS'].map(s => ({ school: s, d: loadSchoolDB(s) })) : [{ school: active, d: loadDB() }];
   const recs = sources.map(({ school, d }) => d.transfers.filter(t => t.status === 'PENDING' && transferForMe(t)).map(t => ({ t, school, d })))
     .flat().sort((a,b) => (b.t.createdAt||'').localeCompare(a.t.createdAt||''));
   const priorityColor = { LOW:'#6b7280', MEDIUM:'#1d4ed8', HIGH:'#d97706', URGENT:'#dc2626' };
@@ -4926,7 +4835,7 @@ function showPendingTransfers(){
     recs.map(({ t, school, d }) => {
       const ss = studentIdsOf(t).map(id => d.students.find(st => st.id === id)).filter(Boolean);
       const cls = (ss[0]?.classId) ? d.classes.find(c => c.id === ss[0].classId) : null;
-      const badge = isAdmin ? `<span class="badge ${school === 'BOYS' ? 'badge-boys' : 'badge-girls'}" style="margin-left:6px">${campusLabels[school] || school}</span>` : '';
+      const badge = isAdmin ? `<span class="badge badge-girls" style="margin-left:6px">${campusLabels[school] || school}</span>` : '';
       const nameCell = ss.length ? ss.map(s => studentNameLink(s, s ? (studentPointsMap()[s.id] || 0) : undefined)).join('<br>') : '<span class="muted">—</span>';
       return `<tr>
         <td style="font-weight:600">${badge}${nameCell}</td>
@@ -5408,8 +5317,8 @@ function updatePresentNow(){
   if(!el || !user || (user.role !== 'ADMIN' && user.role !== 'AGENT')) return;
   const school = getActiveSchool();
   const info = presentNowInfo(school);
-  const schoolLabel = school === 'GIRLS' ? 'البنات' : 'البنين';
-  const teacherWord = school === 'GIRLS' ? 'معلمة' : 'معلم';
+  const schoolLabel = 'البنات';
+  const teacherWord = 'معلمة';
   const sinfo = presentStudentsOnlineInfo(school);
   const studentWord = school === 'GIRLS' ? 'طالبة' : 'طالب';
   el.innerHTML = `
@@ -5428,8 +5337,8 @@ function updatePresentNow(){
 function showPresentNow(){
   const school = getActiveSchool();
   const info = presentNowInfo(school);
-  const schoolLabel = school === 'GIRLS' ? 'البنات' : 'البنين';
-  const teacherWord = school === 'GIRLS' ? 'معلمة' : 'معلم';
+  const schoolLabel = 'البنات';
+  const teacherWord = 'معلمة';
   const list = info.n
     ? info.names.map(t => `<li class="dl-item"><span>👤 ${escapeHtml(t.name)}</span><span class="muted" style="margin-inline-start:auto">${t.online ? '🟢 سجل الدخول اليوم' : '—'}</span></li>`).join('')
     : `<li class="dl-empty">لا يوجد ${teacherWord}s متواجدون بعد</li>`;
@@ -5446,8 +5355,8 @@ function presentStudentsOnlineInfo(school){
 function showPresentStudentsNow(){
   const school = getActiveSchool();
   const info = presentStudentsOnlineInfo(school);
-  const schoolLabel = school === 'GIRLS' ? 'البنات' : 'البنين';
-  const studentWord = school === 'GIRLS' ? 'طالبة' : 'طالب';
+  const schoolLabel = 'البنات';
+  const studentWord = 'طالبة';
   const list = info.n
     ? info.names.map(t => `<li class="dl-item"><span>👧 ${escapeHtml(t.name)}</span><span class="muted" style="margin-inline-start:auto">🟢 في الموقع</span></li>`).join('')
     : `<li class="dl-empty">لا توجد ${studentWord} متواجدة في الموقع الآن</li>`;
@@ -6885,10 +6794,6 @@ function renderTransfers(){
   const isStudent = user?.role === 'STUDENT';
   const active = getActiveSchool();
   const sources = [{ school: active, d: loadDB() }];
-  if(isAdmin && active){
-    const other = active === 'BOYS' ? 'GIRLS' : 'BOYS';
-    sources.push({ school: other, d: loadSchoolDB(other) });
-  }
   const canResolve = (t) => t.status === 'PENDING' && (
     (t.target === 'AGENT' && user?.role === 'AGENT') || (t.target === 'COUNSELOR' && user?.role === 'COUNSELOR')
   );
@@ -6906,7 +6811,7 @@ function renderTransfers(){
       if(transferForMe(t)) all.push({ t, school, d, pts });
     });
   });
-  const schoolBadge = (school) => `<span class="badge ${school === 'BOYS' ? 'badge-boys' : 'badge-girls'}" style="margin-left:6px">${campusLabels[school] || school}</span>`;
+  const schoolBadge = (school) => `<span class="badge badge-girls" style="margin-left:6px">${campusLabels[school] || school}</span>`;
 
   const rows = all.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">لا توجد تحويلات بعد</td></tr>` :
     all.map(({ t, school, d, pts }) => {
@@ -7311,7 +7216,7 @@ function renderAdmins(){
   const items = (d.users || []).filter(u => u.active && (u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE' || u.role === 'SCHOOL_AGENT')).map(u => ({ u, schools: [school] }));
   const rows = items.map(({ u, schools }) => {
     const isSelf = u.id === (cur && cur.id);
-    const schoolTxt = schools.map(s => `<span class="badge ${s === 'BOYS' ? 'badge-boys' : 'badge-girls'}" style="margin-left:6px">${campusLabels[s] || s}</span>`).join(' ');
+    const schoolTxt = schools.map(s => `<span class="badge badge-girls" style="margin-left:6px">${campusLabels[s] || s}</span>`).join(' ');
     const nameCell = `<span style="font-weight:600">${escapeHtml(u.name)} <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="openRoleInbox('${u.id}','${schools[0]}')" title="${'متابعة هذا الحساب: آخر دخول وعدد مرات الدخول وتحويلاته وإشعاراته'}">👁</button> ${canManageTeachers(cur) ? `<button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="renameAdminUser('${u.id}')" title="${'تصحيح/تعديل اسم المستخدم — يُحفظ في الخادم وكل الأجهزة'}">✏️</button>` : ''}</span>`;
     const authCell = `<div style="font-size:12px;line-height:1.7">
         ${u.email ? `<span style="display:block;direction:ltr">📧 ${escapeHtml(u.email)}</span>` : '<span style="display:block;color:#9ca3af">📧 لا يوجد بريد</span>'}
@@ -7400,7 +7305,7 @@ async function renameAdminUser(id){
 function showTempList(creds){
   const box = document.getElementById('importTeacherResult');
   if(!box || !creds || !creds.length) return;
-  const rows = creds.map(c => `<tr><td>${escapeHtml(c.name)}</td><td style="direction:ltr">${escapeHtml(c.username||'')}</td><td style="direction:ltr">${escapeHtml(c.tempPassword)}</td><td>${c.school==='BOYS'?'البنين':'البنات'}</td></tr>`).join('');
+  const rows = creds.map(c => `<tr><td>${escapeHtml(c.name)}</td><td style="direction:ltr">${escapeHtml(c.username||'')}</td><td style="direction:ltr">${escapeHtml(c.tempPassword)}</td><td>البنات</td></tr>`).join('');
   box.innerHTML = `
     <div class="card mb" style="border-color:#fde68a;background:#fffbeb;color:#92400e">
       <p style="font-weight:600;margin:0 0 8px">كلمات المرور المؤقتة للمعلمين (أبلغ كل معلم بما يخصه — تتغير عند أول دخول):</p>
@@ -7420,7 +7325,7 @@ async function exportCredentials(){
     if(r.status === 200 && r.j && r.j.ok){
       const creds = r.j.credentials || [];
       if(!creds.length){ window.__teacherMsg = 'لا يوجد معلمون للتصدير'; renderApp(); return; }
-      const rows = creds.map(c => ({ 'الاسم': c.name, 'اسم المستخدم': c.username, 'كلمة المرور المؤقتة': c.tempPassword, 'البريد الإلكتروني': c.email, 'القسم': c.school==='BOYS'?'البنين':'البنات' }));
+      const rows = creds.map(c => ({ 'الاسم': c.name, 'اسم المستخدم': c.username, 'كلمة المرور المؤقتة': c.tempPassword, 'البريد الإلكتروني': c.email, 'القسم': 'البنات' }));
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'بيانات الدخول');
@@ -7445,7 +7350,7 @@ async function exportCredentials(){
 function makeLocalUsername(base){  let candidate = String(base||'').toLowerCase().replace(/[^a-z0-9._-]/g,'').replace(/^[._-]+|[._-]+$/g,'') || 'user';
   let i = 1;
   const used = new Set();
-  ['BOYS','GIRLS'].forEach(s => { try{ (loadDBFor(s).users||[]).forEach(u => { if(u.username) used.add(String(u.username).toLowerCase()); }); }catch(e){} });
+  ['GIRLS'].forEach(s => { try{ (loadDBFor(s).users||[]).forEach(u => { if(u.username) used.add(String(u.username).toLowerCase()); }); }catch(e){} });
   while(used.has(candidate)){ i++; candidate = String(base||'').toLowerCase().replace(/[^a-z0-9._-]/g,'').replace(/^[._-]+|[._-]+$/g,'') + i; }
   return candidate;
 }
@@ -8005,7 +7910,7 @@ function loadCustomActNames(school){
 function saveCustomActName(name){
   const n = String(name || '').trim();
   if(!n) return;
-  ['BOYS','GIRLS'].forEach(s => {
+  ['GIRLS'].forEach(s => {
     const arr = loadCustomActNames(s);
     if(!arr.includes(n)){
       arr.push(n);
@@ -8301,7 +8206,6 @@ function saveTtCell(){
   const prevCell = (d.timetable[user.id][ttEdit.day][ttEdit.period]) || {};
   d.timetable[user.id][ttEdit.day][ttEdit.period] = { subject, classId, _v: (((prevCell && typeof prevCell._v === 'number') ? prevCell._v : 0) + 1) };
   saveDB(d);
-  mirrorTtToOther(user.email, ttEdit.day, ttEdit.period, { subject, classId });
   closeTtForm();
   renderApp();
 }
@@ -8312,36 +8216,9 @@ function deleteTtCell(period){
   const cell = (d.timetable[user.id][timetableDay] && d.timetable[user.id][timetableDay][period]) || {};
   if(d.timetable && d.timetable[user.id] && d.timetable[user.id][timetableDay]) d.timetable[user.id][timetableDay][period] = { _del: true, _v: (((cell && typeof cell._v === 'number') ? cell._v : 0) + 1) };
   saveDB(d);
-  mirrorTtDelete(user.email, timetableDay, period);
   renderApp();
 }
-// انعكاس الجدول للمدرسة الأخرى لنفس المعلم (نفس البريد) مع الخصوصية لكل قسم
-function mirrorTtToOther(teacherEmail, day, period, cell){
-  const other = getActiveSchool() === 'BOYS' ? 'GIRLS' : 'BOYS';
-  const od = loadDBFor(other);
-  const u = (od.users || []).find(x => x.email === teacherEmail);
-  if(!u) return;
-  let classId = cell.classId;
-  const src = loadDB().classes.find(c => c.id === cell.classId);
-  if(src && src.name){
-    const oc = (od.classes || []).find(c => c.name === src.name);
-    if(oc) classId = oc.id;
-  }
-  od.timetable = od.timetable || {};
-  od.timetable[u.id] = od.timetable[u.id] || {};
-  od.timetable[u.id][day] = od.timetable[u.id][day] || {};
-  od.timetable[u.id][day][period] = { subject: cell.subject, classId };
-  localStorage.setItem(dbKeyFor(other), JSON.stringify(od));
-}
-function mirrorTtDelete(teacherEmail, day, period){
-  const other = getActiveSchool() === 'BOYS' ? 'GIRLS' : 'BOYS';
-  const od = loadDBFor(other);
-  const u = (od.users || []).find(x => x.email === teacherEmail);
-  if(!u || !od.timetable || !od.timetable[u.id] || !od.timetable[u.id][day]) return;
-  const cell = od.timetable[u.id][day][period] || {};
-  od.timetable[u.id][day][period] = { _del: true, _v: (((cell && typeof cell._v === 'number') ? cell._v : 0) + 1) };
-  localStorage.setItem(dbKeyFor(other), JSON.stringify(od));
-}
+/* نظام GIRLS فقط: أُزيل انعكاس الجدول على «المدرسة الأخرى». */
 
 /* ============ التكليفات ============ */
 function getTeacherSubjects(user, d){
@@ -8701,21 +8578,12 @@ function saveActivity(){
   if(!date){ alert('اختر التاريخ'); return; }
   const d = loadDB();
   d.activities = d.activities || [];
-  const otherSchool = getActiveSchool() === 'BOYS' ? 'GIRLS' : 'BOYS';
   if(activityEditId){
     const a = d.activities.find(x => x.id === activityEditId);
     if(a){ a.type = type; a.name = name; a.date = date; a.description = description; a._v = (typeof a._v === 'number' ? a._v : 0) + 1; }
-    const od = loadDBFor(otherSchool);
-    const oa = (od.activities || []).find(x => x.id === activityEditId);
-    if(oa){ oa.type = type; oa.name = name; oa.date = date; oa.description = description; oa._v = (typeof oa._v === 'number' ? oa._v : 0) + 1; localStorage.setItem(dbKeyFor(otherSchool), JSON.stringify(od)); }
   } else {
     const id = uid();
     d.activities.push({ id, type, name, date, description, createdBy: currentUser()?.id, createdAt: new Date().toISOString(), _v: 0 });
-    const od = loadDBFor(otherSchool);
-    od.activities = od.activities || [];
-    if(!(od.activities || []).some(x => x.id === id)) od.activities.push({ id, type, name, date, description, createdBy: currentUser()?.id, createdAt: new Date().toISOString(), _v: 0 });
-    od._ts = Date.now();
-    localStorage.setItem(dbKeyFor(otherSchool), JSON.stringify(od));
   }
   d._ts = Date.now();
   saveDB(d);
@@ -8745,9 +8613,6 @@ function deleteActivity(id){
   d._ts = Date.now();
   saveDB(d);
   __syncSchedule(getActiveSchool(), 0);
-  const otherSchool = getActiveSchool() === 'BOYS' ? 'GIRLS' : 'BOYS';
-  const od = loadDBFor(otherSchool);
-  if((od.activities||[]).some(x => x.id === id)){ od.activities = (od.activities||[]).filter(x => x.id !== id); od._ts = Date.now(); localStorage.setItem(dbKeyFor(otherSchool), JSON.stringify(od)); }
   renderApp();
 }
 function goActivitiesAdd(){
@@ -9999,7 +9864,7 @@ function __cleanupOrphanPointRows(){
   const noteIds = new Set(orphan.map(n => n.id));
   if(!orphan.length){ window.__teacherMsg = 'لا توجد سجلات معزولة — كل النقاط مرتبطة بطالبة ومعلمة مسجلتين بالبنات.'; renderApp(); return; }
   if(!confirm(`🔄 أولاً آمن: عُزلت ${orphan.length} سجلَّات نقاط (بلا طالبة مسجلة أو بلا معلمة مسجلة في قسم البنات). مسحها يزيلها من الخادم نهائياً — ولا يمسّ أي طالبة مسجلة في قائمة البنات. متابعة؟`)) return;
-  if(!confirm(`تأكيد نهائي: حذف ${orphan.length} سجلّ صحيح؟ (عادة = بيانات بنين قديمة تلوّث البنات)`)) return;
+  if(!confirm(`تأكيد نهائي: حذف ${orphan.length} سجلّ صحيح؟ (عادة = بيانات قديمة بلا طالبة مسجلة)`)) return;
   d.notes = (d.notes||[]).filter(n => !noteIds.has(n.id));
   saveDB(d);
   const msg = `تم مسح ${orphan.length} سجلّاً معزولاً — الباقي كله أسماء طالبات مسجلات ومعلمات مسجلات.`;
@@ -10149,7 +10014,7 @@ function renderBackup(){
   <div class="card mb" style="border-color:#fcd34d;background:#fffbeb">
     <div style="font-weight:700;color:#b45309">🛡️ طبقة الحماية: نسخة على جهازك + نسخ تلقائية على الخادم</div>
     <div class="small muted" style="margin-top:6px">
-      على جهازك توفَّر نسخة كاملة (بنين + بنات) تُحدَّث تلقائياً كل ساعة في مجلد سطح المكتب لدى مدير المدرسة،
+      على جهازك توفَّر نسخة كاملة (بنات) تُحدَّث تلقائياً كل ساعة في مجلد سطح المكتب لدى مدير المدرسة،
       وعلى الخادم تُحفظ لقطة كل 30 دقيقة في جدول منفصل لا يُمسح حتى لو استُبدلت البيانات الأصلية.
       بذلك لن يتكرر فقدان «كل شيء».
     </div>
@@ -10158,7 +10023,7 @@ function renderBackup(){
   <div class="card mb">
     <div style="font-weight:700;margin-bottom:8px">⬇️ تنزيل نسخة الآن هذا الجهاز</div>
     <div class="small muted" style="margin-bottom:10px">أحدث تنزيل: ${fmt(lastDevice)}</div>
-    <button class="btn primary" onclick="backupDownloadAll()">⬇️ تنزيل نسخة كاملة (بنين + بنات)</button>
+    <button class="btn primary" onclick="backupDownloadAll()">⬇️ تنزيل نسخة كاملة (بنات)</button>
   </div>
 
   <div class="card mb">
@@ -10203,28 +10068,28 @@ async function backupLoadList(){
     const block = school => {
       const rows = j.recent[school] || [];
       if(!rows.length) return `<div class="muted">لا توجد نسخ بعد — تُنشأ تلقائياً كل 30 دقيقة.</div>`;
-      const campus = school === 'BOYS' ? 'بنين' : 'بنات';
+      const campus = 'بنات';
       return rows.map(b => `
         <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;padding:7px 0;border-bottom:1px dashed #e2e8f0">
           <span>${campus} — ${(() => { try { return new Date(b.taken_at).toLocaleString('ar'); } catch(e){ return b.taken_at; } })()}</span>
           <button class="del-btn" style="color:#b91c1c" onclick="backupRestore(${b.id}, '${school}')">↩️ استرجاع</button>
         </div>`).join('');
     };
-    el.innerHTML = `<div style="font-weight:700;color:#0d9488">البنين</div>` + block('BOYS') + `<div style="font-weight:700;color:#8b5cf6;margin-top:12px">البنات</div>` + block('GIRLS');
+    el.innerHTML = `<div style="font-weight:700;color:#8b5cf6">البنات</div>` + block('GIRLS');
   }catch(e){
     el.innerHTML = 'تعذر الاتصال بالخادم';
   }
 }
 async function backupDownloadAll(){
-  const pack = { meta:{ app:'nibras', takenAt:new Date().toISOString(), device:true, description:'نسخة كاملة (بنين + بنات)' }, BOYS:null, GIRLS:null };
-  for(const s of ['BOYS','GIRLS']){
+  const pack = { meta:{ app:'nibras', takenAt:new Date().toISOString(), device:true, description:'نسخة كاملة (بنات)' }, GIRLS:null };
+  for(const s of ['GIRLS']){
     try{
       const r = await fetch(SYNC_API + s);
       const j = await r.json();
       if(j && j.data) pack[s] = { ts: j.ts, data: j.data };
     }catch(e){}
   }
-  if(!pack.BOYS && !pack.GIRLS){ alert('تعذر جلب البيانات'); return; }
+  if(!pack.GIRLS){ alert('تعذر جلب البيانات'); return; }
   const blob = new Blob([JSON.stringify(pack, null, 1)], { type:'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -10234,7 +10099,7 @@ async function backupDownloadAll(){
   try{ localStorage.setItem('nibras_lastBackup', new Date().toISOString()); }catch(e){}
 }
 async function backupRestore(id, school){
-  if(!confirm('إعادة بيانات قسم ' + (school === 'BOYS' ? 'البنين' : 'البنات') + ' إلى هذه النسخة؟ ستُكتب فوق البيانات الحالية. هل تريد المتابعة؟')) return;
+  if(!confirm('إعادة بيانات قسم البنات إلى هذه النسخة؟ ستُكتب فوق البيانات الحالية. هل تريد المتابعة؟')) return;
   if(!confirm('تأكيد أخير: أُعدت بيانات القسم فعلاً وستحل مكان الحالية نهائياً؟')) return;
   try{
     const r = await fetch('/api/backups/restore', {
@@ -10262,10 +10127,9 @@ async function backupRestoreFromFile(input){
     const text = await file.text();
     const obj = JSON.parse(text);
     const schools = [];
-    if(obj && obj.BOYS && obj.BOYS.data && Array.isArray(obj.BOYS.data.users)) schools.push('BOYS');
     if(obj && obj.GIRLS && obj.GIRLS.data && Array.isArray(obj.GIRLS.data.users)) schools.push('GIRLS');
     if(!schools.length){ el.textContent = '⚠️ الملف ليس نسخة احتياطية صحيحة (لا يحوي بيانات المستخدمين).'; return; }
-    const names = schools.map(s => s === 'BOYS' ? 'البنين' : 'البنات').join(' و');
+    const names = 'البنات';
     if(!confirm('سيُعاد كل شيء (بما فيه الفصول والطلاب والجدول والغياب) لقسم ' + names + ' من هذا الملف، وتُستبدل البيانات الحالية. متابعة؟')){ input.value=''; return; }
     if(!confirm('تأكيد أخير قبل الكتابة فوق البيانات الحالية — متابعة؟')){ input.value=''; return; }
     const done = [];
@@ -10276,7 +10140,7 @@ async function backupRestoreFromFile(input){
         body: JSON.stringify({ school: s, data: obj[s].data })
       });
       const j = await r.json();
-      done.push((s === 'BOYS' ? 'البنين' : 'البنات') + (j.ok ? ' ✓' : ' ✗ ' + (j.error || 'خطأ')));
+      done.push('البنات' + (j.ok ? ' ✓' : ' ✗ ' + (j.error || 'خطأ')));
       if(j.ok){ try{ if(window.__syncPull) __syncPull(s); }catch(e){} }
     }
     el.textContent = 'النتيجة: ' + done.join(' — ') + '. أكمل على الأجهزة الأخرى تلقائياً بعد فتح التطبيق.';
@@ -10436,12 +10300,11 @@ function loadSuggestions(school){
   try { arr = JSON.parse(localStorage.getItem(suggestionsKey(sc)) || '[]'); } catch(e){ arr = []; }
   return Array.isArray(arr) ? arr : [];
 }
-// المدير يرى اقتراحات القسمين معًا (بنين وبنات)، وغيره يرى اقتراحات قسمه فقط
+// المدير يرى اقتراحات القسم (بنات)، وغيره يرى اقتراحات قسمه فقط
 function loadSuggestionsAll(){
   const u = currentUser();
   if(u && u.role === 'ADMIN'){
     return [
-      ...loadSuggestions('BOYS').map(s => ({ ...s, _school:'BOYS' })),
       ...loadSuggestions('GIRLS').map(s => ({ ...s, _school:'GIRLS' })),
     ];
   }
