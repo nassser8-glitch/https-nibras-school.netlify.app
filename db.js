@@ -235,6 +235,7 @@ async function countAdmins() {
   return r.rows[0] ? r.rows[0].n : 0;
 }
 async function insertUser(u) {
+  assertSupportedSchool(u.school); // يمنع إنشاء حساب BOYS (بلا migration)
   await pool.query(
     `INSERT INTO users (id, school, name, email, username, password_hash, plain_password, role, active, first_login, granted, data)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
@@ -257,6 +258,7 @@ async function createStudentAccountAndRecord(input) {
     const id = String(input.id);
     const username = String(input.username);
     const school = String(input.school);
+    assertSupportedSchool(school); // يمنع إنشاء حساب BOYS (بلا migration)
     const existingUser = await client.query('SELECT 1 FROM users WHERE id = $1', [id]);
     if (existingUser.rows.length) {
       const err = new Error('duplicate_student');
@@ -355,7 +357,14 @@ async function setUserActive(id, active) {
   await pool.query('UPDATE users SET active=$2 WHERE id=$1', [id, active !== false]);
 }
 async function deactivateUser(id) { await setUserActive(id, false); }
+// حارس دفاعي: النظام GIRLS فقط. يمنع كتابة أي قسم خارج SCHOOLS بلا تغيير بنية الجداول
+// (قيود CHECK التي تذكر BOYS تبقى كما هي عمداً — تغييرها migration).
+function assertSupportedSchool(school) {
+  if (!SCHOOLS.includes(school)) throw new Error('unsupported_school');
+  return school;
+}
 async function setUserSchool(id, school) {
+  assertSupportedSchool(school);
   await pool.query('UPDATE users SET school=$2 WHERE id=$1', [id, school]);
 }
 async function updateUserIdentity(id, fields) {
@@ -394,6 +403,7 @@ async function deleteUserSessions(userId) {
 // إنهاء الدخول برحلة واحدة: حذف الجلسات القديمة + إنشاء الجلسة + تحديث users.data
 // + تحديث جزئي لنسخة القسم (school_data.users) — بدل 4 استعلامات متتالية.
 async function finalizeLogin(userId, school, tokenHash, ttlMs, ip, ua, userDataJson, loginCount, lastLoginIso, historyJson) {
+  assertSupportedSchool(school); // يمنع الدخول من لمسح school_data الخاص بـ BOYS
   const r = await pool.query(
     `WITH del AS (
         DELETE FROM sessions WHERE user_id = $1
@@ -687,6 +697,7 @@ async function getSchoolData(school) {
   return { data: r.rows[0].data, ts: Number(r.rows[0].ts) || 0 };
 }
 async function setSchoolData(school, data, ts) {
+  assertSupportedSchool(school); // يمنع إنشاء/كتابة صف BOYS (بلا migration)
   await pool.query(
     `INSERT INTO school_data (school, data, ts, updated_at)
      VALUES ($1,$2,$3, now())

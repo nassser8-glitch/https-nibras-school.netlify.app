@@ -16,7 +16,7 @@
   public/index.html  الواجهة المصدرية (طبقة المصادقة والمزامنة عبر الخادم)
   public-build/      نسخة الرفع المغلفة (obfuscated) — استخدمها في الإنتاج
   build_obfuscate.js سكربت بناء public-build من public/index.html
-  data/              بيانات الترحيل الأصلية (BOYS.json / GIRLS.json)
+  data/              بيانات الترحيل الأصلية (GIRLS.json)
   package.json       التبعيات وأمر البدء
 
 التغليف (حماية كود المتصفح)
