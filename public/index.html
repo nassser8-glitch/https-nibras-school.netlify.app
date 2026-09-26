@@ -806,6 +806,59 @@ function __attWinner(a, b){
   }
   return win;
 }
+function __attTsOf(u){
+  const v = u && u._attTs;
+  return (typeof v === 'number' && isFinite(v)) ? v : null;
+}
+function __attTouch(u){ if(u) u._attTs = Date.now(); return u; }
+function __attSig(u){
+  return JSON.stringify([(u && u.absences) || [], (u && u.markedLate) || [], (u && u.lateMinutes) || {}, (u && u.lateType) || {}]);
+}
+function __mergeUserAtt(su, lu){
+  if(!su) return lu;
+  if(!lu) return su;
+  const st = __attTsOf(su), lt = __attTsOf(lu);
+  if((st !== null || lt !== null) && st !== lt){
+    const localWins = lt !== null && (st === null || lt > st);
+    const win = localWins ? lu : su;
+    const out = Object.assign({}, win);
+    out.absences = Array.isArray(win.absences) ? win.absences.slice() : [];
+    out.markedLate = Array.isArray(win.markedLate) ? win.markedLate.slice() : [];
+    out.lateMinutes = Object.assign({}, win.lateMinutes || {});
+    out.lateType = Object.assign({}, win.lateType || {});
+    out._attTs = localWins ? lt : st;
+    return out;
+  }
+  const out = Object.assign({}, su);
+  const unionArr = (f) => {
+    const src = Array.isArray(lu[f]) ? lu[f] : [];
+    if(!Array.isArray(out[f])) out[f] = [];
+    for(const v of src){ if(!out[f].includes(v)) out[f].push(v); }
+  };
+  unionArr('absences');
+  unionArr('markedLate');
+  if(lu.lateMinutes && typeof lu.lateMinutes === 'object'){
+    if(!out.lateMinutes || typeof out.lateMinutes !== 'object') out.lateMinutes = {};
+    for(const dt in lu.lateMinutes){ out.lateMinutes[dt] = lu.lateMinutes[dt]; }
+  }
+  if(lu.lateType && typeof lu.lateType === 'object'){
+    if(!out.lateType || typeof out.lateType !== 'object') out.lateType = {};
+    for(const dt in lu.lateType){ out.lateType[dt] = lu.lateType[dt]; }
+  }
+  if(st !== null || lt !== null) out._attTs = (st === null) ? lt : ((lt === null) ? st : (lt > st ? lt : st));
+  return out;
+}
+function __mergeUsersAttendanceList(localUsers, serverUsers){
+  const out = Array.isArray(localUsers) ? localUsers.slice() : [];
+  const map = new Map(out.map(u => [u.id, u]));
+  for(const su of (Array.isArray(serverUsers) ? serverUsers : [])){
+    if(!su || !su.id) continue;
+    const lu = map.get(su.id);
+    if(!lu){ const n = JSON.parse(JSON.stringify(su)); out.push(n); map.set(su.id, n); continue; }
+    map.set(su.id, __mergeUserAtt(lu, su));
+  }
+  return Array.from(map.values());
+}
 /* إحصائية حضور الموعد الفريدة: مهما تعددت سجلات اليوم (عدة معلمين/حِصص لنفس الفصل)،
    يُحسب الطالب غائبًا/متأخرًا مرة واحدة فقط؛ ومن لم يُسجَّل له غياب/تأخر فهو حاضر افتراضيًا.
    `ids` مجموعة معرفات الطلاب المطلوب حسابهم لهذا التاريخ. */
@@ -954,30 +1007,7 @@ async function __syncPush(school){
             // 3.5) المستخدمون (غياب/تأخر المعلمين): نجعل نسخة الخادم أساساً لكن ندمج الغياب
             //    والتأخر المسجَّل محلياً فوقها — وإلا تُستبدل نسخة الخادمُ بتعديلاتِ هذا
             //    الجهاز فيضيع غياب المعلّم الذي يسجّله الوكيل/المدير من كشف «المعلمون».
-            if(Array.isArray(obj.users)){
-              sd.users = Array.isArray(sd.users) ? sd.users.slice() : [];
-              const uMapStay = new Map(sd.users.map(u => [u.id, u]));
-              for(const lu of obj.users){
-                if(!lu || !lu.id) continue;
-                const su = uMapStay.get(lu.id);
-                if(!su){ sd.users.push(JSON.parse(JSON.stringify(lu))); continue; }
-                const unionArr = (f) => {
-                  if(!Array.isArray(lu[f])) return;
-                  if(!Array.isArray(su[f])) su[f] = [];
-                  for(const v of lu[f]){ if(!su[f].includes(v)) su[f].push(v); }
-                };
-                unionArr('absences');
-                unionArr('markedLate');
-                if(lu.lateMinutes && typeof lu.lateMinutes === 'object'){
-                  if(!su.lateMinutes || typeof su.lateMinutes !== 'object') su.lateMinutes = {};
-                  for(const dt in lu.lateMinutes){ su.lateMinutes[dt] = lu.lateMinutes[dt]; }
-                }
-                if(lu.lateType && typeof lu.lateType === 'object'){
-                  if(!su.lateType || typeof su.lateType !== 'object') su.lateType = {};
-                  for(const dt in lu.lateType){ su.lateType[dt] = lu.lateType[dt]; }
-                }
-              }
-            }
+            if(Array.isArray(obj.users)) sd.users = __mergeUsersAttendanceList(sd.users, obj.users);
             // 4) التكليفات/النشاطات: نحافظ على أي عنصر محلي غير مرفوع بعد (لا يُمسح عند أخذ نسخة الخادم).
             //    الممسوح (deleted) يفوز، ثم الأعلى _v، ثم الأحدث created.
             const betterItem = (a, b) => {
@@ -6587,6 +6617,7 @@ function saveAttendance(){
     u.markedLate = u.markedLate || [];
     u.lateMinutes = u.lateMinutes || {};
     u.lateType = u.lateType || {};
+    const attBefore = __attSig(u);
     const date = attendanceState.date;
     if(status === 'ABSENT'){ if(!u.absences.includes(date)) u.absences.push(date); u.markedLate = u.markedLate.filter(x => x !== date); delete u.lateMinutes[date]; delete u.lateType[date]; }
     else if(status === 'LATE'){
@@ -6600,6 +6631,7 @@ function saveAttendance(){
       u.lateType[date] = (tType === 'MORNING' || tType === 'CLASS' || tType === 'EARLY_LEAVE') ? tType : 'MORNING';
     }
     else { u.absences = u.absences.filter(x => x !== date); u.markedLate = u.markedLate.filter(x => x !== date); delete u.lateMinutes[date]; delete u.lateType[date]; }
+    if(__attSig(u) !== attBefore) __attTouch(u);
   });
   d._ts = Date.now();
   saveDB(d);
@@ -7539,7 +7571,7 @@ function addTeacherAbsenceFromList(){
   const u = d.users.find(x => x.id === teacherId);
   if(!u){ alert('المعلم غير موجود'); return; }
   u.absences = u.absences || [];
-  if(!u.absences.includes(date)) u.absences.push(date);
+  if(!u.absences.includes(date)){ u.absences.push(date); __attTouch(u); }
   saveDB(d);
   renderApp();
 }
@@ -7879,8 +7911,10 @@ function toggleTeacherAbsToday(teacherId, checked){
   const u = d.users.find(x => x.id === teacherId);
   if(!u) return;
   u.absences = u.absences || [];
+  const beforeCount = u.absences.length;
   if(checked && !u.absences.includes(today)) u.absences.push(today);
   if(!checked) u.absences = u.absences.filter(x => x !== today);
+  if(u.absences.length !== beforeCount) __attTouch(u);
   saveDB(d);
   renderApp();
 }
@@ -7893,6 +7927,7 @@ function addTeacherAbsence(teacherId){
   u.absences = u.absences || [];
   if(u.absences.includes(date)){ alert('هذا اليوم مسجل بالفعل كغياب'); return; }
   u.absences.push(date);
+  __attTouch(u);
   saveDB(d);
   renderApp();
 }
@@ -7901,6 +7936,7 @@ function removeTeacherAbsence(teacherId, date){
   const u = d.users.find(x => x.id === teacherId);
   if(!u) return;
   u.absences = (u.absences || []).filter(x => x !== date);
+  __attTouch(u);
   saveDB(d);
   renderApp();
 }
@@ -7911,6 +7947,7 @@ function removeTeacherLate(teacherId, date){
   u.markedLate = (u.markedLate || []).filter(x => x !== date);
   if(u.lateMinutes) delete u.lateMinutes[date];
   if(u.lateType) delete u.lateType[date];
+  __attTouch(u);
   saveDB(d);
   renderApp();
 }

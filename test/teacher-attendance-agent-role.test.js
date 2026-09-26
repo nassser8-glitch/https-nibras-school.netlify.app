@@ -37,7 +37,9 @@ function loadMergeUsersAttendanceOnly() {
   const context = { console, JSON, Array, Object, Map, Set };
   vm.createContext(context);
   vm.runInContext(extractConst('USER_ATTENDANCE_FIELDS') + '; globalThis.__fields = USER_ATTENDANCE_FIELDS;', context);
+  vm.runInContext(extractFn('attTsOf'), context);
   vm.runInContext(extractFn('mergeUsersAttendanceOnly'), context);
+  vm.runInContext(extractFn('mergeUsersAttendanceNewer'), context);
   return context;
 }
 
@@ -97,4 +99,60 @@ test('الحقول الحسّاسة تبقى كما على الخادم (الد�
 test('قائمة الحقول المسموح بها هي حقول الحضور فقط', () => {
   const { __fields: USER_ATTENDANCE_FIELDS } = loadMergeUsersAttendanceOnly();
   assert.deepEqual(Array.from(USER_ATTENDANCE_FIELDS), ['absences', 'markedLate', 'lateMinutes', 'lateType']);
+});
+
+test('إلغاء التأخر من جهاز أحدث يُحفظ (لا يعود من ختم أقدم)', () => {
+  const { mergeUsersAttendanceOnly } = loadMergeUsersAttendanceOnly();
+  const prev = [{ id: 'u_teacher', role: 'TEACHER', active: true, absences: [], markedLate: ['2026-01-04'], _attTs: 1000 }];
+  const out = mergeUsersAttendanceOnly(prev, [{ id: 'u_teacher', absences: [], markedLate: [], _attTs: 2000 }]);
+  assert.deepEqual(out[0].markedLate, [], 'إلغاء التأخر يجب أن يفرّغ القائمة');
+  assert.equal(out[0]._attTs, 2000, 'الختم الزمني يتقدّم');
+});
+
+test('جهاز أقدم لا يُعيد إحياء غياب/تأخر أُلغي على جهاز أحدث', () => {
+  const { mergeUsersAttendanceOnly } = loadMergeUsersAttendanceOnly();
+  const prev = [{ id: 'u_teacher', role: 'TEACHER', active: true, absences: [], markedLate: ['2026-01-04'], _attTs: 5000 }];
+  const staleDevice = [{ id: 'u_teacher', absences: ['2026-01-04'], markedLate: ['2026-01-04'], _attTs: 1000 }];
+  const out = mergeUsersAttendanceOnly(prev, staleDevice);
+  assert.deepEqual(out[0].markedLate, ['2026-01-04'], 'الخادم الأحدث يبقى كما هو');
+  assert.deepEqual(out[0].absences, [], 'ولا يُعاد إحياء الغياب الملغى');
+  assert.equal(out[0]._attTs, 5000);
+});
+
+test('جهاز بلا ختم زمني (نسخة قديمة) لا يُعيد إحياء ما أُلغي على الخادم', () => {
+  const { mergeUsersAttendanceOnly } = loadMergeUsersAttendanceOnly();
+  const prev = [{ id: 'u_teacher', role: 'TEACHER', active: true, absences: [], markedLate: ['2026-01-04'], _attTs: 5000 }];
+  const out = mergeUsersAttendanceOnly(prev, [{ id: 'u_teacher', absences: ['2026-01-04'], markedLate: ['2026-01-04'] }]);
+  assert.deepEqual(out[0].markedLate, ['2026-01-04'], 'الخادم المختموم يبقى كما هو');
+  assert.deepEqual(out[0].absences, [], 'ولا يعود الغياب الملغى');
+  assert.equal(out[0]._attTs, 5000, 'الختم على الخادم يبقى');
+});
+
+test('جهازان بلا ختم زمني: يبقى الاتحاد كما كان (سلوك قديم محفوظ)', () => {
+  const { mergeUsersAttendanceOnly } = loadMergeUsersAttendanceOnly();
+  const prev = [{ id: 'u_teacher', role: 'TEACHER', active: true, absences: [], markedLate: ['2026-01-04'] }];
+  const out = mergeUsersAttendanceOnly(prev, [{ id: 'u_teacher', absences: ['2026-01-05'], markedLate: [] }]);
+  assert.deepEqual(out[0].absences, ['2026-01-05'], 'لا ختم على أي طرف = القواعد القديمة');
+  assert.deepEqual(out[0].markedLate, [], 'إلغاء التأخر يُحفظ');
+});
+
+test('المدير/الوكيل: تعديلات السجل تُحفظ لكن حضوره الأقدم لا يُعيد الإلغاء', () => {
+  const { mergeUsersAttendanceNewer } = loadMergeUsersAttendanceOnly();
+  const prev = [{ id: 'u_teacher', name: 'نهلة', role: 'TEACHER', active: true, absences: [], markedLate: ['2026-01-04'], _attTs: 9000 }];
+  const adminPush = [{ id: 'u_teacher', name: 'نهلة عبد الله', role: 'TEACHER', active: true, absences: ['2026-01-04'], markedLate: ['2026-01-04'], _attTs: 2000 }];
+  const out = mergeUsersAttendanceNewer(prev, adminPush);
+  assert.equal(out[0].name, 'نهلة عبد الله', 'تعديل الاسم من المدير يُحفظ');
+  assert.deepEqual(out[0].markedLate, ['2026-01-04'], 'التأخر الملغى لا يعود');
+  assert.deepEqual(out[0].absences, [], 'الغياب الملغى لا يعود');
+  assert.equal(out[0]._attTs, 9000);
+});
+
+test('المدير/الوكيل: جهاز أحدث يُطبّق إلغاؤه مع بقاء تعديلات السجل', () => {
+  const { mergeUsersAttendanceNewer } = loadMergeUsersAttendanceOnly();
+  const prev = [{ id: 'u_teacher', name: 'نهلة', role: 'TEACHER', active: true, absences: ['2026-01-04'], markedLate: ['2026-01-04'], _attTs: 1000 }];
+  const adminPush = [{ id: 'u_teacher', name: 'نهلة', role: 'TEACHER', active: false, absences: [], markedLate: [], _attTs: 7000 }];
+  const out = mergeUsersAttendanceNewer(prev, adminPush);
+  assert.equal(out[0].active, false, 'تعطيل الحساب من المدير يُحفظ');
+  assert.deepEqual(out[0].absences, [], 'إلغاء الغياب يُحفظ');
+  assert.deepEqual(out[0].markedLate, [], 'إلغاء التأخر يُحفظ');
 });

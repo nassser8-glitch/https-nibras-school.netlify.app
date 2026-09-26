@@ -1413,6 +1413,10 @@ function mergeStudentsLateOnly(prevStudents, inStudents) {
 // (وكيلة الشؤون المدرسية) بتسجيل حضور المعلمات/الإداريين فقط، دون أن تمسّ
 // أي حقل حساس آخر في الحساب (الدور، كلمة المرور، الإلغاء، الاسم...).
 const USER_ATTENDANCE_FIELDS = ['absences', 'markedLate', 'lateMinutes', 'lateType'];
+function attTsOf(u) {
+  const v = u && u._attTs;
+  return (typeof v === 'number' && isFinite(v)) ? v : null;
+}
 function mergeUsersAttendanceOnly(prevUsers, inUsers) {
   if (!Array.isArray(prevUsers)) prevUsers = [];
   if (!Array.isArray(inUsers)) inUsers = [];
@@ -1423,14 +1427,37 @@ function mergeUsersAttendanceOnly(prevUsers, inUsers) {
     const p = map.get(u.id);
     // حساب غير موجود على الخادم: يُتجاهل تماماً (لا إضافة ولا حذف حسابات).
     if (!p) continue;
+    const inTs = attTsOf(u), prevTs = attTsOf(p);
+    if (prevTs !== null && (inTs === null || inTs < prevTs)) continue;
     for (const f of USER_ATTENDANCE_FIELDS) {
       const v = u[f];
       if (Array.isArray(v)) p[f] = v.filter(x => typeof x === 'string');
       else if (v && typeof v === 'object') p[f] = Object.assign({}, v);
       else delete p[f];
     }
+    if (inTs !== null) p._attTs = inTs;
   }
   return Array.from(map.values());
+}
+function mergeUsersAttendanceNewer(prevUsers, inUsers) {
+  if (!Array.isArray(prevUsers)) return Array.isArray(inUsers) ? inUsers : [];
+  if (!Array.isArray(inUsers)) return prevUsers;
+  const map = new Map(prevUsers.map(u => [u && u.id, u]));
+  const out = inUsers.map(u => {
+    if (!u || !u.id) return u;
+    const p = map.get(u.id);
+    if (!p) return u;
+    const inTs = attTsOf(u), prevTs = attTsOf(p);
+    if (prevTs === null || (inTs !== null && inTs >= prevTs)) return u;
+    const w = Object.assign({}, u);
+    w.absences = Array.isArray(p.absences) ? p.absences.slice() : [];
+    w.markedLate = Array.isArray(p.markedLate) ? p.markedLate.slice() : [];
+    w.lateMinutes = Object.assign({}, p.lateMinutes || {});
+    w.lateType = Object.assign({}, p.lateType || {});
+    w._attTs = prevTs;
+    return w;
+  });
+  return out;
 }
 
 // ===== حارس تلوث القسمين (cross-section) =====
@@ -1707,7 +1734,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         const b = src[key];
         if (jsonEqual(a, b)) continue;
         if (key === 'users') {
-          if (canEditU) merged[key] = mergeSection(a, b);
+          if (canEditU) merged[key] = mergeUsersAttendanceNewer(prevUsers, mergeSection(a, b));
           else if (attOnlyU) merged[key] = mergeUsersAttendanceOnly(prevUsers, b);
           else merged[key] = JSON.parse(JSON.stringify(prevUsers));
           continue;
@@ -1755,6 +1782,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           // نقاط المعلمات (notes): تُدمج دائماً حتى مع استبدال المدير الكامل، حتى لا يمسح
           // حفظٌ إداري على جهازٍ قديم ملاحظاتِ معلمات أُضيفت حديثاً من جهات أخرى.
           if (Array.isArray(prev.data.notes) && !jsonEqual(prev.data.notes, cf.notes)) cf.notes = mergeSection(prev.data.notes, cf.notes);
+          if (Array.isArray(prev.data.users) && !jsonEqual(prev.data.users, cf.users)) cf.users = mergeUsersAttendanceNewer(prevUsers, cf.users);
           data = cf;
         }
       }
