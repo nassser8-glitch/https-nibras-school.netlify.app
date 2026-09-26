@@ -181,7 +181,6 @@ const SECTION_KEYS = ['users','grades','classes','students','attendance','notes'
 // (نسخة جهاز قديمة أو حفظ مدير بجهاز قديم كان يمسح الإسناد — هنا يُعاد فرضه قبل التخزين).
 const ALWAYS_TEACHER_IDS = {
   GIRLS: ['id_61e90132bc11ff7b'],                                            // تهاني «تهاني أحمد» — إدارية بنات
-  BOYS:  ['id_0449f163a8198447', 'id_6ef8036cc7f4c692'],                      // خالد يوسف + عبدالله فيصل — بنين
 };
 // حقول سرية لا تُخزن/تُعاد أبدًا
 const STRIP_FIELDS = ['password','password_hash','secret','initialSecret','resetCode','resetExpires','token_hash'];
@@ -677,8 +676,7 @@ function validRoleFor(actor, role) {
 app.post('/api/auth/admin/create-user', requireAuth, (req, res) => {
   (async () => {
     if (rateLimit('create', 60, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
-    const reqSchool = String(req.body && req.body.school || '').toUpperCase();
-    const school = (reqSchool === 'BOYS' || reqSchool === 'GIRLS') ? reqSchool : req.session.school;
+    const school = db.SCHOOLS[0]; // نظام GIRLS فقط: لا يُقبل أي قسم من جسم الطلب
     if (!canManageUsers(req.session, school)) return res.status(403).json({ error: 'forbidden' });
     const name = String(req.body && req.body.name || '').trim();
     const email = String(req.body && req.body.email || '').trim().toLowerCase();
@@ -707,8 +705,7 @@ app.post('/api/auth/admin/create-student', requireAuth, (req, res) => {
   (async () => {
     if (rateLimit('createStudent', 60, 15 * 60 * 1000, req))
       return res.status(429).json({ error: 'rate_limited' });
-    const reqSchool = String(req.body && req.body.school || '').toUpperCase();
-    const school = (reqSchool === 'BOYS' || reqSchool === 'GIRLS') ? reqSchool : req.session.school;
+    const school = db.SCHOOLS[0]; // نظام GIRLS فقط: لا يُقبل أي قسم من جسم الطلب
     if (!canManageUsers(req.session, school)) return res.status(403).json({ error: 'forbidden' });
     const id = String(req.body && req.body.studentId || '').trim();
     const name = String(req.body && req.body.name || '').trim();
@@ -1152,9 +1149,26 @@ function mergeAttendance(prev, incoming) {
   // الغياب/التأخر «معلومات حاسمة» — لا يمحوها تسجيلُ حُضورٍ اعتيادي (افتراضي/خطأ) من معلمٍ آخر
   // في الفصول المشتركة (عدة معلمين يفتحون نفس قائمة الطلاب). PRESENT أقل إفادة من ABSENT/LATE.
   const inf = r => (r && typeof r === 'object' && (r.status === 'ABSENT' || r.status === 'LATE')) ? 1 : 0;
+  // الغيابُ «المعلَّق» (سجّله معلم واحد فقط — بانتظار معلمٍ ثانٍ): سجلٌّ افتراضي قابل للتصحيح
+  // من صاحبِ التسجيل أو مديرٍ مخوَّل — الحاضرُ الأحدث زمناً (إلغاءٌ صريح) يهزمه، فيُحفَظ
+  // الإلغاءُ حتى مع دمج أجهزة/معلمين (لا تُعاد الطالبةُ غائبةً بعد محاولة الحذف). أما
+  // الغيابُ المؤكَّد (مؤكِّدان فعليان أو سجلٌ قديم بشارة LEADY) فيبقى يفوز على الحاضر دائماً.
+  const clerkCount = r => {
+    if (!r || typeof r !== 'object') return 0;
+    if (!Array.isArray(r.absClerks)) return r.status === 'ABSENT' ? 1 : 0; // قديم بلا قائمة = مؤكد
+    return r.absClerks.filter(c => c && c !== LEGACY_ABS).length;
+  };
+  const __attIsPending = r => !!(r && typeof r === 'object' && r.status === 'ABSENT'
+    && Array.isArray(r.absClerks) && r.absClerks.indexOf(LEGACY_ABS) === -1 && clerkCount(r) < 2);
   // اختيار السجل الفائز: الغائب/المتأخر على الحاضر مهما تقدم زمنه، وإلا الأعلى _t
   const better = (a, b) => {
-    if (inf(a) !== inf(b)) return inf(a) > inf(b) ? a : b;
+    if (inf(a) !== inf(b)) {
+      // استثناء الإلغاء الصريح: حضورٌ أحدث زمناً يهزم غياباً «معلَّقاً» أقدم (معلم واحد فقط)
+      const absentSide = inf(a) === 1 ? a : b;
+      const presentSide = absentSide === a ? b : a;
+      if (__attIsPending(absentSide) && (typeof presentSide._t === 'number') && (typeof absentSide._t === 'number') && presentSide._t > absentSide._t) return presentSide;
+      return inf(a) > inf(b) ? a : b;
+    }
     return tOf(a) >= tOf(b) ? a : b;
   };
   // اتحاد قوائم مؤكِّدي الغياب: عند تطابق سجلّي غياب لنفس الطالب/اليوم (من معلّمين/أجهزة مختلفة)
@@ -1390,33 +1404,63 @@ function mergeStudentsLateOnly(prevStudents, inStudents) {
   return Array.from(map.values());
 }
 
-// ===== حارس تلوث القسمين (cross-section) =====
-// القسمان منفصلان تماماً (لا يوجد معرّف مستخدم مشترك بين GIRLS و BOYS إطلاقاً).
-// أي دفعة حفظ/استيراد/استرجاع تستحضر حسابات القسم الآخر = جهاز ملوِّث يدمج النسختين.
-// نرفضها 409 لتتوقف العودة الدورية لأرقام البنين داخل قسم البنات (والعكس).
-async function otherSchoolUserIds(school) {
-  const other = school === 'BOYS' ? 'GIRLS' : 'BOYS';
-  const rec = await db.getSchoolData(other);
-  const set = new Set();
-  if (rec && rec.data && Array.isArray(rec.data.users)) {
-    for (const u of rec.data.users) if (u && u.id) set.add(u.id);
-  }
-  return set;
+// ===== حقول حضور المعلمات/الإداريين داخل سجلّ المستخدم =====
+// غياب/تأخر المعلم والإداري ليسا قسماً مستقلاً، بل حقول على كائن المستخدم
+// (absences/markedLate/lateMinutes/lateType). يسمح هذا الدمج لأدوار مدرسية
+// (وكيلة الشؤون المدرسية) بتسجيل حضور المعلمات/الإداريين فقط، دون أن تمسّ
+// أي حقل حساس آخر في الحساب (الدور، كلمة المرور، الإلغاء، الاسم...).
+const USER_ATTENDANCE_FIELDS = ['absences', 'markedLate', 'lateMinutes', 'lateType'];
+function attTsOf(u) {
+  const v = u && u._attTs;
+  return (typeof v === 'number' && isFinite(v)) ? v : null;
 }
-// تساهل لعمليات النقل المشروعة: تحمّل حتى 3 معرّفات أجنبية (نقل حساب واحد) دون منع،
-// بينما دفعة منسوخة من قسم آخر تحمل العشرات — تُرفض قاطعة.
-function foreignUserCount(users, otherIds) {
-  let n = 0;
-  for (const u of users || []) if (u && u.id && otherIds.has(u.id)) n++;
-  return n;
+function mergeUsersAttendanceOnly(prevUsers, inUsers) {
+  if (!Array.isArray(prevUsers)) prevUsers = [];
+  if (!Array.isArray(inUsers)) inUsers = [];
+  // نبدأ من نسخة الخادم كما هي: أي حقل لا يُرسل هنا يبقى كما هو على الخادم.
+  const map = new Map(prevUsers.map(u => [u && u.id, Object.assign({}, u)]));
+  for (const u of inUsers) {
+    if (!u || !u.id) continue;
+    const p = map.get(u.id);
+    // حساب غير موجود على الخادم: يُتجاهل تماماً (لا إضافة ولا حذف حسابات).
+    if (!p) continue;
+    const inTs = attTsOf(u), prevTs = attTsOf(p);
+    if (prevTs !== null && (inTs === null || inTs < prevTs)) continue;
+    for (const f of USER_ATTENDANCE_FIELDS) {
+      const v = u[f];
+      if (Array.isArray(v)) p[f] = v.filter(x => typeof x === 'string');
+      else if (v && typeof v === 'object') p[f] = Object.assign({}, v);
+      else delete p[f];
+    }
+    if (inTs !== null) p._attTs = inTs;
+  }
+  return Array.from(map.values());
+}
+function mergeUsersAttendanceNewer(prevUsers, inUsers) {
+  if (!Array.isArray(prevUsers)) return Array.isArray(inUsers) ? inUsers : [];
+  if (!Array.isArray(inUsers)) return prevUsers;
+  const map = new Map(prevUsers.map(u => [u && u.id, u]));
+  const out = inUsers.map(u => {
+    if (!u || !u.id) return u;
+    const p = map.get(u.id);
+    if (!p) return u;
+    const inTs = attTsOf(u), prevTs = attTsOf(p);
+    if (prevTs === null || (inTs !== null && inTs >= prevTs)) return u;
+    const w = Object.assign({}, u);
+    w.absences = Array.isArray(p.absences) ? p.absences.slice() : [];
+    w.markedLate = Array.isArray(p.markedLate) ? p.markedLate.slice() : [];
+    w.lateMinutes = Object.assign({}, p.lateMinutes || {});
+    w.lateType = Object.assign({}, p.lateType || {});
+    w._attTs = prevTs;
+    return w;
+  });
+  return out;
 }
 
+// نظام GIRLS فقط: لا يوجد «قسم آخر» — أُزيل حارس التلوث المتقاطع بين القسمين
+// (كان يمنع 409 خلط accounts البنين بالبنات، ولم يعد له معنى بقسم واحد).
+
 // ===== مطابقة جدول المستخدمين (المصادقة) مع نسخة بيانات القسم بعد كتابة قسم users =====
-async function userPresentInOtherSchool(id, school) {
-  const other = school === 'BOYS' ? 'GIRLS' : 'BOYS';
-  const rec = await db.getSchoolData(other);
-  return rec.data && Array.isArray(rec.data.users) && rec.data.users.some(u => u.id === id);
-}
 async function reconcileUserTable(school, prevUsers, nextUsers) {
   // تصحيح الفعّل الإجباري قبل أي مقارنة: أي نسخة (من أي جهاز) تحاول تعطيل حساب
   // مُفعّل إجبارياً تُصحَّح فوراً — يحمي الحسابَ دون التأثير في بقية الحسابات.
@@ -1440,9 +1484,8 @@ async function reconcileUserTable(school, prevUsers, nextUsers) {
   for (const p of (prevUsers || [])) {
     const n = nextMap.get(p.id);
     if (!n) {
-      // أُزيل من بيانات هذا القسم: إن وُجد في القسم الآخر فهو منقول، وإلا فهو محذوف
-      if (await userPresentInOtherSchool(p.id, school)) await db.setUserSchool(p.id, school === 'BOYS' ? 'GIRLS' : 'BOYS');
-      else await db.deactivateUser(p.id);
+      // أُزيل من بيانات هذا القسم = محذوف (نظام قسم واحد، لا يوجد نقل إلى قسم آخر)
+      await db.deactivateUser(p.id);
       continue;
     }
     const tbl = await db.userById(p.id);
@@ -1609,16 +1652,6 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       console.warn('[wipe-guard] رفض تفريغ قسم كامل لـ', school, 'من', req.session && req.session.role || '?', 'ts=', ts);
       return res.status(409).json({ error: 'wipe_blocked', reason: 'full_section' });
     }
-    // ===== حارس التلوث المتبادل بين القسمين (cross-section) =====
-    // جهاز ملوِّث يحمل نسخة ممزوجة (users من البنين + من البنات) ويدفعها على قسم واحد
-    // فيتسرب حسابات القسم الآخر إليه (ظهرت «معلمات» بأسماء أولادٍ في البنات: abdullah, salman...).
-    // نرفض أي كتابة تستحضر أكثر من 3 معرّفات من القسم الآخر — تمنع الخلط جذرياً.
-    const otherIdsSet = await otherSchoolUserIds(school);
-    const foreignN = foreignUserCount(nowUsers, otherIdsSet);
-    if (foreignN > 3) {
-      console.warn('[cross-section] رفض حفظ خلط قسمين لـ', school, 'على يد', req.session && req.session.user_id || '?', 'foreign=', foreignN, 'ts=', ts);
-      return res.status(409).json({ error: 'cross_section_blocked', reason: 'foreign_users', count: foreignN });
-    }
     // "قديمة": وصول نسخة بزمن أقل مما لدى الخادم (حفظ معلم آخر/فرق ساعة الأجهزة).
     // بدلاً من رفضها فتضيع تعديلات من يحفظ، ندمجها لاحقاً (مزج حسب المفتاح) مع بقاء نسخة الخادم سليمة.
     // نسخة تقلّ عن نسخة الخادم بأكثر من 5 دقائق تُعدّ قديمة (تُدمج، لا تُحذف بيانات أحد).
@@ -1628,10 +1661,17 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     // ===== تحقق الصلاحيات لكل قسم تغيّر =====
     // المدير/الوكيل: يمكنه تعديل قسم المستخدمين، والبقية يحفظون أقسامهم (حضور/غياب...) فقط.
     const canEditUsers = (req.session.role === 'ADMIN' || req.session.role === 'AGENT');
+    // وكيل الشؤون المدرسية: يُسجّل حضور المعلمات/الإداريين (حقول الغياب/التأخر) فقط.
+    const canEditUserAttendance = (req.session.role === 'SCHOOL_AGENT');
     if (!canEditUsers) {
-      // لا يحق لهذا الدور تعديل الحسابات: نتجاهل أي تغيير أرسله على قسم users
-      // ونُبقي نسخة الخادم الموثوقة سليمة، دون فقدان بقية الأقسام المشروعة (مثل الحضور).
-      data.users = JSON.parse(JSON.stringify(prevUsers));
+      if (canEditUserAttendance) {
+        // يُقبل تغيّر حقول الحضور على سجلات المستخدمين، ويبقى سائر الحقول نسخة الخادم.
+        data.users = mergeUsersAttendanceOnly(prevUsers, data.users);
+      } else {
+        // لا يحق لهذا الدور تعديل الحسابات: نتجاهل أي تغيير أرسله على قسم users
+        // ونُبقي نسخة الخادم الموثوقة سليمة، دون فقدان بقية الأقسام المشروعة (مثل الحضور).
+        data.users = JSON.parse(JSON.stringify(prevUsers));
+      }
     }
     for (const key of SECTION_KEYS) {
       const a = prev.data ? prev.data[key] : undefined;
@@ -1647,7 +1687,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     // طازجة الزمن، بل تُدمج تعديلاتها حسب الصلاحيات داخل نسخة الخادم الحالية (مزج حسب المفتاح).
     // هكذا لا يمسح معلم (جدول/حضور/ملاحظات/تكليفات...) بيانات زملائه ولا يمسح أحد القسم ككل،
     // وخلايا الجدول المضافة تبقى محفوظة بعد التحديث/إعادة الدخول.
-    const applyMerged = (base, src, role, canEditU) => {
+    const applyMerged = (base, src, role, canEditU, attOnlyU) => {
       const merged = JSON.parse(JSON.stringify(base));
       delete merged._ts;
       const allKeys = new Set([...SECTION_KEYS, ...Object.keys(src || {})]);
@@ -1657,7 +1697,8 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         const b = src[key];
         if (jsonEqual(a, b)) continue;
         if (key === 'users') {
-          if (canEditU) merged[key] = mergeSection(a, b);
+          if (canEditU) merged[key] = mergeUsersAttendanceNewer(prevUsers, mergeSection(a, b));
+          else if (attOnlyU) merged[key] = mergeUsersAttendanceOnly(prevUsers, b);
           else merged[key] = JSON.parse(JSON.stringify(prevUsers));
           continue;
         }
@@ -1686,7 +1727,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       // يُدمجان دائماً حتى لا يمسح جهاز إداري حصة/غياباً سجّله المعلمون حديثاً.
       if (prev.data && prev.data.hasOwnProperty) {
         if (stale) {
-          data = applyMerged(prev.data, data, role, true);
+          data = applyMerged(prev.data, data, role, true, false);
         } else {
           const cf = JSON.parse(JSON.stringify(data));
           // التكليفات/النشاطات (وشواهد الحذف فيها) تُدمج دائماً حتى للمدير/الوكيل:
@@ -1704,13 +1745,14 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           // نقاط المعلمات (notes): تُدمج دائماً حتى مع استبدال المدير الكامل، حتى لا يمسح
           // حفظٌ إداري على جهازٍ قديم ملاحظاتِ معلمات أُضيفت حديثاً من جهات أخرى.
           if (Array.isArray(prev.data.notes) && !jsonEqual(prev.data.notes, cf.notes)) cf.notes = mergeSection(prev.data.notes, cf.notes);
+          if (Array.isArray(prev.data.users) && !jsonEqual(prev.data.users, cf.users)) cf.users = mergeUsersAttendanceNewer(prevUsers, cf.users);
           data = cf;
         }
       }
     } else if (prev.data && prev.data.hasOwnProperty) {
       // كل الباقين: دمج دائماً (لا خسارة لبيانات أحد). قسم الطلاب للمعلم يُدمج
       // بحقول التأخر فقط (lateMinutes/lateType) فلا يُرفض الحفظ ولا يمسح بيانات الطالب.
-      data = applyMerged(prev.data, data, role, false);
+      data = applyMerged(prev.data, data, role, false, canEditUserAttendance);
     }
     if (!canEditUsers && (role === 'TEACHER' || role === 'ADMINISTRATIVE' || role === 'SCHOOL_AGENT') && incomingStudents) {
       // المعلم والإداري ووكيل الشؤون المدرسية: يُسمح لهم بتعديل حقول التأخر للطلاب (lateMinutes/lateType) فقط
@@ -1918,12 +1960,6 @@ app.post('/api/backups/restore', requireAuth, (req, res) => {
       console.warn('[restore-guard] رفض استرجاع بلا users لـ', bak.school, 'من', req.session.user_id, 'IP', req.ip);
       return res.status(409).json({ error: 'wipe_blocked', reason: 'restore_empty' });
     }
-    // حارس: استرجاع نسخة ممزوجة من القسمين = تلوث — يُرفض
-    const roth = await otherSchoolUserIds(bak.school);
-    if (foreignUserCount(data.users, roth) > 3) {
-      console.warn('[restore-guard] رفض استرجاع يخلط قسمين لـ', bak.school, 'من', req.session.user_id, 'IP', req.ip);
-      return res.status(409).json({ error: 'cross_section_blocked', reason: 'restore_foreign_users' });
-    }
     await db.setSchoolData(bak.school, data, ts);
     res.json({ ok: true, school: bak.school, ts, takenAt: bak.taken_at });
   })().catch(fail(res));
@@ -1943,13 +1979,6 @@ app.post('/api/backups/import', requireAuth, (req, res) => {
     if (data.users.length === 0) {
       console.warn('[import-guard] رفض استيراد بلا users لـ', school, 'من', req.session.user_id, 'IP', req.ip);
       return res.status(409).json({ error: 'wipe_blocked', reason: 'import_empty' });
-    }
-    // حارس: استيراد ممزوج من القسمين = تلوث — يُرفض
-    const ioth = await otherSchoolUserIds(school);
-    const iForeign = foreignUserCount(data.users, ioth);
-    if (iForeign > 3) {
-      console.warn('[import-guard] رفض استيراد يخلط قسمين لـ', school, 'من', req.session.user_id, 'IP', req.ip, 'foreign=', iForeign);
-      return res.status(409).json({ error: 'cross_section_blocked', reason: 'import_foreign_users', count: iForeign });
     }
     const ts = Date.now();
     const clean = JSON.parse(JSON.stringify(data));
