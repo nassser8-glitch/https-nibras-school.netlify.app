@@ -509,6 +509,13 @@ const SYNC_INTERVAL = 300000;
 const __origSetItem = localStorage.setItem.bind(localStorage);
 let __sessionUser = null; // المستخدم الحالي (من الخادم) — المرجع الوحيد للصلاحيات
 let __syncTimers = {};
+/* نافذة «الدفعة معلّقة» لكل مدرسة: تكتبها __syncSchedule وتقرأها syncPullAll لتمتنع
+   عن السحب ما دامت هناك دفعة لم تُرفع بعد. كائن مستقل عن __syncTimers (مؤقّتات). */
+let __pushPendingUntil = {};
+/* سقف محاولات إعادة الرفع بعد الفشل. بلا حدٍّ كان كل تبويب يعيد الطلب كل 15 ثانية
+   إلى الأبد، فتتراكم الطلبات ويضجيج السجل بلا نهاية. نُبقي النسخة المعلّقة في
+   التخزين (لا يفقد المستخدم شيئاً) ونتوقف، ثم نستأنف عند عودة الشبكة أو أي تفاعل. */
+const __PUSH_MAX_ATTEMPTS = 6;
 let __supervisionToday = null;
 let __supervisionTodayLoading = false;
 let __supervisionTodayFailed = false;
@@ -670,6 +677,19 @@ async function __putSchoolSettings(school, data){
 /* ============ مزامنة الخادم (جلسة آمنة — لا SYNC_KEY) ============ */
 function __syncEnabled(){ return !DEMO_MODE && location.protocol.indexOf('http') === 0; }
 function __syncTS(obj){ return (obj && typeof obj === 'object' && obj._ts) || 0; }
+/* مقارنة عميقة ثابتة الرتابة: نرتّب مفاتيح الكائنات قبل التسلسل، فتعطي نتيجة
+   صحيحة حتى لو اختلف ترتيب المفاتيح بين استججابة الخادم ونسخة localStorage.
+   JSON.stringify وحده لا يصلح: ترتيب المفاتيح يختلف، فيُظنّ اختلافٌ غير موجود. */
+function __canon(v){
+  if(v === undefined) return 'null';
+  if(v === null || typeof v !== 'object') return JSON.stringify(v);
+  if(Array.isArray(v)) return '[' + v.map(__canon).join(',') + ']';
+  return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + __canon(v[k])).join(',') + '}';
+}
+function __canonEq(a, b){ return __canon(a) === __canon(b); }
+/* نفس المقارنة لكن متجاهلةً _ts: الطابع وحده يتغيّر مع كل نداء حفظ، فلو قُورن
+   لتغيّر النص دائماً وظهر «تعديل» وهي لا تعديل. */
+function __canonNoTs(d){ const c = Object.assign({}, d || {}); delete c._ts; return __canon(c); }
 /* حالة الرفع المعلّق لكل قسم: تمنع أن تسحب نسخة الخادم الأقدم فتختفي تعديلاتٌ لم تُرفع بعد */
 const __pushPending = {};
 function __uiDirty(){ try { return !!document.querySelector('.modal-overlay') || (document.getElementById('noteForm') && document.getElementById('noteForm').style.display !== 'none'); } catch(e){ return false; } }
@@ -694,6 +714,9 @@ function __uiToast(txt, isErr){
 }
 function __syncSchedule(school, ms){
   if(!__syncEnabled()) return;
+  // نعلن الدفعة معلّقة بمهلة تتجاوز زمن الجدولة، فيمنع السحب الدوري
+  // (كل 5 دقائق) من الكتابة فوق اللوحة قبل أن تُرفع تعديلاتها. تُقرأ في syncPullAll.
+  __pushPendingUntil[school] = Date.now() + (ms === undefined ? 700 : ms) + 5000;
   clearTimeout(__syncTimers[school]);
   __syncTimers[school] = setTimeout(() => __syncPush(school), (ms === undefined) ? 700 : ms);
 }
@@ -1070,8 +1093,16 @@ async function __syncPush(school){
               }
               return out;
             };
+            // لا نُدرج قسماً لم يغيّره هذا الجهاز فعلاً.
+            // sd[sec] هنا ما زال نسخة الخادم سليمة (الدمج السابق مسّ حقول Attendance
+            // والجدول فقط، لا هذه الأقسام)، فإن تطابق القسمان فلم يمسّهما هذا الجهاز
+            // ⇒ نُبقي نسخة الخادم كما هي.
+            // بدون هذا الشرط يدفع كل جهاز قديم فصوله/درجاته المحلية على كل مزامنة،
+            // فيعيد بها ما حذفه زميله على جهاز أحدث: فصول فارغة ودرجات محذوفة.
             ['students','classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
-              if(Array.isArray(obj[sec])) sd[sec] = locallyOnly(obj[sec], sd[sec]);
+              if(!Array.isArray(obj[sec])) return;
+              if(__canonEq(obj[sec], sd[sec])) return; // بلا تعديل محلي ⇒ نسخة الخادم تكفي
+              sd[sec] = locallyOnly(obj[sec], sd[sec]);
             });
             obj = sd;
             obj._ts = mergedTs || Date.now();
@@ -1134,13 +1165,40 @@ async function __syncPush(school){
     st.lastFail = Date.now();
     try{ localStorage.setItem(pendKey, JSON.stringify(obj)); }catch(e){}
     __syncLogAdd({ ev:'push-fail', school, notes:(obj && Array.isArray(obj.notes))?obj.notes.length:0, ts:__syncTS(obj), attempt });
-    __syncTimers[school] = setTimeout(() => __syncPush(school), 15000);
-    __uiToast('⚠️ تعذّر رفع حفظك للخادم الآن — سأعيد المحاولة تلقائياً ولا تختفي بياناتك.', true);
+    if(st.attempts < __PUSH_MAX_ATTEMPTS){
+      __syncTimers[school] = setTimeout(() => __syncPush(school), 15000);
+      __uiToast('⚠️ تعذّر رفع حفظك للخادم الآن — سأعيد المحاولة تلقائياً ولا تختفي بياناتك.', true);
+    } else {
+      // استُنفد السقف: نتوقف عن الطلبات لكن النسخة المعلّقة باقية في التخزين، وبلَغ
+      // المستخدم صراحةً حتى لا يظن أن حفظه ضاع. الاستئناف عند عودة الشبكة أو أي
+      // تعديل جديد (يستدعي __syncSchedule فيصفّر العدّ عبر __syncResumeAttempts).
+      __syncLogAdd({ ev:'push-gave-up', school, attempts: st.attempts, ts:__syncTS(obj) });
+      __uiToast('⚠️ تعذّر رفع حفظك للخادم (' + st.attempts + ' محاولات) — بياناتك محفوظة على هذا الجهاز، وسيُعاد المحاولة عند عودة الاتصال أو أي تعديل جديد.', true);
+    }
     try{ __noteSaveBanner(true); }catch(e){}
   }catch(e){} finally {
     st.running = false;
   }
 }
+/* استئناف الرفع بعد توقّفه بسقف المحاولات: تصفير العدّ ثم جدولة فورية.
+   يُستدعى عند عودة الشبكة وعند استعادة التركيز، فالمستخدم لا يبقى عاطلاً على تعديلاته. */
+function __syncResumeAttempts(){
+  for(const s of Object.keys(__syncTimers)){
+    const st = __pushState(s);
+    if(st && st.attempts >= __PUSH_MAX_ATTEMPTS){
+      st.attempts = 0;
+      try{ __syncLogAdd({ ev:'push-resume', school: s, trigger: 'resume' }); }catch(e){}
+      __syncSchedule(s, 0);
+    }
+  }
+}
+try{
+  if(!window.__syncResumeHook){
+    window.__syncResumeHook = true;
+    window.addEventListener('online', ()=>{ try{ __syncResumeAttempts(); }catch(e){} });
+    window.addEventListener('focus', ()=>{ try{ __syncResumeAttempts(); }catch(e){} });
+  }
+}catch(e){}
 function __syncPullPaused(){
   // إيقاف مؤقت: يُضبَط من قبل المدير عبر localStorage لأي مدرسة على حدة (مفتاح
   // nibras_pull_pause_until_<school> يحمل طابع زمني حتى متى يوقف السحب).
@@ -1377,6 +1435,14 @@ async function syncPullAll(){
   const user = currentUser();
   if(!user) return;
   const schools = [user.school || 'GIRLS'];
+  // لا نسحب whilst دفعةٌ مجدولة أو قائمة: السحب يكتب فوق التخزين المحلي، فإن سبق
+  // رفعاً غير مكتمل لبث تعديلاتٍ لم تصل الخادم بعد. نتحقق من نافذة __syncSchedule ومن
+  // حالة الجارية، ونخرج بلا كتابة إطلاقاً — فالدورية لا تسبق الدفع أبداً.
+  const nowMs = Date.now();
+  if(schools.some(s => (__pushPendingUntil[s] || 0) > nowMs || (__pushState(s) || {}).running === true)){
+    __syncLogAdd({ ev:'pull-skipped-busy', school: schools.join(',') });
+    return;
+  }
   await Promise.all(schools.map(s => __syncPull(s)));
   await Promise.all(schools.filter(Boolean).map(s => __getSchoolSettings(s)));
   // عرض الإشعارات الجديدة فور وصولها دون انتظار تحديث يدوي للصفحة
@@ -1898,7 +1964,16 @@ function loadDB(){
 }
 function saveDB(d){
   if(DEMO_MODE && !window.__demoLSOverridden) return; // حماية احتياطية: لا حفظ في نسخة العرض
-  localStorage.setItem(dbKey(), JSON.stringify(d));
+  // لا نكتب إن لم يتغيّر شيء حقيقي. نقارن مع ما هو في التخزين الآن متجاهلين _ts:
+  // الطابع وحده يتحرك مع كل نداء، فيبدو النص مختلفاً دائماً وتُكتب اللوحة بلا فائدة
+  // في كل مرة، ما يُشعل حلقة سحب/دفع لا تنتهي. المقارنة تتم على الحالة الحيّة
+  // (لا على ذاكرة مؤقتة) حتى لو كتب هنا كاتبٌ آخر، فنُعيد الكتابة بدل إسقاط حفظ.
+  const k = dbKey();
+  try{
+    const cur = JSON.parse(localStorage.getItem(k) || 'null');
+    if(cur && __canonNoTs(cur) === __canonNoTs(d)) return;
+  }catch(e){}
+  localStorage.setItem(k, JSON.stringify(d));
 }
 function dbKeyFor(school){ return 'nibras_GIRLS_db_v1'; } // نظام قسم واحد: GIRLS
 function loadDBFor(school){
