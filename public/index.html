@@ -5919,7 +5919,7 @@ function renderStudents(){
     <label style="display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px">🏫 ${tl('الفصل')}:
       <select class="input" style="width:auto;padding:6px 10px" onchange="setStudentsView(this.value)">
         <option value="all" ${studentsView==='all'?'selected':''}>جميع الطلاب</option>
-        ${(function(){ const seen = {}; students.forEach(s => { if(s.classId) seen[s.classId] = true; }); return getClassesSorted().filter(c => seen[c.id]).map(c => `<option value="${c.id}" ${studentsView===c.id?'selected':''}>${escapeHtml(classLabel(c))}</option>`).join(''); })()}
+        ${(function(){ return getClassesSorted().map(c => `<option value="${c.id}" ${studentsView===c.id?'selected':''}>${escapeHtml(classLabel(c))}</option>`).join(''); })()}
       </select>
     </label>
     <label style="display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px">🔃 ${tl('الترتيب')}:
