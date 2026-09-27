@@ -94,18 +94,21 @@ test('كلا المسارين يقرآن السطر المخزَّن قبل ال
   }
 });
 
-test('كلا المسارين يفحصان نتيجة setSchoolData ويرفضان 200 عند الرفض', () => {
+test('كل المسارات تفحص نتيجة setSchoolData وترفض 200 عند الرفض', () => {
   const checks = src.match(/if \(!w\.written\) \{/g) || [];
-  assert.equal(checks.length, 2, 'فحصان: restore + import');
-  assert.equal((src.match(/error: 'write_rejected', reason: 'stale_ts'/g) || []).length, 2);
-  assert.equal((src.match(/status\(409\)\.json\(\{ error: 'write_rejected'/g) || []).length, 2);
+  assert.equal(checks.length, 2, 'فحصان بصيغة w: restore + import');
+  // stale_ts الآن ثلاثة: restore + import + مسار PUT العادي (الذي كان يُرجع 200 كذبًا).
+  assert.equal((src.match(/error: 'write_rejected', reason: 'stale_ts'/g) || []).length, 3);
+  // write_rejected أربع مرات: الاثنان السابقان + concurrent_change + stale_ts في PUT.
+  assert.equal((src.match(/status\(409\)\.json\(\{ error: 'write_rejected'/g) || []).length, 4);
   // لا مسار يستدعي setSchoolData ويتجاهل النتيجة
   const calls = src.match(/await db\.setSchoolData\(/g) || [];
-  const assigns = src.match(/(?:const (?:w|putRes) = )?await db\.setSchoolData\(/g) || [];
-  const assigned = src.match(/(?:const w = |const putRes = )await db\.setSchoolData\(/g) || [];
-  assert.equal(calls.length, 3, 'ثلاثة نداءات');
-  assert.equal(assigned.length, 3, 'الثلاثة تفحص النتيجة (PUT + restore + import)');
-  assert.ok(assigns.length >= calls.length);
+  const assigned = src.match(/(?:const|let) (?:w|putRes) = await db\.setSchoolData\(/g) || [];
+  // أربعة نداءات: PUT (أول محاولة) + PUT (إعادة المحاولة) + restore + import.
+  // النداء الرابع داخل حلقة المحاولة فالنتيجةُ تُفحص بشرط الحلقة نفسه (while (!putRes.written)).
+  assert.equal(calls.length, 4, 'أربعة نداءات');
+  assert.equal(assigned.length, 3, 'ثلاثة منها إسناد مُفحص + إعادة المحاولة داخل الحلقة');
+  assert.ok(src.includes('while (!putRes.written'), 'إعادة المحاولة نفسها مشروطة بفحص النتيجة');
 });
 
 test('حارس تفريغ القسم ما زال يعمل قبل أي كتابة', () => {

@@ -711,7 +711,12 @@ async function setSchoolData(school, data, ts) {
      ON CONFLICT (school) DO UPDATE SET data=EXCLUDED.data, ts=EXCLUDED.ts, updated_at=now()
      WHERE school_data.ts < EXCLUDED.ts`,
     [school, JSON.stringify(data), nextTs]);
-  return { written: r.rowCount > 0, storedTs: nextTs };
+  if (r.rowCount > 0) return { written: true, storedTs: nextTs };
+  // رُفضت الكتابة: نقرأ الـts المخزَّن فعلاً (لا المُدخَل) ليعود المتصل برقم صحيح
+  // ويعيد المحاولة فوق الأحدث. وقبل هذا كان storedTs يساوي nextTs المُدخَل دائماً،
+  // فلا يميّزه المتصل بين «الأحدث على الخادم» و«الذي حاولنا» — في放弃 فوراً.
+  const cur = await pool.query('SELECT ts FROM school_data WHERE school = $1', [school]);
+  return { written: false, storedTs: (cur.rows[0] && Number(cur.rows[0].ts)) || 0 };
 }
 
 // تعديل جزئي داخل معاملة واحدة: BEGIN -> SELECT ... FOR UPDATE -> تعديل المطلوب -> UPDATE -> COMMIT.

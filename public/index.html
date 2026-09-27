@@ -931,13 +931,19 @@ async function __syncPush(school){
     // لدى المعلمين الذين يدخلون من أكثر من جهاز (مساعد/عبدالمالك) بينما إسحاق الخصوصي بجهازٍ واحد سالم.
     // نُدمج بالحقول التالية: الجدول الزمني، الحضور (الأحدث يفوز)، الملاحظات، ثم ندفع الدمج.
     const isEmptySeed0 = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
+    // النسخة التي اشتُقّ منها الدفع فعلاً بعد GET أدناه. يقارنها الخادم بالـts المخزَّن:
+    // إن كانت الأحدث ⇒ استبدال كامل يُحترم (فيستطيع المدير الحذف كالمعتاد)،
+    // وإن كانت أقدم ⇒ دمجٌ محافظ لا يُمحى فيه أحد.
+    // إرسال baseTs ضروري لأن ts وحده لا يميّز «تأخّر بجزء من الثانية» عن «نسخة قديمة فعلاً».
+    let __pushBaseTs = 0;
     try{
       const mresp = await fetch(SYNC_API + school);
       if(mresp.status === 401){ __handleAuthError(mresp); return; }
       if(mresp.ok){
-        const mj = await mresp.json();
-        if(mj && mj.data){
-          const sd = JSON.parse(JSON.stringify(mj.data));
+          const mj = await mresp.json();
+          if(mj && mj.data){
+            try{ __pushBaseTs = Number(mj.ts) || 0; }catch(e){}
+            const sd = JSON.parse(JSON.stringify(mj.data));
           const serverHasData = Array.isArray(sd.students) && sd.students.length > 0;
           const localNonEmpty = (!isEmptySeed0) || Array.isArray(obj.students);
           if(serverHasData && localNonEmpty){
@@ -1088,7 +1094,7 @@ async function __syncPush(school){
           resp = await fetch(SYNC_API + school, {
             method:'PUT',
             headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({ ts: __syncTS(obj) || Date.now(), data: obj })
+            body: JSON.stringify({ ts: __syncTS(obj) || Date.now(), baseTs: __pushBaseTs, data: obj })
           });
         }catch(e){ resp = null; }
         if(!resp){ await new Promise(res => setTimeout(res, 1000 * (attempt + 1))); continue; }

@@ -1672,9 +1672,23 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     }
     // "قديمة": وصول نسخة بزمن أقل مما لدى الخادم (حفظ معلم آخر/فرق ساعة الأجهزة).
     // بدلاً من رفضها فتضيع تعديلات من يحفظ، ندمجها لاحقاً (مزج حسب المفتاح) مع بقاء نسخة الخادم سليمة.
-    // نسخة تقلّ عن نسخة الخادم بأكثر من 5 دقائق تُعدّ قديمة (تُدمج، لا تُحذف بيانات أحد).
-    // نافذة التسامح تمنع أن تُقبل نسخة قديمة كتحديث جديد مع الحفاظ على تقدم زمن الخادم.
-    const stale = !!(prev.data && prev.ts && ts < prev.ts - 5 * 60 * 1000);
+    //
+    // قاعدة حرجة: الدمج (mergeSection/mergeClasses) اتحادٌ بشواهد حذف فقط —
+    // لا حذف صلب. لذلك لا يجوز إطلاقاً اعتبار نسخة متأخرة «طازجة»، وإلا محت
+    // دفعاتِ الطلاب كاملةً باستبدالٍ كامل، والعكس يُعيد محذوفاً بلا سبب.
+    //
+    // نافذة الـ5 دقائق السابقة كانت تسمح لجهاز متأخر **ثانية واحدة فقط** بأن
+    // يستبدل 162 فوق 172 — وهي الحادثة الموثّقة. القاعدة الآن:
+    //   • عميل جديد يُرسل baseTs = النسخة التي اشتُقّ منها فعلاً بعد GET ثم الدمج:
+    //       إن كانت الأحدث  ⇒ استبدال كامل يُحترم (فيستطيع المدير الحذف كالمعتاد).
+    //       إن كانت أقدم    ⇒ دمجٌ محافظ (لا يُمحى أحد).
+    //   • عميل قديم لا يُرسل baseTs ⇒ نافذة الـ5 دقيقة كما هي (سلوك مطابق للنشر الحالي).
+    const declaredBase = Number(req.body && req.body.baseTs) || 0;
+    const storedTsNow = (prev && Number(prev.ts)) || 0;
+    const behindBy = storedTsNow - ts;
+    const stale = !!(prev && prev.data && storedTsNow && (
+      declaredBase > 0 ? declaredBase < storedTsNow : behindBy > 5 * 60 * 1000
+    ));
 
     // ===== تحقق الصلاحيات لكل قسم تغيّر =====
     // المدير/الوكيل: يمكنه تعديل قسم المستخدمين، والبقية يحفظون أقسامهم (حضور/غياب...) فقط.
@@ -1836,7 +1850,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     // (يمنع ذلك انتشار الحذف عبر الدمج)، فيُقيّد الزمن بنطاق 5 دقائق حول ساعة الخادم.
     const nowTs = Date.now();
     const saneTs = Math.min(ts, nowTs + 5 * 60 * 1000);
-    const nextTs = Math.max(saneTs, (prev && prev.ts) || 0) + 1;
+    let nextTs = Math.max(saneTs, (prev && prev.ts) || 0) + 1;
     if (clean && typeof clean === 'object') clean._ts = nextTs;
     // تثبيت الإسناد الإداري: إعادة فرض مسؤولي القسم في كل فصل مهما حمل جهاز الحفظ
     try {
@@ -1888,10 +1902,33 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       }
     } catch (e) { console.warn('[joinedAt-preserve]', e.message); }
 
-    const putRes = await db.setSchoolData(school, clean, nextTs);
+    let putRes = await db.setSchoolData(school, clean, nextTs);
     // nextTs = max(saneTs, prev.ts)+1 فيلزم أن يسبق الصف المخزَّن. إن رُفضت الكتابة
     // فهناك كاتب أحدث سباقنا بين القراءة والكتابة — ولم تُمحَ بيانات أحدث.
-    if (!putRes.written) console.warn('[db-put] رفض حفظ ts أقدم لـ', school, '— كاتب أحدث متزامن');
+    //
+    // لماذا إعادة المحاولة لا الإهمال: الجهاز نفسه يرفع كل ~700ms عبر __syncSchedule،
+    // فيرفع ts المخزَّن بمقدار 1 في كل مرة، فيرفض حارسُ ts حفظَ المدير الشرعي
+    // في كل مرة (سباق ذاتي بين اللوحة وخطّ الرفع الخاص بها) — وكان المسار يُرجع 200
+    // فيصدّق العميل أن حفظه نجح ثم يفقد تعديلاته بصمت.
+    let putAttempts = 0;
+    while (!putRes.written && putAttempts < 3) {
+      putAttempts++;
+      const cur = await db.getSchoolData(school);
+      const curTs = (cur && Number(cur.ts)) || putRes.storedTs || 0;
+      // وصل تغيير بنيوي جديد بعد قراءتنا الأولى (طالب/فصل أُضيف أو حُذف من جهاز آخر):
+      // لا نطمسه. نُرجع 409 فيقرأ العميل من جديد ويدمج ثم يدفع — وهو سلوك __syncPush أصلاً.
+      if (cur && cur.data && prev && prev.data && !jsonEqual(cur.data.students, prev.data.students)) {
+        console.warn('[db-put] تغيير بنيوي متزامن لـ', school, '— 409 ليعيد العميل الدمج');
+        return res.status(409).json({ error: 'write_rejected', reason: 'concurrent_change', storedTs: curTs });
+      }
+      nextTs = Math.max(saneTs, curTs) + 1;
+      if (clean && typeof clean === 'object') clean._ts = nextTs;
+      putRes = await db.setSchoolData(school, clean, nextTs);
+    }
+    if (!putRes.written) {
+      console.warn('[db-put] استُنفدت إعادة المحاولة لـ', school, 'storedTs=', putRes.storedTs);
+      return res.status(409).json({ error: 'write_rejected', reason: 'stale_ts', storedTs: putRes.storedTs });
+    }
     // مزامنة جدول المصادقة مع أي تغيير في قسم المستخدمين (حذف/نقل/تعطيل)
     if (['ADMIN','AGENT'].includes(req.session.role)) {
       if (!jsonEqual(prevUsers, clean.users)) await reconcileUserTable(school, prevUsers, clean.users);
