@@ -2123,9 +2123,13 @@ app.post('/api/admin/fix-user-school', requireAuth, (req, res) => {
     .catch(e => { console.error('[fix-user-school]', e); res.status(500).json({ error: 'db' }); });
 });
 
-// نقطة مؤقتة: إنشاء/إصلاح مدير قسم البنات (تُستدعى مرة واحدة ثم تُحذف). مفتوحة عمداً لمرة واحدة
-app.post('/api/ops/ensure-girls-admin', async (req, res) => {
+// نقطة مؤقتة: إنشاء/إصلاح مدير قسم البنات (تُستدعى مرة واحدة ثم تُحذف).
+// محمية بنفس نمط مسارات الإدارة في المشروع: requireAuth + role ADMIN فقط.
+// ملاحظة: هذه النقطة تنشئ حساب ADMIN بكلمة مرور مُضمَّنة، فبلا حماية كان أي
+// زائر قادراً على إنشاء/إعادة تعيين حساب المدير عبر الإنترنت.
+app.post('/api/ops/ensure-girls-admin', requireAuth, async (req, res) => {
   try {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
     const bcrypt = require('bcryptjs');
     const hash = await bcrypt.hash('a1111111', 10);
     const r = await db.pool.query(
@@ -2141,8 +2145,9 @@ app.post('/api/ops/ensure-girls-admin', async (req, res) => {
 
 // نقطة مؤقتة: تنظيف بيانات قسم البنات على مستوى القاعدة مباشرة (campus=GIRLS،
 // حذف الفصول الميتة والمواد المكررة بلا طلاب). تُستدعى مرة واحدة ثم تُحذف.
-app.post('/api/ops/clean-girls', async (req, res) => {
+app.post('/api/ops/clean-girls', requireAuth, async (req, res) => {
   try {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
     // على الصف المقفول (BEGIN + SELECT..FOR UPDATE) — نفس سبب تحديث المستخدمين أعلاه:
     // لا تُحسب الإحصاءات على لقطة أقدم مما سيُكتب فعلاً.
     const out = await db.mutateSchoolData('GIRLS', async (d) => {
