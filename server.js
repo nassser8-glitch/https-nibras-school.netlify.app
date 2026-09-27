@@ -1969,7 +1969,12 @@ app.post('/api/backups/restore', requireAuth, (req, res) => {
     if (!id) return res.status(400).json({ error: 'missing' });
     const bak = await db.getBackup(id);
     if (!bak) return res.status(404).json({ error: 'not_found' });
-    const ts = Date.now();
+    // ts رتيب: الخادم قد يخزّن ts يتقدّم على ساعة الحائط (ساعة جهاز عميل متأخرة
+    // +5د). بمجرد إضافة حارس monotonicity على setSchoolData كان ts=Date.now()
+    // يُرفض بصمت — والاستعادة تُبلّغ ok:true وهي لم تكتب شيئاً.
+    // فنقرأ السطر الحالي ونُhalbه للأعلى، ونتحقق من نتيجة الكتابة.
+    const prevRow = await db.getSchoolData(bak.school);
+    const ts = Math.max(Date.now(), (prevRow && prevRow.ts) || 0) + 1;
     const data = JSON.parse(JSON.stringify(bak.data));
     if (data && typeof data === 'object') data._ts = ts;
     if (data && Array.isArray(data._blockedClasses) && Array.isArray(data.classes)) {
@@ -1981,7 +1986,12 @@ app.post('/api/backups/restore', requireAuth, (req, res) => {
       console.warn('[restore-guard] رفض استرجاع بلا users لـ', bak.school, 'من', req.session.user_id, 'IP', req.ip);
       return res.status(409).json({ error: 'wipe_blocked', reason: 'restore_empty' });
     }
-    await db.setSchoolData(bak.school, data, ts);
+    const w = await db.setSchoolData(bak.school, data, ts);
+    if (!w.written) {
+      console.warn('[restore-guard] رفضت الاستعادة كتابة غير متفوقة لـ', bak.school,
+                  'ts=', ts, 'المخزَّن=', prevRow && prevRow.ts, 'من', req.session.user_id, 'IP', req.ip);
+      return res.status(409).json({ error: 'write_rejected', reason: 'stale_ts', storedTs: (prevRow && prevRow.ts) || 0 });
+    }
     res.json({ ok: true, school: bak.school, ts, takenAt: bak.taken_at });
   })().catch(fail(res));
 });
@@ -2001,14 +2011,22 @@ app.post('/api/backups/import', requireAuth, (req, res) => {
       console.warn('[import-guard] رفض استيراد بلا users لـ', school, 'من', req.session.user_id, 'IP', req.ip);
       return res.status(409).json({ error: 'wipe_blocked', reason: 'import_empty' });
     }
-    const ts = Date.now();
+    // نفس منطق الاستعادة أعلاه: ts فوق السطر المخزَّن (وإلا رفضه حارس monotonicity
+    // بصمت بينما يُرجع ok:true)، مع تحقق من قبول الكتابة.
+    const prevRow = await db.getSchoolData(school);
+    const ts = Math.max(Date.now(), (prevRow && prevRow.ts) || 0) + 1;
     const clean = JSON.parse(JSON.stringify(data));
     if (clean && typeof clean === 'object') clean._ts = ts;
     if (Array.isArray(clean._blockedClasses) && Array.isArray(clean.classes)) {
       const bl = new Set(clean._blockedClasses);
       clean.classes = clean.classes.filter(c => c && !bl.has(c.id));
     }
-    await db.setSchoolData(school, clean, ts);
+    const w = await db.setSchoolData(school, clean, ts);
+    if (!w.written) {
+      console.warn('[import-guard] رفض الاستيراد كتابة غير متفوقة لـ', school,
+                  'ts=', ts, 'المخزَّن=', prevRow && prevRow.ts, 'من', req.session.user_id, 'IP', req.ip);
+      return res.status(409).json({ error: 'write_rejected', reason: 'stale_ts', storedTs: (prevRow && prevRow.ts) || 0 });
+    }
     res.json({ ok: true, school, ts });
   })().catch(fail(res));
 });
