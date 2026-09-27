@@ -1093,6 +1093,46 @@ async function __syncPush(school){
               }
               return out;
             };
+            // دمج الفصول حقولاً بحقل — لا استبدال الكائن.
+            // previously classes went through locallyOnly, which keeps the SERVER object
+            // verbatim whenever the id exists on the server and drops the local one
+            // untouched. So a teacher added here (addTeacherToClass pushes into
+            // cls.teacherIds) was thrown away before the PUT and the server's stale
+            // teacherIds won forever. Mirror the server's mergeClasses policy instead:
+            // union teacherIds, honour removedTeacherIds, keep a server tombstone (never
+            // resurrect a class somebody deleted on purpose), and leave every other class
+            // byte-identical.
+            const mergeClassesLocal = (lArr, sArr) => {
+              if(!Array.isArray(lArr) || lArr.length === 0) return sArr;
+              const out = Array.isArray(sArr) ? sArr.map(x => (x && typeof x === 'object' ? JSON.parse(JSON.stringify(x)) : x)) : [];
+              const idx = new Map();
+              out.forEach((x, i) => { if(x && x.id != null) idx.set(x.id, i); });
+              for(const x of lArr){
+                if(!x || typeof x !== 'object') continue;
+                if(x.id == null){
+                  const k = JSON.stringify(x);
+                  if(!out.some(y => JSON.stringify(y) === k)) out.push(JSON.parse(JSON.stringify(x)));
+                  continue;
+                }
+                const i = idx.get(x.id);
+                if(i === undefined){ out.push(JSON.parse(JSON.stringify(x))); idx.set(x.id, out.length - 1); continue; }
+                const ex = out[i];
+                if(ex && ex.deleted) continue;
+                if(x.deleted){ ex.deleted = true; continue; }
+                const merged = Object.assign({}, ex, x);
+                const ids = new Set(Array.isArray(ex.teacherIds) ? ex.teacherIds : []);
+                for(const id of (Array.isArray(x.teacherIds) ? x.teacherIds : [])) if(id) ids.add(id);
+                const removed = new Set(Array.isArray(ex.removedTeacherIds) ? ex.removedTeacherIds : []);
+                for(const id of (Array.isArray(x.removedTeacherIds) ? x.removedTeacherIds : [])) if(id) removed.add(id);
+                for(const id of (Array.isArray(x.teacherIds) ? x.teacherIds : [])) if(id && removed.has(id)) removed.delete(id);
+                for(const id of removed) ids.delete(id);
+                // لا نضيف مفتاحاً لم يكن موجوداً: الفصل غير المتأثر يبقى مطابقاً حرفياً
+                if('teacherIds' in ex || 'teacherIds' in x) merged.teacherIds = Array.from(ids);
+                if('removedTeacherIds' in ex || 'removedTeacherIds' in x) merged.removedTeacherIds = Array.from(removed);
+                out[i] = merged;
+              }
+              return out;
+            };
             // لا نُدرج قسماً لم يغيّره هذا الجهاز فعلاً.
             // sd[sec] هنا ما زال نسخة الخادم سليمة (الدمج السابق مسّ حقول Attendance
             // والجدول فقط، لا هذه الأقسام)، فإن تطابق القسمان فلم يمسّهما هذا الجهاز
@@ -1102,7 +1142,7 @@ async function __syncPush(school){
             ['students','classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
               if(!Array.isArray(obj[sec])) return;
               if(__canonEq(obj[sec], sd[sec])) return; // بلا تعديل محلي ⇒ نسخة الخادم تكفي
-              sd[sec] = locallyOnly(obj[sec], sd[sec]);
+              sd[sec] = (sec === 'classes') ? mergeClassesLocal(obj[sec], sd[sec]) : locallyOnly(obj[sec], sd[sec]);
             });
             obj = sd;
             obj._ts = mergedTs || Date.now();
@@ -7096,7 +7136,14 @@ function renderClasses(){
     stages.forEach(stage => {
       let grade = d.grades.find(g => g.name === stage.name);
       if(!grade){ grade = { id:stage.id, name:stage.name, order:stage.order }; d.grades.push(grade); }
-      if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ' && !c.deleted)){
+      const __clsId = __stageClassId(grade.id);
+      // فصل محذوف عمداً يحمل id موجوداً أو مُحجوباً في _blockedClasses لا يُعاد إنتاجه:
+      // الخادم يرفض أي إحياء بنفس المعرّف (mergeClasses يتجاهل ما في tomb) فتدور الحلقة
+      // بلا نهاية، وكل دورة تُسقط teacherIds التي أُضيفت بينها. الشرط مكتوب هنا بلا متغيّر
+      // خارجي حتى يبقى آلياً (extractAutoRepairBlock في الاختبارات ينفّذه في سياق معزول).
+      const hasRecord = d.classes.some(c => c.id === __clsId);
+      const isBlocked = (Array.isArray(d._blockedClasses) ? d._blockedClasses : []).includes(__clsId);
+      if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ' && !c.deleted) && !hasRecord && !isBlocked){
         d.classes.push({ id:__stageClassId(grade.id), gradeId:grade.id, name:'أ', campus, capacity:null, teacherIds:[] });
         added++;
         addedNames.push(stage.name);

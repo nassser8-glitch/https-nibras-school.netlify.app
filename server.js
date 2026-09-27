@@ -1346,12 +1346,29 @@ function mergeClasses(prevCls, inCls) {
 function dedupeClasses(data){
   const classes = data && data.classes;
   if (!Array.isArray(classes)) return;
-  const gradeIds = new Set((Array.isArray(data.grades) ? data.grades : []).map(g => g && g.id).filter(Boolean));
+  const gradeList = Array.isArray(data.grades) ? data.grades.filter(g => g && g.id) : [];
+  const gradeIds = new Set(gradeList.map(g => g.id));
+  // A stage may be stored under a different id than stages[].id (older rows, imported
+  // snapshots), and older class rows carry the stage in grade/stage/stageId/section
+  // instead of gradeId. Resolve the stage by id first, then by those legacy fields,
+  // so a class is not buried just because its stage id differs while the stage itself
+  // is plainly present under another id.
+  const tok = v => String(v == null ? '' : v).replace(/[\u064B-\u0652\u0670\u0640]/g, '').replace(/\s+/g, ' ').trim();
+  const gradeTokens = new Set();
+  for (const g of gradeList) { gradeTokens.add(tok(g.id)); const n = tok(g.name); if (n) gradeTokens.add(n); }
+  const resolves = c => {
+    if (c.gradeId && gradeIds.has(c.gradeId)) return true;
+    for (const k of ['grade', 'stage', 'stageId', 'section']) {
+      const t = tok(c[k]);
+      if (t && gradeTokens.has(t)) return true;
+    }
+    return false;
+  };
   const keyOf = c => ((c.gradeId || '') + '|' + (c.name || '') + '|' + (c.campus || ''));
   const seen = new Set();
   for (const c of classes) {
     if (!c || typeof c !== 'object' || c.deleted) continue;
-    if (!c.gradeId || !gradeIds.has(c.gradeId)) { c.deleted = true; continue; }
+    if (!resolves(c)) { c.deleted = true; continue; }
     const k = keyOf(c);
     if (seen.has(k)) { c.deleted = true; continue; }
     seen.add(k);
