@@ -3586,9 +3586,14 @@ function dismissAdminMsg(id){
   // المكررة التي تخص نفس المصدر (transferId/partReqId/النص) حتى لا تبقى نسخة
   // "تعاود الظهور" بعد اطلاع النسخة الأولى (كان التحويل يُنشئ نسختين متطابقتين).
   let target = found.m;
+  // مفتاح المصدر: للتحويل/النشاط بالمعرّف الخاص، وللمراسلة العادية بصمة المحتوى
+  // (المرسل + الهدف + النص المُطبّع) لا بالمعرّف — فالشقيقتان المتطابقتان اللتان
+  // أُنشئتا بمعرّفين مختلفين تُعامَلان كمصدرٍ واحد ويُسقط ضغطُ «تم الاطلاع» كلتيهما
+  // معًا، فلا تعود شقيقةٌ بعد إسقاط أختها وضغط إعادة الدخول.
+  const normTxt = (t) => String(t || '').replace(/\s+/g, ' ').trim();
   const key = (m) => m.senderRole === 'TRANSFER' && m.transferId ? 't:' + m.transferId
     : (m.senderRole === 'ACTIVITY' && m.partReqId ? 'p:' + m.partReqId
-    : 'm:' + (m.id));
+    : 'm:' + (m.senderRole || '') + '|' + (m.teacherId || '') + '|' + normTxt(m.text).toLowerCase());
   const k = key(target);
   const stamp = new Date().toISOString();
   arr.forEach(m => {
@@ -8408,7 +8413,7 @@ function renderAssignments(){
         </div>
         <div style="margin-top:10px;display:flex;gap:8px;border-top:1px solid var(--line);padding-top:10px">
           <button class="btn-secondary" style="font-size:12px;padding:5px 12px" onclick="location.hash='#/assignments?step=list&cid=${cid}'">📋 قائمة التكليفات</button>
-          ${subCount > 0 ? `<button class="btn-secondary" style="font-size:12px;padding:5px 12px" onclick="location.hash='#/assignments?step=subject&cid=${cid}'">➕ تكليف جديد</button>` : ''}
+          <button class="btn-secondary" style="font-size:12px;padding:5px 12px" onclick="location.hash='#/assignments?step=${subCount > 0 ? 'subject' : 'form'}&cid=${cid}'">➕ تكليف جديد</button>
         </div>
       </div>`;
     }).join('');

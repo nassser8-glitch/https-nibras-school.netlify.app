@@ -1131,24 +1131,39 @@ function mergeSection(prevVal, inVal) {
 // ===== دمج رسائل المدير/الإشعارات (adminMsgs) =====
 // دمج حسب id مع «إزالة تكرار المصدر»: تحويل/نشاط كان يُنشئ سابقاً نسختين متطابقتين
 // (نفس transferId/partReqId لجهتين مرسلتين) فتبقى بعد دمجها رسالةٌ شقيقة بنفس المحتوى
-// وتعاود الظهور بعد الضغط على «تم الاطلاع». هنا نُبقي آخر نسخة فقط من كل مصدر.
+// وتعاود الظهور بعد الضغط على «تم الاطلاع». نُبقي نسخة واحدة لكل مصدر — وللمراسلة
+// العادية تكون بصمةُ المحتوى (المرسل+الهدف+النص) هي المصدر، فتتحد الشقائق المتطابقة.
+// عند ضمّ الأخوات نُدمج الاطلاع/الإسقاط اتحاداً (لا نفقد إسقاط معلمةٍ ضغطت) بدل
+// اختيار الأحدث فقط — وإلا جاءت نسخةٌ شقيقةٌ بلا clearedBy فتعود الرسالة بعد الدخول.
 function mergeAdminMsgs(prev, incoming) {
   if (!Array.isArray(prev)) prev = [];
   if (!Array.isArray(incoming)) incoming = [];
   const keyOf = r => (r && typeof r === 'object' && r.id) ? r.id : '__anon:' + JSON.stringify(r);
+  const normTxt = (t) => String(t || '').replace(/\s+/g, ' ').trim().toLowerCase();
   const srcKeyOf = r => (r && typeof r === 'object')
     ? ((r.senderRole === 'TRANSFER' && r.transferId) ? 't:' + r.transferId
       : (r.senderRole === 'ACTIVITY' && r.partReqId) ? 'p:' + r.partReqId
-      : 'm:' + keyOf(r))
+      : 'm:' + (r.senderRole || '') + '|' + (r.teacherId || '') + '|' + normTxt(r.text))
     : 'm:' + keyOf(r);
-  // ندمج أولاً حسب id ثم نزيل إخوة كل مصدر (نُبقي الأحدث رجحاناً للنسخة ذات المعلومات).
+  // ندمج أولاً حسب id ثم نضغط إخوة كل مصدر في نسخة اتحادية واحدة.
   const merged = mergeSection(prev, incoming);
   const bySrc = new Map();
   merged.forEach(m => {
     if (!m || typeof m !== 'object') return;
     const k = srcKeyOf(m);
     const cur = bySrc.get(k);
-    if (!cur || String(cur.updatedAt || cur.createdAt || '') <= String(m.updatedAt || m.createdAt || '')) bySrc.set(k, m);
+    if (!cur) { bySrc.set(k, m); return; }
+    // الأخوات من نفس المصدر: اتحاد معرفات الاطلاع/الإسقاط + الأعلام لا تتراجع + أطوابع أحدث.
+    const out = JSON.parse(JSON.stringify(cur));
+    const cA = (cur && cur.clearedBy) || {}, cB = (m && m.clearedBy) || {};
+    out.clearedBy = Object.assign({}, cB, cA);
+    const sA = (cur && cur.seenBy) || {}, sB = (m && m.seenBy) || {};
+    out.seenBy = Object.assign({}, sB, sA);
+    for (const f of ['read','revealed','dismissed']) out[f] = !!(out[f] || m[f]);
+    for (const f of ['updatedAt','editedAt','lastViewAt','dismissedAt','revealedAt','firstViewAt','createdAt']) {
+      if (out[f] || m[f]) out[f] = String(m[f] || '') >= String(out[f] || '') ? (m[f] || out[f]) : (out[f] || m[f]);
+    }
+    bySrc.set(k, out);
   });
   return Array.from(bySrc.values());
 }
