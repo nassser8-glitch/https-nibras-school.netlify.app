@@ -40,10 +40,9 @@ function extract(src, name) {
 const mergeClasses = new Function(extract(serverSrc, 'mergeClasses') + '; return mergeClasses;')();
 const dedupeClasses = new Function(extract(serverSrc, 'dedupeClasses') + '; return dedupeClasses;')();
 
-// دالة العميل: مُعرَّفة بسهم داخل دالة، فنلتقط نصّها ونغلّفها بنفس المتغيّراتClosure
-const mcl = indexSrc.match(/const mergeClassesLocal = (\(lArr, sArr\) => \{[\s\S]*?\n {12}\})/);
-assert.ok(mcl, 'لم يُعثر على mergeClassesLocal في public/index.html');
-const mergeClassesLocal = new Function('return (' + mcl[1] + ')')();
+// دالة العميل: دالة علوية مشتركة بين __syncPush و __syncPull، فنستخرجها بنفس extract
+const mergeClassesLocal = new Function(extract(indexSrc, 'mergeClassesLocal') + '; return mergeClassesLocal;')();
+assert.ok(mergeClassesLocal(1, 2), 'mergeClassesLocal استُخرج');
 
 /* ---------- أدوات ---------- */
 const KG = 'kg_g0_a';

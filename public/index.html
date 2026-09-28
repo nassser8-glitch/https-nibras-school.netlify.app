@@ -917,6 +917,43 @@ function __mergeMsg(a, b){
   }
   return out;
 }
+// دمج الفصول حقولاً بحقل — لا استبدال الكائن. مشترك بين الدفع (__syncPush) والسحب
+// (__syncPull): الاثنان كانا يمرّران قسم classes على locallyOnly وهي تبقي كائن الخادم
+// كاملاً حين يتطابق المعرّف، فتُمحى teacherIds المُضافة على الجهاز قبل الرفع، وتُمحى
+// مجدداً عند كل سحب فيتشكى المستخدم أن الإسناد لم يُحفظ. نُحاكي سياسة الخادم
+// (mergeClasses) بدل ذلك: اتحاد teacherIds، واحترام removedTeacherIds، وإبقاء قبر
+// الخادم (فصل محذوف عمداً لا يُحى)، وترك كل فصل غير متأثر مطابقاً حرفياً.
+function mergeClassesLocal(lArr, sArr){
+  if(!Array.isArray(lArr) || lArr.length === 0) return sArr;
+  const out = Array.isArray(sArr) ? sArr.map(x => (x && typeof x === 'object' ? JSON.parse(JSON.stringify(x)) : x)) : [];
+  const idx = new Map();
+  out.forEach((x, i) => { if(x && x.id != null) idx.set(x.id, i); });
+  for(const x of lArr){
+    if(!x || typeof x !== 'object') continue;
+    if(x.id == null){
+      const k = JSON.stringify(x);
+      if(!out.some(y => JSON.stringify(y) === k)) out.push(JSON.parse(JSON.stringify(x)));
+      continue;
+    }
+    const i = idx.get(x.id);
+    if(i === undefined){ out.push(JSON.parse(JSON.stringify(x))); idx.set(x.id, out.length - 1); continue; }
+    const ex = out[i];
+    if(ex && ex.deleted) continue;          // قبر الخادم: لا إحياء لفصل محذوف عمداً
+    if(x.deleted){ ex.deleted = true; continue; }
+    const merged = Object.assign({}, ex, x);
+    const ids = new Set(Array.isArray(ex.teacherIds) ? ex.teacherIds : []);
+    for(const id of (Array.isArray(x.teacherIds) ? x.teacherIds : [])) if(id) ids.add(id);
+    const removed = new Set(Array.isArray(ex.removedTeacherIds) ? ex.removedTeacherIds : []);
+    for(const id of (Array.isArray(x.removedTeacherIds) ? x.removedTeacherIds : [])) if(id) removed.add(id);
+    for(const id of (Array.isArray(x.teacherIds) ? x.teacherIds : [])) if(id && removed.has(id)) removed.delete(id);
+    for(const id of removed) ids.delete(id);
+    // لا نضيف مفتاحاً لم يكن موجوداً: الفصل غير المتأثر يبقى مطابقاً حرفياً
+    if('teacherIds' in ex || 'teacherIds' in x) merged.teacherIds = Array.from(ids);
+    if('removedTeacherIds' in ex || 'removedTeacherIds' in x) merged.removedTeacherIds = Array.from(removed);
+    out[i] = merged;
+  }
+  return out;
+}
 async function __syncPush(school){
   if(!__syncEnabled()) return;
   const key = 'nibras_'+school+'_db_v1';
@@ -1090,46 +1127,6 @@ async function __syncPush(school){
                 if(!x) continue;
                 const k = (x.id != null) ? x.id : JSON.stringify(x);
                 if(!seen.has(k)){ out.push(JSON.parse(JSON.stringify(x))); seen.add(k); }
-              }
-              return out;
-            };
-            // دمج الفصول حقولاً بحقل — لا استبدال الكائن.
-            // previously classes went through locallyOnly, which keeps the SERVER object
-            // verbatim whenever the id exists on the server and drops the local one
-            // untouched. So a teacher added here (addTeacherToClass pushes into
-            // cls.teacherIds) was thrown away before the PUT and the server's stale
-            // teacherIds won forever. Mirror the server's mergeClasses policy instead:
-            // union teacherIds, honour removedTeacherIds, keep a server tombstone (never
-            // resurrect a class somebody deleted on purpose), and leave every other class
-            // byte-identical.
-            const mergeClassesLocal = (lArr, sArr) => {
-              if(!Array.isArray(lArr) || lArr.length === 0) return sArr;
-              const out = Array.isArray(sArr) ? sArr.map(x => (x && typeof x === 'object' ? JSON.parse(JSON.stringify(x)) : x)) : [];
-              const idx = new Map();
-              out.forEach((x, i) => { if(x && x.id != null) idx.set(x.id, i); });
-              for(const x of lArr){
-                if(!x || typeof x !== 'object') continue;
-                if(x.id == null){
-                  const k = JSON.stringify(x);
-                  if(!out.some(y => JSON.stringify(y) === k)) out.push(JSON.parse(JSON.stringify(x)));
-                  continue;
-                }
-                const i = idx.get(x.id);
-                if(i === undefined){ out.push(JSON.parse(JSON.stringify(x))); idx.set(x.id, out.length - 1); continue; }
-                const ex = out[i];
-                if(ex && ex.deleted) continue;
-                if(x.deleted){ ex.deleted = true; continue; }
-                const merged = Object.assign({}, ex, x);
-                const ids = new Set(Array.isArray(ex.teacherIds) ? ex.teacherIds : []);
-                for(const id of (Array.isArray(x.teacherIds) ? x.teacherIds : [])) if(id) ids.add(id);
-                const removed = new Set(Array.isArray(ex.removedTeacherIds) ? ex.removedTeacherIds : []);
-                for(const id of (Array.isArray(x.removedTeacherIds) ? x.removedTeacherIds : [])) if(id) removed.add(id);
-                for(const id of (Array.isArray(x.teacherIds) ? x.teacherIds : [])) if(id && removed.has(id)) removed.delete(id);
-                for(const id of removed) ids.delete(id);
-                // لا نضيف مفتاحاً لم يكن موجوداً: الفصل غير المتأثر يبقى مطابقاً حرفياً
-                if('teacherIds' in ex || 'teacherIds' in x) merged.teacherIds = Array.from(ids);
-                if('removedTeacherIds' in ex || 'removedTeacherIds' in x) merged.removedTeacherIds = Array.from(removed);
-                out[i] = merged;
               }
               return out;
             };
@@ -1427,6 +1424,14 @@ async function __syncPull(school){
       // الأقسام غير المُدمجة أعلاه (الطلاب/الفصول/الدرجات/المحوّلات/الصيانة/التنبيهات...):
       // نُلحق أي سجل محلي غير موجود في نسخة الخادم حتى لا يفقد السحبُ حفظَ هذا الجهاز
       // (تعديل تأخر/غياب ليس في الخادم بعد) عند إعادة فتح التطبيق على أي متصفح/جهاز.
+      // الفصول استثناء: تمرّ على mergeClassesLocal بدل الإلحاق البحت، وإلا بقيت لقاعدة
+      // «الخادم يفوز» وفقد السحبُ teacherIds المُضافة على هذا الجهاز عند كل تحديث.
+      // نسجّل معرّفات فصول الخادم (بما فيها المدفونة deleted:true) قبل الدمج لتُطبَّق
+      // تنقية «الفصول الشبح» أدناه على المحلي غير المعروف للخادم فقط.
+      const serverClassIds = new Set(
+        (Array.isArray(merged.classes) ? merged.classes : [])
+          .map(c => c && c.id).filter(id => id != null)
+      );
       const locallyOnlyP = (lArr, sArr) => {
         if(!Array.isArray(lArr) || lArr.length === 0) return sArr;
         const out = Array.isArray(sArr) ? sArr.slice() : [];
@@ -1439,10 +1444,16 @@ async function __syncPull(school){
         return out;
       };
       ['students','classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
-        if(Array.isArray(local[sec])) merged[sec] = locallyOnlyP(local[sec], merged[sec]);
+        if(!Array.isArray(local[sec])) return;
+        merged[sec] = (sec === 'classes')
+          ? mergeClassesLocal(local[sec], merged[sec])
+          : locallyOnlyP(local[sec], merged[sec]);
       });
       // تنقية الفصول على العميل: تمنع عودة الفصول الزائدة (مكررة/بدون مرحلة/بمرحلة وهمية بلا طلاب)
       // التي تحملها النسخة المحلية لكن الخادم كرّسها (deleted). دون هذا يظهر العدد 24 بدل 12.
+      // «بلا طلاب ⇒ تُحذف» تخصّ الفصل الشبح المحلي وحده: أي فصل يعرفه الخادم — حتى لو كان
+      // فارغاً كتمهيدي الروضة قبل تسجيل أطفاله — يبقى. وقبل ذلك كان السحب يحذف كل فصل فارغ
+      // فيعيد renderClasses إنتاجه بـ teacherIds:[] فتختفى أسماء المعلمات عند كل تحديث.
       try {
         if(Array.isArray(merged.classes)){
           const gradeIds = new Set((Array.isArray(merged.grades) ? merged.grades : []).map(g => g && g.id).filter(Boolean));
@@ -1454,9 +1465,9 @@ async function __syncPull(school){
           const seenKeys = new Set();
           merged.classes = merged.classes.filter(c => {
             if(!c || typeof c !== 'object') return false;
-            if(c.deleted) return false;
+            if(c.deleted) return false;                                  // محذوف في الخادم: لا يُحيا
             if(!c.gradeId || !gradeIds.has(c.gradeId)) return false;
-            if(!stuCount[c.id]) return false;
+            if(!stuCount[c.id] && !serverClassIds.has(c.id)) return false; // شبح محلي فقط
             const k = c.gradeId + '|' + (c.name||'');
             if(seenKeys.has(k)) return false;
             seenKeys.add(k);
