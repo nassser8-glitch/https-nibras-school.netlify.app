@@ -9808,6 +9808,20 @@ function computeReportRows(){
       .sort((a,b) => b.date.localeCompare(a.date))
       .map(a => { const s = studentById(a.studentId); const c = classById(a.classId); const g = c?gradeById(c.gradeId):null;
         return { 'التاريخ':a.date, 'الطالب':s?.fullName||'—', 'الرقم':s?.studentNo||'—', 'الصف':g?.name||'—', 'الفصل':c?.name||'—', 'الحالة':statusLabels[__attEffStatus(a)] }; });
+    // غياب/تأخر المعلمات: في تقريري الغياب والتأخر يُضاف سجلُّ كل معلمةٍ غابت أو تأخرت
+    // (محفوظ على صفة المستخدم لا في d.attendance) — تظهر عند اختيار «كل الفصول» لأن المعلمة لا تتبع فصلًا.
+    if((statusFilter === 'ABSENT' || statusFilter === 'LATE') && !classId){
+      const tTypeLbl = { MORNING:'تأخر صباحي', CLASS:'تأخر عن الحصة', EARLY_LEAVE:'خروج مبكر' };
+      d.users.filter(u => (u.role === 'TEACHER' || isAdminRole(u.role)) && u.active).forEach(t => {
+        const dates = (statusFilter === 'ABSENT' ? (t.absences || []) : (t.markedLate || [])).filter(inRange);
+        dates.sort().reverse().forEach(date => {
+          const mins = statusFilter === 'LATE' && t.lateMinutes ? t.lateMinutes[date] : null;
+          const typeLbl = statusFilter === 'LATE' && t.lateType && t.lateType[date] ? (tTypeLbl[t.lateType[date]] || '') : '';
+          rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—') + ' (معلمة)', 'الرقم': '—', 'الصف': 'المعلمات', 'الفصل': '—', 'الحالة': statusFilter === 'ABSENT' ? 'غائبة' : ('متأخرة' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : '')) });
+        });
+      });
+      rows.sort((a,b) => b.date.localeCompare(a.date));
+    }
   } else if(type === 'notes'){
     rows = d.notes
       .filter(n => { const s = studentById(n.studentId); return !n.deleted && canSeeStudent(n.studentId) && (!classId || s?.classId===classId) && (!from && !to || inRange(n.createdAt.slice(0,10))); })
