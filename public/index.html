@@ -9803,26 +9803,43 @@ function computeReportRows(){
 
   if(type === 'attendance' || type === 'absence' || type === 'late'){
     const statusFilter = type==='absence' ? 'ABSENT' : type==='late' ? 'LATE' : null;
-    rows = d.attendance
-      .filter(a => canSeeClass(a.classId) && (!classId || a.classId===classId) && (!statusFilter || __attEffStatus(a)===statusFilter) && inRange(a.date))
-      .sort((a,b) => b.date.localeCompare(a.date))
-      .map(a => { const s = studentById(a.studentId); const c = classById(a.classId); const g = c?gradeById(c.gradeId):null;
-        return { 'التاريخ':a.date, 'الطالب':s?.fullName||'—', 'الرقم':s?.studentNo||'—', 'الصف':g?.name||'—', 'الفصل':c?.name||'—', 'الحالة':statusLabels[__attEffStatus(a)] }; });
-    // غياب/تأخر المعلمات والإداريات: في تقريري الغياب والتأخر يُضاف سجلُّ الكادر
-    // (محفوظ على صفة المستخدم لا في d.attendance) — يظهر عند اختيار خانة
-    // «المعلمون والإداريون» في فلتر الفصول، أو ضمن «كل الفصول» لأنهم لا يتبعون فصلًا.
-    if((statusFilter === 'ABSENT' || statusFilter === 'LATE') && (!classId || classId === 'STAFF')){
-      const isStaffOnly = classId === 'STAFF';
+    // خانة «المعلمون والإداريون»: تُظهر سجلات غياب/تأخر الكادر (محفوظة على صفة المستخدم
+    // لا في d.attendance) بدل الطالبات — تعمل للتقرير الثلاثة (الحضور يعرض الغياب والتأخر معًا).
+    if(classId === 'STAFF'){
       const tTypeLbl = { MORNING:'تأخر صباحي', CLASS:'تأخر عن الحصة', EARLY_LEAVE:'خروج مبكر' };
+      const showAbs = statusFilter !== 'LATE';
+      const showLate = statusFilter !== 'ABSENT';
       d.users.filter(u => (u.role === 'TEACHER' || isAdminRole(u.role) || u.role === 'ADMIN') && u.active).forEach(t => {
-        const dates = (statusFilter === 'ABSENT' ? (t.absences || []) : (t.markedLate || [])).filter(inRange);
-        dates.sort().reverse().forEach(date => {
-          const mins = statusFilter === 'LATE' && t.lateMinutes ? t.lateMinutes[date] : null;
-          const typeLbl = statusFilter === 'LATE' && t.lateType && t.lateType[date] ? (tTypeLbl[t.lateType[date]] || '') : '';
-          rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': isStaffOnly ? 'المعلمون والإداريون' : tl('المعلمون'), 'الفصل': '—', 'الحالة': statusFilter === 'ABSENT' ? 'غائب' : ('متأخر' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : '')) });
+        if(showAbs) (t.absences || []).filter(inRange).sort().reverse().forEach(date => {
+          rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': 'المعلمون والإداريون', 'الفصل': '—', 'الحالة': 'غائب' });
+        });
+        if(showLate) (t.markedLate || []).filter(inRange).sort().reverse().forEach(date => {
+          const mins = t.lateMinutes ? t.lateMinutes[date] : null;
+          const typeLbl = t.lateType && t.lateType[date] ? (tTypeLbl[t.lateType[date]] || '') : '';
+          rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': 'المعلمون والإداريون', 'الفصل': '—', 'الحالة': 'متأخر' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : '') });
         });
       });
       rows.sort((a,b) => b.date.localeCompare(a.date));
+    } else {
+      rows = d.attendance
+        .filter(a => canSeeClass(a.classId) && (!classId || a.classId===classId) && (!statusFilter || __attEffStatus(a)===statusFilter) && inRange(a.date))
+        .sort((a,b) => b.date.localeCompare(a.date))
+        .map(a => { const s = studentById(a.studentId); const c = classById(a.classId); const g = c?gradeById(c.gradeId):null;
+          return { 'التاريخ':a.date, 'الطالب':s?.fullName||'—', 'الرقم':s?.studentNo||'—', 'الصف':g?.name||'—', 'الفصل':c?.name||'—', 'الحالة':statusLabels[__attEffStatus(a)] }; });
+      // غياب/تأخر المعلمات والإداريات: في تقريري الغياب والتأخر يُضاف سجلُّ الكادر
+      // (محفوظ على صفة المستخدم لا في d.attendance) — يظهر ضمن «كل الفصول» لأنهم لا يتبعون فصلًا.
+      if(statusFilter === 'ABSENT' || statusFilter === 'LATE'){
+        const tTypeLbl = { MORNING:'تأخر صباحي', CLASS:'تأخر عن الحصة', EARLY_LEAVE:'خروج مبكر' };
+        d.users.filter(u => (u.role === 'TEACHER' || isAdminRole(u.role) || u.role === 'ADMIN') && u.active).forEach(t => {
+          const dates = (statusFilter === 'ABSENT' ? (t.absences || []) : (t.markedLate || [])).filter(inRange);
+          dates.sort().reverse().forEach(date => {
+            const mins = statusFilter === 'LATE' && t.lateMinutes ? t.lateMinutes[date] : null;
+            const typeLbl = statusFilter === 'LATE' && t.lateType && t.lateType[date] ? (tTypeLbl[t.lateType[date]] || '') : '';
+            rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': tl('المعلمون'), 'الفصل': '—', 'الحالة': statusFilter === 'ABSENT' ? 'غائب' : ('متأخر' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : '')) });
+          });
+        });
+        rows.sort((a,b) => b.date.localeCompare(a.date));
+      }
     }
   } else if(type === 'notes'){
     rows = d.notes
