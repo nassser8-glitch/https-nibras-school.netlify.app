@@ -9857,7 +9857,9 @@ function computeReportRows(){
   } else if(type === 'assignments'){
     const user = currentUser();
     const myClassIds = new Set(getClassesSorted().map(c => c.id));
-    const clsAss = (d.assignments||[]).filter(a => myClassIds.has(a.classId) && !(a && a.deleted) && (!classId || a.classId===classId) && (!from && !to || (a.date && inRange(a.date))));
+    // نفس شرط قائمة التكليفات: المعلمة ترى تكليفاتها فقط (غيرها يخلق ظهورًا في التقرير دون قائمتها)،
+    // والمدير/الوكيل يرى الكل.
+    const clsAss = (d.assignments||[]).filter(a => myClassIds.has(a.classId) && (isAdmin || user.role === 'AGENT' || a.teacherId === user.id) && !(a && a.deleted) && (!classId || a.classId===classId) && (!from && !to || (a.date && inRange(a.date))));
     const rowsAll = clsAss.sort((a,b) => (b.created||0) - (a.created||0)).map(a => {
       const cls = classById(a.classId);
       const g = cls ? gradeById(cls.gradeId) : null;
