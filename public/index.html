@@ -9831,7 +9831,7 @@ function computeReportRows(){
           rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': 'المعلمون والإداريون', 'الفصل': '—', 'الحالة': 'متأخر' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : '') });
         });
       });
-      rows.sort((a,b) => b.date.localeCompare(a.date));
+      rows.sort((a,b) => String(b['التاريخ']||'').localeCompare(String(a['التاريخ']||'')));
     } else {
       rows = d.attendance
         .filter(a => canSeeClass(a.classId) && (!classId || a.classId===classId) && (!statusFilter || __attEffStatus(a)===statusFilter) && inRange(a.date))
@@ -9850,7 +9850,7 @@ function computeReportRows(){
             rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': tl('المعلمون'), 'الفصل': '—', 'الحالة': statusFilter === 'ABSENT' ? 'غائب' : ('متأخر' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : '')) });
           });
         });
-        rows.sort((a,b) => b.date.localeCompare(a.date));
+        rows.sort((a,b) => String(b['التاريخ']||'').localeCompare(String(a['التاريخ']||'')));
       }
     }
   } else if(type === 'notes'){
