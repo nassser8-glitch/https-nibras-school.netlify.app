@@ -10101,7 +10101,8 @@ function __cleanupOrphanPointRows(){
   if(!orphan.length){ window.__teacherMsg = 'لا توجد سجلات معزولة — كل النقاط مرتبطة بطالبة ومعلمة مسجلتين بالبنات.'; renderApp(); return; }
   if(!confirm(`🔄 أولاً آمن: عُزلت ${orphan.length} سجلَّات نقاط (بلا طالبة مسجلة أو بلا معلمة مسجلة في قسم البنات). مسحها يزيلها من الخادم نهائياً — ولا يمسّ أي طالبة مسجلة في قائمة البنات. متابعة؟`)) return;
   if(!confirm(`تأكيد نهائي: حذف ${orphan.length} سجلّ صحيح؟ (عادة = بيانات قديمة بلا طالبة مسجلة)`)) return;
-  d.notes = (d.notes||[]).filter(n => !noteIds.has(n.id));
+  const me = currentUser();
+  (d.notes||[]).forEach(n => { if(noteIds.has(n.id)){ n.deleted = true; n.deletedAt = new Date().toISOString(); n.deletedBy = me ? me.id : ''; } });
   saveDB(d);
   const msg = `تم مسح ${orphan.length} سجلّاً معزولاً — الباقي كله أسماء طالبات مسجلات ومعلمات مسجلات.`;
   if(__serverEnabled()){
