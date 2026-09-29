@@ -9796,7 +9796,7 @@ function activityPartIds(a){
 let reportState = { type:'absence', classId:'', from:'', to:'', view:'table', rows:null, period:'month' };
 const reportTypes = [
   { value:'absence', label:'تقرير الغياب', adminOnly:true }, { value:'late', label:'تقرير التأخر', adminOnly:true },
-  { value:'notes', label:'تقرير الملاحظات' }, { value:'transfers', label:'تقرير التحويلات' }, { value:'assignments', label:'تقرير التكليفات' }, { value:'class_summary', label:'تقرير الفصول' },
+  { value:'notes', label:'تقرير الملاحظات' }, { value:'transfers', label:'تقرير التحويلات' }, { value:'assignments', label:'تقرير التكليفات' },
   { value:'messages', label:'تقرير الرسائل', adminOnly:true },
   { value:'activities', label:'تقرير الأنشطة والمشاركين', adminOnly:true },
   { value:'maintenance', label:'تقرير الصيانة', adminOnly:true },
@@ -9928,29 +9928,6 @@ function computeReportRows(){
       return { 'التكليف': a.title||'—', 'المادة': a.subject||'—', 'النوع': a.type||'واجب', 'التاريخ': a.date||'—', 'الصف': g?.name||'—', 'الفصل': cls?.name||'—', 'العدد': clsStudents.length, 'نفّذوا': doneCount, 'لم ينفّذوا': notDone, 'النسبة': pct+'%', 'من لم ينفّذوا': notDoneNames || '—' };
     });
     return rowsAll;
-  } else if(type === 'class_summary'){
-    const classes = getClassesSorted().filter(c => canSeeClass(c.id) && (!classId || c.id===classId));
-    const absentDays = new Map(), lateDays = new Map(); // classId -> { studentId: Set(date) }
-    d.attendance.forEach(a => {
-      if(!canSeeClass(a.classId) || (classId && a.classId!==classId) || !inRange(a.date)) return;
-      const perClass = __attEffStatus(a)==='ABSENT' ? absentDays : __attEffStatus(a)==='LATE' ? lateDays : null;
-      if(!perClass) return;
-      let bySt = perClass.get(a.classId);
-      if(!bySt){ bySt = {}; perClass.set(a.classId, bySt); }
-      (bySt[a.studentId] = bySt[a.studentId] || new Set()).add(a.date);
-    });
-    rows = classes.map(c => {
-      const g = gradeById(c.gradeId);
-      const students = d.students.filter(s => s.active && s.classId===c.id);
-      // الغياب/التأخر لكل طالب في كل يوم يُحسب مرة واحدة مهما تعددت السجلات
-      const abD = Object.values(absentDays.get(c.id) || {}).reduce((n,set)=>n+set.size, 0);
-      const laD = Object.values(lateDays.get(c.id) || {}).reduce((n,set)=>n+set.size, 0);
-      const schoolDays = (from && to) ? schoolDaysInRange(from, to) : 1;
-      const totalSeats = students.length * schoolDays;
-      // الأصل الحضور: كل طالب حاضر افتراضيًا ما لم يُسجَّل له غياب في اليوم
-      const present = Math.max(0, totalSeats - abD);
-      return { 'الصف':g?.name||'—', 'الفصل':c.name, 'عدد الطلاب':students.length, 'أيام':schoolDays, 'نسبة الحضور': totalSeats ? Math.round(present/totalSeats*100)+'%':'—', 'الغياب':abD, 'التأخر':laD };
-    });
   } else if(type === 'messages'){
     rows = loadAdminMsgs()
       .filter(m => inRange(m.createdAt.slice(0,10)))
@@ -10141,11 +10118,8 @@ function renderReportTable(rows){
     <tbody>${rows.map(r => `<tr>${cols.map(c=>`<td>${escapeHtml(r[c])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 // أي عمود يُجمَّع عليه الرسم البياني حسب نوع التقرير
-const reportChartCol = { absence:'الصف', late:'الصف', notes:'الطالب', transfers:'إلى', class_summary:null, messages:'الحالة', activities:null, maintenance:'الحالة' };
+const reportChartCol = { absence:'الصف', late:'الصف', notes:'الطالب', transfers:'إلى', messages:'الحالة', activities:null, maintenance:'الحالة' };
 function buildChartData(type, rows){
-  if(type === 'class_summary'){
-    return rows.map(r => ({ label:(r['الصف']||'')+' - '+(r['الفصل']||''), value:parseInt(r['نسبة الحضور'])||0, unit:'%' }));
-  }
   if(type === 'activities'){
     return rows.map(r => ({ label: r['المشارك'], value: parseInt(r['عدد الأنشطة المشارك فيها']) || 0 }));
   }
