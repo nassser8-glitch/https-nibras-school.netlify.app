@@ -8381,6 +8381,15 @@ function getTeacherSubjects(user, d){
   });
   return Object.values(map);
 }
+// فصول المعلمة في التكليفات: المسندة إليها (teacherIds) + فصول فيها تكليفاتها حتى لو لم تكن
+// مسندة رسميًا + فصول جدولها. التكليف يخص الفصل: فأي تكليف في هذه الفصول يظهر لها ولتقريرها
+// (سابقًا كان يظهر في التقارير ولا يظهر في خانة التكليفات عند اختلاف حساب المنشئ عن المعلمة).
+function getAssignmentClassIds(user, d){
+  const taughtClassIds = (d.classes||[]).filter(c => Array.isArray(c.teacherIds) && c.teacherIds.includes(user.id)).map(c => c.id);
+  const myAssignClassIds = (d.assignments||[]).filter(a => a.teacherId === user.id && !(a && a.deleted)).map(a => a.classId).filter(Boolean);
+  const subClassIds = getTeacherSubjects(user, d).map(s => s.classId);
+  return [...new Set([...taughtClassIds, ...myAssignClassIds, ...subClassIds])];
+}
 function renderAssignments(){
   const user = currentUser();
   if(!user || user.role !== 'TEACHER') return '<h1 class="page-title">غير متاح</h1>';
@@ -8390,10 +8399,9 @@ function renderAssignments(){
   const classId = params.get('cid') || '';
   const subject = decodeURIComponent(params.get('sub') || '');
   const subjects = getTeacherSubjects(user, d);
-  // كل الفصول التي يدرّسها المعلم (من teacherIds) — حتى لو لم تكن له حصص/مواد مسجّلة بعد،
-  // حتى لا تختفي تكليفاته أو تعجز شاشة "التكليفات" عن إظهارها (كان يبدو التكليف "يُمحى").
-  const taughtClassIds = (d.classes||[]).filter(c => Array.isArray(c.teacherIds) && c.teacherIds.includes(user.id)).map(c => c.id);
-  const myClassIds = [...new Set([...taughtClassIds, ...subjects.map(s => s.classId)])];
+  // كل الفصول التي يدرّسها المعلم (teacherIds) + فصول تكليفاتها الخاصة + فصول جدولها —
+  // بحيث لا تختفي تكليفاتها من خانة التكليفات (كانت تظهر في التقارير ولا تظهر في القائمة).
+  const myClassIds = getAssignmentClassIds(user, d);
   const gradeById = g => (d.grades||[]).find(x => x.id === g);
   const classLabel = c => { const g = gradeById(c.gradeId); return (g ? g.name + ' — ' : '') + 'الفصل ' + c.name; };
 
@@ -8460,7 +8468,9 @@ function renderAssignments(){
   if(step === 'list'){
     const cls = d.classes.find(c => c.id === classId);
     const clsStudents = (d.students||[]).filter(s => s.active && s.classId === classId);
-    const clsAssignments = (d.assignments||[]).filter(a => a.classId === classId && (user.role==='ADMIN' || user.role==='AGENT' || a.teacherId === user.id) && !(a && a.deleted)).sort((a,b) => (b.created||0) - (a.created||0));
+    // التكليف يخص الفصل لا مالك الحساب: يعرض لجميع معلمات الفصل حتى لو أُنشئ بحساب آخر
+    // (مثلاً حسابات «شيماء» المتعددة) — كان يظهر في التقارير ولا يظهر في خانة التكليفات.
+    const clsAssignments = (d.assignments||[]).filter(a => a.classId === classId && !(a && a.deleted)).sort((a,b) => (b.created||0) - (a.created||0));
     const typeColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
     const rows = clsAssignments.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">لا توجد تكليفات لهذا الفصل</td></tr>` :
     clsAssignments.map(a => {
@@ -8505,7 +8515,9 @@ function renderAssignments(){
     const clsStudents = (d.students||[]).filter(s => s.active && s.classId === classId);
     const a = (d.assignments||[]).find(x => x.id === assignmentId);
     if(!a) return `<div class="page-title">التكليف غير موجود</div><a href="#/assignments?step=list&cid=${classId}" style="font-size:13px">← الرجوع</a>`;
-    if(user.role !== 'ADMIN' && user.role !== 'AGENT' && a.teacherId !== user.id) return `<div class="page-title">غير متاح</div><a href="#/assignments?step=list&cid=${classId}" style="font-size:13px">← الرجوع</a>`;
+    // عكس فلتر القائمة: أي معلمة يظهر الفصل في خانة تكليفاتها ترى تفاصيل تكليفه
+    // (التكليف يخص الفصل لا مالك الحساب) — الحذف والتعديل يبقيان للمالك/المدير فقط.
+    if(user.role !== 'ADMIN' && user.role !== 'AGENT' && !myClassIds.includes(a.classId)) return `<div class="page-title">غير متاح</div><a href="#/assignments?step=list&cid=${classId}" style="font-size:13px">← الرجوع</a>`;
     const doneCount = clsStudents.filter(s => (a.completedBy||[]).includes(s.id)).length;
     const pct = clsStudents.length ? Math.round(doneCount/clsStudents.length*100) : 0;
     const typeColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
@@ -9856,10 +9868,10 @@ function computeReportRows(){
         return { 'التاريخ':t.createdAt.slice(0,10), 'الطالب': ss.map(s=>s?.fullName||'—').join('، ') || '—', 'إلى':targetLabel(t.target), 'الأولوية':priorityLabels[t.priority], 'السبب':t.reason, 'الحالة': t.status==='PENDING'?'قيد المتابعة':'تم الحل', 'بواسطة':by?.name||'—' }; });
   } else if(type === 'assignments'){
     const user = currentUser();
-    const myClassIds = new Set(getClassesSorted().map(c => c.id));
-    // نفس شرط قائمة التكليفات: المعلمة ترى تكليفاتها فقط (غيرها يخلق ظهورًا في التقرير دون قائمتها)،
-    // والمدير/الوكيل يرى الكل.
-    const clsAss = (d.assignments||[]).filter(a => myClassIds.has(a.classId) && (isAdmin || user.role === 'AGENT' || a.teacherId === user.id) && !(a && a.deleted) && (!classId || a.classId===classId) && (!from && !to || (a.date && inRange(a.date))));
+    // نفس فصول «خانة التكليفات» للمعلمة (التكليف يخص الفصل لا مالك الحساب)؛
+    // المدير/الوكيل/الشموليون يرون كل الفصول.
+    const myClassIds = new Set((user && !seesAllClasses(user)) ? getAssignmentClassIds(user, d) : getClassesSorted().map(c => c.id));
+    const clsAss = (d.assignments||[]).filter(a => myClassIds.has(a.classId) && !(a && a.deleted) && (!classId || a.classId===classId) && (!from && !to || (a.date && inRange(a.date))));
     const rowsAll = clsAss.sort((a,b) => (b.created||0) - (a.created||0)).map(a => {
       const cls = classById(a.classId);
       const g = cls ? gradeById(cls.gradeId) : null;
