@@ -32,7 +32,7 @@ function extractFunctionSource(src, name) {
 
 // يستخرج فقط جسم شرط الإشراف داخل renderApp() (النمط الحقيقي المستخدم لمنع الحلقة)
 function extractRenderAppSupervisionTrigger(src) {
-  const marker = "if(__serverEnabled() && (user.role === 'TEACHER' || user.role === 'ADMIN' || user.role === 'SCHOOL_AGENT')){";
+  const marker = "if(__serverEnabled() && (user.role === 'TEACHER' || user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT')){";
   const startIdx = src.indexOf(marker);
   if (startIdx === -1) throw new Error('renderApp supervision trigger block not found');
   let depth = 0;

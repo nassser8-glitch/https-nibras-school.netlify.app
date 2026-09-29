@@ -571,17 +571,17 @@ async function sweepSessions() {
 }
 
 const SUPERVISION_DAYS = new Set([1, 2, 3, 4, 5]);
-const SUPERVISION_VISIBLE_ROLES = new Set(['ADMIN', 'TEACHER', 'SCHOOL_AGENT']);
+const SUPERVISION_VISIBLE_ROLES = new Set(['ADMIN', 'AGENT', 'TEACHER', 'SCHOOL_AGENT']);
 
 // من يملك حق استدعاء /api/supervision/today أصلًا (بقية الأدوار تُرفض فورًا).
 function canViewSupervisionToday(role) {
   return SUPERVISION_VISIBLE_ROLES.has(role);
 }
 
-// المدير والوكيلة يريان جميع مشرفات اليوم؛ المعلمة ترى تكليفها هي فقط وليس زميلاتها.
-// («الوكيلة» تدخل بنفسها من أدى الإشراف ومن لم يؤده).
+// المدير والوكيل والوكيلة يريان جميع مشرفات اليوم؛ المعلمة ترى تكليفها هي فقط وليس زميلاتها.
+// («الوكيل/الوكيلة» يدخل بنفسه من أدى الإشراف ومن لم يؤده).
 function filterSupervisionAssignments(role, rows, userId) {
-  if (role === 'ADMIN' || role === 'SCHOOL_AGENT') return rows;
+  if (role === 'ADMIN' || role === 'AGENT' || role === 'SCHOOL_AGENT') return rows;
   if (role === 'TEACHER') return rows.filter(row => row.teacher_id === userId);
   return [];
 }

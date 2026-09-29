@@ -63,7 +63,7 @@ test('SCHOOL_AGENT: يظهر رابط الإشراف اليومي (الوكيل�
   assert.ok(keys.includes('supervision'), 'يجب أن يحتوي فرع SCHOOL_AGENT على رابط supervision');
 });
 
-test('AGENT: لا يظهر رابط إدارة الإشراف اليومي (مقتصر على ADMIN والوكيلة)', () => {
+test('AGENT (الوكيل): يظهر رابط الإشراف اليومي (الوكيل يسجّل من أدى الإشراف ومن لم يؤده)', () => {
   const keys = computeNavKeysForRole('AGENT');
-  assert.ok(!keys.includes('supervision'), 'يجب أن يبقى رابط supervision مقتصرًا على ADMIN والوكيلة');
+  assert.ok(keys.includes('supervision'), 'يجب أن يحتوي فرع AGENT على رابط supervision');
 });

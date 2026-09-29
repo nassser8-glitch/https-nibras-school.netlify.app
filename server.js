@@ -505,7 +505,7 @@ app.get('/api/supervision/today', requireAuth, (req, res) => {
         teacherId: row.teacher_id, name: row.name, dayOfWeek: row.day_of_week,
         checkedInAt: row.checked_in_at,
       })),
-      managerView: role === 'ADMIN' || role === 'SCHOOL_AGENT',
+      managerView: role === 'ADMIN' || role === 'AGENT' || role === 'SCHOOL_AGENT',
     });
   })().catch(fail(res));
 });
@@ -513,7 +513,7 @@ app.get('/api/supervision/today', requireAuth, (req, res) => {
 app.get('/api/supervision/schedule', requireAuth, (req, res) => {
   (async () => {
     const school = String(req.query.school || req.session.school || '').toUpperCase();
-    if ((req.session.role !== 'ADMIN' && req.session.role !== 'SCHOOL_AGENT') || !db.SCHOOLS.includes(school))
+    if ((req.session.role !== 'ADMIN' && req.session.role !== 'AGENT' && req.session.role !== 'SCHOOL_AGENT') || !db.SCHOOLS.includes(school))
       return res.status(403).json({ error: 'forbidden' });
     if (!(canManageUsers(req.session, school) || (req.session.role === 'SCHOOL_AGENT' && school === req.session.school)))
       return res.status(403).json({ error: 'forbidden' });
@@ -527,7 +527,7 @@ app.get('/api/supervision/schedule', requireAuth, (req, res) => {
 app.put('/api/supervision/schedule', requireAuth, (req, res) => {
   (async () => {
     const school = String(req.body && req.body.school || req.session.school || '').toUpperCase();
-    if ((req.session.role !== 'ADMIN' && req.session.role !== 'SCHOOL_AGENT') || !db.SCHOOLS.includes(school))
+    if ((req.session.role !== 'ADMIN' && req.session.role !== 'AGENT' && req.session.role !== 'SCHOOL_AGENT') || !db.SCHOOLS.includes(school))
       return res.status(403).json({ error: 'forbidden' });
     if (!(canManageUsers(req.session, school) || (req.session.role === 'SCHOOL_AGENT' && school === req.session.school)))
       return res.status(403).json({ error: 'forbidden' });
@@ -559,7 +559,7 @@ app.post('/api/supervision/check-in', requireAuth, (req, res) => {
 app.post('/api/supervision/record', requireAuth, (req, res) => {
   (async () => {
     const role = req.session.role;
-    if (role !== 'ADMIN' && role !== 'SCHOOL_AGENT') return res.status(403).json({ error: 'forbidden' });
+    if (role !== 'ADMIN' && role !== 'AGENT' && role !== 'SCHOOL_AGENT') return res.status(403).json({ error: 'forbidden' });
     const school = String(req.body && req.body.school || req.session.school || '').toUpperCase();
     if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'invalid_school' });
     if (!(canManageUsers(req.session, school) || (role === 'SCHOOL_AGENT' && school === req.session.school)))
@@ -582,7 +582,7 @@ app.post('/api/supervision/record', requireAuth, (req, res) => {
 app.get('/api/supervision/history', requireAuth, (req, res) => {
   (async () => {
     const school = String(req.query.school || req.session.school || '').toUpperCase();
-    if ((req.session.role !== 'ADMIN' && req.session.role !== 'SCHOOL_AGENT') || !db.SCHOOLS.includes(school))
+    if ((req.session.role !== 'ADMIN' && req.session.role !== 'AGENT' && req.session.role !== 'SCHOOL_AGENT') || !db.SCHOOLS.includes(school))
       return res.status(403).json({ error: 'forbidden' });
     if (!(canManageUsers(req.session, school) || (req.session.role === 'SCHOOL_AGENT' && school === req.session.school)))
       return res.status(403).json({ error: 'forbidden' });
