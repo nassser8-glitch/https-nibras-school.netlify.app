@@ -9793,9 +9793,9 @@ function activityPartIds(a){
 }
 
 /* ============ التقارير ============ */
-let reportState = { type:'attendance', classId:'', from:'', to:'', view:'table', rows:null, period:'month' };
+let reportState = { type:'absence', classId:'', from:'', to:'', view:'table', rows:null, period:'month' };
 const reportTypes = [
-  { value:'attendance', label:'تقرير الحضور', adminOnly:true }, { value:'absence', label:'تقرير الغياب', adminOnly:true }, { value:'late', label:'تقرير التأخر', adminOnly:true },
+  { value:'absence', label:'تقرير الغياب', adminOnly:true }, { value:'late', label:'تقرير التأخر', adminOnly:true },
   { value:'notes', label:'تقرير الملاحظات' }, { value:'transfers', label:'تقرير التحويلات' }, { value:'assignments', label:'تقرير التكليفات' }, { value:'class_summary', label:'تقرير الفصول' },
   { value:'messages', label:'تقرير الرسائل', adminOnly:true },
   { value:'activities', label:'تقرير الأنشطة والمشاركين', adminOnly:true },
@@ -9813,8 +9813,8 @@ function renderReports(){
   const classes = getClassesSorted();
   const user = currentUser();
   const isAdmin = isManager(user);
-  // تقارير الحضور/الغياب/التأخر هي جوهر عمل «وكيل الشؤون المدرسية» — يراها مع فئات التقارير العامة
-  const repAllowedAdmin = t => t.adminOnly && (isAdmin || (user?.role === 'SCHOOL_AGENT' && (t.value === 'attendance' || t.value === 'absence' || t.value === 'late')));
+  // التقارير الإدارية (الغياب/التأخر وما دونها) هي جوهر عمل «وكيل الشؤون المدرسية» — يراها مع فئات التقارير العامة
+  const repAllowedAdmin = t => t.adminOnly && (isAdmin || (user?.role === 'SCHOOL_AGENT' && (t.value === 'absence' || t.value === 'late')));
   const types = reportTypes.filter(t => !t.adminOnly || repAllowedAdmin(t));
   if(types.length && !types.some(t => t.value === reportState.type)) reportState.type = types[0].value;
   const isEng = reportState.type === 'teacher_engagement' || reportState.type === 'teacher_logins' || reportState.type === 'points_detail' || reportState.type === 'sync_log';
@@ -9851,17 +9851,17 @@ function computeReportRows(){
   // المعلم يرى بيانات فصوله فقط (المدير والوكيل يرون الكل)
   const user = currentUser();
   const isAdmin = isManager(user);
-  // تقرير الحضور والغياب والتأخر خاص بالمدير والوكيل — ويشمل «وكيل الشؤون المدرسية» لأنه يراها كلها
-  if((type === 'attendance' || type === 'absence' || type === 'late') && !isAdmin && user?.role !== 'SCHOOL_AGENT') return [];
+  // تقرير الغياب والتأخر خاص بالمدير والوكيل — ويشمل «وكيل الشؤون المدرسية» لأنه يراها كلها
+  if((type === 'absence' || type === 'late') && !isAdmin && user?.role !== 'SCHOOL_AGENT') return [];
   const visibleClassIds = new Set(getClassesSorted().map(c => c.id));
   const visibleStudentIds = new Set(getVisibleStudents().map(s => s.id));
   const canSeeClass = cid => isAdmin || visibleClassIds.has(cid);
   const canSeeStudent = sid => isAdmin || visibleStudentIds.has(sid);
 
-  if(type === 'attendance' || type === 'absence' || type === 'late'){
-    const statusFilter = type==='absence' ? 'ABSENT' : type==='late' ? 'LATE' : null;
+  if(type === 'absence' || type === 'late'){
+    const statusFilter = type==='absence' ? 'ABSENT' : 'LATE';
     // خانة «المعلمون والإداريون»: تُظهر سجلات غياب/تأخر الكادر (محفوظة على صفة المستخدم
-    // لا في d.attendance) بدل الطالبات — تعمل للتقرير الثلاثة (الحضور يعرض الغياب والتأخر معًا).
+    // لا في d.attendance) بدل الطالبات — تعمل للتقريرين (الغياب يعرض الغياب، والتأخر ظهر التأخر).
     if(classId === 'STAFF'){
       const tTypeLbl = { MORNING:'تأخر صباحي', CLASS:'تأخر عن الحصة', EARLY_LEAVE:'خروج مبكر' };
       const showAbs = statusFilter !== 'LATE';
@@ -10141,7 +10141,7 @@ function renderReportTable(rows){
     <tbody>${rows.map(r => `<tr>${cols.map(c=>`<td>${escapeHtml(r[c])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 // أي عمود يُجمَّع عليه الرسم البياني حسب نوع التقرير
-const reportChartCol = { attendance:'الحالة', absence:'الصف', late:'الصف', notes:'الطالب', transfers:'إلى', class_summary:null, messages:'الحالة', activities:null, maintenance:'الحالة' };
+const reportChartCol = { absence:'الصف', late:'الصف', notes:'الطالب', transfers:'إلى', class_summary:null, messages:'الحالة', activities:null, maintenance:'الحالة' };
 function buildChartData(type, rows){
   if(type === 'class_summary'){
     return rows.map(r => ({ label:(r['الصف']||'')+' - '+(r['الفصل']||''), value:parseInt(r['نسبة الحضور'])||0, unit:'%' }));
