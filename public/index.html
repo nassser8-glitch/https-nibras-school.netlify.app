@@ -609,7 +609,14 @@ function __supervisionRemoveTeacher(dow, teacherId){
 }
 async function __checkInSupervision(){
   const r = await fetch(SUPERVISION_API + 'check-in', { method:'POST' });
-  if(!r.ok){ alert('لا توجد مهمة إشراف مسجلة لك اليوم'); return; }
+  if(!r.ok){ alert('تعذر تسجيل المباشرة'); return; }
+  await __loadSupervisionToday(true);
+  renderApp();
+}
+async function __recordSupervision(teacherId, checkIn){
+  if(!teacherId) return;
+  const r = await fetch(SUPERVISION_API + 'record', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ teacherId, checkIn }) });
+  if(!r.ok){ const e = await r.json().catch(()=>({})); alert(e.error === 'not_assigned' ? 'هذه المعلمة ليست مكلفة بالإشراف اليوم' : 'تعذر حفظ الحالة'); return; }
   await __loadSupervisionToday(true);
   renderApp();
 }
@@ -2266,7 +2273,7 @@ function renderApp(){
   }
 
   app.innerHTML = renderLayout(user, hash);
-  if(__serverEnabled() && (user.role === 'TEACHER' || user.role === 'ADMIN')){
+  if(__serverEnabled() && (user.role === 'TEACHER' || user.role === 'ADMIN' || user.role === 'SCHOOL_AGENT')){
     // إعادة render فقط عند نجاح التحميل — الفشل (401/403/شبكة) لا يستدعي renderApp مرة أخرى
     if(!__supervisionToday && !__supervisionTodayLoading &&
        (!__supervisionTodayFailed || __supervisionTodayAttempts < SUPERVISION_MAX_ATTEMPTS)){
@@ -3117,6 +3124,7 @@ function renderLayout(user, hash){
     { title:'الإدارة', items:[
       { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👥' },
       { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
+      { href:'#/supervision', key:'supervision', label:'🛡️ الإشراف اليومي', icon:'🛡️' },
     ]},
     { title:'المتابعة', items:[
       { href:'#/attendance', key:'attendance', label:'الحضور والغياب', icon:'✓' },
@@ -3137,7 +3145,7 @@ function renderLayout(user, hash){
       (user.role === 'ADMIN' || user.role === 'AGENT') ? { href:'#/admins', key:'admins', label:'الإداريون', icon:'🛡' } : null,
       { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👥' },
       { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
-      (user.role === 'ADMIN') ? { href:'#/supervision', key:'supervision', label:'🛡️ الإشراف اليومي', icon:'🛡️' } : null,
+      (user.role === 'ADMIN' || user.role === 'SCHOOL_AGENT') ? { href:'#/supervision', key:'supervision', label:'🛡️ الإشراف اليومي', icon:'🛡️' } : null,
     ]},
     { title:'المتابعة', items:[
       { href:'#/attendance', key:'attendance', label:'الحضور والغياب', icon:'✓' },
@@ -3205,7 +3213,7 @@ function renderLayout(user, hash){
   else if(page === 'settings') pageHtml = renderSettings();
   else if(page === 'daily-msg') pageHtml = renderDailyMsg();
   else if(page === 'backup' && user.role === 'ADMIN') pageHtml = renderBackup();
-  else if(page === 'supervision' && user.role === 'ADMIN') pageHtml = renderSupervisionAdmin();
+  else if(page === 'supervision' && (user.role === 'ADMIN' || user.role === 'SCHOOL_AGENT')) pageHtml = renderSupervisionAdmin();
   else if(page === 'notebook') pageHtml = renderNotebookPage();
   else if(page === 'about') pageHtml = renderAbout();
   else pageHtml = renderDashboard();
@@ -8156,9 +8164,14 @@ function renderSupervisionAdmin(){
     </div>`;
   }).join('');
   const today = __supervisionToday;
+  const canRecord = user.role === 'ADMIN' || user.role === 'SCHOOL_AGENT';
   const todayRows = today && today.assigned ? today.assigned : [];
   const todayBlock = `<div class="panel"><h3>🛡️ مشرفات اليوم – ${escapeHtml((SUPERVISION_DAYS.find(x=>x.dow===today?.dayOfWeek)||{}).label || 'لا يوجد إشراف')}</h3>
-    ${todayRows.length ? todayRows.map(x => `<div>${x.checkedInAt ? '🟢 باشرت الإشراف' : '🟡 لم تسجل المباشرة'} — ${escapeHtml(x.name || x.teacherId)}${x.checkedInAt ? ` <span class="muted">${escapeHtml(x.checkedInAt)}</span>` : ''}</div>`).join('') : '<p class="muted">لا توجد مشرفات اليوم</p>'}</div>`;
+    ${todayRows.length ? todayRows.map(x => `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #eee;flex-wrap:wrap">${x.checkedInAt ? '🟢 باشرت الإشراف' : '🟡 لم تسجل المباشرة'} — <b>${escapeHtml(x.name || x.teacherId)}</b>${x.checkedInAt ? ` <span class="muted">${escapeHtml(x.checkedInAt)}</span>` : ''}
+      ${canRecord ? (x.checkedInAt
+        ? `<button type="button" class="btn-secondary" style="padding:2px 10px;font-size:12px;margin-inline-start:auto" onclick="__recordSupervision('${x.teacherId}',false)">إلغاء (لم تؤده)</button>`
+        : `<button type="button" class="btn-primary" style="padding:2px 10px;font-size:12px;margin-inline-start:auto" onclick="__recordSupervision('${x.teacherId}',true)">أدت الإشراف</button>`) : ''}
+    </div>`).join('') : '<p class="muted">لا توجد مشرفات اليوم</p>'}</div>`;
   const history = __supervisionHistory && __supervisionHistory.history;
   const historyBlock = history ? `<div class="panel"><h3>📜 سجل الإشراف</h3>${history.length ? history.map(x => `<div style="padding:7px 0;border-bottom:1px solid #eee">${escapeHtml(x.supervision_date || x.checkin_date || x.date || '')} — ${escapeHtml(x.name || x.teacher_id || '')} — ${x.checked_in_at || x.checkin_time ? '🟢 ' + escapeHtml(x.checked_in_at || x.checkin_time) : '🟡 لم تسجل المباشرة'}</div>`).join('') : '<p class="muted">لا توجد سجلات بعد</p>'}</div>` : '<button class="btn-secondary" onclick="__loadSupervisionHistory()">عرض سجل الإشراف</button>';
   return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">جدول أسبوعي ثابت يتكرر تلقائيًا من الاثنين إلى الجمعة.</p><button class="btn-primary" onclick="__saveSupervisionSchedule()">حفظ جدول الإشراف</button></section>${todayBlock}${days}${historyBlock}`;

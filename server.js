@@ -505,7 +505,7 @@ app.get('/api/supervision/today', requireAuth, (req, res) => {
         teacherId: row.teacher_id, name: row.name, dayOfWeek: row.day_of_week,
         checkedInAt: row.checked_in_at,
       })),
-      managerView: role === 'ADMIN',
+      managerView: role === 'ADMIN' || role === 'SCHOOL_AGENT',
     });
   })().catch(fail(res));
 });
@@ -513,7 +513,9 @@ app.get('/api/supervision/today', requireAuth, (req, res) => {
 app.get('/api/supervision/schedule', requireAuth, (req, res) => {
   (async () => {
     const school = String(req.query.school || req.session.school || '').toUpperCase();
-    if (req.session.role !== 'ADMIN' || !db.SCHOOLS.includes(school) || !canManageUsers(req.session, school))
+    if ((req.session.role !== 'ADMIN' && req.session.role !== 'SCHOOL_AGENT') || !db.SCHOOLS.includes(school))
+      return res.status(403).json({ error: 'forbidden' });
+    if (!(canManageUsers(req.session, school) || (req.session.role === 'SCHOOL_AGENT' && school === req.session.school)))
       return res.status(403).json({ error: 'forbidden' });
     const rows = await db.getSupervisionSchedule(school);
     res.json({ ok: true, school, schedule: rows.map(row => ({
@@ -525,7 +527,9 @@ app.get('/api/supervision/schedule', requireAuth, (req, res) => {
 app.put('/api/supervision/schedule', requireAuth, (req, res) => {
   (async () => {
     const school = String(req.body && req.body.school || req.session.school || '').toUpperCase();
-    if (req.session.role !== 'ADMIN' || !db.SCHOOLS.includes(school) || !canManageUsers(req.session, school))
+    if ((req.session.role !== 'ADMIN' && req.session.role !== 'SCHOOL_AGENT') || !db.SCHOOLS.includes(school))
+      return res.status(403).json({ error: 'forbidden' });
+    if (!(canManageUsers(req.session, school) || (req.session.role === 'SCHOOL_AGENT' && school === req.session.school)))
       return res.status(403).json({ error: 'forbidden' });
     const rows = await db.replaceSupervisionSchedule(school, req.body && req.body.schedule);
     res.json({ ok: true, school, schedule: rows.map(row => ({
@@ -551,10 +555,36 @@ app.post('/api/supervision/check-in', requireAuth, (req, res) => {
   });
 });
 
+// الوكيلة/المدير: تسجيل من أدى الإشراف ومن لم يؤده في تاريخ معيّن (افتراضيًا اليوم).
+app.post('/api/supervision/record', requireAuth, (req, res) => {
+  (async () => {
+    const role = req.session.role;
+    if (role !== 'ADMIN' && role !== 'SCHOOL_AGENT') return res.status(403).json({ error: 'forbidden' });
+    const school = String(req.body && req.body.school || req.session.school || '').toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'invalid_school' });
+    if (!(canManageUsers(req.session, school) || (role === 'SCHOOL_AGENT' && school === req.session.school)))
+      return res.status(403).json({ error: 'forbidden' });
+    const teacherId = String(req.body && req.body.teacherId || '');
+    const checkIn = Boolean(req.body && req.body.checkIn);
+    const date = String(req.body && req.body.date || '').slice(0, 10);
+    if (!teacherId) return res.status(400).json({ error: 'invalid_teacher' });
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date))
+      return res.status(400).json({ error: 'invalid_date' });
+    const target = await db.recordSupervisionCheckIn(school, teacherId, date || (supervisionToday().date), checkIn);
+    res.json({ ok: true, recorded: target.checkedInAt ? true : false, cancelled: target.cancelled });
+  })().catch(error => {
+    if (error && ['not_assigned'].includes(error.message))
+      return res.status(403).json({ error: error.message });
+    fail(res)(error);
+  });
+});
+
 app.get('/api/supervision/history', requireAuth, (req, res) => {
   (async () => {
     const school = String(req.query.school || req.session.school || '').toUpperCase();
-    if (req.session.role !== 'ADMIN' || !db.SCHOOLS.includes(school) || !canManageUsers(req.session, school))
+    if ((req.session.role !== 'ADMIN' && req.session.role !== 'SCHOOL_AGENT') || !db.SCHOOLS.includes(school))
+      return res.status(403).json({ error: 'forbidden' });
+    if (!(canManageUsers(req.session, school) || (req.session.role === 'SCHOOL_AGENT' && school === req.session.school)))
       return res.status(403).json({ error: 'forbidden' });
     res.json({ ok: true, school, history: await db.getSupervisionHistory(school, req.query.limit) });
   })().catch(fail(res));

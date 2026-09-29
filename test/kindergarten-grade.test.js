@@ -305,7 +305,7 @@ test('رسائل retrofitting لم تعد تحتوي أرقامًا ثابتة �
   assert.match(SRC, /addedNames\.join/, 'أسماء الصفوف المضافة تُحسب من الكود');
 });
 
-test('تقرير ملخّص الفصول يعتمد getClassesSorted (ترتيب الصفوف)', () => {
-  assert.match(SRC, /const classes = getClassesSorted\(\)\.filter\(c => canSeeClass\(c\.id\)/,
-    'تقرير class_summary مرتَّب بترتيب الصفوف');
+test('تقرير ملخّص الفصول (class_summary) أُزيل نهائيًا من التقارير', () => {
+  assert.equal(SRC.includes("value:'class_summary'"), false, 'لا يوجد خيار تقرير class_summary');
+  assert.equal(SRC.includes("type === 'class_summary'"), false, 'لا يوجد فرع معالجة class_summary');
 });

@@ -571,16 +571,17 @@ async function sweepSessions() {
 }
 
 const SUPERVISION_DAYS = new Set([1, 2, 3, 4, 5]);
-const SUPERVISION_VISIBLE_ROLES = new Set(['ADMIN', 'TEACHER']);
+const SUPERVISION_VISIBLE_ROLES = new Set(['ADMIN', 'TEACHER', 'SCHOOL_AGENT']);
 
 // من يملك حق استدعاء /api/supervision/today أصلًا (بقية الأدوار تُرفض فورًا).
 function canViewSupervisionToday(role) {
   return SUPERVISION_VISIBLE_ROLES.has(role);
 }
 
-// المدير يرى جميع مشرفات اليوم؛ المعلمة ترى تكليفها هي فقط وليس زميلاتها.
+// المدير والوكيلة يريان جميع مشرفات اليوم؛ المعلمة ترى تكليفها هي فقط وليس زميلاتها.
+// («الوكيلة» تدخل بنفسها من أدى الإشراف ومن لم يؤده).
 function filterSupervisionAssignments(role, rows, userId) {
-  if (role === 'ADMIN') return rows;
+  if (role === 'ADMIN' || role === 'SCHOOL_AGENT') return rows;
   if (role === 'TEACHER') return rows.filter(row => row.teacher_id === userId);
   return [];
 }
@@ -671,6 +672,35 @@ async function checkInSupervision(school, teacherId, dayOfWeek, date) {
   } finally {
     client.release();
   }
+}
+
+// للوكيلة/المدير: تسجيل أن المعلمة باشرت الإشراف في تاريخ معيّن (checkIn=true)
+// أو إلغاء ذلك/تسجّل أنها لم تؤده (checkIn=false). تُقيَّد المعلمة وتاريخ اليوم.
+async function recordSupervisionCheckIn(school, teacherId, checkinDate, checkIn) {
+  const assigned = await pool.query(
+    `SELECT 1 FROM teacher_supervision_schedule
+      WHERE school = $1 AND day_of_week = (EXTRACT(ISODOW FROM $2::date))::int
+        AND teacher_id = $3 AND enabled = true`,
+    [school, checkinDate, teacherId]);
+  if (!assigned.rows.length) throw new Error('not_assigned');
+  const r = await pool.query(
+    `INSERT INTO teacher_supervision_checkins (school, teacher_id, day_of_week, checkin_date)
+     VALUES ($1,$2,(EXTRACT(ISODOW FROM $3::date))::int,$3::date)
+     ON CONFLICT (school, teacher_id, checkin_date)
+     DO UPDATE SET checked_in_at = CASE WHEN $4::boolean
+       THEN COALESCE(teacher_supervision_checkins.checked_in_at, now())
+       ELSE NULL END
+     RETURNING teacher_id, checkin_date, checked_in_at`,
+    [school, teacherId, checkinDate, checkIn]);
+  const record = r.rows[0] || null;
+  if (record && !record.checked_in_at && !checkIn) {
+    // إذا كانت النتيجة أن لا سجل مباشرة فعلًا، نحذف الصف ليبقى الجدول نظيفًا
+    await pool.query(
+      `DELETE FROM teacher_supervision_checkins
+        WHERE school = $1 AND teacher_id = $2 AND checkin_date = $3::date`,
+      [school, teacherId, checkinDate]);
+  }
+  return { teacherId, checkinDate, checkedInAt: record ? record.checked_in_at : null, cancelled: !checkIn };
 }
 
 async function getSupervisionHistory(school, limit) {
@@ -886,7 +916,7 @@ module.exports = {
   repairTeacherFirstLoginFromEvidence,
   activateTeachersSafely,
   getSupervisionSchedule, replaceSupervisionSchedule, getSupervisionForDate,
-  checkInSupervision, getSupervisionHistory,
+  checkInSupervision, recordSupervisionCheckIn, getSupervisionHistory,
   canViewSupervisionToday, filterSupervisionAssignments,
   getSchoolData, setSchoolData, mutateSchoolData, patchSchoolUserStats, touchUserPresence,
   getSchoolSettings, setSchoolSettings,

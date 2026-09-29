@@ -15,6 +15,12 @@ test('ADMIN can see all of today\'s supervisors', () => {
   assert.deepEqual(visible, rows);
 });
 
+test('SCHOOL_AGENT (الوكيلة) can see all of today\'s supervisors and record them', () => {
+  assert.equal(db.canViewSupervisionToday('SCHOOL_AGENT'), true);
+  const visible = db.filterSupervisionAssignments('SCHOOL_AGENT', rows, 'teacher-1');
+  assert.deepEqual(visible, rows);
+});
+
 test('TEACHER cannot see other teachers\' supervision assignments', () => {
   const visible = db.filterSupervisionAssignments('TEACHER', rows, 'teacher-1');
   assert.equal(visible.some(row => row.teacher_id === 'teacher-2'), false);
@@ -27,7 +33,7 @@ test('TEACHER can see her own assignment', () => {
 });
 
 test('an unauthorized role is rejected before any row is returned', () => {
-  for (const role of ['STUDENT', 'AGENT', 'COUNSELOR', 'SCHOOL_AGENT', 'ADMINISTRATIVE']) {
+  for (const role of ['STUDENT', 'AGENT', 'COUNSELOR', 'ADMINISTRATIVE']) {
     assert.equal(db.canViewSupervisionToday(role), false);
   }
   // حتى لو استُدعيت دالة الفلترة خطأً لدور غير مصرح له، لا تُعيد أي صف

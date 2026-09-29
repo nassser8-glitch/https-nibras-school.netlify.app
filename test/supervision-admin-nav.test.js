@@ -58,12 +58,12 @@ test('TEACHER: لا يظهر رابط إدارة الإشراف اليومي ف�
   assert.ok(!keys.includes('supervision'), 'يجب ألا يحتوي على رابط supervision لحساب TEACHER');
 });
 
-test('SCHOOL_AGENT: لا يظهر رابط إدارة الإشراف اليومي (لا ينتمي لهذا الدور)', () => {
+test('SCHOOL_AGENT: يظهر رابط الإشراف اليومي (الوكيلة تسجّل من أدى الإشراف ومن لم يؤده)', () => {
   const keys = computeNavKeysForRole('SCHOOL_AGENT');
-  assert.ok(!keys.includes('supervision'), 'يجب ألا يحتوي فرع SCHOOL_AGENT على رابط supervision بعد النقل');
+  assert.ok(keys.includes('supervision'), 'يجب أن يحتوي فرع SCHOOL_AGENT على رابط supervision');
 });
 
-test('AGENT: لا يظهر رابط إدارة الإشراف اليومي (مقتصر على ADMIN فقط)', () => {
+test('AGENT: لا يظهر رابط إدارة الإشراف اليومي (مقتصر على ADMIN والوكيلة)', () => {
   const keys = computeNavKeysForRole('AGENT');
-  assert.ok(!keys.includes('supervision'), 'يجب أن يبقى رابط supervision مقتصرًا على ADMIN فقط');
+  assert.ok(!keys.includes('supervision'), 'يجب أن يبقى رابط supervision مقتصرًا على ADMIN والوكيلة');
 });
