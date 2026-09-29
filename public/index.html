@@ -462,7 +462,9 @@
   .att-legend .row { display:flex; align-items:center; gap:7px; white-space:nowrap; }
   .att-legend .swatch { width:11px; height:11px; border-radius:3px; flex-shrink:0; }
   .att-legend b { margin-inline-start:auto; font-weight:800; }
-  .att-report-btn { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; border:none; background:transparent; color:#2563eb; font-size:12px; font-weight:700; cursor:pointer; padding:10px 16px; border-top:1px solid var(--line); font-family:inherit; grid-column:1 / -1; }
+  .att-report-btn { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; border:none; background:transparent; color:#2563eb; font-size:12px; font-weight:700; cursor:pointer; padding:10px 16px; border-top:1px solid var(--line); font-family:inherit; }
+  .att-report-btn.colA { grid-column:1 / 2; }
+  .att-report-btn.colB { grid-column:2 / 3; }
   .att-report-btn:hover { color:#1d4ed8; background:var(--light); }
   .dash-tabs { display:flex; gap:6px; background:var(--light); border-radius:10px; padding:4px; }
   .dash-tab { flex:1; border:none; background:transparent; border-radius:8px; padding:7px 10px; font-size:12.5px; font-weight:800; color:var(--muted); cursor:pointer; font-family:inherit; }
@@ -480,7 +482,7 @@
   @media (max-width:900px){ .topbar-search { display:none; } }
   @media (max-width:820px){ .dash-hero { grid-template-columns:1fr; } .dash-grid2 { grid-template-columns:1fr; } .dash-bottom { grid-template-columns:1fr; } .dash-mid { grid-template-columns:1fr; } }
   @media (max-width:700px){ .layout .main { padding:12px; } .dash-greet { flex-wrap:wrap; } .dash-status { flex-wrap:wrap; } .topbar-actions { gap:8px; } .topbar-brand p { display:none; } }
-  @media (max-width:560px){ .dash-stats { grid-template-columns:repeat(2,1fr); } .att-card { grid-template-columns:1fr; } .att-group + .att-group { border-inline-start:none; border-top:1px solid var(--line); } .topbar-brand h1 { font-size:13px; } .topbar-logo { width:36px; height:36px; } .topbar-actions .btn-secondary { padding:6px 9px; font-size:12px; } .topbar-user-name { font-size:12px; } .topbar-user-role { font-size:10.5px; } .act-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+  @media (max-width:560px){ .dash-stats { grid-template-columns:repeat(2,1fr); } .att-card { grid-template-columns:1fr; } .att-group + .att-group { border-inline-start:none; border-top:1px solid var(--line); } .att-report-btn.colA, .att-report-btn.colB { grid-column:auto; } .topbar-brand h1 { font-size:13px; } .topbar-logo { width:36px; height:36px; } .topbar-actions .btn-secondary { padding:6px 9px; font-size:12px; } .topbar-user-name { font-size:12px; } .topbar-user-role { font-size:10.5px; } .act-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
   @media (max-width:380px){ .topbar-brand h1 { font-size:12px; } .topbar-actions .topbar-user-block { display:none; } }
   .pw-wrap { position:relative; display:block; }
   .pw-wrap .pw-toggle { position:absolute; top:50%; inset-inline-end:8px; transform:translateY(-50%); border:none; background:transparent; cursor:pointer; font-size:16px; line-height:1; color:var(--muted); padding:4px; z-index:2; }
@@ -4466,7 +4468,8 @@ function renderDashboard(){
     <div class="att-card">
       ${attGroup('👨‍🎓 حضور الطلاب', present, absent, late, sPct, 'showTodayAttendance()')}
       ${attGroup('👨‍🏫 حضور المعلمين والإداريين', tPresent, absentTeachers.length, lateTeachers.length, tPct, canMgrT ? 'showTeacherAbsenceList()' : 'showTodayAttendance()', true, true)}
-      <button class="att-report-btn" onclick="showTodayAttendance()"><span>عرض تقرير الحضور</span><span>←</span></button>
+      <button class="att-report-btn colA" onclick="showTodayAttendance()"><span>عرض تقرير الحضور</span><span>←</span></button>
+      <button class="att-report-btn colB" onclick="showTeacherTodayAttendance()"><span>عرض تقرير الحضور</span><span>←</span></button>
     </div>`;
   const attPanel = `
     <div class="dash-panel">
@@ -4884,6 +4887,48 @@ function showTodayAttendance(){
       </div>
       <table class="data-table" style="margin-top:12px">
         <thead><tr><th>الطالب</th><th>الرقم</th><th>الفصل</th><th>الحالة</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+/* ==== عرض تقرير حضور المعلمين والإداريين اليوم (مثل حضور الطلاب) ==== */
+function showTeacherTodayAttendance(){
+  const d = loadDB();
+  const todayKey = localDateKey(new Date());
+  const staff = d.users.filter(u => ((u.role === 'TEACHER') || isAdminRole(u.role)) && u.active)
+    .sort((a,b) => String(a.name).localeCompare(String(b.name),'ar'));
+  const rows = staff.length === 0
+    ? `<tr><td colspan="3" style="text-align:center;padding:20px;color:#9ca3af">لا يوجد معلمون وإداريون مسجلون</td></tr>`
+    : staff.map(t => {
+        const absent = (t.absences || []).includes(todayKey);
+        const late = (t.markedLate || []).includes(todayKey);
+        let badge, color;
+        if(absent){ badge = 'غائب'; color = '#dc2626'; }
+        else if(late){
+          const mins = (t.lateMinutes && t.lateMinutes[todayKey] != null) ? t.lateMinutes[todayKey] : '';
+          const nm = LATE_TYPE_NAMES[t.lateType && t.lateType[todayKey]] || 'تأخر';
+          badge = 'متأخر' + (nm !== 'تأخر' ? ' — ' + nm : '') + (mins !== '' ? ' (' + mins + ' د)' : '');
+          color = '#d97706';
+        } else { badge = 'حاضر'; color = '#16a34a'; }
+        return `<tr>
+          <td style="font-weight:700">${teacherEmoji()} ${escapeHtml(t.name)}</td>
+          <td>${escapeHtml(t.email)}</td>
+          <td style="font-weight:800;color:${color}">${badge}</td>
+        </tr>`;
+      }).join('');
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.onclick = (e) => { if(e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="card" style="width:min(560px,100%);max-height:86vh;overflow:auto;padding:20px">
+      <div class="header-row">
+        <h3 style="margin:0">✅ حضور المعلمين والإداريين اليوم <span class="muted small">(${staff.length})</span></h3>
+        <button class="btn-secondary" onclick="this.closest('.card').parentElement.remove()">✕ إغلاق</button>
+      </div>
+      <table class="data-table" style="margin-top:12px">
+        <thead><tr><th>الاسم</th><th>البريد</th><th>الحالة</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
