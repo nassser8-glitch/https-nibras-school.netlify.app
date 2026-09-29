@@ -58,6 +58,7 @@ function buildSandbox(fetchImpl) {
     __supervisionTodayLoading: false,
     __supervisionTodayFailed: false,
     __supervisionTodayAttempts: 0,
+    __supervisionTodayDenied: false,
     SUPERVISION_MAX_ATTEMPTS: 3,
     SUPERVISION_API: '/api/supervision/',
     fetchCallCount: 0,
@@ -122,5 +123,11 @@ for (const scenario of [
       true,
       'عدّاد المحاولات يجب ألا يتجاوز SUPERVISION_MAX_ATTEMPTS'
     );
+    // 401/403 = رفض صلاحية من الخادم (يجب أن يُعرض سبب واضح لا تعليق «جار تحميل»)، أما خطأ الشبكة فليس رفض صلاحية
+    if (scenario.name === '401' || scenario.name === '403') {
+      assert.equal(ctx.__supervisionTodayDenied, true, `يجب تعليم حالة الرفض عند ${scenario.name}`);
+    } else {
+      assert.equal(ctx.__supervisionTodayDenied, false, 'خطأ الشبكة لا يُعد رفض صلاحية');
+    }
   });
 }

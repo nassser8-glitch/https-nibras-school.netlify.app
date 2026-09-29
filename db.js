@@ -918,6 +918,7 @@ module.exports = {
   getSupervisionSchedule, replaceSupervisionSchedule, getSupervisionForDate,
   checkInSupervision, recordSupervisionCheckIn, getSupervisionHistory,
   canViewSupervisionToday, filterSupervisionAssignments,
+  supervisionVisibleRoles: () => [...SUPERVISION_VISIBLE_ROLES],
   getSchoolData, setSchoolData, mutateSchoolData, patchSchoolUserStats, touchUserPresence,
   getSchoolSettings, setSchoolSettings,
   saveBackup, listBackups, getBackup,

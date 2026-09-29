@@ -522,10 +522,12 @@ let __supervisionToday = null;
 let __supervisionTodayLoading = false;
 let __supervisionTodayFailed = false;
 let __supervisionTodayAttempts = 0;
+let __supervisionTodayDenied = false; // الخادم رفض الطلب (401/403) — يُعرض سبب واضح بدل تعليق «جار التحميل» إلى الأبد
 let __supervisionSchedule = null;
 let __supervisionScheduleLoading = false;
 let __supervisionScheduleFailed = false;
 let __supervisionScheduleAttempts = 0;
+let __supervisionScheduleDenied = false; // الخادم رفض الطلب (401/403) — يُعرض سبب واضح بدل تعليق «جار التحميل» إلى الأبد
 let __supervisionHistory = null;
 let __supervisionDraftSchedule = null; // مسودة العميل: { [dayOfWeek]: Set<teacherId> } — تُبنى من __supervisionSchedule وتُصفَّر بعد الحفظ الناجح
 let __supervisionAddOpenDay = null; // اليوم الذي تُعرض له قائمة "+ إضافة مشرفة" حاليًا، أو null
@@ -542,8 +544,8 @@ async function __loadSupervisionToday(force){
   __supervisionTodayAttempts++;
   try{
     const r = await fetch(SUPERVISION_API + 'today');
-    if(r.ok){ __supervisionToday = await r.json(); __supervisionTodayFailed = false; }
-    else { __supervisionTodayFailed = true; }
+    if(r.ok){ __supervisionToday = await r.json(); __supervisionTodayFailed = false; __supervisionTodayDenied = false; }
+    else { __supervisionTodayFailed = true; if(r.status === 401 || r.status === 403) __supervisionTodayDenied = true; }
   }catch(e){ __supervisionTodayFailed = true; } finally { __supervisionTodayLoading = false; }
   return __supervisionToday;
 }
@@ -556,8 +558,8 @@ async function __loadSupervisionSchedule(force){
   __supervisionScheduleAttempts++;
   try{
     const r = await fetch(SUPERVISION_API + 'schedule');
-    if(r.ok){ __supervisionSchedule = await r.json(); __supervisionScheduleFailed = false; }
-    else { __supervisionScheduleFailed = true; }
+    if(r.ok){ __supervisionSchedule = await r.json(); __supervisionScheduleFailed = false; __supervisionScheduleDenied = false; }
+    else { __supervisionScheduleFailed = true; if(r.status === 401 || r.status === 403) __supervisionScheduleDenied = true; }
   }catch(e){ __supervisionScheduleFailed = true; } finally { __supervisionScheduleLoading = false; }
   return __supervisionSchedule;
 }
@@ -618,6 +620,20 @@ async function __recordSupervision(teacherId, checkIn){
   const r = await fetch(SUPERVISION_API + 'record', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ teacherId, checkIn }) });
   if(!r.ok){ const e = await r.json().catch(()=>({})); alert(e.error === 'not_assigned' ? 'هذه المعلمة ليست مكلفة بالإشراف اليوم' : 'تعذر حفظ الحالة'); return; }
   await __loadSupervisionToday(true);
+  renderApp();
+}
+// إعادة تحميل بيانات الإشراف من الصفر: يمسح حالة الرفض/الفشل والبيانات القديمة، ثم يرسم
+function __reloadSupervision(){
+  __supervisionSchedule = null;
+  __supervisionScheduleDenied = false;
+  __supervisionScheduleFailed = false;
+  __supervisionScheduleAttempts = 0;
+  __supervisionScheduleLoading = false;
+  __supervisionToday = null;
+  __supervisionTodayDenied = false;
+  __supervisionTodayFailed = false;
+  __supervisionTodayAttempts = 0;
+  __supervisionTodayLoading = false;
   renderApp();
 }
 async function __loadSupervisionHistory(){
@@ -8128,6 +8144,10 @@ const TIMETABLE_DAYS = [
 ];
 function renderSupervisionAdmin(){
   if(!__supervisionSchedule){
+    if(__supervisionScheduleDenied){
+      // الخادم رفض الطلب (دور بلا صلاحية أو جلسة منتهية) — لا نعيد المحاولة endlessly ولا نترك «جار تحميل» معلقًا
+      return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">لا تملك صلاحية عرض بيانات الإشراف. إن كنت مسؤول النظام فاطلب تفعيل صلاحية الإشراف لحسابك من صفحة الحسابات، ثم أعد تسجيل الدخول.</p><button class="btn-secondary" onclick="__reloadSupervision()">إعادة المحاولة</button></section>`;
+    }
     if(__supervisionScheduleFailed && __supervisionScheduleAttempts >= SUPERVISION_MAX_ATTEMPTS){
       return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">تعذر تحميل بيانات الإشراف. تحقق من الاتصال ثم أعد المحاولة.</p><button class="btn-secondary" onclick="__loadSupervisionSchedule(true).then(renderApp)">إعادة المحاولة</button></section>`;
     }
@@ -8140,6 +8160,9 @@ function renderSupervisionAdmin(){
   const db = loadDB();
   const teachers = (db.users || []).filter(u => u.role === 'TEACHER' && u.active !== false);
   __ensureSupervisionDraft();
+  const currentRole = (currentUser() || {}).role;
+  const canRecord = currentRole === 'ADMIN' || currentRole === 'AGENT' || currentRole === 'SCHOOL_AGENT';
+  const canEditSchedule = currentRole === 'ADMIN'; // تعديل الجدول الأسبوعي للمدير فقط؛ الوكيل/الوكيلة يسجّل من أدى الإشراف فقط
   const teacherName = (id) => { const t = teachers.find(x => x.id === id); return t ? (t.name || t.username || t.id) : id; };
   const days = SUPERVISION_DAYS.map(day => {
     const assignedIds = [...__supervisionDraftSchedule[day.dow]];
@@ -8151,20 +8174,19 @@ function renderSupervisionAdmin(){
     return `
     <div class="panel" data-supervision-day="${day.dow}" style="margin-bottom:12px">
       <h3>🛡️ ${day.label}</h3>
-      <button type="button" class="btn-secondary" onclick="__supervisionToggleAddPicker(${day.dow})">${pickerOpen ? '✕ إغلاق' : '+ إضافة مشرفة'}</button>
-      ${pickerOpen ? `
+      ${canEditSchedule ? `<button type="button" class="btn-secondary" onclick="__supervisionToggleAddPicker(${day.dow})">${pickerOpen ? '✕ إغلاق' : '+ إضافة مشرفة'}</button>` : ''}
+      ${pickerOpen && canEditSchedule ? `
         <div class="grid-2" data-supervision-picker="${day.dow}" style="margin-top:8px">
           ${available.length ? available.map(t => `<label class="check-row"><input type="checkbox" value="${t.id}"> ${escapeHtml(t.name || t.username || t.id)}</label>`).join('') : '<p class="muted">تمت إضافة جميع المعلمات لهذا اليوم</p>'}
         </div>
         ${available.length ? `<button type="button" class="btn-primary" style="margin-top:8px" onclick="__supervisionAddSelected(${day.dow})">إضافة المحددات</button>` : ''}
       ` : ''}
       <ul style="margin:10px 0 0;padding-inline-start:18px">
-        ${assignedList.length ? assignedList.map(x => `<li style="padding:4px 0">${escapeHtml(x.name)} <button type="button" class="btn-secondary" style="padding:2px 8px;font-size:12px;margin-inline-start:6px" onclick="__supervisionRemoveTeacher(${day.dow},'${x.id}')">حذف</button></li>`).join('') : '<li class="muted">لا توجد مشرفات مكلفات بعد</li>'}
+        ${assignedList.length ? assignedList.map(x => `<li style="padding:4px 0">${escapeHtml(x.name)} ${canEditSchedule ? `<button type="button" class="btn-secondary" style="padding:2px 8px;font-size:12px;margin-inline-start:6px" onclick="__supervisionRemoveTeacher(${day.dow},'${x.id}')">حذف</button>` : ''}</li>`).join('') : '<li class="muted">لا توجد مشرفات مكلفات بعد</li>'}
       </ul>
     </div>`;
   }).join('');
   const today = __supervisionToday;
-  const canRecord = user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT';
   const todayRows = today && today.assigned ? today.assigned : [];
   const todayBlock = `<div class="panel"><h3>🛡️ مشرفات اليوم – ${escapeHtml((SUPERVISION_DAYS.find(x=>x.dow===today?.dayOfWeek)||{}).label || 'لا يوجد إشراف')}</h3>
     ${todayRows.length ? todayRows.map(x => `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #eee;flex-wrap:wrap">${x.checkedInAt ? '🟢 باشرت الإشراف' : '🟡 لم تسجل المباشرة'} — <b>${escapeHtml(x.name || x.teacherId)}</b>${x.checkedInAt ? ` <span class="muted">${escapeHtml(x.checkedInAt)}</span>` : ''}
@@ -8174,7 +8196,7 @@ function renderSupervisionAdmin(){
     </div>`).join('') : '<p class="muted">لا توجد مشرفات اليوم</p>'}</div>`;
   const history = __supervisionHistory && __supervisionHistory.history;
   const historyBlock = history ? `<div class="panel"><h3>📜 سجل الإشراف</h3>${history.length ? history.map(x => `<div style="padding:7px 0;border-bottom:1px solid #eee">${escapeHtml(x.supervision_date || x.checkin_date || x.date || '')} — ${escapeHtml(x.name || x.teacher_id || '')} — ${x.checked_in_at || x.checkin_time ? '🟢 ' + escapeHtml(x.checked_in_at || x.checkin_time) : '🟡 لم تسجل المباشرة'}</div>`).join('') : '<p class="muted">لا توجد سجلات بعد</p>'}</div>` : '<button class="btn-secondary" onclick="__loadSupervisionHistory()">عرض سجل الإشراف</button>';
-  return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">جدول أسبوعي ثابت يتكرر تلقائيًا من الاثنين إلى الجمعة.</p><button class="btn-primary" onclick="__saveSupervisionSchedule()">حفظ جدول الإشراف</button></section>${todayBlock}${days}${historyBlock}`;
+  return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">جدول أسبوعي ثابت يتكرر تلقائيًا من الاثنين إلى الجمعة.</p>${canEditSchedule ? '<button class="btn-primary" onclick="__saveSupervisionSchedule()">حفظ جدول الإشراف</button>' : ''}</section>${todayBlock}${days}${historyBlock}`;
 }
 
 /* ===== جدول الإشراف اليومي الأسبوعي (مصدره الخادم) ===== */
