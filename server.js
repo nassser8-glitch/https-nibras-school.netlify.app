@@ -1625,9 +1625,9 @@ app.post('/api/stars/award', requireAuth, (req, res) => {
     if (!ctx) return;
 
     // الكتابة تجري على الصف المقفل (BEGIN + SELECT..FOR UPDATE)
-    // وليس getSchoolData ثم setSchoolData: تقرأً نافذة سباق تمسح أي حفظ
-    // جديد تمظر بيننهما إلى الطبقة (المحدر يُقابلة بالتقويم).
-    // التحقق يتكرر داخل القفل المقفل الأسبوع، فيُعد النسخة إذا لون تكررنا.
+    // وليس getSchoolData ثم setSchoolData: فالفجوة بينهما سباقٌ يمسح أي حفظ
+    // جديد يُسجَّل بينهما إلى التطبيق layer (وهو ما حذف دفعات حضور سابقًا هنا).
+    // والتحقق يتكرر داخل القفل، فيُعاد الاشتقاق إن تغيّر الأساس.
     let out = null;
     const r = await db.mutateSchoolData(ctx.school, (fresh) => {
       const o = starWeek.upsertAward(fresh, req.session, body, { week: ctx.week });
@@ -1636,7 +1636,7 @@ app.post('/api/stars/award', requireAuth, (req, res) => {
       return { changed: true, value: o.record };
     });
     if (!r.written) return res.status(409).json({ error: 'write_conflict', reason: r.reason });
-    // لنُعد الإعادة إلا بما حقيقيًا داخل القلف المقفل.
+    // نُعيد الاستجابة من الحالة بعد القفل مباشرةً، لا من قيمة مُقدَّرة.
     const after = await db.getSchoolData(ctx.school);
     const view = starWeek.buildView(after.data || {}, req.session, ctx.week);
     res.json({ ok: true, school: ctx.school, traits: starWeek.STAR_TRAITS, ...view });

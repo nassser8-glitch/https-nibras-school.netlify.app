@@ -217,7 +217,8 @@ test('كل ملفات JS المعدَّلة تُحلَّل فعلًا (حارس 
   const files = [
     'server.js', 'star-week.js',
     'public/star-week.js', 'public/sw.js',
-    'test/star-week.test.js', 'test/star-week-ui.test.js', 'test/star-week-handler.test.js'
+    'test/star-week.test.js', 'test/star-week-ui.test.js', 'test/star-week-handler.test.js',
+    'test/star-week-http.test.js', 'test/helpers/stars-http-harness.js'
   ];
   for (const f of files) {
     const p = path.join(ROOT, f);
@@ -229,7 +230,8 @@ test('كل ملفات JS المعدَّلة تُحلَّل فعلًا (حارس 
 test('لا محارف تالفة (U+FFFD) ولا صينية في ملفات الميزة', () => {
   // بقايا تحريرTermination تُنتج نصًّا مشوّهًا صامتًا
   for (const f of ['star-week.js', 'public/star-week.js', 'public/sw.js',
-                   'test/star-week.test.js', 'test/star-week-ui.test.js', 'test/star-week-handler.test.js']) {
+                   'test/star-week.test.js', 'test/star-week-ui.test.js', 'test/star-week-handler.test.js',
+                   'test/star-week-http.test.js', 'test/helpers/stars-http-harness.js']) {
     const s = fs.readFileSync(path.join(ROOT, f), 'utf8');
     const bad = s.match(/[\uFFFD\u4e00-\u9fff]/g);
     assert.ok(!bad, f + ' يحتوي محارف غريبة: ' + JSON.stringify(bad && bad.slice(0, 5)));
