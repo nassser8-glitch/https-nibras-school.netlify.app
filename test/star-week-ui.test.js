@@ -236,6 +236,35 @@ test('لا محارف تالفة (U+FFFD) ولا صينية في ملفات ال
   }
 });
 
+test('حارس PUT: النجوم لا تُمحو حتى لو لم ترسلها الحمولة أصلًا', () => {
+  // فحص سلوكي لا نصي: مسار الاستبدال الكامل للمدير (data = cf) يبني النسخة من
+  // حمولة العميل وحدها، فحمولة بلا `stars` كانت ستمسح كل النجوم بصمت.
+  const s = fs.readFileSync(SERVER, 'utf8');
+  const putAt = s.indexOf("app.put('/api/db/");
+  assert.ok(putAt > 0, 'المسار موجود');
+  const guardAt = s.indexOf('if (Array.isArray(serverStars)) clean.stars = serverStars;', putAt);
+  assert.ok(guardAt > 0, 'تثبيت قيمة الخادم موجود');
+  const guardBlock = s.slice(guardAt - 600, guardAt + 200);
+  // لا يجوز أن يكون التثبيت مشروطًا بوجود المفتاح في حمولة العميل
+  assert.ok(!/if \('stars' in data\)\s*\{[^}]*Array\.isArray\(serverStars\)/.test(guardBlock),
+    'التثبيت يجب أن يكون بلا شرط، وإلا مسحت الحمولة الناقصة النجوم');
+  assert.ok(/else delete clean\.stars;/.test(guardBlock), 'والمسار الآمن: انعدام قيمة خادم يعني عدم تخزين قيمة عميل');
+
+  // محاكاة السلوك: الحمولة ناقصة stars + قاعدة فيها نجوم ⇒ النجوم تبقى
+  const prev = { data: { stars: [{ id: 'w::C1', studentId: 'S1' }], users: [], students: [] } };
+  const data = { users: [], students: [], grades: [] };          // لا تحمل stars
+  const clean = JSON.parse(JSON.stringify(data));
+  const serverStars = (prev.data || {}).stars;
+  if (Array.isArray(serverStars)) clean.stars = serverStars; else delete clean.stars;
+  assert.deepStrictEqual(clean.stars, prev.data.stars, 'النجوم باقية رغم غيابها عن الحمولة');
+
+  // وحالة أسوأ: عميل يحاول انتحال نجمة باسمه
+  const d2 = { users: [], students: [], stars: [{ id: 'forged', studentId: 'HACK' }] };
+  const c2 = JSON.parse(JSON.stringify(d2));
+  c2.stars = serverStars;
+  assert.deepStrictEqual(c2.stars, prev.data.stars, 'محاولة التزوير مرفوضة');
+});
+
 test('CSS: ثيم وردي + دعم prefers-reduced-motion', () => {
   const idx = fs.readFileSync(INDEX, 'utf8');
   const css = idx.slice(idx.indexOf('<style>'), idx.indexOf('</style>'));
@@ -259,14 +288,16 @@ test('الملف لا يستورد express/pg (يبقى قابلًا للاخت�
 test('حارس PUT: يُسقط stars القادمة من العميل في PUT /api/db/:school', () => {
   const s = fs.readFileSync(SERVER, 'utf8');
   const putAt = s.indexOf("app.put('/api/db/:school'");
-  const guardAt = s.indexOf("if ('stars' in data) {", putAt);
+  // الحارس ثابت (بلا شرط على وجود المفتاح في حمولة العميل) — انظر الاختبار السابق
+  const guardAt = s.indexOf('const serverStars = (prev.data || {}).stars;', putAt);
   const writeAt = s.indexOf('db.setSchoolData(school, clean', putAt);
   assert.ok(putAt !== -1, 'المسار موجود');
   assert.ok(guardAt !== -1, 'الحارس موجود داخل PUT');
   assert.ok(guardAt < writeAt, 'الحارس قبل الكتابة (لا يُكتب قسم ملوَّث)');
-  const guard = s.slice(guardAt, guardAt + 400);
+  const guard = s.slice(guardAt, guardAt + 500);
   assert.ok(guard.includes('prev.data'), 'يعيد قيمة الخادم');
   assert.ok(/delete clean\.stars/.test(guard), 'يحذفها إن لم تكن موجودة في الخادم');
+  assert.ok(/jsonEqual\(serverStars, data\.stars\)/.test(guard), 'يسجّل محاولة التزوير');
   // مسار الاستعادة (استعادة نسخة احتياطية) غير معدّل: النجوم تُستعاد عمدًا
   const restoreAt = s.indexOf("app.post('/api/backups/restore'");
   const afterRestore = s.slice(restoreAt);

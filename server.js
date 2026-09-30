@@ -1954,18 +1954,23 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
 
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
     const clean = JSON.parse(JSON.stringify(data));
-// ===== قسم «نجمة الأسبوع» يملكه الخادم وحده =====
-// PUT /api/db/:school stores the whole payload (clean = copy of data), so any NEW
-// section sent by a client would be accepted from it — including a STUDENT.
-// Therefore we drop whatever the client sent for this section and keep the server
-// value: writes go only through /api/stars/award, which re-derives the class owner
-// server-side. Without this, the whole permission model would be bypassable.
-if ('stars' in data) {
-  const serverStars = (prev.data || {}).stars;
-  if (!jsonEqual(serverStars, data.stars)) console.warn('[stars] dropped client-supplied stars from', role || req.session && req.session.role || '?');
-  if (Array.isArray(serverStars)) clean.stars = serverStars;
-  else delete clean.stars;
-}
+    // ===== قسم «نجمة الأسبوع» يملكه الخادم وحده =====
+    // PUT /api/db/:school يخزّن النسخة كاملةً (clean = نسخة من data)، فأي قسم
+    // جديد يرسله العميل كان سيُقبل منه — حتى من طالبة. لذلك نتخلّص من أي نسخة
+    // يرسلها العميل لهذا القسم ونثبّت قيمة الخادم: الكتابة تمرّ فقط عبر
+    // /api/stars/award الذي يعيد اشتقاق رائدة الفصل في الخادم.
+    //
+    // مهم: التثبيت بلا شرط «العميل أرسل القسم». فمسار الاستبدال الكامل للمدير
+    // (data = cf) يبني النسخة من حمولة العميل فقط، فحمولة لا تحمل `stars`
+    // (جهاز بنسخة أقدم، أو حفظ جزئي) كانت ستمسح كل النجوم بصمت.
+    {
+      const serverStars = (prev.data || {}).stars;
+      if ('stars' in data && !jsonEqual(serverStars, data.stars)) {
+        console.warn('[stars] dropped client-supplied stars from', (req.session && req.session.role) || '?');
+      }
+      if (Array.isArray(serverStars)) clean.stars = serverStars;
+      else delete clean.stars;
+    }
     // تطبيع ثانٍ بعد الدمج: الدمج (mergeSection/mergeClasses...) قد يعيد مرجعات يتيمة
     // لمعلمات مكررة من نسخة جهاز قديم، فننظف النتيجة النهائية التي ستُخزن.
     try { await normalizeTeacherDuplicates(school, clean); } catch (e) { console.warn('[normalize#2]', e.message); }
