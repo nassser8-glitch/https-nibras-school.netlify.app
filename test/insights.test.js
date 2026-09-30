@@ -18,14 +18,17 @@ function extractBlock(name, from, to){
 }
 
 function extractInsightsCode(){
-  const optConsts = extractBlock('ثوابت المؤشرات', 'const __insightAbsOpts', 'function __insightRepeatedAbsence');
-  const absFn = extractBlock('__insightRepeatedAbsence', 'function __insightRepeatedAbsence', 'function __insightFrequentTransfers');
-  const trFn  = extractBlock('__insightFrequentTransfers', 'function __insightFrequentTransfers', 'function __insightModal');
-  return optConsts + '\n' + absFn + '\n' + trFn;
+  // الكتلة كلها من الثوابت حتى دالة النافذة، فتُشمل كل دوال المؤشرات بلا استثناء
+  return extractBlock('كتلة المؤشرات', 'const __insightAbsOpts', 'function __insightModal');
 }
 
 const DAY = 86400000;
-const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
+// مفتاح تاريخ بمكوّنات محلية، كما يولّده todayStr في التطبيق.
+// نتجنّب toISOString لأنه يحوّل إلى UTC فيُرجع اليوم السابق عند منتصف الليل
+// على أجهزة متأخرة عن UTC، فتنكسر حسابات «الأيام المتتالية» بلا سبب حقيقي.
+const pad2 = (n) => String(n).padStart(2, '0');
+const keyOf = (d) => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+const iso = (ms) => keyOf(new Date(ms));
 
 function sandbox(db){
   const context = {
@@ -49,8 +52,14 @@ function sandbox(db){
     classLabel: (c) => `${c ? c.name : '?'}`,
   };
   vm.createContext(context);
-  vm.runInContext(extractInsightsCode() + '\n;globalThis.__r = __insightRepeatedAbsence; globalThis.__f = __insightFrequentTransfers;', context);
-  return { abs: (...a) => context.__r(...a), freq: (...a) => context.__f(...a) };
+  vm.runInContext(extractInsightsCode() + '\n;globalThis.__r = __insightRepeatedAbsence; globalThis.__f = __insightFrequentTransfers; globalThis.__lt = __insightLateTeachers; globalThis.__ls = __insightLateStudents; globalThis.__ms = __insightMonthStart;', context);
+  return {
+    abs: (...a) => context.__r(...a),
+    freq: (...a) => context.__f(...a),
+    lateT: (...a) => context.__lt(...a),
+    lateS: (...a) => context.__ls(...a),
+    monthStart: (...a) => context.__ms(...a),
+  };
 }
 
 // يبني سجل حضور: studentId -> عدد أيام غياب متتالية ابتداءً من اليوم
@@ -214,9 +223,210 @@ test('الترتيب تنازلي بالأعلى عددًا', () => {
   assert.equal(rows[1].n, 4);
 });
 
+test('بداية الشهر تُحسب بالتقويم المحلي لا بـ UTC (الاختبار يعمل على أي منطقة زمنية)', () => {
+  const { monthStart } = sandbox({ students:[], classes:[], attendance:[], transfers:[], users:[] });
+  //Tz = UTC+9:Components المحلية لمنتصف ليل اليوم الأول = اليوم الأول محليًا،
+  // بينما UTC-9 = اليوم الأول من الشهر السابق. فأي اعتماد على toISOString
+  // سيعطي الشهر الخطأ هنا، وهذا ما نتحقق منه.
+  assert.equal(monthStart(new Date(2026, 8, 1)), '2026-09-01', '1 سبتمبر');
+  assert.equal(monthStart(new Date(2026, 0, 1)), '2026-01-01', 'يناير: شهر من رقم واحد يُ.padStart(2)');
+  assert.equal(monthStart(new Date(2026, 11, 31)), '2026-12-01', 'ديسمبر: آخر يوم');
+  assert.equal(monthStart(new Date(2027, 0, 1)), '2027-01-01', 'يناير 2027');
+  // بلا معامل = الشهر الحالي بصيغة YYYY-MM-01
+  assert.match(String(monthStart()), /^\d{4}-\d{2}-01$/, 'بلا معامل يعيد بداية الشهر الحالي');
+  assert.equal(monthStart(new Date('nonsense')), null, 'تاريخ فاسد يعيد null');
+});
+
 test('قاعدة بيانات فارغة لا تنهار', () => {
-  const db = { students:[], classes:[], attendance:[], transfers:[] };
-  const { abs, freq } = sandbox(db);
+  const db = { students:[], classes:[], attendance:[], transfers:[], users:[] };
+  const { abs, freq, lateT, lateS } = sandbox(db);
   assert.deepEqual(abs(), []);
   assert.deepEqual(freq(), []);
+  assert.deepEqual(lateT(), []);
+  assert.deepEqual(lateS(), []);
+});
+
+// ===== تأخر المعلمات المتكرر (أكثر من 5 مرات في الشهر) =====
+
+// يبني تواريخ أيام ماضية ضمن الشهر الحالي.
+// نبنيها بمكوّنات التاريخ المحلية (كما يفعل todayStr في التطبيق)، لا عبر toISOString:
+// فـtoISOString يحوّل إلى UTC فيُرجع اليوم السابق عند منتصف الليل على أجهزة
+// متأخرة عن UTC، فتخرج مفاتيح خارج الشهر وتُحذف سهوًا.
+function thisMonthDates(n, back = 0){
+  const out = [];
+  const now = new Date();
+  for(let i = 0; i < n; i++){
+    out.push(keyOf(new Date(now.getFullYear(), now.getMonth(), 1 + (i - back))));
+  }
+  return out;
+}
+
+function mkUser(id, name, role, markedLate){
+  return { id, name, role, active:true, markedLate };
+}
+
+test('معلمة تأخّرت 5 مرات بالضبط لا تظهر (العتبة أكثر من 5)', () => {
+  const u = mkUser('U1', 'معلمة خمسة', 'TEACHER', thisMonthDates(5));
+  const db = { students:[], classes:[], attendance:[], transfers:[], users:[u] };
+  const { lateT } = sandbox(db);
+  assert.equal(lateT().length, 0, '5 مرات لا تكفي');
+});
+
+test('معلمة تأخّرت 6 مرات تظهر', () => {
+  const u = mkUser('U1', 'معلمة ستة', 'TEACHER', thisMonthDates(6));
+  const db = { students:[], classes:[], attendance:[], transfers:[], users:[u] };
+  const { lateT } = sandbox(db);
+  const rows = lateT();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].n, 6);
+  assert.equal(rows[0].name, 'معلمة ستة');
+});
+
+test('تأخر المعلمة من الشهر الماضي لا يُحتسب في الشهر الحالي', () => {
+  const now = new Date();
+  const lastMonth = [];
+  for(let i = 1; i <= 8; i++){
+    lastMonth.push(iso(new Date(now.getFullYear(), now.getMonth() - 1, i).getTime()));
+  }
+  const u = mkUser('U1', 'معلمة الشهر الماضي', 'TEACHER', lastMonth);
+  const db = { students:[], classes:[], attendance:[], transfers:[], users:[u] };
+  const { lateT } = sandbox(db);
+  assert.equal(lateT().length, 0, 'تأخر الشهر الماضي لا يدخل عدّ هذا الشهر');
+});
+
+test('يوم تكراره في markedLate يُحسب مرة واحدة', () => {
+  const dup = [...thisMonthDates(6), ...thisMonthDates(6)];
+  const u = mkUser('U1', 'معلمة مكررة', 'TEACHER', dup);
+  const db = { students:[], classes:[], attendance:[], transfers:[], users:[u] };
+  const { lateT } = sandbox(db);
+  assert.equal(lateT()[0].n, 6, `6 أيام فريدة فقط (لا ${dup.length})`);
+});
+
+test('معلمة غير نشطة لا تظهر، ومعلمة COUNSELOR تظهر', () => {
+  const off = mkUser('U1', 'موقوفة', 'TEACHER', thisMonthDates(9));
+  off.active = false;
+  const coun = mkUser('U2', 'موجهة', 'COUNSELOR', thisMonthDates(7));
+  const db = { students:[], classes:[], attendance:[], transfers:[], users:[off, coun] };
+  const { lateT } = sandbox(db);
+  const rows = lateT();
+  assert.equal(rows.length, 1, 'غير النشطة مستبعدة');
+  assert.equal(rows[0].name, 'موجهة');
+});
+
+test('مدير/وكيل ليس معلمة — لا يظهر ضمن تأخر المعلمات', () => {
+  const admin = mkUser('U1', 'مدير', 'ADMIN', thisMonthDates(12));
+  const agent = mkUser('U2', 'وكيل', 'AGENT', thisMonthDates(12));
+  const db = { students:[], classes:[], attendance:[], transfers:[], users:[admin, agent] };
+  const { lateT } = sandbox(db);
+  assert.equal(lateT().length, 0, 'الإدارة ليست ضمن الكادر التعليمي');
+});
+
+test('معلمة بلا markedLate لا تنهار عند غياب الحقل', () => {
+  const u = { id:'U1', name:'بلا حقل', role:'TEACHER', active:true };
+  const db = { students:[], classes:[], attendance:[], transfers:[], users:[u] };
+  const { lateT } = sandbox(db);
+  assert.equal(lateT().length, 0);
+});
+
+// ===== تأخر الطالبات المتكرر (أكثر من 10 مرات في الشهر) =====
+
+function lateStudentAttendance(studentId, n){
+  return thisMonthDates(n).map((dte, i) => ({ id:`L${i}`, studentId, date:dte, status:'LATE' }));
+}
+
+test('طالبة تأخّرت 10 مرات بالضبط لا تظهر (العتبة أكثر من 10)', () => {
+  const s = mkStudent('S1', 'طالبة عشرة', 'C1');
+  const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: lateStudentAttendance('S1', 10), transfers:[], users:[] };
+  const { lateS } = sandbox(db);
+  assert.equal(lateS().length, 0, '10 مرات لا تكفي');
+});
+
+test('طالبة تأخّرت 11 مرة تظهر', () => {
+  const s = mkStudent('S1', 'طالبة أحد عشر', 'C1');
+  const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: lateStudentAttendance('S1', 11), transfers:[], users:[] };
+  const { lateS } = sandbox(db);
+  const rows = lateS();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].n, 11);
+});
+
+test('يوم غياب فيه لا يُحتسب تأخّرًا (العتبات تُحسب على أيام التأخّر وحدها)', () => {
+  // في البيانات الحقيقية سجلٌّ واحد لكل طالب/يوم بعد الدمج (__attWinner)،
+  // فاليوم إمّا غائب أو متأخر. هنا 11 يومًا: الأول غياب، والباقي 10 تأخّرًا.
+  const s = mkStudent('S1', 'طالبة مختلطة', 'C1');
+  const days = thisMonthDates(11);
+  const att = days.map((dte, i) => ({ id:`L${i}`, studentId:'S1', date:dte, status: i === 0 ? 'ABSENT' : 'LATE' }));
+  const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: att, transfers:[], users:[] };
+  const { lateS } = sandbox(db);
+  assert.equal(lateS().length, 0, '10 أيام تأخّر فقط — دون عتبة «أكثر من 10»');
+});
+
+test('يوم تأخّر مكرّر لنفس الطالبة يُحسب مرة واحدة', () => {
+  const s = mkStudent('S1', 'طالبة مكررة', 'C1');
+  const days = thisMonthDates(11);
+  const att = [
+    ...days.map((dte, i) => ({ id:`L${i}`, studentId:'S1', date:dte, status:'LATE' })),
+    ...days.slice(0, 4).map((dte, i) => ({ id:`D${i}`, studentId:'S1', date:dte, status:'LATE' })), // تكرار
+  ];
+  const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: att, transfers:[], users:[] };
+  const { lateS } = sandbox(db);
+  const rows = lateS();
+  assert.equal(rows.length, 1, '11 يومًا فريدة تتجاوز العتبة');
+  assert.equal(rows[0].n, 11, `التكرار لا يُضاعف العدّ: 11 يومًا فريدة من 15 سجلًّا (لا 15)`);
+});
+
+test('تأخر من الشهر الماضي لا يدخل عدّ الطالبات', () => {
+  const s = mkStudent('S1', 'طالبة قديمة', 'C1');
+  const now = new Date();
+  const att = [];
+  for(let i = 1; i <= 15; i++) att.push({ id:`L${i}`, studentId:'S1', date: iso(new Date(now.getFullYear(), now.getMonth()-1, i).getTime()), status:'LATE' });
+  const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: att, transfers:[], users:[] };
+  const { lateS } = sandbox(db);
+  assert.equal(lateS().length, 0);
+});
+
+test('سجل تأخّر محذوف (deleted) يُستبعد', () => {
+  const s = mkStudent('S1', 'طالبة محذوفات', 'C1');
+  const att = lateStudentAttendance('S1', 12).map((a, i) => i < 3 ? { ...a, deleted:true } : a);
+  const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: att, transfers:[], users:[] };
+  const { lateS } = sandbox(db);
+  assert.equal(lateS().length, 0, '12 منها 3 محذوفة = 9 دون العتبة');
+});
+
+test('طالبة غير نشطة لا تظهر في تأخر الطالبات', () => {
+  const s = { id:'S1', fullName:'موقوفة', classId:'C1', active:false };
+  const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: lateStudentAttendance('S1', 15), transfers:[], users:[] };
+  const { lateS } = sandbox(db);
+  assert.equal(lateS().length, 0);
+});
+
+test('الترتيب تنازلي بعدد مرات التأخّر', () => {
+  const s1 = mkStudent('S1', 'أقل', 'C1');
+  const s2 = mkStudent('S2', 'أكثر', 'C1');
+  const db = { students:[s1, s2], classes:[{id:'C1', name:'أ'}],
+    attendance: [...lateStudentAttendance('S1', 11), ...lateStudentAttendance('S2', 14)], transfers:[], users:[] };
+  const { lateS } = sandbox(db);
+  const rows = lateS();
+  assert.equal(rows[0].id, 'S2');
+  assert.equal(rows[0].n, 14);
+  assert.equal(rows[1].n, 11);
+});
+
+test('عتبة مخصّصة تُحترم (بديل تجريبي)', () => {
+  const s = mkStudent('S1', 'طالبة', 'C1');
+  const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: lateStudentAttendance('S1', 3), transfers:[], users:[] };
+  const { lateS } = sandbox(db);
+  assert.equal(lateS().length, 0, 'لا تظهر بالعتبة الافتراضية 10');
+  assert.equal(lateS(2).length, 1, 'تظهر بعتبة 2');
+});
+
+test('المؤشران يعملان معًا ولا يتداخلان', () => {
+  const s = mkStudent('S1', 'طالبة', 'C1');
+  const u = mkUser('U1', 'معلمة', 'TEACHER', thisMonthDates(8));
+  const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: lateStudentAttendance('S1', 12), transfers:[], users:[u] };
+  const { lateT, lateS } = sandbox(db);
+  assert.equal(lateT().length, 1, 'المعلمة تظهر');
+  assert.equal(lateS().length, 1, 'الطالبة تظهر');
+  assert.equal(lateT()[0].id, 'U1');
+  assert.equal(lateS()[0].id, 'S1');
 });

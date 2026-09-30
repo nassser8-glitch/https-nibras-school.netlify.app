@@ -4474,13 +4474,16 @@ function renderDashboard(){
   // نبراس يرى — مؤشرات ذكية للمسؤولين (ADMIN/AGENT/COUNSELOR) فقط.
   //  1) طلاب غيابهم متكرر: تجاوز 10 أيام غياباً، أو 5 أيام متتالية على مدى 30 يومًا.
   //  2) طلاب تحويلاتهم متكررة: أكثر من 3 تحويلات.
-  // منطق الحساب معزول في __insightRepeatedAbsence/__insightFrequentTransfers
-  // ليبقى واحدًا بين اللوحة ونافذتي التفاصيل (لا نسختي حساب).
+  //  3) معلمات تأخّرن متكررًا: أكثر من 5 مرات خلال الشهر.
+  //  4) طالبات تأخّرن متكررًا: أكثر من 10 مرات خلال الشهر.
+  // منطق الحساب معزول في __insight* ليستخدمه اللوحة ونوافذ التفاصيل بلا نسختين.
   const seesInsights = (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR');
   const insightsHTML = (() => {
     if(!seesInsights) return '';
     const repeatedAbs = __insightRepeatedAbsence();
     const frequentTransfers = __insightFrequentTransfers();
+    const lateTeachers = __insightLateTeachers();
+    const lateStudents = __insightLateStudents();
     const chip = (icon, color, name, meta, click) => `
       <div class="dash-needs-item" ${click ? `onclick="${click}" style="cursor:pointer"` : ''}>
         <div class="dash-needs-ico" style="background:${color}">${icon}</div>
@@ -4502,6 +4505,14 @@ function renderDashboard(){
     if(frequentTransfers.length){
       const meta = frequentTransfers.slice(0,3).map(t => `${t.name}${t.className ? ' (' + t.className + ')' : ''} — ${t.n} تحويلات`).join(' · ');
       items.push(chip('🔄', '#f5f3ff', `${frequentTransfers.length} طالبًا بتحويلات متكررة`, meta, 'showFrequentTransfers()'));
+    }
+    if(lateTeachers.length){
+      const meta = lateTeachers.slice(0,3).map(t => `${t.name} — ${t.n} مرة`).join(' · ');
+      items.push(chip('⏰', '#fffbeb', `${lateTeachers.length} معلمة تأخّرن متكررًا هذا الشهر`, meta, 'showLateTeachers()'));
+    }
+    if(lateStudents.length){
+      const meta = lateStudents.slice(0,3).map(t => `${t.name}${t.className ? ' (' + t.className + ')' : ''} — ${t.n} مرة`).join(' · ');
+      items.push(chip('⌛', '#fff7ed', `${lateStudents.length} طالبة تأخّرن متكررًا هذا الشهر`, meta, 'showLateStudents()'));
     }
     if(!items.length) return '';
     return `
@@ -5036,12 +5047,29 @@ function showTeacherTodayAttendance(){
   document.body.appendChild(overlay);
 }
 
-/* ============ «نبراس يرى»: تفاصيل الغياب المتكرر والتحويلات المتكررة ============ */
-/* معطيات المؤشرات: غياب متكرر = تجاوز 10 يوم غياب، أو 5 أيام متتالية على مدى آخر 30 يومًا.
-   تحويلات متكررة = أكثر من 3 تحويلات لنفس الطالب. الأساس هو سجل الحضور الفعلي
-   (__attEffStatus يحترم قاعدة التأكيد المزدوج: غائب بيومٍ أكّده معلمان أو سجله معلم واحد). */
+/* ============ «نبراس يرى»: تفاصيل الغياب المتكرر والتحويلات المتكررة والتأخر المتكرر ============ */
+/* معطيات المؤشرات:
+   - غياب متكرر = تجاوز 10 يوم غياب، أو 5 أيام متتالية على مدى آخر 30 يومًا (سجل الحضور).
+   - تحويلات متكررة = أكثر من 3 تحويلات لنفس الطالب.
+   - تأخر المعلمات المتكرر = أكثر من 5 مرات تأخّر خلال الشهر (teacher.markedLate).
+   - تأخر طالبات متكرر = أكثر من 10 مرات تأخّر خلال الشهر (سجل الحضور status LATE).
+   الأسس كلها سجلات الحضور/الحضور الفعلية، فتبقى الأرقام مطابقة لما في باقي اللوحة. */
 const __insightAbsOpts = { windowDays:30, daysThreshold:10, runThreshold:5 };
 const __insightTransfersThreshold = 3;
+const __insightLateOpts = { teacherThreshold:5, studentThreshold:10 };
+/* بداية الشهر بالتقويم المحلي للمتصفح، وهي التقويم نفسه الذي كُتبت به مفاتيح
+   التواريخ في البيانات: todayStr() في أعلى الملف هي التي تولّد attendance.date
+   وتواريخ teacher.markedLate. فلو حسبنا الشهر بتوقيت المدرسة (Asia/Karachi) لاختلف
+   الشهر عند حدّ الفجر على جهاز不在 توقيت المدرسة، وحُسب يومٌ خطأً. القاعدة:
+   نرشّح بتلك المفاتيح كما هي، فنحدّد الشهر بمنهج كاتبها لا بمنهج مستقل.
+   المعامل d اختياري (يصلح للحساب على تاريخ معيّن) وهو ما يجعل السلوك قابلًا للاختبار. */
+function __insightMonthStart(d0){
+  try{
+    const d = d0 || new Date();
+    if(!(d instanceof Date) || isNaN(d.getTime())) return null;
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01';
+  }catch(e){ return null; }
+}
 function __insightRepeatedAbsence(opts){
   const o = Object.assign({}, __insightAbsOpts, opts || {});
   const d = loadDB();
@@ -5074,7 +5102,7 @@ function __insightRepeatedAbsence(opts){
     const total = dates.size, run = longestRun(dates);
     if(total < o.daysThreshold && run < o.runThreshold) continue;
     const s = students.get(sid);
-    if(!s) continue; // طالب غير نش��: لا يظهر
+    if(!s) continue; // طالبة غير نشطة: لا تظهر
     const cls = s.classId ? (d.classes || []).find(c => c && c.id === s.classId) : null;
     out.push({ id:sid, name:s.fullName || s.name || sid, className: cls ? classLabel(cls) : '', total, run,
                dates: Array.from(dates).sort().reverse() });
@@ -5099,6 +5127,56 @@ function __insightFrequentTransfers(threshold){
     if(!s) continue;
     const cls = s.classId ? (d.classes || []).find(c => c && c.id === s.classId) : null;
     out.push({ id:sid, name:s.fullName || s.name || sid, className: cls ? classLabel(cls) : '', n });
+  }
+  out.sort((a,b) => b.n - a.n);
+  return out;
+}
+/* تأخر المعلمات المتكرر خلال الشهر: المصدر teacher.markedLate (مصفوفة مفاتيح تواريخ)،
+   لا سجل الحضور — لأن حضور المعلّمات يُسجَّل على كائن المعلمة لا في attendance.
+   الكادر التعليمي = TEACHER وCOUNSELOR (كما في قوائمهن في بقية التطبيق)، لا الإدارة. */
+function __insightLateTeachers(threshold){
+  const lim = Number(threshold) || __insightLateOpts.teacherThreshold;
+  const d = loadDB();
+  const start = __insightMonthStart();
+  if(!start) return [];
+  const out = [];
+  for(const u of (d.users || [])){
+    if(!u || u.active === false) continue;
+    if(u.role !== 'TEACHER' && u.role !== 'COUNSELOR') continue;
+    const dates = Array.isArray(u.markedLate) ? u.markedLate.filter(x => typeof x === 'string' && x >= start) : [];
+    const n = new Set(dates).size; // اليوم المتكرر يُحسب مرة واحدة
+    if(n <= lim) continue;
+    out.push({ id:u.id, name:u.name || u.id, role:u.role, n, dates:Array.from(new Set(dates)).sort().reverse() });
+  }
+  out.sort((a,b) => b.n - a.n);
+  return out;
+}
+/* تأخر الطالبات المتكرر خلال الشهر: من سجل الحضور،日为 واحد يُحسب مرة واحدة،
+   ويُستبعد اليوم الذي صار فيه الطالب غائبًا (الغائب يفوز على المتأخر في القاعدة
+   الواحدة __attEffStatus، فلا يُحتسب اليوم تأخرًا وحضورًا في آن). */
+function __insightLateStudents(threshold){
+  const lim = Number(threshold) || __insightLateOpts.studentThreshold;
+  const d = loadDB();
+  const start = __insightMonthStart();
+  if(!start) return [];
+  const days = new Map();
+  for(const a of (d.attendance || [])){
+    if(!a || a.deleted || !a.studentId) continue;
+    const date = String(a.date || '');
+    if(!date || date < start) continue;
+    if(__attEffStatus(a) !== 'LATE') continue;
+    if(!days.has(a.studentId)) days.set(a.studentId, new Set());
+    days.get(a.studentId).add(date);
+  }
+  const students = new Map((d.students || []).filter(s => s && s.active !== false).map(s => [s.id, s]));
+  const out = [];
+  for(const [sid, set] of days){
+    const n = set.size;
+    if(n <= lim) continue;
+    const s = students.get(sid);
+    if(!s) continue; // طالبة غير نشطة: لا تُتابع
+    const cls = s.classId ? (d.classes || []).find(c => c && c.id === s.classId) : null;
+    out.push({ id:sid, name:s.fullName || s.name || sid, className: cls ? classLabel(cls) : '', n, dates:Array.from(set).sort().reverse() });
   }
   out.sort((a,b) => b.n - a.n);
   return out;
@@ -5145,6 +5223,35 @@ function showFrequentTransfers(){
       </tr>`).join('')}</tbody>
     </table>` : '<p class="muted" style="margin:12px 0">لا توجد تحويلات متكررة ✅</p>';
   __insightModal('طلاب بتحويلات متكررة', '🔄', body);
+}
+function showLateTeachers(){
+  const rows = __insightLateTeachers();
+  const body = rows.length ? `
+    <p class="muted small" style="margin:8px 0 10px">التأخر المتكرر = أكثر من ${__insightLateOpts.teacherThreshold} مرات تأخّر خلال الشهر(${fmtDateOnly(__insightMonthStart())} فما بعد).</p>
+    <table class="data-table" style="margin-top:6px">
+      <thead><tr><th>المعلمة</th><th>عدد المرات</th><th>أيام التأخّر</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td style="font-weight:700">${escapeHtml(r.name)}</td>
+        <td style="font-weight:800;color:#d97706">${r.n} مرة</td>
+        <td class="muted small">${r.dates.map(x => escapeHtml(fmtDateOnly(x))).join('، ')}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '<p class="muted" style="margin:12px 0">لا تأخر متكرر للمعلمات هذا الشهر ✅</p>';
+  __insightModal('معلمات تأخّرن متكررًا هذا الشهر', '⏰', body);
+}
+function showLateStudents(){
+  const rows = __insightLateStudents();
+  const body = rows.length ? `
+    <p class="muted small" style="margin:8px 0 10px">التأخر المتكرر = أكثر من ${__insightLateOpts.studentThreshold} مرات تأخّر خلال الشهر.</p>
+    <table class="data-table" style="margin-top:6px">
+      <thead><tr><th>الطالبة</th><th>الفصل</th><th>عدد مرات التأخّر</th><th>أيام التأخّر</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td style="font-weight:700">${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(r.className || '—')}</td>
+        <td style="font-weight:800;color:#d97706">${r.n} مرة</td>
+        <td class="muted small">${r.dates.slice(0,8).map(x => escapeHtml(fmtDateOnly(x))).join('، ')}${r.dates.length>8 ? ' …' : ''}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '<p class="muted" style="margin:12px 0">لا تأخر متكرر للطالبات هذا الشهر ✅</p>';
+  __insightModal('طالبات تأخّرن متكررًا هذا الشهر', '⏰', body);
 }
 
 /* ============ قائمة التحويلات المعلّقة (عند الضغط على البطاقة) ============ */
