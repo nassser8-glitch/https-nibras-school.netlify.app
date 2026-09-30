@@ -5,6 +5,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { spawnSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const CLIENT = path.join(ROOT, 'public', 'star-week.js');
@@ -142,6 +143,97 @@ test('التركيب داخل لوحتَي renderStudentDashboard و renderDashb
   const sd = before.slice(before.indexOf('function renderStudentDashboard()'));
   assert.ok(sd.includes('data-stw-mount'), 'داخل لوحة الطالبات');
   assert.ok(after.includes('data-stw-mount'), 'داخل لوحة المعلمين/الإدارة');
+});
+
+test('التهيئة: الميزة تظهر من أول رسم حتى لو لم يحدث renderApp بعد التحميل', () => {
+  // هذا هو الخطأ الذي أطّلعت عليه: index.html ينادي renderApp() قبل تحميل
+  // star-week.js، فكان المطلوب relies على renderApp آخر ولا يظهر شيء إطلاقًا.
+  const src = fs.readFileSync(CLIENT, 'utf8');
+  assert.ok(/document\.readyState === 'loading'/.test(src), 'يستمع لـ DOMContentLoaded');
+  assert.ok(/addEventListener\('DOMContentLoaded'/.test(src), 'يسجّل المستمع');
+  assert.ok(/else\s*\{\s*try\s*\{\s*afterRender\(\)/.test(src), 'ويسمّي بعدRender فورًا إن كان DOM جاهزًا');
+  assert.ok(/function afterRender\(\)/.test(src), 'الدالة موجودة');
+  // ولا يعتمد على وجود نقطة تركيب فقط: يجب أن يطلب البيانات عند وجودها
+  assert.ok(/if \(!document\.querySelector\('\[data-stw-mount\]'\)\) return;/.test(src), 'يتحقق من نقطة التركيب');
+  assert.ok(/else load\(\);/.test(src), 'يحمّل البيانات إن لم تكن محمّلة');
+});
+
+// محاكاة: DOM فيه نقطة تركيب + مستخدم + رد خادم — نتوقع نصًّا ظاهرًا
+test('محاكاة أول رسم: نقطة تركيب موجودة ← تُملأ ببطاقة النجمة', () => {
+  const star = { id: 'w::C1', weekKey: '2026-09-28', classId: 'C1', className: 'أ', studentId: 'S1',
+    studentName: 'نورة', traits: ['khuluqa'], traitsLabels: ['🌷 خلوقة'], message: 'ممتازة' };
+  const view = { week: { key: '2026-09-28', label: 'الأسبوع 5' }, stars: [star], owners: [], history: [],
+    me: { id: 'S1', role: 'STUDENT', isManager: false, ownedClassIds: [] } };
+  const mount = { innerHTML: '' };
+  const doc = {
+    readyState: 'complete',
+    querySelector: (sel) => (sel === '[data-stw-mount]' ? mount : null),
+    querySelectorAll: (sel) => (sel === '[data-stw-mount]' ? [mount] : (sel === '[data-stw-eraser]' ? [] : [])),
+    addEventListener: () => {}
+  };
+  const win = {
+    matchMedia: () => ({ matches: false }),
+    localStorage: { getItem: () => null, setItem: () => {} },
+    requestAnimationFrame: (f) => f(), setTimeout: (f) => f(),
+    getComputedStyle: () => ({ getPropertyValue: () => '#be185d' }),
+    document: doc, console
+  };
+  win.window = win;
+  let fetched = 0;
+  win.fetch = () => { fetched++; return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, traits: [{ id: 'khuluqa', emoji: '🌷', label: 'خلوقة' }], ...view }) }); };
+  vm.createContext(win);
+  vm.runInContext(fs.readFileSync(CLIENT, 'utf8'), win);
+  // بعد التركيب: يجب أن يكون قد طُلبت البيانات فورًا (لا انتظارًا لـ renderApp)
+  return new Promise(resolve => {
+    setTimeout(() => {
+      assert.ok(fetched > 0, 'طُلبت البيانات عند التركيب');
+      assert.ok(mount.innerHTML.includes('نجمة الأسبوع'), 'ظهر عنوان البطاقة');
+      assert.ok(mount.innerHTML.includes('نورة'), 'اسم الطالبة');
+      assert.ok(mount.innerHTML.includes('data-stw-eraser'), 'المموحاة مركّبة');
+      resolve();
+    }, 30);
+  });
+});
+
+// لا خيارات اختيار لغير الرائدة
+test('الطالب لا يرى زر الاختيار، والمعلمة الرائدة تراه', () => {
+  const w = loadClient();
+  const base = { week: { key: 'k', label: 'l' }, owners: [], history: [], stars: [] };
+  w.__stwState.view = Object.assign({}, base, { me: { id: 'S1', role: 'STUDENT', isManager: false, ownedClassIds: [] } });
+  assert.ok(!w.__stwSectionHTML().includes('__stwOpenPick'), 'الطالب بلا زر اختيار');
+  w.__stwState.view = Object.assign({}, base, { me: { id: 'T1', role: 'TEACHER', isManager: false, ownedClassIds: ['C1'] } });
+  assert.ok(w.__stwSectionHTML().includes('__stwOpenPick'), 'الرائدة ترى الزر');
+  w.__stwState.view = Object.assign({}, base, { me: { id: 'A', role: 'ADMIN', isManager: true, ownedClassIds: [] } });
+  w.__stwState.view.owners = [{ classId: 'C1', className: 'أ', ownerId: 'T1', ownerName: 'أ. ر', periods: 20, tie: false }];
+  const adm = w.__stwSectionHTML();
+  assert.ok(adm.includes('رائدة الفصل'), 'الإدارة ترى جدول الرؤساء');
+  assert.ok(adm.includes('أ. ر') && adm.includes('20'), 'الاسم وعدد الحصص');
+  assert.ok(!adm.includes('__stwOpenPick'), 'الإدارة لا تختار (ليست رائدة)');
+});
+
+test('كل ملفات JS المعدَّلة تُحلَّل فعلًا (حارس ضد ملف معطوب يشلّ الميزة بصمت)', () => {
+  // حدث فعلي: اقتباس ناقص في public/sw.js جعل الملف كله يفشل في التحليل،
+  // فتعطّل تسجيل الـSW وظهر خلل غير مفهوم بدل رسالة واضحة.
+  const files = [
+    'server.js', 'star-week.js',
+    'public/star-week.js', 'public/sw.js',
+    'test/star-week.test.js', 'test/star-week-ui.test.js', 'test/star-week-handler.test.js'
+  ];
+  for (const f of files) {
+    const p = path.join(ROOT, f);
+    const r = spawnSync(process.execPath, ['--check', p], { encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, f + ' فشل في التحليل:\n' + (r.stderr || '').slice(0, 300));
+  }
+});
+
+test('لا محارف تالفة (U+FFFD) ولا صينية في ملفات الميزة', () => {
+  // بقايا تحريرTermination تُنتج نصًّا مشوّهًا صامتًا
+  for (const f of ['star-week.js', 'public/star-week.js', 'public/sw.js',
+                   'test/star-week.test.js', 'test/star-week-ui.test.js', 'test/star-week-handler.test.js']) {
+    const s = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    const bad = s.match(/[\uFFFD\u4e00-\u9fff]/g);
+    assert.ok(!bad, f + ' يحتوي محارف غريبة: ' + JSON.stringify(bad && bad.slice(0, 5)));
+  }
 });
 
 test('CSS: ثيم وردي + دعم prefers-reduced-motion', () => {

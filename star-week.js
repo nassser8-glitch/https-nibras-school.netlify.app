@@ -37,7 +37,7 @@ const SCHOOL_TZ_OFFSET_MIN = 300; // Asia/Karachi = +05:00 (بلا daylight savi
 function pad2(n){ return String(n).padStart(2, '0'); }
 function ymd(d){ return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate()); }
 
-// الأسبوع الحالي = نفس منطق schoolWeekInfo(): أقرب يوم اثنين（含 اليوم الحالي)،
+  // الأسبوع الحالي = نفس منطق schoolWeekInfo(): أقرب يوم اثنين (شاملًا اليوم الحالي)،
 // فالمفتاح تاريخ ذلك الاثنين → ثابت لكل أسبوع ولا يعتمد على تسمية نصية تتغير.
 function currentWeek(nowMs, tzOffsetMin){
   const off = tzOffsetMin == null ? SCHOOL_TZ_OFFSET_MIN : tzOffsetMin;

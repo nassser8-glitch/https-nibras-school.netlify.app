@@ -370,14 +370,29 @@
   window.__stwPaint = paint;
   window.__stwLoad = load;
 
+  // ── 7) الربط: أي re-render في التطبيق يحدّث البطاقات ───────────────────
+  // التوقيت مهم: هذا الملف يُحمَّل بعد السكربت الرئيسي الذي ينادي renderApp()
+  // في نهايته، أي أن أول رسم قد سبق تركيبنا. لذلك نلتقط ذلك الـDOM فورًا
+  // بدل انتظار renderApp آخر.
   const origRender = window.renderApp;
   if (typeof origRender === 'function' && !origRender.__stwWrapped) {
     const wrapped = function () {
       const out = origRender.apply(this, arguments);
-      try { if (state.loaded) paint(); else if (document.querySelector('[data-stw-mount]')) load(); } catch (e) {}
+      try { afterRender(); } catch (e) {}
       return out;
     };
     wrapped.__stwWrapped = true;
     window.renderApp = wrapped;
+  }
+  function afterRender(){
+    if (!document.querySelector('[data-stw-mount]')) return;   // لا نقطة تركيب (صفحة أخرى)
+    if (state.loading) return;
+    if (state.loaded) paint(); else load();
+  }
+  // تشغيل فوري إن كانت نقطة التركيب موجودة أصلًا في DOM المرسوم مسبقًا
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', afterRender, { once: true });
+  } else {
+    try { afterRender(); } catch (e) {}
   }
 })();

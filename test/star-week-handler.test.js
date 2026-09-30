@@ -300,7 +300,7 @@ test('النجمة تبقى محفوظة بعد إعادة القراءة (GET �
   assert.deepStrictEqual(s.traits, ['khuluqa', 'masrwla']);
 });
 
-// ══════ 14) تغيير classId في الطلب لا ي.par绕 ══════
+  // ══════ 14) تغيير classId في الطلب لا يُتجاوز ══════
 test('محاولة التملّص بتغيير classId تفشل (الملكية تُشتق من الخادم)', async () => {
   // T2 تحاول اختيار نجمة لفصلها هي (C2 هي فصلها) لكنOwnership T3
   const r = await runHandler(AWARD, {
