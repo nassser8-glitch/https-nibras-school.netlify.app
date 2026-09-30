@@ -129,6 +129,40 @@ test('تاريخ اللوحة يأتي من مفتاح تاريخ لا من كا
   assert.ok(/fmtDateOnly\(todayStr\(\)\)/.test(srcPanel), 'يستخدم مفتاح التاريخ');
 });
 
+test('ألوان اللوحة تأتي من ثيم المدرسة (لا لون خاص بها)', () => {
+  const cssStart = src.indexOf('/* ===== «نبراس يرى»');
+  const cssEnd = src.indexOf('.dash-activity-item {', cssStart);
+  assert.ok(cssStart !== -1 && cssEnd > cssStart, 'كتلة CSS للوحة غير موجودة');
+  const css = src.slice(cssStart, cssEnd);
+  const mkStart = src.indexOf('const seesInsights =');
+  const mk = src.slice(mkStart, src.indexOf('// الأنشطة القادمة', mkStart));
+
+  // 1) لا ألوان زرقاء قديمة (لون المرحلة السابقة قبل التحويل إلى الثيم الوردي)
+  for (const old of ['#0f4678', '#1672c4', '#1e88d6', '#0f4f88', '#1d7fd6']){
+    assert.ok(!css.includes(old) && !mk.includes(old), 'لا لون أزرق قديم: ' + old);
+  }
+  // 2) الهوية الوردية تأتي من المتغيّر لا من قيمة مكتوبة
+  for (const v of ['--primary', '--accent']){
+    assert.ok(css.includes('var(' + v), 'يستعمل var(' + v + ')');
+  }
+  // 3) درجة الاستحقاق للرقم من متغيّرات دلالية لا من hex مباشرة
+  for (const v of ['--red', '--orange', '--purple']){
+    assert.ok(mk.includes('var(' + v), 'الرقم يستعمل var(' + v + ')');
+  }
+  // 4) ألوان علب الأيقونات مطابقة للوحة «يحتاج إلى متابعتك» القائمة
+  const existing = [...new Set([...src.matchAll(/color:'(#[0-9a-f]{6})'/g)].map(x => x[1]))];
+  const mine = [...new Set([...mk.matchAll(/bg:'(#[0-9a-f]{6})'/g)].map(x => x[1]))];
+  for (const c of mine) assert.ok(existing.includes(c), 'لون علبة الأيقونة مستعمل في اللوحة أصلًا: ' + c);
+
+  // 5) نفس المتغيّر = نفس قيمة الاحتياط (اختلافها يوحي بإهمال حتى لو لم يظهر بصريًا)
+  const byToken = {};
+  for (const m of mk.matchAll(/var\((--[a-z-]+),(#[0-9a-f]{3,6})\)/g)){
+    const [, tok, hex] = m;
+    if (byToken[tok]) assert.equal(byToken[tok], hex, tok + ' له قيمتا احتياط مختلفتان');
+    byToken[tok] = hex;
+  }
+});
+
 test('كل بطاقة قابلة للنقر بمسار صحيح', () => {
   const db = {
     students: [{ id: 'S1', fullName: 'x', classId: 'C1', active: true }],
