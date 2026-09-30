@@ -527,6 +527,44 @@
   .pw-wrap .pw-toggle { position:absolute; top:50%; inset-inline-end:8px; transform:translateY(-50%); border:none; background:transparent; cursor:pointer; font-size:16px; line-height:1; color:var(--muted); padding:4px; z-index:2; }
   .pw-wrap .pw-toggle:hover { color:var(--text); }
   .pw-wrap input.input { padding-inline-end:38px !important; }
+  /* ============ ★ نجمة الأسبوع (المموحاة) ============ */
+  /* الألوان: حرارة شبيهة مربط بالحد، الذات بالمثاث الصلبة محرمة */
+  .stw-wrap { margin-top:14px; }
+  .stw-card { background:#fff; border:1px solid var(--border-color); border-radius:18px; padding:16px 18px; box-shadow:0 6px 20px rgba(190,24,93,.07); }
+  .stw-head { display:flex; align-items:center; gap:9px; margin-bottom:4px; }
+  .stw-logo { width:30px; height:30px; border-radius:50%; display:grid; place-items:center; font-size:15px; color:#fff; background:linear-gradient(135deg,var(--primary,#be185d),var(--accent,#db2777)); }
+  .stw-title { font-weight:800; color:var(--primary,#be185d); font-size:15.5px; margin:0; }
+  .stw-week { font-size:11.5px; color:var(--muted); }
+  .stw-name { font-weight:800; font-size:21px; color:var(--text); margin:8px 0 2px; }
+  .stw-cls { font-size:12px; color:var(--muted); }
+  .stw-traits { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .stw-trait { background:var(--primary-light,#fdf2f8); color:var(--primary,#be185d); border:1px solid var(--border-color); border-radius:999px; padding:3px 10px; font-size:12px; font-weight:700; }
+  .stw-msg { margin-top:10px; font-size:13px; color:var(--text); background:var(--bg-subtle,#fff0f7); border-inline-start:3px solid var(--accent,#db2777); border-radius:8px; padding:8px 10px; }
+  /* الغطاء: يقتط المأس/(اللوسي) وليمنع تقرير الصفحة خارجها */
+  .stw-eraser { position:relative; touch-action:none; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; cursor:crosshair; }
+  .stw-eraser canvas { position:absolute; inset:0; width:100%; height:100%; border-radius:14px; }
+  .stw-eraser-hint { position:absolute; inset:0; display:grid; place-items:center; text-align:center; padding:12px; pointer-events:none; }
+  .stw-eraser-hint b { display:block; font-size:14.5px; color:var(--primary,#be185d); margin-top:6px; }
+  .stw-eraser-hint span { font-size:11.5px; color:var(--muted); }
+  .stw-pct { position:absolute; inset-inline-end:10px; inset-block-start:10px; background:rgba(255,255,255,.94); border:1px solid var(--border-color); color:var(--primary,#be185d); font-weight:800; font-size:12px; border-radius:999px; padding:2px 10px; pointer-events:none; }
+  .stw-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  .stw-btn { background:linear-gradient(135deg,var(--primary,#be185d),var(--accent,#db2777)); color:#fff; border:none; border-radius:10px; padding:9px 14px; font-size:13px; font-weight:700; cursor:pointer; }
+  .stw-btn.ghost { background:#fff; color:var(--primary,#be185d); border:1px solid var(--border-color); }
+  .stw-note { font-size:12px; color:var(--muted); margin-top:9px; }
+  .stw-chips { display:flex; flex-wrap:wrap; gap:7px; margin:8px 0; }
+  .stw-chip { border:1px solid var(--border-color); background:#fff; color:var(--text); border-radius:999px; padding:5px 11px; font-size:12.5px; cursor:pointer; }
+  .stw-chip.on { background:var(--primary-light,#fdf2f8); color:var(--primary,#be185d); border-color:var(--accent,#db2777); font-weight:700; }
+  .stw-list { max-height:230px; overflow:auto; border:1px solid var(--border-color); border-radius:10px; }
+  .stw-row { padding:8px 10px; border-bottom:1px solid var(--line,#e4edf5); cursor:pointer; font-size:13.5px; }
+  .stw-row:last-child { border-bottom:none; }
+  .stw-row.on { background:var(--primary-light,#fdf2f8); font-weight:700; color:var(--primary,#be185d); }
+  .stw-table { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px; }
+  .stw-table th, .stw-table td { border-bottom:1px solid var(--line,#e4edf5); padding:6px 7px; text-align:start; vertical-align:top; }
+  .stw-table th { color:var(--muted); font-weight:700; font-size:11.5px; }
+  .stw-scroll { max-height:290px; overflow:auto; }
+  .stw-hint-sm { font-size:11.5px; color:var(--muted); }
+  /* prefers-reduced-motion: بلا حركة — الكشف يُعرض مباشرةة (والمحركة تعمل بالمحركة ولا بالنقط) */
+  @media (prefers-reduced-motion: reduce){ .stw-eraser, .stw-card { transition:none !important; animation:none !important; } .stw-eraser canvas { transition:none !important; } }
 </style>
 </head>
 <body>
@@ -4249,6 +4287,7 @@ function renderStudentDashboard(){
         </div>`;
       }).join('')}
     </div>
+  <div data-stw-mount></div>
   </div>`;
 }
 function renderStudentAssignments(){
@@ -4900,6 +4939,7 @@ function renderDashboard(){
   ` : ''}
   ${isMgr ? renderCharts(d) : ''}
   ${todayAtt.length===0 ? `<div class="card mt"><p class="muted">لم يُسجَّل حضور اليوم بعد — انتقل إلى صفحة <a href="#/attendance" class="link">الحضور</a> لتسجيله.</p></div>` : ''}
+  <div data-stw-mount></div>
   `;
 }
 
@@ -11139,6 +11179,7 @@ function maybeShowInstallHint(force){
 }
 setTimeout(function(){ maybeShowInstallHint(false); }, 1200);
 </script>
+<script src="star-week.js?v=2026-09-30a"></script>
 </body>
 </html>
 

@@ -10,6 +10,8 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const db = require('./db');
+// ⭐ نجمة الأسبوع: منطق نقي في ملف مستقل ليبقى قابلًا للاختبار بلا خادم
+const starWeek = require('./star-week');
 
 // قراءة متغير: من Environment أولاً، ثم من ملف سري في /etc/secrets (بديل Render)
 function envOrSecret(name, fallback) {
@@ -1586,6 +1588,69 @@ async function reconcileUserTable(school, prevUsers, nextUsers) {
   }
 }
 
+// ============ ★ نجمة الأسبوع (مقسم خادمي) ============
+const STARS_API = '/api/stars/';
+function starWeekNow(){
+  return starWeek.currentWeek(Date.now(), starWeek.SCHOOL_TZ_OFFSET_MIN);
+}
+async function starWeekContext(req, res, body){
+  const school = String((body && body.school) || (req.session && req.session.school) || '').toUpperCase();
+  if (!db.SCHOOLS.includes(school)){ res.status(400).json({ error: 'bad_school' }); return null; }
+  if (!schoolAccess(req.session, school)){ res.status(403).json({ error: 'forbidden' }); return null; }
+  const prev = await db.getSchoolData(school);
+  let academicStart = null;
+  try {
+    const settings = await db.getSchoolSettings(school);
+    academicStart = (settings && settings.academicStart) || null;
+  } catch (e) { /* week label falls back to the key */ }
+  const week = starWeekNow();
+  return { school, data: (prev && prev.data) || {}, week: { ...week, label: starWeek.weekLabel(week, academicStart) } };
+}
+
+app.get('/api/stars', requireAuth, (req, res) => {
+  (async () => {
+    const ctx = await starWeekContext(req, res, req.query);
+    if (!ctx) return;
+    const view = starWeek.buildView(ctx.data, req.session, ctx.week);
+    res.json({ ok: true, school: ctx.school, traits: starWeek.STAR_TRAITS, ...view });
+  })().catch(fail(res));
+});
+
+app.post('/api/stars/award', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.first_login) return res.status(403).json({ error: 'change_password_first' });
+    if (rateLimit('starwrite', 60, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+    const body = req.body || {};
+    const ctx = await starWeekContext(req, res, body);
+    if (!ctx) return;
+
+    // الكتابة تجري على الصف المقفل (BEGIN + SELECT..FOR UPDATE)
+    // وليس getSchoolData ثم setSchoolData: تقرأً نافذة سباق تمسح أي حفظ
+    // جديد تمظر بيننهما إلى الطبقة (المحدر يُقابلة بالتقويم).
+    // التحقق يتكرر داخل القفل المقفل الأسبوع، فيُعد النسخة إذا لون تكررنا.
+    let out = null;
+    const r = await db.mutateSchoolData(ctx.school, (fresh) => {
+      const o = starWeek.upsertAward(fresh, req.session, body, { week: ctx.week });
+      fresh.stars = o.stars;
+      out = o;
+      return { changed: true, value: o.record };
+    });
+    if (!r.written) return res.status(409).json({ error: 'write_conflict', reason: r.reason });
+    // لنُعد الإعادة إلا بما حقيقيًا داخل القلف المقفل.
+    const after = await db.getSchoolData(ctx.school);
+    const view = starWeek.buildView(after.data || {}, req.session, ctx.week);
+    res.json({ ok: true, school: ctx.school, traits: starWeek.STAR_TRAITS, ...view });
+  })().catch(error => {
+    if (error && error.code && error.status) return res.status(error.status).json({ error: error.code });
+    fail(res)(error);
+  });
+});
+app.delete('/api/stars/award', requireAuth, (req, res) => {
+  (async () => {
+    // حذف نجمة الأسبوع غير مطلوب بالميزة: مسجل الأسابيع يُحفظ للأبد.
+    res.status(405).json({ error: 'not_allowed' });
+  })().catch(fail(res));
+});
 app.get('/api/db/:school', requireAuth, (req, res) => {
   (async () => {
     const school = String(req.params.school).toUpperCase();
@@ -1889,6 +1954,18 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
 
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
     const clean = JSON.parse(JSON.stringify(data));
+// ===== قسم «نجمة الأسبوع» يملكه الخادم وحده =====
+// PUT /api/db/:school stores the whole payload (clean = copy of data), so any NEW
+// section sent by a client would be accepted from it — including a STUDENT.
+// Therefore we drop whatever the client sent for this section and keep the server
+// value: writes go only through /api/stars/award, which re-derives the class owner
+// server-side. Without this, the whole permission model would be bypassable.
+if ('stars' in data) {
+  const serverStars = (prev.data || {}).stars;
+  if (!jsonEqual(serverStars, data.stars)) console.warn('[stars] dropped client-supplied stars from', role || req.session && req.session.role || '?');
+  if (Array.isArray(serverStars)) clean.stars = serverStars;
+  else delete clean.stars;
+}
     // تطبيع ثانٍ بعد الدمج: الدمج (mergeSection/mergeClasses...) قد يعيد مرجعات يتيمة
     // لمعلمات مكررة من نسخة جهاز قديم، فننظف النتيجة النهائية التي ستُخزن.
     try { await normalizeTeacherDuplicates(school, clean); } catch (e) { console.warn('[normalize#2]', e.message); }
