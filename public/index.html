@@ -2415,7 +2415,10 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* ============ تسجيل الدخول ============ */
-const __APP_VER = '9d33c1b';
+/* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
+   كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
+   تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
+const __APP_VER = '2026-09-30 insights';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
