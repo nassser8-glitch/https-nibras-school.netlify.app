@@ -4471,7 +4471,48 @@ function renderDashboard(){
       <div class="dash-needs-num" style="color:#ef4444">${n.num}</div>
     </div>`).join('') : '<p class="muted small" style="margin:4px 0">كل الأمور تحت السيطرة — لا شيء ينتظر متابعتك الآن ✅</p>';
 
-  // نبراس يرى — أُزيل
+  // نبراس يرى — مؤشرات ذكية للمسؤولين (ADMIN/AGENT/COUNSELOR) فقط.
+  //  1) طلاب غيابهم متكرر: تجاوز 10 أيام غياباً، أو 5 أيام متتالية على مدى 30 يومًا.
+  //  2) طلاب تحويلاتهم متكررة: أكثر من 3 تحويلات.
+  // منطق الحساب معزول في __insightRepeatedAbsence/__insightFrequentTransfers
+  // ليبقى واحدًا بين اللوحة ونافذتي التفاصيل (لا نسختي حساب).
+  const seesInsights = (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR');
+  const insightsHTML = (() => {
+    if(!seesInsights) return '';
+    const repeatedAbs = __insightRepeatedAbsence();
+    const frequentTransfers = __insightFrequentTransfers();
+    const chip = (icon, color, name, meta, click) => `
+      <div class="dash-needs-item" ${click ? `onclick="${click}" style="cursor:pointer"` : ''}>
+        <div class="dash-needs-ico" style="background:${color}">${icon}</div>
+        <div class="dash-needs-txt">
+          <div class="dash-needs-name">${escapeHtml(name)}</div>
+          <div class="dash-needs-meta">${escapeHtml(meta)}</div>
+        </div>
+      </div>`;
+    const items = [];
+    if(repeatedAbs.length){
+      const meta = repeatedAbs.slice(0,3).map(r => {
+        const why = [];
+        if(r.total >= __insightAbsOpts.daysThreshold) why.push(r.total + ' يوم غياب');
+        if(r.run >= __insightAbsOpts.runThreshold) why.push(r.run + ' يوم متتالٍ');
+        return `${r.name}${r.className ? ' (' + r.className + ')' : ''} — ${why.join(' و')}`;
+      }).join(' · ');
+      items.push(chip('🔁', '#fef2f2', `${repeatedAbs.length} طالبًا بغياب متكرر`, meta, 'showRepeatedAbsenceStudents()'));
+    }
+    if(frequentTransfers.length){
+      const meta = frequentTransfers.slice(0,3).map(t => `${t.name}${t.className ? ' (' + t.className + ')' : ''} — ${t.n} تحويلات`).join(' · ');
+      items.push(chip('🔄', '#f5f3ff', `${frequentTransfers.length} طالبًا بتحويلات متكررة`, meta, 'showFrequentTransfers()'));
+    }
+    if(!items.length) return '';
+    return `
+    <div class="dash-panel">
+      <div class="dash-panel-head">
+        <p class="dash-panel-title">🔎 نبراس يرى</p>
+        <span class="dash-panel-more" onclick="location.hash='#/attendance'" style="cursor:pointer">عرض التحليلات التفصيلية ←</span>
+      </div>
+      ${items.join('')}
+    </div>`;
+  })();
 
   // الأنشطة القادمة
   const typeIcon = t => { const x = activityTypes.find(v => v.value === t); return x ? x.icon : '🎉'; };
@@ -4680,6 +4721,7 @@ function renderDashboard(){
     </div>`;
 
   const bottom = `
+  ${insightsHTML}
   <div class="dash-bottom">
     <div class="dash-panel">
       <div class="dash-panel-head">
@@ -4992,6 +5034,117 @@ function showTeacherTodayAttendance(){
       </table>
     </div>`;
   document.body.appendChild(overlay);
+}
+
+/* ============ «نبراس يرى»: تفاصيل الغياب المتكرر والتحويلات المتكررة ============ */
+/* معطيات المؤشرات: غياب متكرر = تجاوز 10 يوم غياب، أو 5 أيام متتالية على مدى آخر 30 يومًا.
+   تحويلات متكررة = أكثر من 3 تحويلات لنفس الطالب. الأساس هو سجل الحضور الفعلي
+   (__attEffStatus يحترم قاعدة التأكيد المزدوج: غائب بيومٍ أكّده معلمان أو سجله معلم واحد). */
+const __insightAbsOpts = { windowDays:30, daysThreshold:10, runThreshold:5 };
+const __insightTransfersThreshold = 3;
+function __insightRepeatedAbsence(opts){
+  const o = Object.assign({}, __insightAbsOpts, opts || {});
+  const d = loadDB();
+  const DAY = 86400000;
+  const startMs = Date.now() - o.windowDays * DAY;
+  const absDays = new Map();
+  for(const a of (d.attendance || [])){
+    if(!a || a.deleted || !a.studentId) continue;
+    const t = Date.parse(a.date || '');
+    if(!Number.isFinite(t) || t < startMs) continue;
+    if(__attEffStatus(a) !== 'ABSENT') continue;
+    if(!absDays.has(a.studentId)) absDays.set(a.studentId, new Set());
+    absDays.get(a.studentId).add(a.date);
+  }
+  const longestRun = (dates) => {
+    const sorted = Array.from(dates).slice().sort();
+    let best = 0, run = 0, prev = null;
+    for(const ds of sorted){
+      const t = Date.parse(ds);
+      if(!Number.isFinite(t)) continue;
+      run = (prev !== null && t - prev === DAY) ? run + 1 : 1;
+      if(run > best) best = run;
+      prev = t;
+    }
+    return best;
+  };
+  const students = new Map((d.students || []).filter(s => s && s.active !== false).map(s => [s.id, s]));
+  const out = [];
+  for(const [sid, dates] of absDays){
+    const total = dates.size, run = longestRun(dates);
+    if(total < o.daysThreshold && run < o.runThreshold) continue;
+    const s = students.get(sid);
+    if(!s) continue; // طالب غير نش��: لا يظهر
+    const cls = s.classId ? (d.classes || []).find(c => c && c.id === s.classId) : null;
+    out.push({ id:sid, name:s.fullName || s.name || sid, className: cls ? classLabel(cls) : '', total, run,
+               dates: Array.from(dates).sort().reverse() });
+  }
+  out.sort((a,b) => (b.run - a.run) || (b.total - a.total));
+  return out;
+}
+function __insightFrequentTransfers(threshold){
+  const d = loadDB();
+  const lim = Number(threshold) || __insightTransfersThreshold;
+  const count = new Map();
+  for(const t of (d.transfers || [])){
+    if(!t || t.deleted) continue;
+    const ids = Array.isArray(t.studentIds) ? t.studentIds : (t.studentId ? [t.studentId] : []);
+    for(const sid of ids) count.set(sid, (count.get(sid) || 0) + 1);
+  }
+  const students = new Map((d.students || []).filter(s => s && s.active !== false).map(s => [s.id, s]));
+  const out = [];
+  for(const [sid, n] of count){
+    if(n <= lim) continue;
+    const s = students.get(sid);
+    if(!s) continue;
+    const cls = s.classId ? (d.classes || []).find(c => c && c.id === s.classId) : null;
+    out.push({ id:sid, name:s.fullName || s.name || sid, className: cls ? classLabel(cls) : '', n });
+  }
+  out.sort((a,b) => b.n - a.n);
+  return out;
+}
+function __insightModal(title, icon, bodyHTML){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.onclick = (e) => { if(e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="card" style="width:min(640px,100%);max-height:86vh;overflow:auto;padding:20px">
+      <div class="header-row">
+        <h3 style="margin:0">${icon} ${escapeHtml(title)}</h3>
+        <button class="btn-secondary" onclick="this.closest('.card').parentElement.remove()">✕ إغلاق</button>
+      </div>
+      ${bodyHTML}
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function showRepeatedAbsenceStudents(){
+  const rows = __insightRepeatedAbsence();
+  const body = rows.length ? `
+    <p class="muted small" style="margin:8px 0 10px">الغياب المتكرر = تجاوز ${__insightAbsOpts.daysThreshold} أيام غياب، أو ${__insightAbsOpts.runThreshold} أيام متتالية على مدى آخر ${__insightAbsOpts.windowDays} يومًا.</p>
+    <table class="data-table" style="margin-top:6px">
+      <thead><tr><th>الطالب</th><th>الفصل</th><th>أيام الغياب</th><th>أطول سلسلة متتالية</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td style="font-weight:700">${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(r.className || '—')}</td>
+        <td style="font-weight:800;color:#dc2626">${r.total} يوم</td>
+        <td style="font-weight:800;color:#ea580c">${r.run} يوم</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '<p class="muted" style="margin:12px 0">لا يوجد غياب متكرر — الطالبون ملتزمون ✅</p>';
+  __insightModal('طلاب بغياب متكرر', '🔁', body);
+}
+function showFrequentTransfers(){
+  const rows = __insightFrequentTransfers();
+  const body = rows.length ? `
+    <p class="muted small" style="margin:8px 0 10px">التحويل المتكرر = أكثر من ${__insightTransfersThreshold} تحويلات لنفس الطالب.</p>
+    <table class="data-table" style="margin-top:6px">
+      <thead><tr><th>الطالب</th><th>الفصل</th><th>عدد التحويلات</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td style="font-weight:700">${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(r.className || '—')}</td>
+        <td style="font-weight:800;color:#7c3aed">${r.n} تحويلات</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '<p class="muted" style="margin:12px 0">لا توجد تحويلات متكررة ✅</p>';
+  __insightModal('طلاب بتحويلات متكررة', '🔄', body);
 }
 
 /* ============ قائمة التحويلات المعلّقة (عند الضغط على البطاقة) ============ */
