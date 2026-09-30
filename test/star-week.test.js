@@ -189,7 +189,8 @@ test('معلمة أخرى غير مخولة لا تستطيع إنشاء نجم�
     { classId: 'C1', studentId: 'S1', traits: ['khuluqa'] }, OPTS),
   e => e.code === 'not_owner' && e.status === 403);
 
-  // وخلوّها من الجدول تمامًا: رائدة مستقلة (fallback حتمي)
+  // وخلوّها من الجدول تمامًا: الملكية المعلنة (teacherIds) هي الحاكم بترتيبها،
+  // لا المقارنة الأبجدية على المعرّف (التي كانت تُغيّب صاحبة الفصل الحقيقية).
   const d2 = makeData({
     classes: [{ id: 'C1', name: 'أ', gradeId: 'G1', teacherIds: ['T2', 'T1'] }],
     students: [student('S1', 'C1')],
@@ -197,8 +198,9 @@ test('معلمة أخرى غير مخولة لا تستطيع إنشاء نجم�
     timetable: {}
   });
   const o = sw.classOwner(d2, 'C1');
-  assert.strictEqual(o.ownerId, 'T1', 'بلا جدول: الحتمية بالمعرّف');
-  assert.throws(() => sw.upsertAward(d2, SESSION('T2', 'TEACHER'),
+  assert.strictEqual(o.ownerId, 'T2', 'بلا جدول: صاحبة الفصل المعلنة أولًا');
+  assert.strictEqual(o.source, 'ownership');
+  assert.throws(() => sw.upsertAward(d2, SESSION('T1', 'TEACHER'),
     { classId: 'C1', studentId: 'S1', traits: ['khuluqa'] }, OPTS),
   e => e.code === 'not_owner');
 });
@@ -433,4 +435,83 @@ test('الحساب المعطّل لا يُمنح صلاحية الاختيار 
     timetable: { T1: ttCell('C1', 3) }
   });
   assert.strictEqual(sw.classOwner(d2, 'C1').ownerId, 'T1');
+});
+
+// ══════════════ 7) جدول فارغ: الرجوع إلى ملكية الفصل (توافق البيانات الواقعية) ═══
+// سبب النقص الأصلي: في فصل بلا جدول كان كل المرشّحات بدرجة صفر، فيُختار بالأبجدية
+// لا بالواقع — فتفقد صاحبة الفصل الحقيقية الأداة. هذه الاختبارات تقفل ذلك المسار.
+test('فصل بلا جدول: صاحبة الفصل (teacherIds) هي الرائدة لا الأبجدية', () => {
+  const d = makeData({
+    classes: [{ id: 'C2', name: 'الصف الثاني', gradeId: 'G1', teacherIds: ['T9', 'T1'] }],
+    students: [student('S1', 'C2')],
+    users: [teacher('T9', 'شيماء'), teacher('T1', 'أ. أخرى')],
+    timetable: {}
+  });
+  const o = sw.classOwner(d, 'C2');
+  assert.strictEqual(o.ownerId, 'T9', 'شيماء صاحبة الفصل، لا صاحبة المعرّف الأصغر');
+  assert.strictEqual(o.source, 'ownership');
+  assert.strictEqual(o.tie, false, 'غياب الجدول ليس تعادلًا يُعرض للإدارة');
+});
+
+test('ترتيب teacherIds هو الحاكم عند غياب الجدول (حتمي)', () => {
+  const mk = ids => makeData({
+    classes: [{ id: 'C2', name: 'الثاني', gradeId: 'G1', teacherIds: ids }],
+    students: [student('S1', 'C2')],
+    users: ids.map(id => teacher(id, 'أ. ' + id)),
+    timetable: {}
+  });
+  assert.strictEqual(sw.classOwner(mk(['T9', 'T1']), 'C2').ownerId, 'T9');
+  assert.strictEqual(sw.classOwner(mk(['T1', 'T9']), 'C2').ownerId, 'T1');
+});
+
+test('الرجوع للملكية يمنح الصلاحية فعليًا (upsertAward ينجح)', () => {
+  const d = makeData({
+    classes: [{ id: 'C2', name: 'الثاني', gradeId: 'G1', teacherIds: ['T9', 'T1'] }],
+    students: [student('S1', 'C2')],
+    users: [teacher('T9', 'شيماء'), teacher('T1', 'أ. أخرى')],
+    timetable: {}
+  });
+  const r = sw.upsertAward(d, SESSION('T9', 'TEACHER'),
+    { classId: 'C2', studentId: 'S1', traits: ['khuluqa'] }, OPTS);
+  assert.strictEqual(r.record.studentId, 'S1');
+  assert.strictEqual(r.owner.ownerId, 'T9');
+  assert.deepStrictEqual(sw.ownedClassIds(d, 'T9'), ['C2']);
+});
+
+test('جدول موجود لكن كل خاناته محذوفة (_del) ⇒ نفس الرجوع للملكية', () => {
+  const dead = ttCell('C2', 3);
+  for (const day of Object.keys(dead)) for (const p of Object.keys(dead[day])) dead[day][p]._del = true;
+  const d = makeData({
+    classes: [{ id: 'C2', name: 'الثاني', gradeId: 'G1', teacherIds: ['T9', 'T1'] }],
+    students: [student('S1', 'C2')],
+    users: [teacher('T9', 'شيماء'), teacher('T1', 'أ. أخرى')],
+    timetable: { T1: dead }
+  });
+  assert.strictEqual(sw.classOwner(d, 'C2').ownerId, 'T9');
+  assert.strictEqual(sw.classOwner(d, 'C2').source, 'ownership');
+});
+
+test('فصل بلا جدول وبلا معلمات معلنة ⇒ لا رائدة (بلا انهيار)', () => {
+  const d = makeData({
+    classes: [{ id: 'C3', name: 'الثالث', gradeId: 'G1', teacherIds: [] }],
+    students: [student('S1', 'C3')],
+    users: [teacher('T1', 'أ')],
+    timetable: {}
+  });
+  const o = sw.classOwner(d, 'C3');
+  assert.strictEqual(o.ownerId, null);
+  assert.strictEqual(o.source, 'none');
+  assert.deepStrictEqual(sw.ownedClassIds(d, 'T1'), [], 'لا صلاحية بلا ملكية ولا جدول');
+});
+
+test('وجود الجدول يبقي المصدر timetable ولا يفعّل الرجوع', () => {
+  const d = makeData({
+    classes: [{ id: 'C1', name: 'أ', gradeId: 'G1', teacherIds: ['T1', 'T2'] }],
+    students: [student('S1', 'C1')],
+    users: [teacher('T1', 'أ'), teacher('T2', 'ب')],
+    timetable: { T1: ttCell('C1', 2), T2: ttCell('C1', 5) }
+  });
+  const o = sw.classOwner(d, 'C1');
+  assert.strictEqual(o.ownerId, 'T2');
+  assert.strictEqual(o.source, 'timetable');
 });

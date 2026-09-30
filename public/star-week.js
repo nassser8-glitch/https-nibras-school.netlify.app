@@ -235,6 +235,7 @@
         const st = (v.stars || []).filter(x => x.classId === o.classId)[0];
         html += '<tr><td>' + esc(o.className) + '</td><td>' + esc(o.ownerName || '—')
           + (o.tie ? ' <span class="stw-hint-sm">(تعادل)</span>' : '')
+          + (o.source === 'ownership' ? ' <span class="stw-hint-sm">(بلا جدول — ملكية الفصل)</span>' : '')
           + '</td><td>' + esc(String(o.periods)) + '</td><td>'
           + (st ? esc(st.studentName) + '<div class="stw-hint-sm">' + esc((st.traitsLabels || []).join(' · ')) + '</div>' : '—')
           + '</td></tr>';
@@ -282,6 +283,15 @@
       });
     }
     if (owned.length) html += pickerHTML(owned);
+    else if (v.me && v.me.role === 'TEACHER' && !v.me.isManager)
+      // لا نُخفي السبب: غياب الأداة مخوّل للنظام لا خطأ عارض.
+      html += '<div class="stw-wrap"><div class="stw-card">'
+        + '<div class="stw-head"><div class="stw-logo">🏷️</div><div>'
+        + '<p class="stw-title">رائدة الفصل</p>'
+        + '<div class="stw-week">تُحدَّد آليًا حسب الحصص</div></div></div>'
+        + '<div class="stw-note">لم تظهر لك أداة الاختيار لأنك لست رائدة فصل حاليًا. '
+        + 'رائدة الفصل هي الأكثر تدريسًا له، وتُحدَّد من جدول الحصص. '
+        + 'راجعي الإدارة إن كان ذلك غير صحيح.</div></div></div>';
     if (v.me && v.me.isManager && ((v.owners && v.owners.length) || (v.history && v.history.length)))
       html += adminHTML(v);
     return html;

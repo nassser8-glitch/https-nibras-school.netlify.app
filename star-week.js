@@ -145,31 +145,54 @@ function classCandidates(schoolData, classId){
       active: !!(u && !u.deleted && u.active !== false),
       exists: !!u && !u.deleted,
       periods: counts.get(id) || 0,
-      fromTimetable: counts.has(id)
+      fromTimetable: counts.has(id),
+      // هل نصّحتها المدرسة صاحبة هذا الفصل؟ وترتيبها كما أُدخلت (للرجوع الحتمي)
+      fromOwnership: owned.indexOf(id) >= 0,
+      order: owned.indexOf(id)
     };
   }).filter(c => c.exists);
 }
 
 // رائدة الفصل: صاحبة أكبر عدد حصص.
-// التعادل ليس خطأ: تُرتَّب بـ periods تنازليًا ثم بمعرّف المستخدم تصاعديًا → نتيجة
-// حتمية واحدة مهما اختلف ترتيب مفاتيح الكائن أو عدد المعلمات، دون تدخل إداري.
+//
+// cases لاWitnesses خوارزمية:
+// 1) الجدول معبّأ ⇒ الأكثر حصصًا.
+// 2) الجدول فارغ (لم تُدخل المدرسة حصصًا بعد) ⇒ الرجوع إلى *ملكية الفصل*
+//    (teacherIds) التي هي تعبير المدرسة عن صاحب الفصل. بدون هذا الرجوع تكون
+//    كل الدرجات صفرًا، فيفوز الترتيب بالمعرّف أبجديًا لا بالواقع — أي أن صاحبة
+//    الفصل لا تحصل على الأداة لمجرد أن حرف اسمها يسبق غيرها، وهو خطأ واضح.
+// 3) في الحالتين النتيجة حتمية تمامًا بلا عشوائية ولا تدخل إداري.
 function classOwner(schoolData, classId){
   const cls = findClass(schoolData, classId);
   if (!cls) return null;
   const all = classCandidates(schoolData, classId);
-  if (!all.length) return { classId, ownerId: null, ownerName: '', periods: 0, tie: false, candidates: [] };
+  if (!all.length) return { classId, ownerId: null, ownerName: '', periods: 0, tie: false, source: 'none', candidates: [] };
   // المفعّلة أولاً: منح الصلاحية لحساب معطّل بلا فائدة. إن لم تكن هناك مفعّلة نستخدم الجميع.
   const active = all.filter(c => c.active);
   const pool = active.length ? active : all;
-  const ranked = pool.slice().sort((a, b) => (b.periods - a.periods) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  const top = ranked[0];
+  const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const ranked = pool.slice().sort((a, b) => (b.periods - a.periods) || byId(a, b));
+
+  const anyRecorded = ranked.some(c => c.periods > 0);
+  let top, source;
+  if (anyRecorded) {
+    top = ranked[0];
+    source = 'timetable';
+  } else {
+    // لا حصص مسجّلة: الرجوع إلى ملكية الفصل. الترتيب يبقى حتميًا (ترتيب teacherIds
+    // كما إدخالتها المدرسة، ثم المعرّف أبجديًا حمايةً).
+    const designated = pool.filter(c => c.fromOwnership).sort((a, b) => a.order - b.order || byId(a, b));
+    top = designated.length ? designated[0] : ranked[0];
+    source = 'ownership';
+  }
   const tied = ranked.filter(c => c.periods === top.periods);
   return {
     classId,
     ownerId: top.id,
     ownerName: top.name,
     periods: top.periods,
-    tie: tied.length > 1,
+    tie: source === 'timetable' && tied.length > 1,
+    source,                       // 'timetable' | 'ownership' | 'none'
     candidates: ranked.map(c => ({ id: c.id, name: c.name, periods: c.periods, active: c.active }))
   };
 }
@@ -319,10 +342,11 @@ function buildView(schoolData, session, week, opts){
 
   const owners = manager
     ? listClasses(schoolData).filter(c => c && !c.deleted).map(c => {
-        const o = classOwner(schoolData, c.id) || { ownerId: null, ownerName: '', periods: 0, tie: false };
+        const o = classOwner(schoolData, c.id) || { ownerId: null, ownerName: '', periods: 0, tie: false, source: 'none' };
         return {
           classId: c.id, className: classTitle(c.id, schoolData),
-          ownerId: o.ownerId, ownerName: o.ownerName, periods: o.periods, tie: !!o.tie
+          ownerId: o.ownerId, ownerName: o.ownerName, periods: o.periods, tie: !!o.tie,
+          source: o.source || 'none'   // timetable | ownership | none
         };
       })
     : [];
