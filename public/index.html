@@ -1161,11 +1161,35 @@ async function __syncPush(school){
             // ⇒ نُبقي نسخة الخادم كما هي.
             // بدون هذا الشرط يدفع كل جهاز قديم فصوله/درجاته المحلية على كل مزامنة،
             // فيعيد بها ما حذفه زميله على جهاز أحدث: فصول فارغة ودرجات محذوفة.
-            ['students','classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
+            // بلاغات الصيانة: تغيّر الحالة (اعتماد/رفض/بدء/إكمال) تعديلٌ على بلاغ قائم
+            // لا بلاغ جديد، فكان الدمج بالاتحاد البسيط (locallyOnly) يهمله ويُبقي نسخة
+            // الخادم القديمة فيعود البلاغ إلى حالته السابقة ("الرسالة ثابتة").
+            // ندمج بالـid مع الأحدث زمنياً: أي بلاغ حُدّث محليًا بـ updatedAt/حالة/تكلفة
+            // يتقدّم على نسخته في الخادم.
+            const maintStamp = (x) => (x && (x.updatedAt || x.completedAt || x.startedAt || x.approvedAt || x.rejectedAt || x.forwardedAt || x.createdAt)) || '';
+            const mergeMaintByIdNewer = (srvArr, locArr) => {
+              const m = new Map();
+              for(const x of (Array.isArray(srvArr) ? srvArr : [])) if(x && x.id != null) m.set(x.id, x);
+              for(const x of (Array.isArray(locArr) ? locArr : [])){
+                if(!x) continue;
+                if(x.id == null){ continue; }
+                const ex = m.get(x.id);
+                if(!ex){ m.set(x.id, x); continue; }
+                if(__canonEq(x, ex)) continue; // متطابقان، لا داعي للاختيار
+                // الأحدث زمنياً يكسب؛ وعند التساوي نأخذ المحلي (هذا الجهاز نفّذ الإकार حديثاً
+                // فبصمته قد تطابق إن كان الخادم قديم البصمة بلا updatedAt).
+                if(maintStamp(x) >= maintStamp(ex)) m.set(x.id, x);
+              }
+              return Array.from(m.values());
+            };
+            ['students','classes','grades','videos','transfers','escapeAlerts'].forEach(sec => {
               if(!Array.isArray(obj[sec])) return;
               if(__canonEq(obj[sec], sd[sec])) return; // بلا تعديل محلي ⇒ نسخة الخادم تكفي
               sd[sec] = (sec === 'classes') ? mergeClassesLocal(obj[sec], sd[sec]) : locallyOnly(obj[sec], sd[sec]);
             });
+            if(Array.isArray(obj.maintenance) && !__canonEq(obj.maintenance, sd.maintenance)){
+              sd.maintenance = mergeMaintByIdNewer(sd.maintenance, obj.maintenance);
+            }
             obj = sd;
             obj._ts = mergedTs || Date.now();
             try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
@@ -9193,6 +9217,9 @@ function maintAction(id, action){
   else if(action === 'start'){ if(!maintCanFollow(user)) return; r.status = 'قيد التنفيذ'; r.startedAt = todayStr(); }
   else if(action === 'complete'){ if(!maintCanFollow(user)) return; const raw = prompt('تكلفة الصيانة (بالروبية):', '0'); if(raw === null) return; r.cost = Math.max(0, Number(String(raw).replace(/,/g, '')) || 0); r.status = 'مكتمل'; r.completedAt = todayStr(); }
   else return;
+  // نُحدّث updatedAt عند كل انتقال حالة: هو ما يتيح للدمج (عند تعارض النسخ) معرفة
+  // أن هذه النسخة هي الأحدث، فلماذا كانت الحالة "تعود" إلى ما قبل الإجراء.
+  r.updatedAt = new Date().toISOString();
   // نرفع التغيير للخادم فورًا: الحفظ في التخزين المحلي وحده يُمحى عند أول سحب دوري
   // فيعود البلاغ إلى حالته السابقة (يبدو أن الإجراء لم يُنفَّذ).
   d._ts = Date.now();

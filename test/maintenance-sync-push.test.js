@@ -134,3 +134,78 @@ test('maintDelete: إلغاء التأكيد لا يحذف ولا يرفع', () 
   assert.equal(db.maintenance.length, 1, 'يجب بقاء البلاغ');
   assert.equal(ctx.syncCalls.length, 0, 'لا رفع عند الإلغاء');
 });
+
+// ===== الدمج عند السحب: لماذا كانت الحالة "تعود" إلى ما قبل الإجراء =====
+
+const src = fs.readFileSync(INDEX_HTML_PATH, 'utf8');
+
+function extractMaintMerge(srcText) {
+  const start = srcText.indexOf('const maintStamp = (x) =>');
+  if (start === -1) throw new Error('maintStamp merge helper not found in index.html');
+  // نلتقط تعريف maintStamp و mergeMaintByIdNewer فقط دون الكتل التالية التي تحتاج obj
+  const fnStart = srcText.indexOf('const mergeMaintByIdNewer = (srvArr, locArr) => {', start);
+  if (fnStart === -1) throw new Error('mergeMaintByIdNewer not found in index.html');
+  let depth = 0;
+  let end = srcText.indexOf('{', fnStart);
+  for (; end < srcText.length; end++) {
+    if (srcText[end] === '{') depth++;
+    else if (srcText[end] === '}') {
+      depth--;
+      if (depth === 0) { end++; break; }
+    }
+  }
+  return srcText.slice(start, end);
+}
+
+function buildMergeSandbox() {
+  const context = {
+    __canonEq: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+    console,
+  };
+  vm.createContext(context);
+  vm.runInContext(extractMaintMerge(src) + '\n;globalThis.__mergeMaintByIdNewer = mergeMaintByIdNewer;', context);
+  return { merge: (...a) => context.__mergeMaintByIdNewer(...a) };
+}
+
+test('الدمج: بلاغ حُدّث محليًا يتقدّم على نسخته القديمة في الخادم (السبب: "الرسالة ثابتة")', () => {
+  const { merge } = buildMergeSandbox();
+  const server = [{ id:'PM-0002', status:'قيد التنفيذ', cost:0, createdAt:'2026-09-22T00:00:00.000Z' }];
+  // الجهاز نفّذ «إكمال وإدخال التكلفة» فسُجّلت بصمة أحدث
+  const local = [{ id:'PM-0002', status:'مكتمل', cost:250, createdAt:'2026-09-22T00:00:00.000Z', updatedAt:'2026-09-30T10:00:00.000Z' }];
+  const merged = merge(server, local);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].status, 'مكتمل', 'يجب أن تتقدّم الحالة المحلية المحدثة على الخادم');
+  assert.equal(merged[0].cost, 250, 'يجب حفظ التكلفة المُدخلة');
+});
+
+test('الدمج: نسخة الخادم الأحدث زمنيًا تفوز (لا ننسف تعديل زميل من جهاز أحدث)', () => {
+  const { merge } = buildMergeSandbox();
+  const server = [{ id:'PM-0003', status:'معتمد', createdAt:'2026-09-22T00:00:00.000Z', updatedAt:'2026-09-30T12:00:00.000Z' }];
+  const local = [{ id:'PM-0003', status:'جديد', createdAt:'2026-09-22T00:00:00.000Z', updatedAt:'2026-09-30T09:00:00.000Z' }];
+  const merged = merge(server, local);
+  assert.equal(merged[0].status, 'معتمد', 'يجب احترام الأحدث من الخادم');
+});
+
+test('الدمج: بلاغ جديد محليًا يُضاف، وبلاغ محذوف من الخادم لا يُعاد إحياؤه بلا سبب', () => {
+  const { merge } = buildMergeSandbox();
+  const server = [{ id:'PM-0001', status:'جديد', createdAt:'2026-08-31T00:00:00.000Z' }];
+  const local = [
+    { id:'PM-0002', status:'جديد', createdAt:'2026-09-22T00:00:00.000Z' },
+    { id:'PM-0001', status:'معتمد', createdAt:'2026-08-31T00:00:00.000Z', updatedAt:'2026-09-30T10:00:00.000Z' },
+  ];
+  const merged = merge(server, local);
+  assert.equal(merged.length, 2, 'يجب أن يحتوي البلاغين');
+  const pm2 = merged.find(x => x.id === 'PM-0002');
+  assert.ok(pm2, 'البلاغ الجديد محليًا يجب أن يُحفظ');
+  assert.equal(merged.find(x => x.id === 'PM-0001').status, 'معتمد', 'تغيّر الحالة محفوظ');
+});
+
+test('maintAction يضبط updatedAt ليُعرف أي نسخة أحدث عند الدمج', () => {
+  const { ctx, db } = buildSandbox({ report: { ...BASE_REPORT, status: 'قيد التنفيذ' } });
+  ctx.maintAction('PM-0001', 'complete');
+  const r = db.maintenance[0];
+  assert.equal(r.status, 'مكتمل');
+  assert.ok(r.updatedAt, 'يجب تسجيل updatedAt عند تغيّر الحالة');
+  assert.ok(!Number.isNaN(Date.parse(r.updatedAt)), 'updatedAt يجب أن يكون تاريخًا صالحًا');
+});
+
