@@ -5,7 +5,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-COPY server.js db.js seed.js ./
+# star-week.js is the server-side logic required by server.js via
+# require('./star-week'). Dropping it from this line makes the server fail
+# to boot on Render, so keep it listed here.
+COPY server.js db.js seed.js star-week.js ./
 COPY public ./public
 
 ENV NODE_ENV=production
