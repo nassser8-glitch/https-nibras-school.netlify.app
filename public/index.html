@@ -1166,7 +1166,19 @@ async function __syncPush(school){
             // الخادم القديمة فيعود البلاغ إلى حالته السابقة ("الرسالة ثابتة").
             // ندمج بالـid مع الأحدث زمنياً: أي بلاغ حُدّث محليًا بـ updatedAt/حالة/تكلفة
             // يتقدّم على نسخته في الخادم.
-            const maintStamp = (x) => (x && (x.updatedAt || x.completedAt || x.startedAt || x.approvedAt || x.rejectedAt || x.forwardedAt || x.createdAt)) || '';
+            // البصمة الزمنية لبلاغ: الأحدث بين updatedAt وكل تواريخ الانتقال.
+            // نأخذ الأكبر (الأحدث) ولا نعتمد أول حقلٍ في السلسلة: ترتيب الأولوية كان
+            // يجعل approvedAt (تاريخ اعتماد قديم) يتقدّم على updatedAt (بصمة الإجراء الأخير)،
+            // فيخسر التعديل الجديد أمام نسخة الخادم ويعود البلاغ إلى حالته السابقة.
+            const maintTimes = (x) => {
+              if(!x) return [];
+              return [x.updatedAt, x.completedAt, x.startedAt, x.approvedAt, x.rejectedAt, x.forwardedAt, x.createdAt]
+                .map(t => Date.parse(t || '')).filter(t => Number.isFinite(t));
+            };
+            const maintStamp = (x) => {
+              const ts = maintTimes(x);
+              return ts.length ? Math.max.apply(null, ts) : 0;
+            };
             const mergeMaintByIdNewer = (srvArr, locArr) => {
               const m = new Map();
               for(const x of (Array.isArray(srvArr) ? srvArr : [])) if(x && x.id != null) m.set(x.id, x);
@@ -1176,8 +1188,7 @@ async function __syncPush(school){
                 const ex = m.get(x.id);
                 if(!ex){ m.set(x.id, x); continue; }
                 if(__canonEq(x, ex)) continue; // متطابقان، لا داعي للاختيار
-                // الأحدث زمنياً يكسب؛ وعند التساوي نأخذ المحلي (هذا الجهاز نفّذ الإकार حديثاً
-                // فبصمته قد تطابق إن كان الخادم قديم البصمة بلا updatedAt).
+                // الأحدث زمنياً يكسب؛ وعند التساوي نأخذ المحلي (هذا الجهاز نفّذ الإجراء حديثاً).
                 if(maintStamp(x) >= maintStamp(ex)) m.set(x.id, x);
               }
               return Array.from(m.values());

@@ -140,9 +140,9 @@ test('maintDelete: إلغاء التأكيد لا يحذف ولا يرفع', () 
 const src = fs.readFileSync(INDEX_HTML_PATH, 'utf8');
 
 function extractMaintMerge(srcText) {
-  const start = srcText.indexOf('const maintStamp = (x) =>');
-  if (start === -1) throw new Error('maintStamp merge helper not found in index.html');
-  // نلتقط تعريف maintStamp و mergeMaintByIdNewer فقط دون الكتل التالية التي تحتاج obj
+  const start = srcText.indexOf('const maintTimes = (x) =>');
+  if (start === -1) throw new Error('maintTimes merge helper not found in index.html');
+  // نلتقط تعريف maintTimes و maintStamp و mergeMaintByIdNewer فقط دون الكتل التالية التي تحتاج obj
   const fnStart = srcText.indexOf('const mergeMaintByIdNewer = (srvArr, locArr) => {', start);
   if (fnStart === -1) throw new Error('mergeMaintByIdNewer not found in index.html');
   let depth = 0;
@@ -163,8 +163,8 @@ function buildMergeSandbox() {
     console,
   };
   vm.createContext(context);
-  vm.runInContext(extractMaintMerge(src) + '\n;globalThis.__mergeMaintByIdNewer = mergeMaintByIdNewer;', context);
-  return { merge: (...a) => context.__mergeMaintByIdNewer(...a) };
+  vm.runInContext(extractMaintMerge(src) + '\n;globalThis.__merge = mergeMaintByIdNewer;', context);
+  return { merge: (...a) => context.__merge(...a) };
 }
 
 test('الدمج: بلاغ حُدّث محليًا يتقدّم على نسخته القديمة في الخادم (السبب: "الرسالة ثابتة")', () => {
@@ -207,5 +207,44 @@ test('maintAction يضبط updatedAt ليُعرف أي نسخة أحدث عند 
   assert.equal(r.status, 'مكتمل');
   assert.ok(r.updatedAt, 'يجب تسجيل updatedAt عند تغيّر الحالة');
   assert.ok(!Number.isNaN(Date.parse(r.updatedAt)), 'updatedAt يجب أن يكون تاريخًا صالحًا');
+});
+
+// ===== التتابع: اعتمادٌ قديمٌ ثم إكمالٌ اليوم (السبب: البلاغ "يعود كأنه لم يتم عليه إجراء") =====
+
+test('الدمج: إكمالٌ اليوم يتقدّم رغم وجود تاريخ اعتماد أقدم (البلاغ لا يعود لحالته السابقة)', () => {
+  const { merge } = buildMergeSandbox();
+  // الخادم ما زال يحمل نسخة «معتمد» بتاريخ اعتماد سابق
+  const server = [{ id:'PM-0002', status:'معتمد', cost:0, createdAt:'2026-09-22T00:00:00.000Z', approvedAt:'2026-09-23T08:00:00.000Z' }];
+  // الجهاز أكمل البلاغ اليوم فسجّل completedAt + updatedAt اليوم
+  const local = [{
+    id:'PM-0002', status:'مكتمل', cost:15000,
+    createdAt:'2026-09-22T00:00:00.000Z', approvedAt:'2026-09-23T08:00:00.000Z',
+    startedAt:'2026-09-29T08:00:00.000Z', completedAt:'2026-09-30T10:00:00.000Z',
+    updatedAt:'2026-09-30T10:00:00.000Z',
+  }];
+  const merged = merge(server, local);
+  assert.equal(merged[0].status, 'مكتمل', 'يجب أن يكتمل البلاغ ولا يعود إلى معتمد');
+  assert.equal(merged[0].cost, 15000, 'يجب حفظ المبلغ المدخل');
+});
+
+test('الدمج: بصمة الإجراء الأحدث تنتصر مهما كان ترتيب حقول التاريخ داخل البلاغ', () => {
+  const { merge } = buildMergeSandbox();
+  const server = [{ id:'PM-0009', status:'معتمد', cost:0, createdAt:'2026-09-01T00:00:00.000Z', approvedAt:'2026-09-20T08:00:00.000Z' }];
+  // startedAt أقدم من approvedAt لكن كلاهما أقدم من updatedAt
+  const local = [{
+    id:'PM-0009', status:'قيد التنفيذ', cost:0,
+    createdAt:'2026-09-01T00:00:00.000Z', approvedAt:'2026-09-20T08:00:00.000Z',
+    startedAt:'2026-09-19T08:00:00.000Z', updatedAt:'2026-09-30T09:00:00.000Z',
+  }];
+  const merged = merge(server, local);
+  assert.equal(merged[0].status, 'قيد التنفيذ', 'يجب اعتماد الإجراء الأحدث لا الأقدم');
+});
+
+test('الدمج: بلاغ بلا أي تاريخ على الإطلاق لا يسقط الخادم (بلا انهيار Date)', () => {
+  const { merge } = buildMergeSandbox();
+  const server = [{ id:'PM-0010', status:'جديد', cost:0 }];
+  const local = [{ id:'PM-0010', status:'معتمد', cost:0 }];
+  const merged = merge(server, local);
+  assert.equal(merged.length, 1, 'يجب ألا ينهار الدمج على تواريخ مفقودة');
 });
 
