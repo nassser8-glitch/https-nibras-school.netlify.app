@@ -9193,7 +9193,11 @@ function maintAction(id, action){
   else if(action === 'start'){ if(!maintCanFollow(user)) return; r.status = 'قيد التنفيذ'; r.startedAt = todayStr(); }
   else if(action === 'complete'){ if(!maintCanFollow(user)) return; const raw = prompt('تكلفة الصيانة (بالروبية):', '0'); if(raw === null) return; r.cost = Math.max(0, Number(String(raw).replace(/,/g, '')) || 0); r.status = 'مكتمل'; r.completedAt = todayStr(); }
   else return;
+  // نرفع التغيير للخادم فورًا: الحفظ في التخزين المحلي وحده يُمحى عند أول سحب دوري
+  // فيعود البلاغ إلى حالته السابقة (يبدو أن الإجراء لم يُنفَّذ).
+  d._ts = Date.now();
   saveDB(d);
+  __syncSchedule(getActiveSchool(), 0);
   renderApp();
 }
 function maintDelete(id){
@@ -9203,7 +9207,9 @@ function maintDelete(id){
   if(!maintCanDelete(r, currentUser())) return;
   if(!confirm('حذف البلاغ ' + id + ' نهائيًا؟')) return;
   d.maintenance = d.maintenance.filter(x => x.id !== id);
+  d._ts = Date.now();
   saveDB(d);
+  __syncSchedule(getActiveSchool(), 0);
   renderApp();
 }
 function maintSetFilter(k, v){ maintFilter[k] = v; renderApp(); }
@@ -9515,7 +9521,9 @@ function saveMaintReport(){
       status: 'جديد', cost: 0
     });
   }
+  d._ts = Date.now();
   saveDB(d);
+  __syncSchedule(getActiveSchool(), 0);
   closeMaintForm();
   renderApp();
 }
