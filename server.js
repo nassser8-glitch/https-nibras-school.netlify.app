@@ -303,20 +303,49 @@ function cookieOpts(req, maxAgeMs) {
 
 function authUser(req) {
   const token = readCookies(req)[SESSION_COOKIE];
-  if (!token) return Promise.resolve(null);
+  if (!token) { req._authReason = 'no_cookie'; return Promise.resolve(null); }
   const hash = crypto.createHash('sha256').update(token).digest('hex');
   return db.sessionByTokenHash(hash).then(row => {
-    if (!row) return null;
+    if (!row) { req._authReason = 'no_session_row'; return null; }
     req._sessionToken = token;
     req._tokenHash = hash;
     return row;
   });
 }
 function fail(res) { return e => { console.error('[500]', e); res.status(500).json({ error: 'server' }); }; }
+
+// ===== تجديد زاحف للجلسة =====
+// المشكلة: TTL ثابتة (24 ساعة)، فالموظفة التي تعمل طول اليوم تُطرد في منتصف يومها.
+// النتيجة في الواجهة: الصفحة تبقى ظاهرة من sessionStorage بينما كل طلب خادم يرتدّ 401 —
+// وهذا ما كان يظهر «تعذّر عرض نجمة الأسبوع» بلا تفسير. الآن نُمدّد الجلسة النشطة
+// (نفس المخاطرة TTL، بلا تغيير سلوك الدخول والخروج) ونعيد ضبط كوكي المتصفح.
+// خريطة in-memory لتحديد المعدل: لا استعلام لكل طلب.
+const SESSION_RENEW_MIN_GAP_MS = 30 * 60 * 1000;
+const __renewedAt = new Map();
+function renewSessionIfNeeded(req, res, s) {
+  if (!req._tokenHash) return;
+  const now = Date.now();
+  const key = req._tokenHash;
+  const last = __renewedAt.get(key) || 0;
+  if (now - last < SESSION_RENEW_MIN_GAP_MS) return;
+  const remaining = new Date(s.expires_at || 0).getTime() - now;
+  if (!(remaining < SESSION_TTL_MS / 2)) return;   // ما زالت جديدة: لا تدخّل
+  __renewedAt.set(key, now);
+  if (__renewedAt.size > 5000) { const cutoff = now - SESSION_RENEW_MIN_GAP_MS; for (const [k, t] of __renewedAt) if (t < cutoff) __renewedAt.delete(k); }
+  db.touchSession(key, SESSION_TTL_MS)
+    .then(exp => {
+      if (!exp) return;
+      s.expires_at = exp;
+      try { res.setHeader('Set-Cookie', cookieOpts(req)); } catch (_) { /* رد أُرسل */ }
+      console.log('[auth] session renewed', key.slice(0, 8));
+    })
+    .catch(e => console.warn('[auth] renew failed', e.message));
+}
 function requireAuth(req, res, next) {
   authUser(req).then(s => {
-    if (!s) return res.status(401).json({ error: 'unauthorized' });
+    if (!s) return res.status(401).json({ error: 'unauthorized', reason: req._authReason || 'unauthorized' });
     req.session = s;
+    renewSessionIfNeeded(req, res, s);
     next();
   }).catch(fail(res));
 }

@@ -90,11 +90,12 @@
       state.loading = false;
       state.loaded = true;
       if (r.ok && r.j && r.j.ok) {
-        state.view = r.j; state.traits = r.j.traits || []; state.error = ''; state.errorStatus = 0;
+        state.view = r.j; state.traits = r.j.traits || []; state.error = ''; state.errorStatus = 0; state.errorReason = '';
       } else {
         state.error = (r.j && r.j.error) || 'load_failed';
         state.errorStatus = r.status || 0;
-        console.warn('[star-week] تعذّر تحميل نجمة الأسبوع:', state.errorStatus, state.error);
+        state.errorReason = (r.j && r.j.reason) || '';
+        console.warn('[star-week] تعذّر تحميل نجمة الأسبوع:', state.errorStatus, state.error, state.errorReason);
       }
       return paint();
     });
@@ -108,12 +109,15 @@
   function errorHTML() {
     const code = state.error || 'load_failed';
     const st = state.errorStatus || 0;
+    const why = { no_cookie: 'لا يوجد كوكي جلسة في المتصفح',
+                  no_session_row: 'الجلسة غير موجودة أو منتهية على الخادم' }[state.errorReason] || '';
     if (st === 401 || code === 'unauthorized')
       return '<div>انتهت جلستك على الخادم — هذا الميزة تقرأ من الخادم مباشرة، ' +
         'فلا تظهر ببيانات الجهاز القديمة. سجّلي الدخول من جديد وستعود النجمة.</div>'
         + '<div class="stw-actions"><button class="stw-btn" onclick="location.hash=\'#/login\';' +
         ' if(typeof renderApp===\'function\') renderApp();">تسجيل الدخول</button>'
-        + '<button class="stw-btn ghost" onclick="__stwRetry()">إعادة المحاولة</button></div>';
+        + '<button class="stw-btn ghost" onclick="__stwRetry()">إعادة المحاولة</button></div>'
+        + (why ? '<div class="stw-hint-sm">' + esc(why) + '</div>' : '');
     return '<div>تعذّر تحميل نجمة الأسبوع.</div>'
       + '<div class="stw-actions"><button class="stw-btn ghost" onclick="__stwRetry()">إعادة المحاولة</button></div>'
       + '<div class="stw-hint-sm" dir="ltr" style="text-align:left">http=' + esc(String(st)) + ' · error=' + esc(code) + '</div>';

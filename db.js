@@ -395,6 +395,16 @@ async function sessionByTokenHash(tokenHash) {
       WHERE s.token_hash = $1 AND s.expires_at > now() AND u.active = true`, [tokenHash]);
   return r.rows[0] || null;
 }
+// تمديد جلسة نشطة (تجديد زاحف): المستخدم الذي يعمل طول اليوم لا يُطرد في منتصفه.
+// يُستدعى فقط عندما يكون المتبقي أقل من نصف المدة، مرة واحدة كل 30 دقيقة.
+async function touchSession(tokenHash, ttlMs) {
+  const r = await pool.query(
+    `UPDATE sessions
+        SET expires_at = now() + ($2::float/1000 || ' seconds')::interval
+      WHERE token_hash = $1
+      RETURNING expires_at`, [tokenHash, ttlMs]);
+  return r.rows[0] ? r.rows[0].expires_at : null;
+}
 async function deleteSession(tokenHash) {
   await pool.query('DELETE FROM sessions WHERE token_hash = $1', [tokenHash]);
 }
@@ -912,7 +922,7 @@ module.exports = {
   createStudentAccountAndRecord,
   updateUserPasswordHash, updateUserPlainPassword, updateUserProfile, grantUserAccess, clearFirstLogin,
   setUserActive, deactivateUser, setUserSchool, updateUserIdentity, setUserUsername,
-  createSession, sessionByTokenHash, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,
+  createSession, sessionByTokenHash, touchSession, deleteSession, deleteUserSessions, sweepSessions, finalizeLogin,
   repairTeacherFirstLoginFromEvidence,
   activateTeachersSafely,
   getSupervisionSchedule, replaceSupervisionSchedule, getSupervisionForDate,

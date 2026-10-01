@@ -226,6 +226,9 @@ test('رسالة الخطأ: 401 تعطي تسجيل دخول (لا «تعذّر
   const h400 = w.__stwErrorHTML();
   assert.ok(h400.includes('bad_school') && h400.includes('400'), 'رمز الخطأ ظاهر للتشخيص');
   assert.ok(h400.includes('إعادة المحاولة'), 'زر إعادة المحاولة');
+
+  w.__stwState.error = 'unauthorized'; w.__stwState.errorStatus = 401; w.__stwState.errorReason = 'no_cookie';
+  assert.ok(w.__stwErrorHTML().includes('لا يوجد كوكي جلسة'), 'سبب 401 مُفسَّر للمستخدم');
 });
 
 test('كل ملفات JS المعدَّلة تُحلَّل فعلًا (حارس ضد ملف معطوب يشلّ الميزة بصمت)', () => {

@@ -141,6 +141,38 @@ test('بلا جلسة ⇒ 401 على المسارات الثلاثة', async () 
   }
 });
 
+test('الـ401 يميّز السبب: لا كوكي مقابل جلسة غير موجودة/منتهية', async () => {
+  const none = await req(srv.port, 'GET', '/api/stars');
+  assert.strictEqual((await none.json()).reason, 'no_cookie', 'بلا كوكي أصلاً');
+  const ghost = await req(srv.port, 'GET', '/api/stars', { cookie: 'nibras_session=tok-ghost' });
+  const j = await ghost.json();
+  assert.strictEqual(j.error, 'unauthorized');
+  assert.strictEqual(j.reason, 'no_session_row', 'كوكي موجود لكن لا صف جلسة');
+});
+
+test('تجديد زاحف: جلسة قاربت الانتهاء تُمدَّد ويُعاد ضبط الكوكي', async () => {
+  const soon = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  const c = await login(srv.port, 'A1', { role: 'ADMIN', expires_at: soon });
+  const before = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8'));
+  const hash = Object.keys(before).find(h => before[h].id === 'A1' && before[h].expires_at === soon);
+  const r = await req(srv.port, 'GET', '/api/stars', { cookie: c });
+  assert.strictEqual(r.status, 200);
+  const setCookie = r.headers.get('set-cookie') || '';
+  assert.ok(setCookie.includes('nibras_session='), 'أُعيد ضبط كوكي الجلسة: ' + setCookie);
+  assert.ok(/Max-Age=(\d+)/.test(setCookie) && Number(/Max-Age=(\d+)/.exec(setCookie)[1]) >= 23 * 3600,
+    'المدة أُعيد ضبطها ليوم كامل: ' + setCookie);
+  const after = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8'));
+  assert.ok(new Date(after[hash].expires_at).getTime() > Date.now() + 23 * 3600 * 1000,
+    'expires_at امتدّ في القاعدة');
+});
+
+test('جلسة جديدة المدة ⇒ لا تجديد ولا كتابة (لا استعلام لكل طلب)', async () => {
+  const c = await login(srv.port, 'T1', { role: 'TEACHER', expires_at: new Date(Date.now() + 23 * 3600 * 1000).toISOString() });
+  const r = await req(srv.port, 'GET', '/api/stars', { cookie: c });
+  assert.strictEqual(r.status, 200);
+  assert.ok(!(r.headers.get('set-cookie') || '').includes('nibras_session='), 'لا كوكي جديد');
+});
+
 test('GET /api/stars: الرائدة محسوبة من الجدول وتظهر للمدير', async () => {
   const c = await login(srv.port, 'A1', { role: 'ADMIN' });
   const r = await req(srv.port, 'GET', '/api/stars', { cookie: c });

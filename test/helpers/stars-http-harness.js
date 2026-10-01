@@ -48,6 +48,14 @@ const dbStub = {
     const all = readJson(SESSIONS_FILE, {}) || {};
     return all[hash] || null;
   },
+  // تجديد زاحف: نمدّد expires_at في ملف الجلسات (كما يفعل UPDATE في الإنتاج)
+  async touchSession(hash, ttlMs) {
+    const all = readJson(SESSIONS_FILE, {}) || {};
+    if (!all[hash]) return null;
+    all[hash].expires_at = new Date(Date.now() + (ttlMs || 864e5)).toISOString();
+    writeJson(SESSIONS_FILE, all);
+    return all[hash].expires_at;
+  },
   // في الإنتاج جدول الحسابات هو مصدر الحقيقة، وقسم users في JSON ذاكرة مزامنة.
   // لا بد من إرجاع الحسابات فعلاً وإلا مسح الخادم ذاكرته (كما حدث عند stub فارغ).
   async usernamesByIds(ids) {
