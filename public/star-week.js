@@ -235,7 +235,7 @@
         const st = (v.stars || []).filter(x => x.classId === o.classId)[0];
         html += '<tr><td>' + esc(o.className) + '</td><td>' + esc(o.ownerName || '—')
           + (o.tie ? ' <span class="stw-hint-sm">(تعادل)</span>' : '')
-          + (o.source === 'ownership' ? ' <span class="stw-hint-sm">(بلا جدول — ملكية الفصل)</span>' : '')
+          + (o.source === 'assigned' ? ' <span class="stw-hint-sm">(معلمة الفصل المسندة)</span>' : '')
           + '</td><td>' + esc(String(o.periods)) + '</td><td>'
           + (st ? esc(st.studentName) + '<div class="stw-hint-sm">' + esc((st.traitsLabels || []).join(' · ')) + '</div>' : '—')
           + '</td></tr>';

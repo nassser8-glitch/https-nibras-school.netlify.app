@@ -199,7 +199,7 @@ test('معلمة أخرى غير مخولة لا تستطيع إنشاء نجم�
   });
   const o = sw.classOwner(d2, 'C1');
   assert.strictEqual(o.ownerId, 'T2', 'بلا جدول: صاحبة الفصل المعلنة أولًا');
-  assert.strictEqual(o.source, 'ownership');
+  assert.strictEqual(o.source, 'assigned');
   assert.throws(() => sw.upsertAward(d2, SESSION('T1', 'TEACHER'),
     { classId: 'C1', studentId: 'S1', traits: ['khuluqa'] }, OPTS),
   e => e.code === 'not_owner');
@@ -449,7 +449,7 @@ test('فصل بلا جدول: صاحبة الفصل (teacherIds) هي الرائ
   });
   const o = sw.classOwner(d, 'C2');
   assert.strictEqual(o.ownerId, 'T9', 'شيماء صاحبة الفصل، لا صاحبة المعرّف الأصغر');
-  assert.strictEqual(o.source, 'ownership');
+  assert.strictEqual(o.source, 'assigned');
   assert.strictEqual(o.tie, false, 'غياب الجدول ليس تعادلًا يُعرض للإدارة');
 });
 
@@ -488,7 +488,7 @@ test('جدول موجود لكن كل خاناته محذوفة (_del) ⇒ نف�
     timetable: { T1: dead }
   });
   assert.strictEqual(sw.classOwner(d, 'C2').ownerId, 'T9');
-  assert.strictEqual(sw.classOwner(d, 'C2').source, 'ownership');
+  assert.strictEqual(sw.classOwner(d, 'C2').source, 'assigned');
 });
 
 test('فصل بلا جدول وبلا معلمات معلنة ⇒ لا رائدة (بلا انهيار)', () => {
@@ -504,7 +504,7 @@ test('فصل بلا جدول وبلا معلمات معلنة ⇒ لا رائد�
   assert.deepStrictEqual(sw.ownedClassIds(d, 'T1'), [], 'لا صلاحية بلا ملكية ولا جدول');
 });
 
-test('وجود الجدول يبقي المصدر timetable ولا يفعّل الرجوع', () => {
+test('فصل فيه إسناد: المصدر assigned والأكثر حصصًا من المُسندات', () => {
   const d = makeData({
     classes: [{ id: 'C1', name: 'أ', gradeId: 'G1', teacherIds: ['T1', 'T2'] }],
     students: [student('S1', 'C1')],
@@ -512,6 +512,49 @@ test('وجود الجدول يبقي المصدر timetable ولا يفعّل ا
     timetable: { T1: ttCell('C1', 2), T2: ttCell('C1', 5) }
   });
   const o = sw.classOwner(d, 'C1');
+  assert.strictEqual(o.ownerId, 'T2', 'الأكثر حصصًا من المُسندات');
+  assert.strictEqual(o.source, 'assigned');
+});
+
+test('فصل بلا إسناد: المصدر timetable ويُختار الأكثر حصصًا من الجدول', () => {
+  const d = makeData({
+    classes: [{ id: 'C4', name: 'د', gradeId: 'G1', teacherIds: [] }],
+    students: [student('S1', 'C4')],
+    users: [teacher('T1', 'أ'), teacher('T2', 'ب')],
+    timetable: { T1: ttCell('C4', 2), T2: ttCell('C4', 5) }
+  });
+  const o = sw.classOwner(d, 'C4');
   assert.strictEqual(o.ownerId, 'T2');
   assert.strictEqual(o.source, 'timetable');
+});
+
+// ══════════ 8) معلمة غير مُسندة للفصل لا تسلب الرائدية من مُسندته ══════════
+// جوهر شكوى «شيماء»: فصل تُدرّس فيه معلمة أخرى حصصًا أكثر (أو تُسجّلها المدرسة
+// في الجدول) بينما شيماء هي معلمة الفصل المُسندة. الرائدية للمُسندة دائمًا.
+test('معلمة الفصل المُسندة تفوز على غير المُسندة ولو كانت أقل حصصًا', () => {
+  const d = makeData({
+    classes: [{ id: 'C2', name: 'الصف الثاني', gradeId: 'G1', teacherIds: ['T9'] }],
+    students: [student('S1', 'C2')],
+    users: [teacher('T9', 'شيماء'), teacher('T5', 'أ. أخرى')],
+    // الأخرى تُدرّس الفصل فعليًا وبحصص كثيرة، وتظهر في الجدول فقط
+    timetable: { T5: ttCell('C2', 5) }
+  });
+  const o = sw.classOwner(d, 'C2');
+  assert.strictEqual(o.ownerId, 'T9', 'شيماء المُسندة هي الرائدة رغم أن حصصها صفر');
+  assert.strictEqual(o.source, 'assigned');
+  assert.deepStrictEqual(sw.ownedClassIds(d, 'T9'), ['C2']);
+  // والأخرى لا تحصل على الصلاحية
+  assert.throws(() => sw.upsertAward(d, SESSION('T5', 'TEACHER'),
+    { classId: 'C2', studentId: 'S1', traits: ['khuluqa'] }, OPTS),
+  e => e.code === 'not_owner');
+});
+
+test('بين معلمتين مُسندتين تفوز الأكثر حصصًا', () => {
+  const d = makeData({
+    classes: [{ id: 'C2', name: 'الثاني', gradeId: 'G1', teacherIds: ['T9', 'T1'] }],
+    students: [student('S1', 'C2')],
+    users: [teacher('T9', 'شيماء'), teacher('T1', 'أ. أخرى')],
+    timetable: { T1: ttCell('C2', 5), T9: ttCell('C2', 1) }
+  });
+  assert.strictEqual(sw.classOwner(d, 'C2').ownerId, 'T1', 'الأكثر حصصًا من المُسندات');
 });
