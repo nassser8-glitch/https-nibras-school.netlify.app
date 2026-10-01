@@ -310,79 +310,137 @@
     for (let i = 0; i < nodes.length; i++) nodes[i].innerHTML = sectionHTML();
     const eras = document.querySelectorAll('[data-stw-eraser]');
     for (let i = 0; i < eras.length; i++) initEraser(eras[i]);
+    // مؤقّتات التطبيق (المزامنة/الإشعارات) تعيد رسم اللوحة، فالنافذة المفتوحة
+    // تُعاد رسمها من state حتى لا يضيع ما اختيرته الإدارة.
+    if (state.pick && state.pick.classId) renderPicker();
   }
 
   // ── 6) نافذة الاختيار (للإدارة فقط — تُدخل نيابةً عن رائدة الصف) ───────
+  // الحالة في state لا داخل الإغلاق: إعادة رسم اللوحة تستبدل عناصر النافذة،
+  // فلو عاش الاختيار داخل الإغلاق لضاع بمجرد مزامنة واحدة، وتبدو القائمة
+  // «تفتح ولا تُختار».
+  function pick() {
+    if (!state.pick) state.pick = { classId: '', studentId: '', message: '', traits: {}, inited: false };
+    return state.pick;
+  }
+  function closePick() {
+    state.pick = null;
+    const hosts = document.querySelectorAll('[data-stw-pick]');
+    for (let i = 0; i < hosts.length; i++) hosts[i].innerHTML = '';
+  }
+  function pickHost(cid) {
+    return document.querySelector('[data-stw-class="' + cid + '"][data-stw-pick]')
+      || document.querySelector('[data-stw-pick]');
+  }
+  function nameOf(list, id) {
+    const s = (list || []).filter(x => x && x.id === id)[0];
+    return s ? (s.fullName || s.id) : '';
+  }
+  function rowHTML(id, label, on) {
+    return '<div class="stw-row' + (on ? ' on' : '') + '" data-stw-sid="' + esc(id) + '"'
+      + ' data-stw-name="' + esc(label) + '">' + (on ? '✔ ' : '') + esc(label) + '</div>';
+  }
+
   function openPick(targetClassId) {
     const v = state.view; if (!v) return;
-    const d = (typeof loadDB === 'function') ? loadDB() : {};
-    const cid = targetClassId || ((v.me && v.me.ownedClassIds) || [])[0];
-    if (!cid) return;
-    const host = document.querySelector('[data-stw-class="' + cid + '"][data-stw-pick]')
-      || document.querySelector('[data-stw-pick]');
-    if (!host) return;
-    const className = getClassName(cid);
-    const ownerName = ((v.owners || []).filter(x => x.classId === cid)[0] || {}).ownerName || '—';
-    const list = (d.students || []).filter(s => s && s.classId === cid && !s.deleted);
-    const cur = (v.stars || []).filter(x => x.classId === cid)[0];
-    const chosen = {};
-    (cur ? cur.traits : []).forEach(t => { chosen[t] = 1; });
-    let studentId = cur ? cur.studentId : '';
-    let msg = cur ? cur.message : '';
+    const cid = targetClassId || ((v.me && v.me.ownedClassIds) || [])[0] || '';
+    const p = pick();
+    const changed = !!cid && cid !== p.classId;
+    p.classId = cid;
+    // تهيئة واحدة لكل فصل: تفتح على المحفوظ فعلًا، وتُصفَّر عند تغيير الفصل.
+    if (!p.inited || changed) {
+      const cur = (v.stars || []).filter(x => x.classId === cid)[0];
+      p.studentId = (cur && cur.studentId) || '';
+      p.message = (cur && cur.message) || '';
+      p.traits = {};
+      (cur ? (cur.traits || []) : []).forEach(t => { p.traits[t] = 1; });
+      p.inited = true;
+    }
+    renderPicker();
+    const host = pickHost(cid);
+    if (host && host.scrollIntoView) host.scrollIntoView({ block: 'nearest' });
+  }
 
+  function renderPicker() {
+    const v = state.view; const p = state.pick;
+    if (!v || !p || !p.classId) return;
+    const host = pickHost(p.classId);
+    if (!host) return;
+    const d = (typeof loadDB === 'function') ? loadDB() : {};
+    const className = getClassName(p.classId);
+    const ownerName = ((v.owners || []).filter(x => x.classId === p.classId)[0] || {}).ownerName || '—';
+    const list = (d.students || []).filter(s => s && s.classId === p.classId && !s.deleted);
     host.innerHTML = '<div class="stw-week" style="margin-top:12px;font-weight:800">اختيار النجمة — '
       + esc(className) + ' · الرائدة: ' + esc(ownerName) + '</div>'
+      + '<div class="stw-note">اضغطي على اسم الطالبة، ثم صفة واحدة على الأقل، ثم احفظي. المختارة الآن: '
+      + '<span data-stw-picked>' + esc(nameOf(list, p.studentId) || 'لا أحد') + '</span></div>'
       + '<div class="stw-list" style="margin-top:6px">'
-      + list.map(s => '<div class="stw-row' + (s.id === studentId ? ' on' : '')
-        + '" data-stw-sid="' + esc(s.id) + '">' + esc(s.fullName || s.id) + '</div>').join('')
+      + (list.length
+        ? list.map(s => rowHTML(s.id, s.fullName || s.id, s.id === p.studentId)).join('')
+        : '<div class="stw-hint-sm" style="padding:10px">لا توجد طالبات في هذا الفصل.</div>')
       + '</div>'
       + '<div class="stw-chips">'
-      + (state.traits || []).map(t => '<button type="button" class="stw-chip' + (chosen[t.id] ? ' on' : '')
+      + (state.traits || []).map(t => '<button type="button" class="stw-chip' + (p.traits[t.id] ? ' on' : '')
         + '" data-stw-tid="' + esc(t.id) + '">' + esc(t.emoji + ' ' + t.label) + '</button>').join('')
       + '</div>'
       + '<input class="input" data-stw-msg maxlength="140" placeholder="عبارة قصيرة عن سبب الاختيار (اختياري)" style="width:100%">'
       + '<div class="stw-actions">'
-      + '<button class="stw-btn" onclick="__stwSavePick(\'' + esc(cid) + '\')">حفظ النجمة</button>'
-      + '<button class="stw-btn ghost" onclick="this.closest(\'[data-stw-pick]\').innerHTML=\'\'">إلغاء</button>'
+      + '<button class="stw-btn" onclick="__stwSavePick()">حفظ النجمة</button>'
+      + '<button class="stw-btn ghost" onclick="__stwClosePick()">إلغاء</button>'
       + '</div>';
     const mi = host.querySelector('[data-stw-msg]');
-    if (mi) {
-      mi.value = msg || '';
-      mi.oninput = () => { msg = mi.value; };
-    }
-    host.querySelectorAll('[data-stw-sid]').forEach(el => {
-      el.onclick = () => {
-        studentId = el.getAttribute('data-stw-sid');
-        host.querySelectorAll('[data-stw-sid]').forEach(x => x.classList.remove('on'));
-        el.classList.add('on');
-      };
-    });
-    host.querySelectorAll('[data-stw-tid]').forEach(el => {
-      el.onclick = () => {
-        const id = el.getAttribute('data-stw-tid');
-        if (chosen[id]) delete chosen[id]; else chosen[id] = 1;
-        el.classList.toggle('on');
-      };
-    });
-    host.__stwPick = () => ({ classId: cid, studentId, message: msg, traits: Object.keys(chosen) });
+    if (mi) { mi.value = p.message || ''; mi.oninput = () => { p.message = mi.value; }; }
+    bindPickEvents();
   }
 
-  function savePick(targetClassId) {
-    let host = null;
-    if (targetClassId) {
-      host = document.querySelector('[data-stw-class="' + targetClassId + '"][data-stw-pick]');
-    }
-    if (!host) {
-      const allHosts = document.querySelectorAll('[data-stw-pick]');
-      for (let i = 0; i < allHosts.length; i++) {
-        if (allHosts[i].__stwPick) { host = allHosts[i]; break; }
+  // تفويض الأحداث على document مرة واحدة: يبقى فعّالًا مهما أُعيد رسم اللوحة،
+  // بخلاف ربط onclick لكل عنصر (يُفقد مع أول re-render).
+  function bindPickEvents() {
+    if (bindPickEvents.__bound) return;
+    bindPickEvents.__bound = true;
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      if (!t || !t.closest) return;
+      const row = t.closest('[data-stw-sid]');
+      if (row) {
+        const p = pick();
+        p.studentId = row.getAttribute('data-stw-sid');
+        const host = pickHost(p.classId);
+        if (host) host.querySelectorAll('[data-stw-sid]').forEach(x => {
+          const on = (x === row);
+          const label = x.getAttribute('data-stw-name') || '';
+          x.classList.toggle('on', on);
+          x.textContent = (on ? '✔ ' : '') + label;
+        });
+        const out = document.querySelector('[data-stw-picked]');
+        if (out) out.textContent = nameOf(
+          ((typeof loadDB === 'function') ? loadDB() : {}).students || [], p.studentId) || p.studentId;
+        return;
       }
-    }
-    if (!host) host = document.querySelector('[data-stw-pick]');
-    const g = host && host.__stwPick ? host.__stwPick() : null;
-    if (!g || !g.studentId) { alert('اختاري الطالبة أولًا'); return; }
+      const chip = t.closest('[data-stw-tid]');
+      if (chip) {
+        const p = pick();
+        const id = chip.getAttribute('data-stw-tid');
+        if (p.traits[id]) delete p.traits[id]; else p.traits[id] = 1;
+        chip.classList.toggle('on');
+      }
+    }, false);
+  }
+
+  function savePick() {
+    const p = state.pick;
+    if (!p || !p.classId) { alert('اختاري الفصل أولًا من جدول الإدارة.'); return; }
+    if (!p.studentId) { alert('اختاري الطالبة أولًا'); return; }
+    if (!Object.keys(p.traits).length) { alert('اختاري صفة واحدة على الأقل'); return; }
+    const g = {
+      classId: p.classId, studentId: p.studentId,
+      message: p.message || '', traits: Object.keys(p.traits)
+    };
     api('award', g).then(r => {
-      if (r.ok && r.j && r.j.ok) { state.view = r.j; state.traits = r.j.traits || []; return paint(); }
+      if (r.ok && r.j && r.j.ok) {
+        state.view = r.j; state.traits = r.j.traits || []; state.pick = null;
+        return paint();
+      }
       const code = (r.j && r.j.error) || 'save_failed';
       if (code === 'not_owner') alert('لست الجهة المخوّلة لهذا الفصل.');
       else if (code === 'student_not_in_class') alert('الطالبة لا تنتمي إلى هذا الفصل.');
@@ -394,6 +452,8 @@
   // ── 7) الربط: أي re-render في التطبيق يحدّث البطاقات ───────────────────
   window.__stwOpenPick = openPick;
   window.__stwSavePick = savePick;
+  window.__stwClosePick = closePick;
+  window.__stwRenderPicker = renderPicker;
   window.__stwInitEraser = initEraser;
   // منطق نقي مُعرَّض للاختبارات (لا DOM)
   window.__stwCoverage = coverage;
