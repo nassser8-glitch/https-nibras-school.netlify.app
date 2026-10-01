@@ -342,11 +342,14 @@ function buildView(schoolData, session, week, opts){
 
   const owners = manager
     ? listClasses(schoolData).filter(c => c && !c.deleted).map(c => {
-        const o = classOwner(schoolData, c.id) || { ownerId: null, ownerName: '', periods: 0, tie: false, source: 'none' };
+        const o = classOwner(schoolData, c.id) || { ownerId: null, ownerName: '', periods: 0, tie: false, source: 'none', candidates: [] };
         return {
           classId: c.id, className: classTitle(c.id, schoolData),
           ownerId: o.ownerId, ownerName: o.ownerName, periods: o.periods, tie: !!o.tie,
-          source: o.source || 'none'   // assigned | timetable | none
+          source: o.source || 'none',   // assigned | timetable | none
+          // تشخيص: معلمات الفصل المُسندات وأسماؤهن وحصصهن (للمديرة فقط)
+          assigned: (o.candidates || []).filter(x => x.assigned)
+            .map(x => ({ id: x.id, name: x.name, periods: x.periods }))
         };
       })
     : [];
@@ -358,12 +361,20 @@ function buildView(schoolData, session, week, opts){
 
   const owned = (role === 'STUDENT' || manager) ? [] : ownedClassIds(schoolData, session.id);
   const ownedClasses = (role === 'STUDENT' || manager) ? [] : owned.map(id => ({ id, name: classTitle(id, schoolData) }));
+  // تشخيص للمعلمة: الفصول التي هي مُدرجة فيها صراحةً (teacherIds) داخل مدرستها.
+  const assignedClassIds = listClasses(schoolData).filter(c =>
+    c && !c.deleted && Array.isArray(c.teacherIds) && c.teacherIds.includes(session.id)
+  ).map(c => c.id);
 
   return {
     week: { key: week.key, start: week.start, end: week.end, label: week.label },
     stars: visible.map(a => publicAward(schoolData, a)),
     owners, history,
-    me: { id: session.id, role, isManager: manager, ownedClassIds: owned, ownedClasses }
+    me: {
+      id: session.id, role, isManager: manager, school: session.school || null,
+      name: userName(session.id, schoolData), userExists: !!findUser(schoolData, session.id),
+      ownedClassIds: owned, ownedClasses, assignedClassIds
+    }
   };
 }
 
