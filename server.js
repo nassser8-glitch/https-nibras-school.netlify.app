@@ -7,7 +7,6 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const express = require('express');
-const expressRateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const db = require('./db');
@@ -1647,6 +1646,7 @@ app.get('/api/stars', requireAuth, (req, res) => {
 });
 
 const saveStarAward = (req, res) => {
+  if (rateLimit('star-award', 60, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
   (async () => {
     if (req.session.first_login) return res.status(403).json({ error: 'change_password_first' });
     const body = req.body || {};
@@ -1676,17 +1676,11 @@ function requireStarAdmin(req, res, next) {
   if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
   next();
 }
-const starWriteRateLimit = expressRateLimit({
-  windowMs: 60 * 1000,
-  limit: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'rate_limited' }
-});
-app.post('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward);
-app.put('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward);
-app.patch('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward);
-app.delete('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, (req, res) => {
+app.post('/api/stars/award', requireAuth, requireStarAdmin, saveStarAward);
+app.put('/api/stars/award', requireAuth, requireStarAdmin, saveStarAward);
+app.patch('/api/stars/award', requireAuth, requireStarAdmin, saveStarAward);
+app.delete('/api/stars/award', requireAuth, requireStarAdmin, (req, res) => {
+  if (rateLimit('star-award', 60, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
   (async () => {
     // حذف نجمة الأسبوع غير مطلوب بالميزة: مسجل الأسابيع يُحفظ للأبد.
     res.status(405).json({ error: 'not_allowed' });

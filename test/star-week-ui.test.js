@@ -353,10 +353,10 @@ test('مسارات النجمة تمر عبر المصادقة والتفويض 
   const s = fs.readFileSync(SERVER, 'utf8');
   const routes = [
     "app.get('/api/stars', requireAuth",
-    "app.post('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward)",
-    "app.put('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward)",
-    "app.patch('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward)",
-    "app.delete('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit"
+    "app.post('/api/stars/award', requireAuth, requireStarAdmin, saveStarAward)",
+    "app.put('/api/stars/award', requireAuth, requireStarAdmin, saveStarAward)",
+    "app.patch('/api/stars/award', requireAuth, requireStarAdmin, saveStarAward)",
+    "app.delete('/api/stars/award', requireAuth, requireStarAdmin"
   ];
   for (const r of routes) assert.ok(s.includes(r), 'المسار محمي: ' + r);
   // WRITE path: يستخدم الكتابة mutateSchoolData لا عبر setSchoolData (تفادي سباق القراءة-الكتابة)
@@ -364,6 +364,7 @@ test('مسارات النجمة تمر عبر المصادقة والتفويض 
   const body = s.slice(awardAt, s.indexOf("function requireStarAdmin", awardAt));
   assert.ok(body.includes('db.mutateSchoolData'), 'كتابة داخل معاملة مقفلة');
   assert.ok(!body.includes('db.setSchoolData('), 'لا كتابة كاملة للصف');
+  assert.ok(body.includes("rateLimit('star-award', 60, 60 * 1000, req)"), 'rate limited');
   assert.ok(s.includes("if (req.session.role !== 'ADMIN') return res.status(403)"), 'فحص ADMIN على الخادم');
 });
 
