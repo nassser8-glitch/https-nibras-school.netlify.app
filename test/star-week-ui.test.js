@@ -353,18 +353,18 @@ test('مسارات الميزة محمية بـ requireAuth', () => {
   const s = fs.readFileSync(SERVER, 'utf8');
   const routes = [
     "app.get('/api/stars', requireAuth",
-    "app.post('/api/stars/award', requireAuth, saveStarAward",
-    "app.put('/api/stars/award', requireAuth, saveStarAward",
-    "app.patch('/api/stars/award', requireAuth, saveStarAward",
+    "app.post('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward",
+    "app.put('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward",
+    "app.patch('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward",
     "app.delete('/api/stars/award', requireAuth"
   ];
   for (const r of routes) assert.ok(s.includes(r), 'المسار محمي: ' + r);
   // WRITE path: يستخدم الكتابة mutateSchoolData لا عبر setSchoolData (تفادي سباق القراءة-الكتابة)
   const awardAt = s.indexOf('const saveStarAward');
-  const body = s.slice(awardAt, s.indexOf("app.post('/api/stars/award'", awardAt));
+  const body = s.slice(awardAt, s.indexOf("function requireStarAdmin", awardAt));
   assert.ok(body.includes('db.mutateSchoolData'), 'كتابة داخل معاملة مقفلة');
-  assert.ok(body.includes("req.session.role !== 'ADMIN'"), 'فحص ADMIN على الخادم');
   assert.ok(!body.includes('db.setSchoolData('), 'لا كتابة كاملة للصف');
+  assert.ok(s.includes("if (req.session.role !== 'ADMIN') return res.status(403)"), 'فحص ADMIN على الخادم');
 });
 
 test('حذف النجمة غير مسموح (السجل دائم)', () => {

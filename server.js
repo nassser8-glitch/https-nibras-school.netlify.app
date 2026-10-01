@@ -1647,9 +1647,7 @@ app.get('/api/stars', requireAuth, (req, res) => {
 
 const saveStarAward = (req, res) => {
   (async () => {
-    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
     if (req.session.first_login) return res.status(403).json({ error: 'change_password_first' });
-    if (rateLimit('starwrite', 60, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
     const body = req.body || {};
     const ctx = await starWeekContext(req, res, body);
     if (!ctx) return;
@@ -1673,9 +1671,17 @@ const saveStarAward = (req, res) => {
     fail(res)(error);
   });
 };
-app.post('/api/stars/award', requireAuth, saveStarAward);
-app.put('/api/stars/award', requireAuth, saveStarAward);
-app.patch('/api/stars/award', requireAuth, saveStarAward);
+function requireStarAdmin(req, res, next) {
+  if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+  next();
+}
+function starWriteRateLimit(req, res, next) {
+  if (rateLimit('starwrite', 60, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+  next();
+}
+app.post('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward);
+app.put('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward);
+app.patch('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward);
 app.delete('/api/stars/award', requireAuth, (req, res) => {
   (async () => {
     if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
