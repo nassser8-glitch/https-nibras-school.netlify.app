@@ -97,27 +97,54 @@
         state.errorReason = (r.j && r.j.reason) || '';
         console.warn('[star-week] تعذّر تحميل نجمة الأسبوع:', state.errorStatus, state.error, state.errorReason);
       }
+      if (state.errorStatus === 401) return onUnauthorized();
       return paint();
     });
   }
   function retry() {
-    state.error = ''; state.errorStatus = 0; state.loaded = false;
+    state.error = ''; state.errorStatus = 0; state.errorReason = ''; state.probe = null; state.loaded = false;
     return load();
   }
-  // رسالة الخطأ: سببٌ صريح بدل «تعذّر»_general — خصوصًا 401 (انتهت الجلسة على
-  // الخادم بينما الواجهة ما زالت تعرض بيانات localStorage القديمة).
+  // هل الجلسة نفسها حيّة على الخادم؟ /(api/auth/me) هو نفس requireAuth.
+  // فائدته: يفصل بين حالتين متشابهة ظاهريًا — (أ) الجلسة منتهية فعلًا، فيجب الدخول،
+  // و(ب) الجلسة سليمة لكن مسار النجمة وحده يرفض الطلب، وهو عطل خادم يحتاج إصلاحًا.
+  function probeSession() {
+    try {
+      if (typeof __api === 'function')
+        return __api('GET', 'me').then(r => ({ alive: r.status === 200, status: r.status }));
+    } catch (e) { /* نكمل بمسار بديل */ }
+    return fetch('/api/auth/me')
+      .then(r => ({ alive: r.status === 200, status: r.status }))
+      .catch(() => ({ alive: false, status: 0 }));
+  }
+  function onUnauthorized() {
+    return probeSession().then(p => {
+      state.probe = p;
+      // جلسة ميتة فعلًا ⇒ لا نُبقي التطبيق يتظاهر بأنه مسجّل الدخول.
+      if (!p.alive && typeof __handleAuthError === 'function') {
+        try { __handleAuthError({ status: 401 }); } catch (e) { /* لا شيء */ }
+      }
+      return paint();
+    });
+  }
   function errorHTML() {
     const code = state.error || 'load_failed';
     const st = state.errorStatus || 0;
     const why = { no_cookie: 'لا يوجد كوكي جلسة في المتصفح',
                   no_session_row: 'الجلسة غير موجودة أو منتهية على الخادم' }[state.errorReason] || '';
-    if (st === 401 || code === 'unauthorized')
+    if (st === 401 || code === 'unauthorized') {
+      // sessions حيّة + مسار النجمة يرفض ⇒ ليست مشكلة جلسة، فنتصرّف ونطلب الإصلاح.
+      if (state.probe && state.probe.alive)
+        return '<div>جلستك سليمة على الخادم، لكن طلب النجمة رُفض — هذه مشكلة في الخادم لا في حسابك.</div>'
+          + '<div class="stw-actions"><button class="stw-btn ghost" onclick="__stwRetry()">إعادة المحاولة</button></div>'
+          + '<div class="stw-hint-sm">سبب الرفض من الخادم: ' + esc(why || code) + '</div>';
       return '<div>انتهت جلستك على الخادم — هذا الميزة تقرأ من الخادم مباشرة، ' +
         'فلا تظهر ببيانات الجهاز القديمة. سجّلي الدخول من جديد وستعود النجمة.</div>'
         + '<div class="stw-actions"><button class="stw-btn" onclick="location.hash=\'#/login\';' +
         ' if(typeof renderApp===\'function\') renderApp();">تسجيل الدخول</button>'
         + '<button class="stw-btn ghost" onclick="__stwRetry()">إعادة المحاولة</button></div>'
         + (why ? '<div class="stw-hint-sm">' + esc(why) + '</div>' : '');
+    }
     return '<div>تعذّر تحميل نجمة الأسبوع.</div>'
       + '<div class="stw-actions"><button class="stw-btn ghost" onclick="__stwRetry()">إعادة المحاولة</button></div>'
       + '<div class="stw-hint-sm" dir="ltr" style="text-align:left">http=' + esc(String(st)) + ' · error=' + esc(code) + '</div>';
@@ -471,9 +498,10 @@
       }
       const code = (r.j && r.j.error) || 'save_failed';
       if (r.status === 401 || code === 'unauthorized') {
-        // جلسة الخادم انتهت: نعرض رسالة تسجيل الدخول بدل تنبيه غامض.
+        // 401 عند الحفظ: نفس التشخيص (جلسة ميتة أم عطل في مسار النجمة؟).
         state.error = 'unauthorized'; state.errorStatus = 401;
-        return paint();
+        state.errorReason = (r.j && r.j.reason) || '';
+        return onUnauthorized();
       }
       if (code === 'not_owner') alert('لست الجهة المخوّلة لهذا الفصل.');
       else if (code === 'student_not_in_class') alert('الطالبة لا تنتمي إلى هذا الفصل.');
@@ -486,6 +514,7 @@
   window.__stwOpenPick = openPick;
   window.__stwRetry = retry;
   window.__stwErrorHTML = errorHTML;
+  window.__stwProbeSession = probeSession;
   window.__stwSavePick = savePick;
   window.__stwClosePick = closePick;
   window.__stwRenderPicker = renderPicker;

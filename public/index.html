@@ -2495,7 +2495,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-09-30c theme-ui';
+const __APP_VER = '2026-10-01e session';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -11072,24 +11072,26 @@ function saveAnnouncement(){
 /* تسجيل Service Worker للتثبيت والعمل دون اتصال — يعمل فقط عبر http/https */
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('sw.js?v=39', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=41', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
-     فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف) */
+     فلا تبقى أي جهاز يعمل بنسخة قديمة مخزنة (سبب عودة التكليف المحذوف).
+     الخطر: المفتاح كان 'v38' ثابتًا من زمان ولم يُرفع مع أي نشر بعده، فبقي
+     sessionStorage يحمله وتوقّف إعادة التحميل للأبد — وهو ما أبقي الأجهزة على
+     نُسخ قديمة دون أن تشعر. الآن المفتاح مشتق من CACHE_NAME (يرفع نفسه مع كل
+     نسخة sw) ولا يُعاد التحميل إلا مرة واحدة لكل نسخة. */
+  const __swReloadOnce = function(version){
+    const key = '__nibrasReloaded:' + version;
+    if (sessionStorage.getItem(key) === '1') return;
+    try { sessionStorage.setItem(key, '1'); } catch(_){}
+    location.reload();
+  };
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (sessionStorage.getItem('__nibrasReloaded') !== 'v38') {
-      sessionStorage.setItem('__nibrasReloaded', 'v38');
-      location.reload();
-    }
+    __swReloadOnce((navigator.serviceWorker.controller && navigator.serviceWorker.controller.scriptURL) || 'ctl');
   });
   navigator.serviceWorker.addEventListener('message', function(e){
-    if (e && e.data && e.data.type === 'NEW_VERSION') {
-      if (sessionStorage.getItem('__nibrasReloaded') !== 'v38') {
-        sessionStorage.setItem('__nibrasReloaded', 'v38');
-        location.reload();
-      }
-    }
+    if (e && e.data && e.data.type === 'NEW_VERSION') __swReloadOnce(e.data.version || 'new');
   });
 }
 /* ============ لافتة تثبيت التطبيق على الجوال ============ */
@@ -11179,7 +11181,7 @@ function maybeShowInstallHint(force){
 }
 setTimeout(function(){ maybeShowInstallHint(false); }, 1200);
 </script>
-<script src="star-week.js?v=2026-10-01d"></script>
+<script src="star-week.js?v=2026-10-01e"></script>
 </body>
 </html>
 

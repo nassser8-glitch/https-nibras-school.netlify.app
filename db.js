@@ -411,13 +411,25 @@ async function deleteSession(tokenHash) {
 async function deleteUserSessions(userId) {
   await pool.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
 }
-// إنهاء الدخول برحلة واحدة: حذف الجلسات القديمة + إنشاء الجلسة + تحديث users.data
+// إنهاء الدخول برحلة واحدة: إنشاء الجلسة + تحديث users.data
 // + تحديث جزئي لنسخة القسم (school_data.users) — بدل 4 استعلامات متتالية.
+//
+// عن `cut`: كان هنا `DELETE FROM sessions WHERE user_id = $1` عند كل دخول، أي «جلسة
+// واحدة لكل مستخدم». فكل دخول من جهاز آخر (هاتف + حاسوب المدرسة مثلًا) كان يطرد جلسة
+// الجهاز الأول بلا سبب ظاهر، ولا تلمسه الواجهة التي تعرض نفسها مسجّلة الدخول من
+// sessionStorage بينما كل كتابة على الخادم ترتدّ 401.
+// الآن الدخول يُبقي بقية الجلسات، ولا يحذف إلا المنتهية وما تجاوز السقف (12).
+// المسارات الأمنية لم تتغيّر: تغيير كلمة المرور وإعادة التعيين وتعطيل/حذف المستخدم
+// تستدعي deleteUserSessions فتُبطل كل الجلسات كما هي.
 async function finalizeLogin(userId, school, tokenHash, ttlMs, ip, ua, userDataJson, loginCount, lastLoginIso, historyJson) {
   assertSupportedSchool(school); // يمنع الدخول من لمسح school_data الخاص بـ BOYS
   const r = await pool.query(
-    `WITH del AS (
-        DELETE FROM sessions WHERE user_id = $1
+    `WITH cut AS (
+        DELETE FROM sessions
+         WHERE user_id = $1
+           AND (expires_at <= now()
+             OR token_hash IN (SELECT token_hash FROM sessions
+                                 WHERE user_id = $1 ORDER BY created_at DESC OFFSET 12))
      ), upd AS (
         UPDATE users
            SET data = $4::jsonb, first_login = false

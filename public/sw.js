@@ -1,5 +1,5 @@
 ﻿/* نبراس — Service Worker للتثبيت والعمل دون اتصال */
-const CACHE_NAME = 'nibras-v59-auth1';
+const CACHE_NAME = 'nibras-v60-session2';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -27,7 +27,7 @@ self.addEventListener('activate', (event) => {
       // حتى لا تبقى أي جهاز يعمل بملفات قديمة مخزنة
       self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) =>
         clients.forEach((client) => {
-          try { client.postMessage({ type: 'NEW_VERSION' }); } catch (_) { /* تجاهل */ }
+          try { client.postMessage({ type: 'NEW_VERSION', version: CACHE_NAME }); } catch (_) { /* تجاهل */ }
         })
       )
     )

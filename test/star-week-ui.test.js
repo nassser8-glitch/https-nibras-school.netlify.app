@@ -229,6 +229,26 @@ test('رسالة الخطأ: 401 تعطي تسجيل دخول (لا «تعذّر
 
   w.__stwState.error = 'unauthorized'; w.__stwState.errorStatus = 401; w.__stwState.errorReason = 'no_cookie';
   assert.ok(w.__stwErrorHTML().includes('لا يوجد كوكي جلسة'), 'سبب 401 مُفسَّر للمستخدم');
+
+  // التمييز الحاسم: جلسة سليمة + مسار النجمة يرفض ⇒ عطل خادم لا مشكلة جلسة.
+  w.__stwState.probe = { alive: true, status: 200 };
+  const hAlive = w.__stwErrorHTML();
+  assert.ok(hAlive.includes('جلستك سليمة على الخادم'), 'لا يُطلب دخول وهي مسجّلة فعلًا');
+  assert.ok(!hAlive.includes('تسجيل الدخول</button>'), 'لا زر دخول في حالة عطل الخادم');
+  w.__stwState.probe = { alive: false, status: 401 };
+  assert.ok(w.__stwErrorHTML().includes('تسجيل الدخول</button>'), 'الجلسة الميتة ⇒ زر دخول');
+});
+
+test('فحص الجلسة يميّز «ميتة» عن «سليمة» ويخرج من تسجيل الدخول كاذب', () => {
+  const w = loadClient();
+  let probed = 0;
+  w.__api = () => { probed++; return Promise.resolve({ status: 401 }); };
+  w.__handleAuthError = () => { w.__kicked = true; };
+  return w.__stwProbeSession().then(p => {
+    assert.strictEqual(probed, 1, 'استعمل المسار المشترك بدل طلب مكرر');
+    assert.strictEqual(p.alive, false, 'ميتة');
+    assert.ok(!w.__kicked, 'onUnauthorized وحدها تستدعي الخروج');
+  });
 });
 
 test('كل ملفات JS المعدَّلة تُحلَّل فعلًا (حارس ضد ملف معطوب يشلّ الميزة بصمت)', () => {
