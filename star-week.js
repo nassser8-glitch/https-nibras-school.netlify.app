@@ -357,12 +357,13 @@ function buildView(schoolData, session, week, opts){
     : [];
 
   const owned = (role === 'STUDENT' || manager) ? [] : ownedClassIds(schoolData, session.id);
+  const ownedClasses = (role === 'STUDENT' || manager) ? [] : owned.map(id => ({ id, name: classTitle(id, schoolData) }));
 
   return {
     week: { key: week.key, start: week.start, end: week.end, label: week.label },
     stars: visible.map(a => publicAward(schoolData, a)),
     owners, history,
-    me: { id: session.id, role, isManager: manager, ownedClassIds: owned }
+    me: { id: session.id, role, isManager: manager, ownedClassIds: owned, ownedClasses }
   };
 }
 

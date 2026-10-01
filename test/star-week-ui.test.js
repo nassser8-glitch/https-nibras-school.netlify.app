@@ -22,6 +22,8 @@ function loadClient(){
     requestAnimationFrame: (f) => { f(); },
     getComputedStyle: () => ({ getPropertyValue: () => '#be185d' }),
     document: { querySelectorAll: () => [], querySelector: () => null, body: {} },
+    addEventListener: () => {},
+    removeEventListener: () => {},
     setTimeout: (f) => f(),
     console
   };
@@ -325,4 +327,163 @@ test('حذف النجمة غير مسموح (السجل دائم)', () => {
   const s = fs.readFileSync(SERVER, 'utf8');
   const d = s.slice(s.indexOf("app.delete('/api/stars/award'"));
   assert.ok(d.slice(0, 300).includes('405'), 'DELETE يرفض بـ 405');
+});
+
+// ══════════ اختبارات الممحاة وسلوك الـ DOM وإعادة التحميل ══════════
+function makeEraserMock(star, options) {
+  const opts = options || {};
+  const listeners = {};
+  const cv = {
+    width: 0, height: 0,
+    style: {},
+    parentNode: null,
+    getContext: () => ({
+      setTransform: () => {},
+      clearRect: () => {},
+      fillRect: () => {},
+      fillText: () => {},
+      save: () => {},
+      restore: () => {},
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      stroke: () => {}
+    })
+  };
+  cv.parentNode = {
+    removeChild: (child) => {
+      if (child === cv) cv.parentNode = null;
+    }
+  };
+  const pctEl = { style: {}, textContent: '0%' };
+  const hint = { style: {} };
+  const root = {
+    getAttribute: (attr) => (attr === 'data-idx' ? String(opts.idx || 0) : null),
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 200 }),
+    querySelector: (sel) => {
+      if (sel === 'canvas') return cv;
+      if (sel === '[data-stw-pct]') return pctEl;
+      if (sel === '.stw-eraser-hint') return hint;
+      return null;
+    },
+    addEventListener: (evt, fn) => {
+      if (!listeners[evt]) listeners[evt] = [];
+      listeners[evt].push(fn);
+    },
+    setPointerCapture: () => {},
+    releasePointerCapture: () => {}
+  };
+  return { root, cv, pctEl, hint, listeners };
+}
+
+test('الممحاة: حالة الكشف تبقى محفوظة بعد إعادة تحميل الصفحة (localStorage)', () => {
+  const w = loadClient();
+  const star = {
+    id: '2026-09-28::C1', weekKey: '2026-09-28', classId: 'C1', className: 'الصف السادس — أ',
+    studentId: 'S1', studentName: 'نورة الحربي', traits: ['khuluqa'], traitsLabels: ['🌷 خلوقة']
+  };
+  w.__stwState.view = { stars: [star], week: { key: '2026-09-28', label: 'الأسبوع 1' } };
+
+  const key = 'stw_seen_2026-09-28_C1_S1';
+
+  // 1) أول زيارة: لم تُكشف بعد في localStorage
+  const dom1 = makeEraserMock(star, { idx: 0 });
+  w.__stwInitEraser(dom1.root);
+  assert.ok(dom1.cv.parentNode !== null, 'الغطاء يبقى موجودًا');
+  assert.strictEqual(dom1.pctEl.style.display, undefined);
+  assert.strictEqual(dom1.hint.style.display, undefined);
+
+  // 2) محاكاة كشف البطاقة وحفظها في localStorage
+  w.localStorage.setItem(key, '1');
+
+  // 3) إعادة تحميل الصفحة (DOM جديد ومحاكاة تهيئة جديدة بعد التحميل)
+  const dom2 = makeEraserMock(star, { idx: 0 });
+  w.__stwInitEraser(dom2.root);
+
+  // يجب أن يُزال الغطاء فورًا وتُخفى نسبة التقدم والملاحظة
+  assert.strictEqual(dom2.cv.parentNode, null, 'الغطاء (canvas) أُزيل فورًا بعد إعادة التحميل');
+  assert.strictEqual(dom2.pctEl.style.display, 'none', 'نسبة التقدم اختفت');
+  assert.strictEqual(dom2.hint.style.display, 'none', 'تلميح المسح اختفى');
+});
+
+test('الممحاة: عدم تكرار مستمعات الأحداث أو إعادة التهيئة عند إعادة الرسم (__stwReady)', () => {
+  const w = loadClient();
+  const star = {
+    id: '2026-09-28::C1', weekKey: '2026-09-28', classId: 'C1', className: 'الصف السادس — أ',
+    studentId: 'S1', studentName: 'نورة الحربي', traits: ['khuluqa'], traitsLabels: ['🌷 خلوقة']
+  };
+  w.__stwState.view = { stars: [star], week: { key: '2026-09-28' } };
+
+  const dom = makeEraserMock(star, { idx: 0 });
+  w.__stwInitEraser(dom.root);
+
+  assert.strictEqual(dom.root.__stwReady, true, 'تم ضبط علامة الجاهزية');
+  const countBefore = (dom.listeners['pointerdown'] || []).length;
+  assert.strictEqual(countBefore, 1, 'مستمع pointerdown مسجل لمرة واحدة');
+
+  // استدعاء ثانٍ على نفس العنصر (كما يحدث عند تكرار paint أو re-render)
+  w.__stwInitEraser(dom.root);
+  const countAfter = (dom.listeners['pointerdown'] || []).length;
+  assert.strictEqual(countAfter, 1, 'لم تُضف مستمعات مكررة');
+});
+
+test('الممحاة: كشف الممحاة فعليًا لنفس بيانات النجمة وعدم كشف بيانات نجمة أخرى', () => {
+  const w = loadClient();
+  const starA = {
+    id: '2026-09-28::C1', weekKey: '2026-09-28', classId: 'C1', className: 'الصف السادس — أ',
+    studentId: 'S1', studentName: 'نورة الحربي',
+    traits: ['khuluqa', 'mjthda'], traitsLabels: ['🌷 خلوقة', '🌟 مجتهدة'],
+    message: 'طالبة متميزة وخلوقة'
+  };
+  const starB = {
+    id: '2026-09-28::C2', weekKey: '2026-09-28', classId: 'C2', className: 'الصف السادس — ب',
+    studentId: 'S2', studentName: 'سارة محمد',
+    traits: ['mbadara'], traitsLabels: ['❤️ مبادرة'],
+    message: 'مبادرة في الأنشطة'
+  };
+
+  const cardA = w.__stwCardHTML(starA, 'الأسبوع 1');
+  const cardB = w.__stwCardHTML(starB, 'الأسبوع 1');
+
+  // بطاقة A تحوي بيانات A ولا تحوي بيانات B
+  assert.ok(cardA.includes('نورة الحربي'), 'اسم طالبة أ في بطاقتها');
+  assert.ok(cardA.includes('الصف السادس — أ'), 'فصل طالبة أ في بطاقتها');
+  assert.ok(cardA.includes('طالبة متميزة وخلوقة'), 'رسالة طالبة أ في بطاقتها');
+  assert.ok(!cardA.includes('سارة محمد'), 'لا تسريب لاسم طالبة أخرى في بطاقة أ');
+  assert.ok(!cardA.includes('الصف السادس — ب'), 'لا تسريب لفصل طالبة أخرى في بطاقة أ');
+
+  // بطاقة B تحوي بيانات B ولا تحوي بيانات A
+  assert.ok(cardB.includes('سارة محمد'), 'اسم طالبة ب في بطاقتها');
+  assert.ok(cardB.includes('الصف السادس — ب'), 'فصل طالبة ب في بطاقتها');
+  assert.ok(!cardB.includes('نورة الحربي'), 'لا تسريب لاسم طالبة أخرى في بطاقة ب');
+});
+
+test('الواجهة: المعلمة المالكة لأكثر من فصل ترى بطاقة اختيار منفصلة لكل فصل باسمه الصريح', () => {
+  const w = loadClient();
+  const base = { week: { key: '2026-09-28', label: 'الأسبوع 1' }, owners: [], history: [], stars: [] };
+  w.__stwState.view = Object.assign({}, base, {
+    me: {
+      id: 'T1',
+      role: 'TEACHER',
+      isManager: false,
+      ownedClassIds: ['C1', 'C2'],
+      ownedClasses: [
+        { id: 'C1', name: 'الصف السادس — أ' },
+        { id: 'C2', name: 'الصف السادس — ب' }
+      ]
+    }
+  });
+
+  const html = w.__stwSectionHTML();
+  // وجود زري اختيار مستقلين لكل فصل
+  assert.ok(html.includes("__stwOpenPick('C1')"), 'زر اختيار الفصل الأول');
+  assert.ok(html.includes("__stwOpenPick('C2')"), 'زر اختيار الفصل الثاني');
+
+  // ظهور اسم كلا الفصلين بوضوح
+  assert.ok(html.includes('الصف السادس — أ'), 'اسم الفصل الأول ظاهر بوضوح');
+  assert.ok(html.includes('الصف السادس — ب'), 'اسم الفصل الثاني ظاهر بوضوح');
+
+  // نقاط التركيب لكل فصل
+  assert.ok(html.includes('data-stw-class="C1"'), 'نقطة تركيب خيار الفصل الأول');
+  assert.ok(html.includes('data-stw-class="C2"'), 'نقطة تركيب خيار الفصل الثاني');
 });
