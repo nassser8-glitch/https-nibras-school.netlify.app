@@ -198,19 +198,22 @@ test('محاكاة أول رسم: نقطة تركيب موجودة ← تُمل�
 });
 
 // الاختيار للإدارة وحدها: لا أداة للمعلمة ولا للطالبة
-test('الطالبة والمعلمة بلا زر اختيار، والإدارة ترى زر اختيار لكل فصل', () => {
+test('الطالبة والمعلمة والكادر غير ADMIN بلا إدارة؛ ADMIN وحده يدير نجمة الأسبوع', () => {
   const w = loadClient();
   const base = { week: { key: 'k', label: 'l' }, owners: [], history: [], stars: [] };
   w.__stwState.view = Object.assign({}, base, { me: { id: 'S1', role: 'STUDENT', isManager: false, ownedClassIds: [] } });
   assert.ok(!w.__stwSectionHTML().includes('__stwOpenPick'), 'الطالب بلا زر اختيار');
   w.__stwState.view = Object.assign({}, base, { me: { id: 'T1', role: 'TEACHER', isManager: false, ownedClassIds: ['C1'] } });
   assert.ok(!w.__stwSectionHTML().includes('__stwOpenPick'), 'المعلمة بلا زر اختيار (أُلغي دورها)');
-  w.__stwState.view = Object.assign({}, base, { me: { id: 'A', role: 'ADMINISTRATIVE', isManager: true, ownedClassIds: [] } });
-  w.__stwState.view.owners = [{ classId: 'C1', className: 'أ', ownerId: 'T1', ownerName: 'أ. ر', periods: 20, tie: false }];
+  w.__stwState.view = Object.assign({}, base, { me: { id: 'M', role: 'ADMINISTRATIVE', isManager: false, ownedClassIds: [] } });
+  assert.ok(!w.__stwSectionHTML().includes('__stwOpenPick'), 'الإدارية غير ADMIN بلا إدارة');
+  w.__stwState.view = Object.assign({}, base, {
+    classes: [{ id: 'C1', name: 'أ' }],
+    me: { id: 'A', role: 'ADMIN', isManager: true, ownedClassIds: [] }
+  });
   const adm = w.__stwSectionHTML();
-  assert.ok(adm.includes('رائدة الفصل'), 'الإدارة ترى جدول الرؤساء');
-  assert.ok(adm.includes('أ. ر') && adm.includes('20'), 'الاسم وعدد الحصص');
-  assert.ok(adm.includes("__stwOpenPick('C1')"), 'الإدارة ترى زر اختيار لكل فصل');
+  assert.ok(adm.includes('إدارة نجمة الأسبوع'), 'المدير يرى الإدارة');
+  assert.ok(adm.includes('__stwOpenPick()'), 'المدير يستطيع فتح نموذج الاختيار');
 });
 
 
@@ -350,14 +353,17 @@ test('مسارات الميزة محمية بـ requireAuth', () => {
   const s = fs.readFileSync(SERVER, 'utf8');
   const routes = [
     "app.get('/api/stars', requireAuth",
-    "app.post('/api/stars/award', requireAuth",
+    "app.post('/api/stars/award', requireAuth, saveStarAward",
+    "app.put('/api/stars/award', requireAuth, saveStarAward",
+    "app.patch('/api/stars/award', requireAuth, saveStarAward",
     "app.delete('/api/stars/award', requireAuth"
   ];
   for (const r of routes) assert.ok(s.includes(r), 'المسار محمي: ' + r);
   // WRITE path: يستخدم الكتابة mutateSchoolData لا عبر setSchoolData (تفادي سباق القراءة-الكتابة)
-  const awardAt = s.indexOf("app.post('/api/stars/award'");
-  const body = s.slice(awardAt, s.indexOf("app.delete('/api/stars/award'"));
+  const awardAt = s.indexOf('const saveStarAward');
+  const body = s.slice(awardAt, s.indexOf("app.post('/api/stars/award'", awardAt));
   assert.ok(body.includes('db.mutateSchoolData'), 'كتابة داخل معاملة مقفلة');
+  assert.ok(body.includes("req.session.role !== 'ADMIN'"), 'فحص ADMIN على الخادم');
   assert.ok(!body.includes('db.setSchoolData('), 'لا كتابة كاملة للصف');
 });
 
@@ -496,7 +502,7 @@ test('الممحاة: كشف الممحاة فعليًا لنفس بيانات �
   assert.ok(!cardB.includes('نورة الحربي'), 'لا تسريب لاسم طالبة أخرى في بطاقة ب');
 });
 
-test('الواجهة: المعلمة لا ترى أداة اختيار ولو ملكت عدة فصول؛ والإدارة ترى زرًّا لكل فصل', () => {
+test('الواجهة: اختيار النجمة يظهر لمدير ADMIN فقط', () => {
   const w = loadClient();
   const base = { week: { key: '2026-09-28', label: 'الأسبوع 1' }, owners: [], history: [], stars: [] };
   w.__stwState.view = Object.assign({}, base, {
@@ -514,17 +520,14 @@ test('الواجهة: المعلمة لا ترى أداة اختيار ولو م
   let html = w.__stwSectionHTML();
   assert.ok(!html.includes('__stwOpenPick'), 'المعلمة بلا أداة اختيار (أُلغي دورها)');
 
-  // الإدارة ترى زرًّا مستقلًّا لكل فصل من فصول المدرسة
+  // ADMIN sees a single weekly school-wide award form
   w.__stwState.view = Object.assign({}, base, {
-    me: { id: 'M1', role: 'ADMINISTRATIVE', isManager: true, ownedClassIds: [] },
-    owners: [
-      { classId: 'C1', className: 'الصف السادس — أ', ownerId: 'T1', ownerName: 'أ. ر', periods: 20, tie: false },
-      { classId: 'C2', className: 'الصف السادس — ب', ownerId: 'T2', ownerName: 'أ. س', periods: 18, tie: false }
-    ]
+    classes: [{ id: 'C1', name: 'الصف السادس — أ' }, { id: 'C2', name: 'الصف السادس — ب' }],
+    me: { id: 'A1', role: 'ADMIN', isManager: true, ownedClassIds: [] }
   });
   html = w.__stwSectionHTML();
-  assert.ok(html.includes("__stwOpenPick('C1')"), 'زر اختيار الفصل الأول');
-  assert.ok(html.includes("__stwOpenPick('C2')"), 'زر اختيار الفصل الثاني');
-  assert.ok(html.includes('الصف السادس — أ'), 'اسم الفصل الأول ظاهر بوضوح');
-  assert.ok(html.includes('الصف السادس — ب'), 'اسم الفصل الثاني ظاهر بوضوح');
+  assert.ok(html.includes('__stwOpenPick()'), 'إدارة النجمة الأسبوعية');
+  assert.ok(html.includes('إدارة نجمة الأسبوع'));
+  w.__stwState.view.me = { id: 'M1', role: 'ADMINISTRATIVE', isManager: false };
+  assert.ok(!w.__stwSectionHTML().includes('__stwOpenPick'), 'الكادر الإداري غير ADMIN مشاهدة فقط');
 });

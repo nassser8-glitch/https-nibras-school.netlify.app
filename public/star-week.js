@@ -77,7 +77,7 @@
 
   // ── 3) الاتصال بالخادم ─────────────────────────────────────────────────
   function api(path, body) {
-    const opt = { method: body ? 'POST' : 'GET', headers: {} };
+    const opt = { method: body ? 'POST' : 'GET', headers: {}, credentials: 'same-origin' };
     if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
     return fetch(STARS_API + path, opt)
       .then(r => r.json().catch(() => ({})).then(j => ({ status: r.status, ok: r.ok, j })))
@@ -283,44 +283,25 @@
       const found = state.view.owners.find(o => o && o.classId === classId);
       if (found && found.className) return found.className;
     }
-    const d = (typeof loadDB === 'function') ? loadDB() : {};
-    const c = (d.classes || []).find(x => x && x.id === classId);
-    if (!c) return classId || '';
-    const g = (d.grades || []).find(x => x && x.id === c.gradeId);
-    return (g ? g.name + ' — ' : '') + (c.name || classId);
+    const serverClass = ((state.view && state.view.classes) || []).find(x => x && x.id === classId);
+    if (serverClass) return serverClass.name || classId;
+    return classId || '';
   }
 
   function adminHTML(v) {
+    const current = (v.stars || [])[0];
     let html = '<div class="stw-wrap"><div class="stw-card">'
-      + '<div class="stw-head"><div class="stw-logo">📊</div><div>'
-      + '<p class="stw-title">رائدة الفصل — للإدارة</p></div></div>';
-    if (v.owners && v.owners.length) {
-      html += '<div class="stw-scroll"><table class="stw-table"><thead><tr><th>الفصل</th><th>الرائدة</th>'
-        + '<th>الحصص</th><th>نجمة الأسبوع</th><th>إجراء</th></tr></thead><tbody>';
-      v.owners.forEach(o => {
-        const st = (v.stars || []).filter(x => x.classId === o.classId)[0];
-        html += '<tr><td>' + esc(o.className) + '</td><td>' + esc(o.ownerName || '—')
-          + (o.tie ? ' <span class="stw-hint-sm">(تعادل)</span>' : '')
-          + (o.source === 'assigned' ? ' <span class="stw-hint-sm">(معلمة الفصل المسندة)</span>' : '')
-          + '<div class="stw-hint-sm" dir="ltr" style="text-align:left;word-break:break-all">'
-          + 'ownerId=' + esc(String(o.ownerId || '—'))
-          + ((o.assigned && o.assigned.length)
-            ? ' · assigned=[' + o.assigned.map(a => esc(a.id) + ':' + a.periods).join(', ') + ']'
-            : '')
-          + '</div>'
-          + '</td><td>' + esc(String(o.periods)) + '</td><td>'
-          + (st ? esc(st.studentName) + '<div class="stw-hint-sm">' + esc((st.traitsLabels || []).join(' · ')) + '</div>' : '—')
-          + '</td><td><button class="stw-btn" onclick="__stwOpenPick(\'' + esc(o.classId) + '\')">'
-          + (st ? 'تعديل' : 'اختيار') + '</button></td></tr>';
-      });
-      html += '</tbody></table></div>';
-    }
+      + '<div class="stw-head"><div class="stw-logo">⚙️</div><div>'
+      + '<p class="stw-title">إدارة نجمة الأسبوع</p></div></div>'
+      + (current ? '<div class="stw-note">النجمة الحالية: ' + esc(current.studentName) + ' · '
+        + esc(current.className) + '</div>' : '<div class="stw-note">لم تُسجَّل نجمة لهذا الأسبوع بعد.</div>')
+      + '<button class="stw-btn" onclick="__stwOpenPick()">' + (current ? 'تعديل / تغيير النجمة' : 'اختيار نجمة الأسبوع') + '</button>';
     if (v.history && v.history.length) {
       html += '<div class="stw-week" style="margin-top:12px;font-weight:800">سجل الأسابيع</div>'
         + '<div class="stw-scroll"><table class="stw-table"><thead><tr><th>الأسبوع</th><th>الفصل</th>'
-        + '<th>المعلمة</th><th>النجمة</th><th>الصفات</th></tr></thead><tbody>';
+        + '<th>النجمة</th><th>الصفات</th></tr></thead><tbody>';
       v.history.forEach(h => {
-        html += '<tr><td>' + esc(h.weekKey) + '</td><td>' + esc(h.className) + '</td><td>' + esc(h.teacherName)
+        html += '<tr><td>' + esc(h.weekKey) + '</td><td>' + esc(h.className)
           + '</td><td>' + esc(h.studentName) + '</td><td>' + esc((h.traitsLabels || []).join(' · ')) + '</td></tr>';
       });
       html += '</tbody></table></div>';
@@ -370,7 +351,7 @@
     if (state.pick && state.pick.classId) renderPicker();
   }
 
-  // ── 6) نافذة الاختيار (للإدارة فقط — تُدخل نيابةً عن رائدة الصف) ───────
+  // ── 6) نافذة اختيار نجمة المدرسة (للـ ADMIN فقط) ─────────────────────
   // الحالة في state لا داخل الإغلاق: إعادة رسم اللوحة تستبدل عناصر النافذة،
   // فلو عاش الاختيار داخل الإغلاق لضاع بمجرد مزامنة واحدة، وتبدو القائمة
   // «تفتح ولا تُختار».
@@ -383,10 +364,7 @@
     const hosts = document.querySelectorAll('[data-stw-pick]');
     for (let i = 0; i < hosts.length; i++) hosts[i].innerHTML = '';
   }
-  function pickHost(cid) {
-    return document.querySelector('[data-stw-class="' + cid + '"][data-stw-pick]')
-      || document.querySelector('[data-stw-pick]');
-  }
+  function pickHost() { return document.querySelector('[data-stw-pick]'); }
   function nameOf(list, id) {
     const s = (list || []).filter(x => x && x.id === id)[0];
     return s ? (s.fullName || s.id) : '';
@@ -398,7 +376,8 @@
 
   function openPick(targetClassId) {
     const v = state.view; if (!v) return;
-    const cid = targetClassId || ((v.me && v.me.ownedClassIds) || [])[0] || '';
+    const current = (v.stars || [])[0];
+    const cid = targetClassId || (current && current.classId) || ((v.classes || [])[0] || {}).id || '';
     const p = pick();
     const changed = !!cid && cid !== p.classId;
     p.classId = cid;
@@ -421,12 +400,13 @@
     if (!v || !p || !p.classId) return;
     const host = pickHost(p.classId);
     if (!host) return;
-    const d = (typeof loadDB === 'function') ? loadDB() : {};
     const className = getClassName(p.classId);
-    const ownerName = ((v.owners || []).filter(x => x.classId === p.classId)[0] || {}).ownerName || '—';
-    const list = (d.students || []).filter(s => s && s.classId === p.classId && !s.deleted);
-    host.innerHTML = '<div class="stw-week" style="margin-top:12px;font-weight:800">اختيار النجمة — '
-      + esc(className) + ' · الرائدة: ' + esc(ownerName) + '</div>'
+    const list = (v.students || []).filter(s => s && s.classId === p.classId);
+    host.innerHTML = '<div class="stw-week" style="margin-top:12px;font-weight:800">اختيار نجمة الأسبوع</div>'
+      + '<label>الفصل <select class="input" data-stw-class style="width:100%">'
+      + (v.classes || []).map(c => '<option value="' + esc(c.id) + '"' + (c.id === p.classId ? ' selected' : '')
+        + '>' + esc(c.name) + '</option>').join('')
+      + '</select></label><div class="stw-hint-sm">' + esc(className) + '</div>'
       + '<div class="stw-note">اضغطي على اسم الطالبة، ثم صفة واحدة على الأقل، ثم احفظي. المختارة الآن: '
       + '<span data-stw-picked>' + esc(nameOf(list, p.studentId) || 'لا أحد') + '</span></div>'
       + '<div class="stw-list" style="margin-top:6px">'
@@ -468,8 +448,7 @@
           x.textContent = (on ? '✔ ' : '') + label;
         });
         const out = document.querySelector('[data-stw-picked]');
-        if (out) out.textContent = nameOf(
-          ((typeof loadDB === 'function') ? loadDB() : {}).students || [], p.studentId) || p.studentId;
+        if (out) out.textContent = nameOf((state.view && state.view.students) || [], p.studentId) || p.studentId;
         return;
       }
       const chip = t.closest('[data-stw-tid]');
@@ -479,6 +458,15 @@
         if (p.traits[id]) delete p.traits[id]; else p.traits[id] = 1;
         chip.classList.toggle('on');
       }
+    }, false);
+    document.addEventListener('change', (e) => {
+      const t = e.target;
+      if (!t || !t.matches || !t.matches('[data-stw-class]')) return;
+      const p = pick();
+      p.classId = t.value;
+      p.studentId = '';
+      const host = pickHost(p.classId);
+      if (host) renderPicker();
     }, false);
   }
 

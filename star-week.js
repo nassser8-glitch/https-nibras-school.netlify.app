@@ -87,6 +87,9 @@ function findUser(schoolData, userId){
   const u = ((schoolData && Array.isArray(schoolData.users)) ? schoolData.users : []).find(x => x && x.id === userId);
   return u || null;
 }
+function sessionUserId(session){
+  return session && (session.user_id || session.id) || '';
+}
 function userName(userId, schoolData){
   const u = findUser(schoolData, userId);
   return (u && (u.name || u.fullName)) || '';
@@ -228,17 +231,15 @@ function sanitizeMessage(msg){
   return msg.replace(/\s+/g, ' ').trim().slice(0, MAX_MESSAGE);
 }
 
-// معرّف فريد حتمي لكل (أسبوع + فصل) — يجعل «نجمة واحدة لكل فصل في الأسبوع»
-// شرطًا بنيويًا في المخزن لا مجرّد فحص لحظي.
-function awardId(weekKey, classId){ return String(weekKey) + '::' + String(classId); }
+// معرّف فريد حتمي لكل أسبوع داخل school_data الخاص بالمدرسة.
+function awardId(weekKey){ return String(weekKey); }
 
 function listAwards(schoolData){
   const stars = schoolData && schoolData.stars;
   return Array.isArray(stars) ? stars.filter(x => x && typeof x === 'object' && x.id) : [];
 }
 function awardFor(schoolData, weekKey, classId){
-  const id = awardId(weekKey, classId);
-  return listAwards(schoolData).find(a => a.id === id) || null;
+  return listAwards(schoolData).find(a => a.weekKey === weekKey && (!classId || a.classId === classId)) || null;
 }
 
 // ── التحقق الكامل قبل الحفظ (كل الصلاحيات هنا، لا في الواجهة) ───────────────
@@ -248,24 +249,14 @@ class StarError extends Error {
 
 function validateAward(schoolData, session, body, week){
   const role = session && session.role;
-  if (!session || !session.id) throw new StarError('unauthenticated', 401);
-  if (role === 'STUDENT') throw new StarError('forbidden', 403);
+  if (!session || !sessionUserId(session)) throw new StarError('unauthenticated', 401);
+  if (role !== 'ADMIN') throw new StarError('forbidden', 403);
 
   const classId = body && body.classId;
   const cls = findClass(schoolData, classId);
   if (!cls) throw new StarError('bad_class', 400);
 
-  // الملكية تُشتق من الخادم (الجدول + teacherIds) ولا تُؤخذ من العميل إطلاقًا:
-  // تغيير classId في الطلب يعطي دائمًا رائدة ذلك الفصل الحقيقي.
-  const owner = classOwner(schoolData, classId);
-  const manager = isStarManagerRole(role);
-  // المعلمة لا تُدخل إلا لفصلها الذي هي رائدته. الإدارة (تهاني) تُدخل لأي فصل،
-  // ويُسجَّل الاختيار باسم رائدة الصف لا باسمها.
-  if (!manager){
-    if (!owner || !owner.ownerId) throw new StarError('no_owner', 409);
-    if (owner.ownerId !== session.id) throw new StarError('not_owner', 403);
-  }
-
+  // تتحقق صلاحية الفصل والطالبة من نسخة بيانات المدرسة على الخادم.
   const student = findStudent(schoolData, body && body.studentId);
   if (!student) throw new StarError('bad_student', 400);
   if (student.classId !== classId) throw new StarError('student_not_in_class', 400);
@@ -273,7 +264,7 @@ function validateAward(schoolData, session, body, week){
   const traits = sanitizeTraits(body && body.traits);
   if (!traits.length) throw new StarError('bad_traits', 400);
 
-  return { classId, student, traits, message: sanitizeMessage(body && body.message), manager, owner: owner || { ownerId: null, ownerName: '' } };
+  return { classId, student, traits, message: sanitizeMessage(body && body.message) };
 }
 
 // يبني سجل النجمة ويحفظه. teacherId المشتق من الخادم فقط:
@@ -284,12 +275,10 @@ function upsertAward(schoolData, session, body, opts){
   const week = (opts && opts.week) || currentWeek(nowMs);
   const checked = validateAward(schoolData, session, body, week);
 
-  const stars = listAwards(schoolData).slice();
-  const id = awardId(week.key, checked.classId);
-  const existing = stars.find(a => a.id === id);
-  const ownerId = checked.owner && checked.owner.ownerId;
-  if (!checked.manager && existing && existing.teacherId && existing.teacherId !== session.id && existing.teacherId !== ownerId)
-    throw new StarError('not_owner', 403);
+  const previous = listAwards(schoolData);
+  const existing = previous.find(a => a.weekKey === week.key) || null;
+  const stars = previous.filter(a => a.weekKey !== week.key);
+  const id = awardId(week.key);
 
   const record = {
     id,
@@ -301,14 +290,13 @@ function upsertAward(schoolData, session, body, opts){
     studentName: checked.student.fullName || '',
     traits: checked.traits,
     message: checked.message,
-    teacherId: ownerId || session.id,            // يُشتق في الخادم، لا من العميل
-    teacherName: (checked.owner && checked.owner.ownerName) || userName(session.id, schoolData),
+    teacherId: sessionUserId(session),
+    teacherName: userName(sessionUserId(session), schoolData),
     createdAt: existing && existing.createdAt ? existing.createdAt : new Date(nowMs).toISOString(),
     updatedAt: new Date(nowMs).toISOString()
   };
-  const idx = stars.findIndex(a => a.id === id);
-  if (idx >= 0) stars[idx] = record; else stars.push(record);
-  return { record, stars, week, owner: checked.owner };
+  stars.push(record);
+  return { record, stars, week };
 }
 
 // عرض آمن: لا حقول حساسة، ولا بيانات خارج الفصول المسموح بها للمُرسِل.
@@ -316,42 +304,25 @@ function publicAward(schoolData, a){
   return {
     id: a.id, weekKey: a.weekKey, weekStart: a.weekStart, weekEnd: a.weekEnd,
     classId: a.classId, className: classTitle(a.classId, schoolData),
-    studentId: a.studentId, studentName: a.studentName,
+    studentId: a.studentId,
+    studentName: (findStudent(schoolData, a.studentId) || {}).fullName || a.studentName || '',
     traits: sanitizeTraits(a.traits), traitsLabels: sanitizeTraits(a.traits).map(traitLabel),
     message: sanitizeMessage(a.message),
     teacherId: a.teacherId, teacherName: a.teacherName,
     createdAt: a.createdAt, updatedAt: a.updatedAt
   };
 }
-// من يملك إدارة نجمة الأسبوع: نفس من يرى كل الفصول في النظام (seesAllClasses).
-// الإدارية (ADMINISTRATIVE) ووكيلة الشؤون (SCHOOL_AGENT) مشمولتان لأن مهمتهما
-// التسجيل الإداري، وهي الجهة التي تُدخل النجمة نيابةً عن رائدة الصف.
-const STAR_MANAGER_ROLES = new Set(['ADMIN', 'AGENT', 'COUNSELOR', 'ADMINISTRATIVE', 'SCHOOL_AGENT']);
-function isManagerRole(role){ return STAR_MANAGER_ROLES.has(role); }
-function isStarManagerRole(role){ return STAR_MANAGER_ROLES.has(role); }
+function isManagerRole(role){ return role === 'ADMIN'; }
+function isStarManagerRole(role){ return role === 'ADMIN'; }
 
-// يبني الاستجابة لكل دور: الطالب يرى نجمة فصله فقط، والمعلمة فصولها، والإداري الكل.
+// يعرض نجمة المدرسة الحالية لكل دور موثّق، ويقتصر نموذج الإدارة على ADMIN.
 function buildView(schoolData, session, week, opts){
   const role = session && session.role;
   const manager = isManagerRole(role);
   const all = listAwards(schoolData);
-  const current = all.filter(a => a.weekKey === week.key);
-
-  let visible = current;
-  if (!manager){
-    if (role === 'STUDENT'){
-      const st = findStudent(schoolData, session.id);
-      visible = st ? current.filter(a => a.classId === st.classId) : [];
-    } else {
-      const mine = new Set();
-      for (const c of listClasses(schoolData)){
-        if (!c || c.deleted) continue;
-        if ((Array.isArray(c.teacherIds) ? c.teacherIds : []).includes(session.id)) mine.add(c.id);
-        if (classOwner(schoolData, c.id).ownerId === session.id) mine.add(c.id);
-      }
-      visible = current.filter(a => mine.has(a.classId));
-    }
-  }
+  const current = all.filter(a => a.weekKey === week.key)
+    .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
+  const visible = current.slice(0, 1);
 
   const owners = manager
     ? listClasses(schoolData).filter(c => c && !c.deleted).map(c => {
@@ -372,20 +343,27 @@ function buildView(schoolData, session, week, opts){
         .map(a => publicAward(schoolData, a))
     : [];
 
-  const owned = (role === 'STUDENT' || manager) ? [] : ownedClassIds(schoolData, session.id);
+  const userId = sessionUserId(session);
+  const owned = (role === 'STUDENT' || manager) ? [] : ownedClassIds(schoolData, userId);
   const ownedClasses = (role === 'STUDENT' || manager) ? [] : owned.map(id => ({ id, name: classTitle(id, schoolData) }));
   // تشخيص للمعلمة: الفصول التي هي مُدرجة فيها صراحةً (teacherIds) داخل مدرستها.
   const assignedClassIds = listClasses(schoolData).filter(c =>
-    c && !c.deleted && Array.isArray(c.teacherIds) && c.teacherIds.includes(session.id)
+    c && !c.deleted && Array.isArray(c.teacherIds) && c.teacherIds.includes(userId)
   ).map(c => c.id);
 
   return {
     week: { key: week.key, start: week.start, end: week.end, label: week.label },
     stars: visible.map(a => publicAward(schoolData, a)),
     owners, history,
+    classes: manager ? listClasses(schoolData).filter(c => c && !c.deleted).map(c => ({
+      id: c.id, name: classTitle(c.id, schoolData)
+    })) : [],
+    students: manager ? listStudents(schoolData).filter(s => s && !s.deleted).map(s => ({
+      id: s.id, fullName: s.fullName || s.name || s.id, classId: s.classId
+    })) : [],
     me: {
-      id: session.id, role, isManager: manager, school: session.school || null,
-      name: userName(session.id, schoolData), userExists: !!findUser(schoolData, session.id),
+      id: userId, role, isManager: manager, school: session.school || null,
+      name: userName(userId, schoolData), userExists: !!findUser(schoolData, userId),
       ownedClassIds: owned, ownedClasses, assignedClassIds
     }
   };
@@ -395,6 +373,6 @@ module.exports = {
   STAR_TRAITS, TRAIT_IDS, MAX_TRAITS, MAX_MESSAGE, SCHOOL_TZ_OFFSET_MIN,
   currentWeek, weekLabel, periodCountsForClass, classCandidates, classOwner, ownedClassIds,
   sanitizeTraits, sanitizeMessage, traitLabel, awardId, listAwards, awardFor,
-  validateAward, upsertAward, publicAward, buildView, classTitle, findClass, findStudent, findUser, userName,
+  validateAward, upsertAward, publicAward, buildView, classTitle, findClass, findStudent, findUser, userName, sessionUserId,
   StarError
 };

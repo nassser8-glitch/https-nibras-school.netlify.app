@@ -1645,8 +1645,9 @@ app.get('/api/stars', requireAuth, (req, res) => {
   })().catch(fail(res));
 });
 
-app.post('/api/stars/award', requireAuth, (req, res) => {
+const saveStarAward = (req, res) => {
   (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
     if (req.session.first_login) return res.status(403).json({ error: 'change_password_first' });
     if (rateLimit('starwrite', 60, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
     const body = req.body || {};
@@ -1657,11 +1658,9 @@ app.post('/api/stars/award', requireAuth, (req, res) => {
     // وليس getSchoolData ثم setSchoolData: فالفجوة بينهما سباقٌ يمسح أي حفظ
     // جديد يُسجَّل بينهما إلى التطبيق layer (وهو ما حذف دفعات حضور سابقًا هنا).
     // والتحقق يتكرر داخل القفل، فيُعاد الاشتقاق إن تغيّر الأساس.
-    let out = null;
     const r = await db.mutateSchoolData(ctx.school, (fresh) => {
       const o = starWeek.upsertAward(fresh, req.session, body, { week: ctx.week });
       fresh.stars = o.stars;
-      out = o;
       return { changed: true, value: o.record };
     });
     if (!r.written) return res.status(409).json({ error: 'write_conflict', reason: r.reason });
@@ -1673,9 +1672,13 @@ app.post('/api/stars/award', requireAuth, (req, res) => {
     if (error && error.code && error.status) return res.status(error.status).json({ error: error.code });
     fail(res)(error);
   });
-});
+};
+app.post('/api/stars/award', requireAuth, saveStarAward);
+app.put('/api/stars/award', requireAuth, saveStarAward);
+app.patch('/api/stars/award', requireAuth, saveStarAward);
 app.delete('/api/stars/award', requireAuth, (req, res) => {
   (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
     // حذف نجمة الأسبوع غير مطلوب بالميزة: مسجل الأسابيع يُحفظ للأبد.
     res.status(405).json({ error: 'not_allowed' });
   })().catch(fail(res));
