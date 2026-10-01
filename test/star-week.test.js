@@ -205,6 +205,63 @@ test('معلمة أخرى غير مخولة لا تستطيع إنشاء نجم�
   e => e.code === 'not_owner');
 });
 
+// ══════════════════ 4ب) الإدارة (تهاني) تختار لأي فصل؛ التسجيل باسم رائدة الصف ═══
+test('الإدارية (ADMINISTRATIVE) تختار لأي فصل، ويُسجَّل باسم رائدة الصف لا باسمها', () => {
+  const d = makeData({
+    classes: [{ id: 'C1', name: 'أ', gradeId: 'G1', teacherIds: ['T1', 'T2'] }],
+    students: [student('S1', 'C1')],
+    users: [teacher('T1', 'أ. رائدة'), teacher('T2', 'أ. أخرى'),
+      { id: 'M1', name: 'تهاني', role: 'ADMINISTRATIVE', active: true }],
+    timetable: { T1: ttCell('C1', 5), T2: ttCell('C1', 1) }
+  });
+  assert.strictEqual(sw.classOwner(d, 'C1').ownerId, 'T1');
+  const out = sw.upsertAward(d, SESSION('M1', 'ADMINISTRATIVE'),
+    { classId: 'C1', studentId: 'S1', traits: ['khuluqa'] }, OPTS);
+  assert.strictEqual(out.record.teacherId, 'T1', 'يُنسب لرائدة الصف لا للعاملة');
+  assert.strictEqual(out.record.teacherName, 'أ. رائدة');
+});
+
+test('الإدارة تختار لفصل بلا رائدة دون انهيار (يُسجَّل باسم من أدخل)', () => {
+  const d = makeData({
+    classes: [{ id: 'C1', name: 'أ', gradeId: 'G1', teacherIds: [] }],
+    students: [student('S1', 'C1')],
+    users: [{ id: 'A1', name: 'مديرة', role: 'ADMIN', active: true }],
+    timetable: {}
+  });
+  const out = sw.upsertAward(d, SESSION('A1', 'ADMIN'),
+    { classId: 'C1', studentId: 'S1', traits: ['khuluqa'] }, OPTS);
+  assert.strictEqual(out.record.teacherId, 'A1');
+  assert.strictEqual(out.record.teacherName, 'مديرة');
+});
+
+test('المعلمة غير الرائدة تبقى مرفوضة حتى بعد توسيع أدوار الإدارة', () => {
+  const d = makeData({
+    classes: [{ id: 'C1', name: 'أ', gradeId: 'G1', teacherIds: ['T1'] }],
+    students: [student('S1', 'C1')],
+    users: [teacher('T1', 'أ. رائدة'), teacher('T2', 'أ. أخرى')],
+    timetable: { T1: ttCell('C1', 5) }
+  });
+  assert.throws(() => sw.upsertAward(d, SESSION('T2', 'TEACHER'),
+    { classId: 'C1', studentId: 'S1', traits: ['khuluqa'] }, OPTS),
+  e => e.code === 'not_owner');
+});
+
+test('الإدارة تعدّل نجمة المعلمة لنفس الأسبوع بدل تكرارها، وتبقى منسوبة للرائدة', () => {
+  const d = makeData({
+    classes: [{ id: 'C1', name: 'أ', gradeId: 'G1', teacherIds: ['T1'] }],
+    students: [student('S1', 'C1'), student('S2', 'C1')],
+    users: [teacher('T1', 'أ. رائدة'),
+      { id: 'M1', name: 'تهاني', role: 'ADMINISTRATIVE', active: true }],
+    timetable: { T1: ttCell('C1', 5) }
+  });
+  const first = sw.upsertAward(d, SESSION('T1', 'TEACHER'), { classId: 'C1', studentId: 'S1', traits: ['khuluqa'] }, OPTS);
+  d.stars = first.stars;
+  const out = sw.upsertAward(d, SESSION('M1', 'ADMINISTRATIVE'), { classId: 'C1', studentId: 'S2', traits: ['mjthda'] }, OPTS);
+  assert.strictEqual(out.stars.filter(x => x.classId === 'C1').length, 1, 'سجلّ واحد فقط لنفس الأسبوع');
+  assert.strictEqual(out.record.studentId, 'S2');
+  assert.strictEqual(out.record.teacherId, 'T1', 'يبقى منسوبًا لرائدة الصف');
+});
+
 // ══════════════════ 9) الطالبة ليست من نفس الفصل → مرفوضة ═════════════════
 test('الطالبة المختارة يجب أن تكون من نفس الفصل', () => {
   const d = makeData({

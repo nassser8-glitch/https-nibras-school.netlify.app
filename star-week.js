@@ -258,8 +258,13 @@ function validateAward(schoolData, session, body, week){
   // الملكية تُشتق من الخادم (الجدول + teacherIds) ولا تُؤخذ من العميل إطلاقًا:
   // تغيير classId في الطلب يعطي دائمًا رائدة ذلك الفصل الحقيقي.
   const owner = classOwner(schoolData, classId);
-  if (!owner || !owner.ownerId) throw new StarError('no_owner', 409);
-  if (owner.ownerId !== session.id) throw new StarError('not_owner', 403);
+  const manager = isStarManagerRole(role);
+  // المعلمة لا تُدخل إلا لفصلها الذي هي رائدته. الإدارة (تهاني) تُدخل لأي فصل،
+  // ويُسجَّل الاختيار باسم رائدة الصف لا باسمها.
+  if (!manager){
+    if (!owner || !owner.ownerId) throw new StarError('no_owner', 409);
+    if (owner.ownerId !== session.id) throw new StarError('not_owner', 403);
+  }
 
   const student = findStudent(schoolData, body && body.studentId);
   if (!student) throw new StarError('bad_student', 400);
@@ -268,10 +273,12 @@ function validateAward(schoolData, session, body, week){
   const traits = sanitizeTraits(body && body.traits);
   if (!traits.length) throw new StarError('bad_traits', 400);
 
-  return { classId, student, traits, message: sanitizeMessage(body && body.message), owner };
+  return { classId, student, traits, message: sanitizeMessage(body && body.message), manager, owner: owner || { ownerId: null, ownerName: '' } };
 }
 
-// يبني سجل النجمة (teacherId من الجلسة فقط، لا من الطلب) ويحفظ في القسم.
+// يبني سجل النجمة ويحفظه. teacherId المشتق من الخادم فقط:
+//   • الإدارة تُدخل نيابةً عن رائدة الصف ⇒ يُسجَّل باسم الرائدة.
+//   • إن لم يكن للفصل رائدة (نادر) ⇒ يُسجَّل باسم من أدخل.
 function upsertAward(schoolData, session, body, opts){
   const nowMs = (opts && opts.nowMs) != null ? opts.nowMs : Date.now();
   const week = (opts && opts.week) || currentWeek(nowMs);
@@ -280,7 +287,8 @@ function upsertAward(schoolData, session, body, opts){
   const stars = listAwards(schoolData).slice();
   const id = awardId(week.key, checked.classId);
   const existing = stars.find(a => a.id === id);
-  if (existing && existing.teacherId && existing.teacherId !== session.id && existing.teacherId !== checked.owner.ownerId)
+  const ownerId = checked.owner && checked.owner.ownerId;
+  if (!checked.manager && existing && existing.teacherId && existing.teacherId !== session.id && existing.teacherId !== ownerId)
     throw new StarError('not_owner', 403);
 
   const record = {
@@ -293,8 +301,8 @@ function upsertAward(schoolData, session, body, opts){
     studentName: checked.student.fullName || '',
     traits: checked.traits,
     message: checked.message,
-    teacherId: session.id,                       // من الجلسة، لا من العميل
-    teacherName: userName(session.id, schoolData),
+    teacherId: ownerId || session.id,            // يُشتق في الخادم، لا من العميل
+    teacherName: (checked.owner && checked.owner.ownerName) || userName(session.id, schoolData),
     createdAt: existing && existing.createdAt ? existing.createdAt : new Date(nowMs).toISOString(),
     updatedAt: new Date(nowMs).toISOString()
   };
@@ -315,7 +323,12 @@ function publicAward(schoolData, a){
     createdAt: a.createdAt, updatedAt: a.updatedAt
   };
 }
-function isManagerRole(role){ return role === 'ADMIN' || role === 'AGENT' || role === 'COUNSELOR'; }
+// من يملك إدارة نجمة الأسبوع: نفس من يرى كل الفصول في النظام (seesAllClasses).
+// الإدارية (ADMINISTRATIVE) ووكيلة الشؤون (SCHOOL_AGENT) مشمولتان لأن مهمتهما
+// التسجيل الإداري، وهي الجهة التي تُدخل النجمة نيابةً عن رائدة الصف.
+const STAR_MANAGER_ROLES = new Set(['ADMIN', 'AGENT', 'COUNSELOR', 'ADMINISTRATIVE', 'SCHOOL_AGENT']);
+function isManagerRole(role){ return STAR_MANAGER_ROLES.has(role); }
+function isStarManagerRole(role){ return STAR_MANAGER_ROLES.has(role); }
 
 // يبني الاستجابة لكل دور: الطالب يرى نجمة فصله فقط، والمعلمة فصولها، والإداري الكل.
 function buildView(schoolData, session, week, opts){

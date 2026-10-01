@@ -195,21 +195,22 @@ test('محاكاة أول رسم: نقطة تركيب موجودة ← تُمل�
   });
 });
 
-// لا خيارات اختيار لغير الرائدة
-test('الطالب لا يرى زر الاختيار، والمعلمة الرائدة تراه', () => {
+// الاختيار للإدارة وحدها: لا أداة للمعلمة ولا للطالبة
+test('الطالبة والمعلمة بلا زر اختيار، والإدارة ترى زر اختيار لكل فصل', () => {
   const w = loadClient();
   const base = { week: { key: 'k', label: 'l' }, owners: [], history: [], stars: [] };
   w.__stwState.view = Object.assign({}, base, { me: { id: 'S1', role: 'STUDENT', isManager: false, ownedClassIds: [] } });
   assert.ok(!w.__stwSectionHTML().includes('__stwOpenPick'), 'الطالب بلا زر اختيار');
   w.__stwState.view = Object.assign({}, base, { me: { id: 'T1', role: 'TEACHER', isManager: false, ownedClassIds: ['C1'] } });
-  assert.ok(w.__stwSectionHTML().includes('__stwOpenPick'), 'الرائدة ترى الزر');
-  w.__stwState.view = Object.assign({}, base, { me: { id: 'A', role: 'ADMIN', isManager: true, ownedClassIds: [] } });
+  assert.ok(!w.__stwSectionHTML().includes('__stwOpenPick'), 'المعلمة بلا زر اختيار (أُلغي دورها)');
+  w.__stwState.view = Object.assign({}, base, { me: { id: 'A', role: 'ADMINISTRATIVE', isManager: true, ownedClassIds: [] } });
   w.__stwState.view.owners = [{ classId: 'C1', className: 'أ', ownerId: 'T1', ownerName: 'أ. ر', periods: 20, tie: false }];
   const adm = w.__stwSectionHTML();
   assert.ok(adm.includes('رائدة الفصل'), 'الإدارة ترى جدول الرؤساء');
   assert.ok(adm.includes('أ. ر') && adm.includes('20'), 'الاسم وعدد الحصص');
-  assert.ok(!adm.includes('__stwOpenPick'), 'الإدارة لا تختار (ليست رائدة)');
+  assert.ok(adm.includes("__stwOpenPick('C1')"), 'الإدارة ترى زر اختيار لكل فصل');
 });
+
 
 test('كل ملفات JS المعدَّلة تُحلَّل فعلًا (حارس ضد ملف معطوب يشلّ الميزة بصمت)', () => {
   // حدث فعلي: اقتباس ناقص في public/sw.js جعل الملف كله يفشل في التحليل،

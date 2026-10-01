@@ -212,25 +212,13 @@
   }
 
   // ── 5) العرض ──────────────────────────────────────────────────────────
-  function pickerHTML(owned) {
-    const cur = (state.view.stars || []).filter(x => owned.indexOf(x.classId) >= 0)[0];
-    return '<div class="stw-wrap"><div class="stw-card">'
-      + '<div class="stw-head"><div class="stw-logo">🏷️</div><div>'
-      + '<p class="stw-title">اختيار نجمة الأسبوع</p>'
-      + '<div class="stw-week">أنت رائدة الفصل · الخيار يحدّده النظام</div></div></div>'
-      + '<div class="stw-note">' + (cur ? 'مختارة حاليًا: ' + esc(cur.studentName) : 'لم تُختَر بعدًا') + '</div>'
-      + '<div class="stw-actions"><button class="stw-btn" onclick="__stwOpenPick()">'
-      + (cur ? 'تعديل الاختيار' : 'اختيار النجمة') + '</button></div>'
-      + '<div data-stw-pick></div></div></div>';
-  }
-
   function adminHTML(v) {
     let html = '<div class="stw-wrap"><div class="stw-card">'
       + '<div class="stw-head"><div class="stw-logo">📊</div><div>'
       + '<p class="stw-title">رائدة الفصل — للإدارة</p></div></div>';
     if (v.owners && v.owners.length) {
       html += '<div class="stw-scroll"><table class="stw-table"><thead><tr><th>الفصل</th><th>الرائدة</th>'
-        + '<th>الحصص</th><th>نجمة الأسبوع</th></tr></thead><tbody>';
+        + '<th>الحصص</th><th>نجمة الأسبوع</th><th>إجراء</th></tr></thead><tbody>';
       v.owners.forEach(o => {
         const st = (v.stars || []).filter(x => x.classId === o.classId)[0];
         html += '<tr><td>' + esc(o.className) + '</td><td>' + esc(o.ownerName || '—')
@@ -244,7 +232,8 @@
           + '</div>'
           + '</td><td>' + esc(String(o.periods)) + '</td><td>'
           + (st ? esc(st.studentName) + '<div class="stw-hint-sm">' + esc((st.traitsLabels || []).join(' · ')) + '</div>' : '—')
-          + '</td></tr>';
+          + '</td><td><button class="stw-btn" onclick="__stwOpenPick(\'' + esc(o.classId) + '\')">'
+          + (st ? 'تعديل' : 'اختيار') + '</button></td></tr>';
       });
       html += '</tbody></table></div>';
     }
@@ -258,6 +247,7 @@
       });
       html += '</tbody></table></div>';
     }
+    html += '<div data-stw-pick></div>';
     return html + '</div></div>';
   }
 
@@ -267,7 +257,6 @@
     if (state.error)
       return '<div data-stw-mount class="stw-wrap"><div class="stw-card stw-hint-sm">تعذّر عرض نجمة الأسبوع الآن.</div></div>';
     const stars = v.stars || [];
-    const owned = (v.me && v.me.ownedClassIds) || [];
     let html = '';
     if (!stars.length) {
       html += '<div class="stw-wrap"><div class="stw-card">'
@@ -288,24 +277,8 @@
           + '</div></div>';
       });
     }
-    if (owned.length) html += pickerHTML(owned);
-    else if (v.me && v.me.role === 'TEACHER' && !v.me.isManager)
-      // لا نُخفي السبب: غياب الأداة مخوّل للنظام لا خطأ عارض.
-      html += '<div class="stw-wrap"><div class="stw-card">'
-        + '<div class="stw-head"><div class="stw-logo">🏷️</div><div>'
-        + '<p class="stw-title">رائدة الفصل</p>'
-        + '<div class="stw-week">لم تُسند إليك رائدية فصل بعد</div></div></div>'
-        + '<div class="stw-note">أداة الاختيار تتاح لمعلمة الفصل المُسندة. إن كنتِ معلمة الفصل '
-        + 'ولم تظهر لك، فأرسلي للإدارة بيانات التشخيص التالية:</div>'
-        + '<div class="stw-hint-sm" dir="ltr" style="text-align:left;margin-top:6px;word-break:break-all">'
-        + 'id=' + esc(String(v.me.id || '—')) + ' · school=' + esc(String(v.me.school || '—'))
-        + ' · exists=' + (v.me.userExists ? '1' : '0')
-        + ' · assigned=' + esc(String((v.me.assignedClassIds || []).length))
-        + ' · owned=' + esc(String((v.me.ownedClassIds || []).length))
-        + (v.me.name ? ' · name=' + esc(v.me.name) : '')
-        + '</div></div></div>';
-    if (v.me && v.me.isManager && ((v.owners && v.owners.length) || (v.history && v.history.length)))
-      html += adminHTML(v);
+    // لا اختيار للمعلمات: الإدارة وحدها (تهاني) تُدخل النجمة لكل الفصول.
+    if (v.me && v.me.isManager) html += adminHTML(v);
     return html;
   }
 
@@ -316,23 +289,27 @@
     for (let i = 0; i < eras.length; i++) initEraser(eras[i]);
   }
 
-  // ── 6) نافذة الاختيار (للمعلمة الرائدة فقط) ───────────────────────────
-  function openPick() {
+  // ── 6) نافذة الاختيار (للإدارة فقط — تُدخل نيابةً عن رائدة الصف) ───────
+  function openPick(classId) {
     const v = state.view; if (!v) return;
-    const owned = (v.me && v.me.ownedClassIds) || [];
-    if (!owned.length) return;
     const host = document.querySelector('[data-stw-pick]');
     if (!host) return;
     const d = (typeof loadDB === 'function') ? loadDB() : {};
-    const classId = owned[0];
-    const list = (d.students || []).filter(s => s && s.classId === classId && !s.deleted);
-    const cur = (v.stars || []).filter(x => x.classId === classId)[0];
+    const cid = classId || ((v.me && v.me.ownedClassIds) || [])[0];
+    if (!cid) return;
+    const cl = ((d.classes || []).filter(x => x.id === cid)[0]) || ((v.owners || []).filter(x => x.classId === cid)[0]);
+    const className = (cl && (cl.name || cl.className)) || cid;
+    const ownerName = ((v.owners || []).filter(x => x.classId === cid)[0] || {}).ownerName || '—';
+    const list = (d.students || []).filter(s => s && s.classId === cid && !s.deleted);
+    const cur = (v.stars || []).filter(x => x.classId === cid)[0];
     const chosen = {};
     (cur ? cur.traits : []).forEach(t => { chosen[t] = 1; });
     let studentId = cur ? cur.studentId : '';
     let msg = cur ? cur.message : '';
 
-    host.innerHTML = '<div class="stw-list" style="margin-top:10px">'
+    host.innerHTML = '<div class="stw-week" style="margin-top:12px;font-weight:800">اختيار النجمة — '
+      + esc(className) + ' · الرائدة: ' + esc(ownerName) + '</div>'
+      + '<div class="stw-list" style="margin-top:6px">'
       + list.map(s => '<div class="stw-row' + (s.id === studentId ? ' on' : '')
         + '" data-stw-sid="' + esc(s.id) + '">' + esc(s.fullName || s.id) + '</div>').join('')
       + '</div>'
@@ -362,7 +339,7 @@
         el.classList.toggle('on');
       };
     });
-    host.__stwPick = () => ({ classId, studentId, message: msg, traits: Object.keys(chosen) });
+    host.__stwPick = () => ({ classId: cid, studentId, message: msg, traits: Object.keys(chosen) });
   }
 
   function savePick() {
@@ -372,7 +349,7 @@
     api('award', g).then(r => {
       if (r.ok && r.j && r.j.ok) { state.view = r.j; state.traits = r.j.traits || []; return paint(); }
       const code = (r.j && r.j.error) || 'save_failed';
-      if (code === 'not_owner') alert('لست رائدة هذا الفصل — النظام يمنح التعديل لغيرك.');
+      if (code === 'not_owner') alert('لست الجهة المخوّلة لهذا الفصل.');
       else if (code === 'student_not_in_class') alert('الطالبة لا تنتمي إلى هذا الفصل.');
       else if (code === 'bad_traits') alert('اختاري صفة على الأقل.');
       else alert('تعذّر حفظ النجمة: ' + code);
