@@ -1683,10 +1683,11 @@ const starWriteRateLimit = expressRateLimit({
   legacyHeaders: false,
   message: { error: 'rate_limited' }
 });
-app.post('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward);
-app.put('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward);
-app.patch('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward);
-app.delete('/api/stars/award', requireAuth, (req, res) => {
+app.use('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit);
+app.post('/api/stars/award', saveStarAward);
+app.put('/api/stars/award', saveStarAward);
+app.patch('/api/stars/award', saveStarAward);
+app.delete('/api/stars/award', (req, res) => {
   (async () => {
     if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
     // حذف نجمة الأسبوع غير مطلوب بالميزة: مسجل الأسابيع يُحفظ للأبد.

@@ -9,9 +9,10 @@ const ROOT = path.join(__dirname, '..');
 test('all star mutation methods authenticate and share the ADMIN-only handler', () => {
   const source = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
   for (const method of ['post', 'put', 'patch'])
-    assert.ok(source.includes(`app.${method}('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward)`), method);
+    assert.ok(source.includes(`app.${method}('/api/stars/award', saveStarAward)`), method);
+  assert.ok(source.includes("app.use('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit)"));
   assert.ok(source.includes("if (req.session.role !== 'ADMIN') return res.status(403)"), 'server checks role');
-  assert.ok(source.includes("app.delete('/api/stars/award', requireAuth"), 'DELETE authenticates too');
+  assert.ok(source.includes("app.delete('/api/stars/award'"), 'DELETE route exists behind the shared middleware');
 });
 
 test('star mutation updates only the existing school JSON stars array under its row lock', () => {

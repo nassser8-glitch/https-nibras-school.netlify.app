@@ -349,14 +349,15 @@ test('حارس PUT: يُسقط stars القادمة من العميل في PUT /
   assert.ok(!afterRestore.slice(0, 4000).includes("if ('stars' in data)"), 'الاستعادة لم تُمس');
 });
 
-test('مسارات الميزة محمية بـ requireAuth', () => {
+test('مسارات النجمة تمر عبر المصادقة والتفويض وتحديد المعدل', () => {
   const s = fs.readFileSync(SERVER, 'utf8');
   const routes = [
     "app.get('/api/stars', requireAuth",
-    "app.post('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward",
-    "app.put('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward",
-    "app.patch('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward",
-    "app.delete('/api/stars/award', requireAuth"
+    "app.use('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit)",
+    "app.post('/api/stars/award', saveStarAward",
+    "app.put('/api/stars/award', saveStarAward",
+    "app.patch('/api/stars/award', saveStarAward",
+    "app.delete('/api/stars/award', (req, res)"
   ];
   for (const r of routes) assert.ok(s.includes(r), 'المسار محمي: ' + r);
   // WRITE path: يستخدم الكتابة mutateSchoolData لا عبر setSchoolData (تفادي سباق القراءة-الكتابة)
