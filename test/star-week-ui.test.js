@@ -353,11 +353,10 @@ test('مسارات النجمة تمر عبر المصادقة والتفويض 
   const s = fs.readFileSync(SERVER, 'utf8');
   const routes = [
     "app.get('/api/stars', requireAuth",
-    "app.use('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit)",
-    "app.post('/api/stars/award', saveStarAward",
-    "app.put('/api/stars/award', saveStarAward",
-    "app.patch('/api/stars/award', saveStarAward",
-    "app.delete('/api/stars/award', (req, res)"
+    "app.post('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward)",
+    "app.put('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward)",
+    "app.patch('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward)",
+    "app.delete('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit"
   ];
   for (const r of routes) assert.ok(s.includes(r), 'المسار محمي: ' + r);
   // WRITE path: يستخدم الكتابة mutateSchoolData لا عبر setSchoolData (تفادي سباق القراءة-الكتابة)
