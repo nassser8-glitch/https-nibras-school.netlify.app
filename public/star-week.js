@@ -236,6 +236,12 @@
         html += '<tr><td>' + esc(o.className) + '</td><td>' + esc(o.ownerName || '—')
           + (o.tie ? ' <span class="stw-hint-sm">(تعادل)</span>' : '')
           + (o.source === 'assigned' ? ' <span class="stw-hint-sm">(معلمة الفصل المسندة)</span>' : '')
+          + '<div class="stw-hint-sm" dir="ltr" style="text-align:left;word-break:break-all">'
+          + 'ownerId=' + esc(String(o.ownerId || '—'))
+          + ((o.assigned && o.assigned.length)
+            ? ' · assigned=[' + o.assigned.map(a => esc(a.id) + ':' + a.periods).join(', ') + ']'
+            : '')
+          + '</div>'
           + '</td><td>' + esc(String(o.periods)) + '</td><td>'
           + (st ? esc(st.studentName) + '<div class="stw-hint-sm">' + esc((st.traitsLabels || []).join(' · ')) + '</div>' : '—')
           + '</td></tr>';
@@ -288,10 +294,16 @@
       html += '<div class="stw-wrap"><div class="stw-card">'
         + '<div class="stw-head"><div class="stw-logo">🏷️</div><div>'
         + '<p class="stw-title">رائدة الفصل</p>'
-        + '<div class="stw-week">تُحدَّد آليًا حسب الحصص</div></div></div>'
-        + '<div class="stw-note">لم تظهر لك أداة الاختيار لأنك لست رائدة فصل حاليًا. '
-        + 'رائدة الفصل هي الأكثر تدريسًا له، وتُحدَّد من جدول الحصص. '
-        + 'راجعي الإدارة إن كان ذلك غير صحيح.</div></div></div>';
+        + '<div class="stw-week">لم تُسند إليك رائدية فصل بعد</div></div></div>'
+        + '<div class="stw-note">أداة الاختيار تتاح لمعلمة الفصل المُسندة. إن كنتِ معلمة الفصل '
+        + 'ولم تظهر لك، فأرسلي للإدارة بيانات التشخيص التالية:</div>'
+        + '<div class="stw-hint-sm" dir="ltr" style="text-align:left;margin-top:6px;word-break:break-all">'
+        + 'id=' + esc(String(v.me.id || '—')) + ' · school=' + esc(String(v.me.school || '—'))
+        + ' · exists=' + (v.me.userExists ? '1' : '0')
+        + ' · assigned=' + esc(String((v.me.assignedClassIds || []).length))
+        + ' · owned=' + esc(String((v.me.ownedClassIds || []).length))
+        + (v.me.name ? ' · name=' + esc(v.me.name) : '')
+        + '</div></div></div>';
     if (v.me && v.me.isManager && ((v.owners && v.owners.length) || (v.history && v.history.length)))
       html += adminHTML(v);
     return html;

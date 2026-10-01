@@ -359,6 +359,28 @@ test('الطالبة ترى نجمة فصلها فقط، والمعلمة فصو
   assert.strictEqual(adm.history.length, 2);
 });
 
+// ══════════════ 12ب) حقول تشخيص المعلمة ومعلمات الفصل ═══════════════════════
+test('buildView يوفّر تشخيص المعلمة وقائمة مُسندات كل فصل', () => {
+  const w = { key: '2026-09-28', start: '2026-09-28', end: '2026-10-04', label: 'الأسبوع 1' };
+  const d = makeData({
+    classes: [{ id: 'C1', name: 'أ', gradeId: 'G1', teacherIds: ['T9', 'T1'] }],
+    students: [student('S1', 'C1')],
+    users: [teacher('T9', 'شيماء'), teacher('T1', 'أ. أخرى')],
+    timetable: { T9: ttCell('C1', 5), T1: ttCell('C1', 1) }
+  });
+  const tch = sw.buildView(d, SESSION('T9', 'TEACHER'), w, OPTS);
+  assert.strictEqual(tch.me.id, 'T9');
+  assert.strictEqual(tch.me.name, 'شيماء');
+  assert.strictEqual(tch.me.userExists, true);
+  assert.strictEqual(tch.me.school, 'GIRLS');
+  assert.deepStrictEqual(tch.me.assignedClassIds, ['C1']);
+  assert.deepStrictEqual(tch.me.ownedClassIds, ['C1']);
+
+  const adm = sw.buildView(d, SESSION('A1', 'ADMIN'), w, OPTS);
+  assert.deepStrictEqual(adm.owners[0].assigned.map(a => a.id).sort(), ['T1', 'T9']);
+  assert.strictEqual(adm.owners[0].ownerId, 'T9');
+});
+
 // ══════════════════ 13) الأسبوع: مفتاح مستقر + تسمية مطابقة للواجهة ═════════════════
 test('مفتاح الأسبوع ثابت عبر الأسبوع ويُشتق من يوم الاثنين', () => {
   // الأحد 2026-09-27 والأحد 2026-10-04 ينتميان لأسبوعين مختلفين (الاثنين 21 ثم 28)
