@@ -637,3 +637,64 @@ test('بين معلمتين مُسندتين تفوز الأكثر حصصًا', 
   });
   assert.strictEqual(sw.classOwner(d, 'C2').ownerId, 'T1', 'الأكثر حصصًا من المُسندات');
 });
+
+// ══════════ 9) المعلمة المالكة لأكثر من فصل ══════════
+test('معلمة مالكة لأكثر من فصل: تستطيع منح نجمة لكل فصل من فصولها بنجاح دون تعارض', () => {
+  const d = makeData({
+    classes: [
+      { id: 'C1', name: 'الصف السادس — أ', gradeId: 'G1', teacherIds: ['T1'] },
+      { id: 'C2', name: 'الصف السادس — ب', gradeId: 'G1', teacherIds: ['T1'] },
+      { id: 'C3', name: 'الصف السادس — ج', gradeId: 'G1', teacherIds: ['T2'] }
+    ],
+    students: [
+      student('S1', 'C1', 'طالبة فصل أ'),
+      student('S2', 'C2', 'طالبة فصل ب'),
+      student('S3', 'C3', 'طالبة فصل ج')
+    ],
+    users: [teacher('T1', 'أ. رائدة الفصلين'), teacher('T2', 'أ. أخرى')],
+    timetable: {}
+  });
+
+  // T1 تملك C1 و C2
+  const owned = sw.ownedClassIds(d, 'T1');
+  assert.deepStrictEqual(owned, ['C1', 'C2'], 'المعلمة رائدة الفصلين');
+
+  // تمنح نجمة للفصل الأول C1
+  const r1 = sw.upsertAward(d, SESSION('T1', 'TEACHER'), {
+    classId: 'C1', studentId: 'S1', traits: ['khuluqa', 'mjthda'], message: 'متميزة في أ'
+  }, OPTS);
+  assert.strictEqual(r1.record.classId, 'C1');
+  assert.strictEqual(r1.record.studentId, 'S1');
+
+  // تحديث قاعدة البيانات بنجوم r1
+  d.stars = r1.stars;
+
+  // تمنح نجمة للفصل الثاني C2 في نفس الأسبوع
+  const r2 = sw.upsertAward(d, SESSION('T1', 'TEACHER'), {
+    classId: 'C2', studentId: 'S2', traits: ['masrwla'], message: 'متميزة في ب'
+  }, OPTS);
+  assert.strictEqual(r2.record.classId, 'C2');
+  assert.strictEqual(r2.record.studentId, 'S2');
+
+  // كلا النجمتين موجودتان في stars دون أن تحذف إحداهما الأخرى
+  assert.strictEqual(r2.stars.length, 2);
+  const starC1 = r2.stars.find(s => s.classId === 'C1');
+  const starC2 = r2.stars.find(s => s.classId === 'C2');
+  assert.ok(starC1 && starC1.studentId === 'S1');
+  assert.ok(starC2 && starC2.studentId === 'S2');
+
+  // محاولة منح نجمة لفصل C3 لا تملكه تفشل
+  assert.throws(() => sw.upsertAward(d, SESSION('T1', 'TEACHER'), {
+    classId: 'C3', studentId: 'S3', traits: ['khuluqa']
+  }, OPTS), e => e.code === 'not_owner');
+
+  // buildView للمعلمة T1 يرى كلا النجمتين وفصولها المعلنة
+  d.stars = r2.stars;
+  const view = sw.buildView(d, SESSION('T1', 'TEACHER'), OPTS.week);
+  assert.strictEqual(view.stars.length, 2);
+  assert.deepStrictEqual(view.me.ownedClassIds, ['C1', 'C2']);
+  assert.strictEqual(view.me.ownedClasses.length, 2);
+  assert.strictEqual(view.me.ownedClasses[0].id, 'C1');
+  assert.strictEqual(view.me.ownedClasses[1].id, 'C2');
+});
+

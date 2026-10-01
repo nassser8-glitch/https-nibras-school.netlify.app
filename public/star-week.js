@@ -102,13 +102,15 @@
     if (!cv) return;
     const star = (state.view && state.view.stars || [])[Number(root.getAttribute('data-idx') || 0)];
     if (!star) return;
+    root.__stwReady = true;
     const pctEl = root.querySelector('[data-stw-pct]');
     const hint = root.querySelector('.stw-eraser-hint');
     const reduce = reducedMotion();
     // نُسخة ممحاة لكل (أسبوع + فصل + طالبة): البطاقة تبقى مكشوفة بعد إعادة التحميل
     const key = 'stw_seen_' + (star.weekKey || '') + '_' + (star.classId || '') + '_' + (star.studentId || '');
     let revealed = false, pts = [], raf = 0;
-    try { revealed = localStorage.getItem(key) === '1'; } catch (e) {}
+    let storedRevealed = false;
+    try { storedRevealed = localStorage.getItem(key) === '1'; } catch (e) {}
 
     const size = () => {
       const r = root.getBoundingClientRect();
@@ -154,16 +156,19 @@
       c.stroke();
       c.restore();
     }
-    function finish() {
-      if (revealed) return;
+    function applyReveal(immediate) {
       revealed = true;
       if (pctEl) pctEl.style.display = 'none';
       if (hint) hint.style.display = 'none';
       try { localStorage.setItem(key, '1'); } catch (e) {}
-      if (reduce) { if (cv.parentNode) cv.parentNode.removeChild(cv); return; }
+      if (immediate || reduce) { if (cv.parentNode) cv.parentNode.removeChild(cv); return; }
       cv.style.transition = 'opacity .35s ease';
       cv.style.opacity = '0';
       setTimeout(() => { if (cv.parentNode) cv.parentNode.removeChild(cv); }, 360);
+    }
+    function finish() {
+      if (revealed) return;
+      applyReveal(false);
     }
     function progress() {
       const p = coverage(pts, STW_COLS, STW_ROWS, STW_RADIUS);
@@ -206,12 +211,30 @@
     root.addEventListener('pointermove', move);
     root.addEventListener('pointerup', up);
     root.addEventListener('pointercancel', up);
-    window.addEventListener('resize', () => { size(); if (!revealed) sheet(); });
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('resize', () => { size(); if (!revealed) sheet(); });
+    }
     size();
-    if (revealed) finish(); else sheet();
+    if (storedRevealed) applyReveal(true); else sheet();
   }
 
   // ── 5) العرض ──────────────────────────────────────────────────────────
+  function getClassName(classId) {
+    if (state.view && state.view.me && Array.isArray(state.view.me.ownedClasses)) {
+      const found = state.view.me.ownedClasses.find(c => c && c.id === classId);
+      if (found && found.name) return found.name;
+    }
+    if (state.view && Array.isArray(state.view.owners)) {
+      const found = state.view.owners.find(o => o && o.classId === classId);
+      if (found && found.className) return found.className;
+    }
+    const d = (typeof loadDB === 'function') ? loadDB() : {};
+    const c = (d.classes || []).find(x => x && x.id === classId);
+    if (!c) return classId || '';
+    const g = (d.grades || []).find(x => x && x.id === c.gradeId);
+    return (g ? g.name + ' — ' : '') + (c.name || classId);
+  }
+
   function adminHTML(v) {
     let html = '<div class="stw-wrap"><div class="stw-card">'
       + '<div class="stw-head"><div class="stw-logo">📊</div><div>'
@@ -290,15 +313,15 @@
   }
 
   // ── 6) نافذة الاختيار (للإدارة فقط — تُدخل نيابةً عن رائدة الصف) ───────
-  function openPick(classId) {
+  function openPick(targetClassId) {
     const v = state.view; if (!v) return;
-    const host = document.querySelector('[data-stw-pick]');
-    if (!host) return;
     const d = (typeof loadDB === 'function') ? loadDB() : {};
-    const cid = classId || ((v.me && v.me.ownedClassIds) || [])[0];
+    const cid = targetClassId || ((v.me && v.me.ownedClassIds) || [])[0];
     if (!cid) return;
-    const cl = ((d.classes || []).filter(x => x.id === cid)[0]) || ((v.owners || []).filter(x => x.classId === cid)[0]);
-    const className = (cl && (cl.name || cl.className)) || cid;
+    const host = document.querySelector('[data-stw-class="' + cid + '"][data-stw-pick]')
+      || document.querySelector('[data-stw-pick]');
+    if (!host) return;
+    const className = getClassName(cid);
     const ownerName = ((v.owners || []).filter(x => x.classId === cid)[0] || {}).ownerName || '—';
     const list = (d.students || []).filter(s => s && s.classId === cid && !s.deleted);
     const cur = (v.stars || []).filter(x => x.classId === cid)[0];
@@ -319,12 +342,14 @@
       + '</div>'
       + '<input class="input" data-stw-msg maxlength="140" placeholder="عبارة قصيرة عن سبب الاختيار (اختياري)" style="width:100%">'
       + '<div class="stw-actions">'
-      + '<button class="stw-btn" onclick="__stwSavePick()">حفظ النجمة</button>'
+      + '<button class="stw-btn" onclick="__stwSavePick(\'' + esc(cid) + '\')">حفظ النجمة</button>'
       + '<button class="stw-btn ghost" onclick="this.closest(\'[data-stw-pick]\').innerHTML=\'\'">إلغاء</button>'
       + '</div>';
     const mi = host.querySelector('[data-stw-msg]');
-    mi.value = msg;
-    mi.oninput = () => { msg = mi.value; };
+    if (mi) {
+      mi.value = msg || '';
+      mi.oninput = () => { msg = mi.value; };
+    }
     host.querySelectorAll('[data-stw-sid]').forEach(el => {
       el.onclick = () => {
         studentId = el.getAttribute('data-stw-sid');
@@ -342,8 +367,18 @@
     host.__stwPick = () => ({ classId: cid, studentId, message: msg, traits: Object.keys(chosen) });
   }
 
-  function savePick() {
-    const host = document.querySelector('[data-stw-pick]');
+  function savePick(targetClassId) {
+    let host = null;
+    if (targetClassId) {
+      host = document.querySelector('[data-stw-class="' + targetClassId + '"][data-stw-pick]');
+    }
+    if (!host) {
+      const allHosts = document.querySelectorAll('[data-stw-pick]');
+      for (let i = 0; i < allHosts.length; i++) {
+        if (allHosts[i].__stwPick) { host = allHosts[i]; break; }
+      }
+    }
+    if (!host) host = document.querySelector('[data-stw-pick]');
     const g = host && host.__stwPick ? host.__stwPick() : null;
     if (!g || !g.studentId) { alert('اختاري الطالبة أولًا'); return; }
     api('award', g).then(r => {
@@ -359,6 +394,7 @@
   // ── 7) الربط: أي re-render في التطبيق يحدّث البطاقات ───────────────────
   window.__stwOpenPick = openPick;
   window.__stwSavePick = savePick;
+  window.__stwInitEraser = initEraser;
   // منطق نقي مُعرَّض للاختبارات (لا DOM)
   window.__stwCoverage = coverage;
   window.__stwPercentOf = percentOf;
@@ -368,6 +404,7 @@
   window.__stwState = state;
   window.__stwPaint = paint;
   window.__stwLoad = load;
+  window.__stwThreshold = STW_THRESHOLD;
 
   // ── 7) الربط: أي re-render في التطبيق يحدّث البطاقات ───────────────────
   // التوقيت مهم: هذا الملف يُحمَّل بعد السكربت الرئيسي الذي ينادي renderApp()

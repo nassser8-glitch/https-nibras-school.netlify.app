@@ -373,6 +373,7 @@ function buildView(schoolData, session, week, opts){
     : [];
 
   const owned = (role === 'STUDENT' || manager) ? [] : ownedClassIds(schoolData, session.id);
+  const ownedClasses = (role === 'STUDENT' || manager) ? [] : owned.map(id => ({ id, name: classTitle(id, schoolData) }));
   // تشخيص للمعلمة: الفصول التي هي مُدرجة فيها صراحةً (teacherIds) داخل مدرستها.
   const assignedClassIds = listClasses(schoolData).filter(c =>
     c && !c.deleted && Array.isArray(c.teacherIds) && c.teacherIds.includes(session.id)
@@ -385,7 +386,7 @@ function buildView(schoolData, session, week, opts){
     me: {
       id: session.id, role, isManager: manager, school: session.school || null,
       name: userName(session.id, schoolData), userExists: !!findUser(schoolData, session.id),
-      ownedClassIds: owned, assignedClassIds
+      ownedClassIds: owned, ownedClasses, assignedClassIds
     }
   };
 }
