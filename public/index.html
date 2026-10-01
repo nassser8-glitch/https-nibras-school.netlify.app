@@ -4514,10 +4514,10 @@ function renderDashboard(){
     </div>`).join('') : '<p class="muted small" style="margin:4px 0">كل الأمور تحت السيطرة — لا شيء ينتظر متابعتك الآن ✅</p>';
 
   // نبراس يرى — مؤشرات ذكية للمسؤولين (ADMIN/AGENT/COUNSELOR) فقط.
-  //  1) طلاب غيابهم متكرر: تجاوز 10 أيام غياباً، أو 5 أيام متتالية على مدى 30 يومًا.
+  //  1) طلاب غيابهم متكرر: 5 أيام غياب فأكثر، أو 5 أيام متتالية على مدى 30 يومًا.
   //  2) طلاب تحويلاتهم متكررة: أكثر من 3 تحويلات.
   //  3) معلمات تأخّرن متكررًا: أكثر من 5 مرات خلال الشهر.
-  //  4) طالبات تأخّرن متكررًا: أكثر من 10 مرات خلال الشهر.
+  //  4) طالبات تأخّرن متكررًا: 5 مرات فأكثر خلال الشهر.
   // منطق الحساب معزول في __insight* ليستخدمه اللوحة ونوافذ التفاصيل بلا نسختين.
   const seesInsights = (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR');
   const insightsHTML = (() => {
@@ -4571,7 +4571,7 @@ function renderDashboard(){
     // شريط ملخّص: كم مؤشرًا ت无机 اليوم (4 كحد أقصى)، فيرى القارئ صورة واحدة لا أرقامًا متفرقة
     const bar = items.length ? `<div class="nbr-bar" title="${items.length} من 4"><span style="width:${Math.round(items.length/4*100)}%"></span></div>` : '';
     const foot = items.length
-      ? `🔎 ${items.length} من 4 مؤشرات تحتاج متابعة · العتبات: غياب ${A.daysThreshold} يومًا أو ${A.runThreshold} متتالية · تحويلات ${__insightTransfersThreshold + 1}+ · معلمة ${L.teacherThreshold + 1}+ · طالبة ${L.studentThreshold + 1}+`
+      ? `🔎 ${items.length} من 4 مؤشرات تحتاج متابعة · العتبات: غياب ${A.daysThreshold} يومًا أو ${A.runThreshold} متتالية · تحويلات ${__insightTransfersThreshold + 1}+ · معلمة ${L.teacherThreshold + 1}+ · طالبة ${L.studentThreshold}+`
       : `✅ لا شيء يحتاج متابعة الآن — الغياب والتحويلات والتأخّر ضمن الحدود`;
     return `
     <div class="nbr-wrap">
@@ -5117,14 +5117,17 @@ function showTeacherTodayAttendance(){
 
 /* ============ «نبراس يرى»: تفاصيل الغياب المتكرر والتحويلات المتكررة والتأخر المتكرر ============ */
 /* معطيات المؤشرات:
-   - غياب متكرر = تجاوز 10 يوم غياب، أو 5 أيام متتالية على مدى آخر 30 يومًا (سجل الحضور).
+   - غياب متكرر = 5 أيام غياب فأكثر، أو 5 أيام متتالية على مدى آخر 30 يومًا (سجل الحضور).
    - تحويلات متكررة = أكثر من 3 تحويلات لنفس الطالب.
    - تأخر المعلمات المتكرر = أكثر من 5 مرات تأخّر خلال الشهر (teacher.markedLate).
-   - تأخر طالبات متكرر = أكثر من 10 مرات تأخّر خلال الشهر (سجل الحضور status LATE).
+   - تأخر طالبات متكرر = 5 مرات تأخّر فأكثر خلال الشهر (سجل الحضور status LATE).
    الأسس كلها سجلات الحضور/الحضور الفعلية، فتبقى الأرقام مطابقة لما في باقي اللوحة. */
-const __insightAbsOpts = { windowDays:30, daysThreshold:10, runThreshold:5 };
+const __insightAbsOpts = { windowDays:30, daysThreshold:5, runThreshold:5 };
 const __insightTransfersThreshold = 3;
-const __insightLateOpts = { teacherThreshold:5, studentThreshold:10 };
+// studentThreshold حدّ أدنى مُغلق: 5 مرات فأكثر تكفي للظهور (وليس «أكثر من 5»).
+// يُقرأ بـ n < lim في __insightLateStudents، بخلاف teacherThreshold الذي يبقى
+// «أكثر من 5» (n <= lim) لأن عتبته لم تتغيّر.
+const __insightLateOpts = { teacherThreshold:5, studentThreshold:5 };
 /* بداية الشهر بالتقويم المحلي للمتصفح، وهي التقويم نفسه الذي كُتبت به مفاتيح
    التواريخ في البيانات: todayStr() في أعلى الملف هي التي تولّد attendance.date
    وتواريخ teacher.markedLate. فلو حسبنا الشهر بتوقيت المدرسة (Asia/Karachi) لاختلف
@@ -5240,7 +5243,9 @@ function __insightLateStudents(threshold){
   const out = [];
   for(const [sid, set] of days){
     const n = set.size;
-    if(n <= lim) continue;
+    // حدّ أدنى مُغلق: lim فأكثر تظهر (5 مرات = 5 تظهر). n < lim لا n <= lim،
+    // فلا تظهر إلا من lim+1 فيغيب الحدّ المطلوب عند حدّه بالضبط.
+    if(n < lim) continue;
     const s = students.get(sid);
     if(!s) continue; // طالبة غير نشطة: لا تُتابع
     const cls = s.classId ? (d.classes || []).find(c => c && c.id === s.classId) : null;
@@ -5266,7 +5271,7 @@ function __insightModal(title, icon, bodyHTML){
 function showRepeatedAbsenceStudents(){
   const rows = __insightRepeatedAbsence();
   const body = rows.length ? `
-    <p class="muted small" style="margin:8px 0 10px">الغياب المتكرر = تجاوز ${__insightAbsOpts.daysThreshold} أيام غياب، أو ${__insightAbsOpts.runThreshold} أيام متتالية على مدى آخر ${__insightAbsOpts.windowDays} يومًا.</p>
+    <p class="muted small" style="margin:8px 0 10px">الغياب المتكرر = ${__insightAbsOpts.daysThreshold} أيام غياب فأكثر، أو ${__insightAbsOpts.runThreshold} أيام متتالية على مدى آخر ${__insightAbsOpts.windowDays} يومًا.</p>
     <table class="data-table" style="margin-top:6px">
       <thead><tr><th>الطالب</th><th>الفصل</th><th>أيام الغياب</th><th>أطول سلسلة متتالية</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
@@ -5309,7 +5314,7 @@ function showLateTeachers(){
 function showLateStudents(){
   const rows = __insightLateStudents();
   const body = rows.length ? `
-    <p class="muted small" style="margin:8px 0 10px">التأخر المتكرر = أكثر من ${__insightLateOpts.studentThreshold} مرات تأخّر خلال الشهر.</p>
+    <p class="muted small" style="margin:8px 0 10px">التأخر المتكرر = ${__insightLateOpts.studentThreshold} مرات تأخّر فأكثر خلال الشهر.</p>
     <table class="data-table" style="margin-top:6px">
       <thead><tr><th>الطالبة</th><th>الفصل</th><th>عدد مرات التأخّر</th><th>أيام التأخّر</th></tr></thead>
       <tbody>${rows.map(r => `<tr>

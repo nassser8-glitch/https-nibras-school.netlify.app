@@ -77,21 +77,21 @@ function mkStudent(id, name, classId){
 
 // ===== الغياب المتكرر =====
 
-test('غياب 9 أيام متفرقة لا يُعدّ غيابًا متكررًا (تحت العتبة)', () => {
+test('غياب 4 أيام متفرقة لا يُعدّ غيابًا متكررًا (تحت العتبة 5)', () => {
   const s1 = mkStudent('S1', 'طالب واحد', 'C1');
-  const db = { students:[s1], classes:[{id:'C1', name:'أ'}], attendance: attendanceRun('S1', 9).map((a,i) => ({...a, date: iso(Date.now() - (i*2) * DAY)})), transfers:[] };
+  const db = { students:[s1], classes:[{id:'C1', name:'أ'}], attendance: attendanceRun('S1', 4).map((a,i) => ({...a, date: iso(Date.now() - (i*2) * DAY)})), transfers:[] };
   const { abs } = sandbox(db);
-  assert.equal(abs().length, 0, '9 أيام متفرقة أقل من 10 — لا يظهر');
+  assert.equal(abs().length, 0, '4 أيام متفرقة دون 5 ولا سلسلة 5 — لا يظهر');
 });
 
-test('غياب 10 أيام في آخر 30 يومًا يُظهر الطالب', () => {
+test('غياب 5 أيام متفرقة في آخر 30 يومًا يُظهر الطالب (العتبة 5 فأكثر)', () => {
   const s1 = mkStudent('S1', 'طالب متكرر', 'C1');
-  const db = { students:[s1], classes:[{id:'C1', name:'أ'}], attendance: attendanceRun('S1', 10), transfers:[] };
+  const db = { students:[s1], classes:[{id:'C1', name:'أ'}], attendance: attendanceRun('S1', 5), transfers:[] };
   const { abs } = sandbox(db);
   const rows = abs();
-  assert.equal(rows.length, 1, 'يجب أن يظهر طالب واحد');
-  assert.equal(rows[0].total, 10);
-  assert.equal(rows[0].run, 10, '10 أيام متتالية = سلسلة 10');
+  assert.equal(rows.length, 1, '5 أيام متفرقة تكفي عند العتبة 5');
+  assert.equal(rows[0].total, 5);
+  assert.equal(rows[0].run, 5, '5 أيام متتالية = سلسلة 5');
 });
 
 test('5 أيام متتالية فقط تكفي (أقل من 10 أيام إجمالًا)', () => {
@@ -104,24 +104,27 @@ test('5 أيام متتالية فقط تكفي (أقل من 10 أيام إجم�
   assert.equal(rows[0].run, 5);
 });
 
-test('4 أيام متتالية + 3 متباعدة = لا ظهور (دون 5 متتالية ودون 10 إجمالًا)', () => {
+test('4 أيام متتالية + 3 متباعدة تظهر بالعتب�� الجديدة (7 ≥ 5)', () => {
   const s1 = mkStudent('S1', 'طالب متوسط', 'C1');
   const dates = [0,1,2,3, 10, 20, 21].map(n => iso(Date.now() - n * DAY)); // 4 متتالية + 3 متباعدة = 7
   const db = { students:[s1], classes:[{id:'C1', name:'أ'}],
     attendance: dates.map((dte,i) => ({id:`A${i}`, studentId:'S1', date:dte, status:'ABSENT'})), transfers:[] };
   const { abs } = sandbox(db);
-  assert.equal(abs().length, 0, '7 أيام إجمالًا و4 متتالية: لا يستوفي شرط 10 ولا شرط 5 متتالية');
+  const rows = abs();
+  assert.equal(rows.length, 1, '7 أيام إجمالًا تتجاوز العتبة 5');
+  assert.equal(rows[0].total, 7);
+  assert.equal(rows[0].run, 4, 'أطول سلسلة 4 فقط — الظهور بسبب العدد لا التسلسل');
 });
 
-test('4 أيام متتالية + 6 متباعدة (10 إجمالًا) تظهر بسبب العدد لا التسلسل', () => {
-  const s1 = mkStudent('S1', 'طالب عشرون', 'C1');
-  const dates = [0,1,2,3, 10, 14, 18, 22, 25, 27].map(n => iso(Date.now() - n * DAY)); // 10 أيام، أطول سلسلة 4
+test('سلسلة متتالية 4 فقط مع 1 غياب متباعد = 5 إجمالًا تظهر بالعتب�� 5', () => {
+  const s1 = mkStudent('S1', 'طالب خمس', 'C1');
+  const dates = [0,1,2,3, 10].map(n => iso(Date.now() - n * DAY)); // 4 متتالية + 1 متباعد = 5
   const db = { students:[s1], classes:[{id:'C1', name:'أ'}],
     attendance: dates.map((dte,i) => ({id:`A${i}`, studentId:'S1', date:dte, status:'ABSENT'})), transfers:[] };
   const { abs } = sandbox(db);
   const rows = abs();
-  assert.equal(rows.length, 1, '10 أيام إجمالًا تكفي ولو لم تكن متتالية');
-  assert.equal(rows[0].total, 10);
+  assert.equal(rows.length, 1, '5 أيام إجمالًا تكفي ولو لم تكن متتالية');
+  assert.equal(rows[0].total, 5);
   assert.equal(rows[0].run, 4, 'أطول سلسلة 4 فقط');
 });
 
@@ -334,11 +337,21 @@ function lateStudentAttendance(studentId, n){
   return thisMonthDates(n).map((dte, i) => ({ id:`L${i}`, studentId, date:dte, status:'LATE' }));
 }
 
-test('طالبة تأخّرت 10 مرات بالضبط لا تظهر (العتبة أكثر من 10)', () => {
-  const s = mkStudent('S1', 'طالبة عشرة', 'C1');
-  const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: lateStudentAttendance('S1', 10), transfers:[], users:[] };
+test('طالبة تأخّرت 4 مرات لا تظهر (دون العتبة 5)', () => {
+  const s = mkStudent('S1', 'طالبة أربع', 'C1');
+  const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: lateStudentAttendance('S1', 4), transfers:[], users:[] };
   const { lateS } = sandbox(db);
-  assert.equal(lateS().length, 0, '10 مرات لا تكفي');
+  assert.equal(lateS().length, 0, '4 مرات دون 5 — لا تظهر');
+});
+
+test('طالبة تأخّرت 5 مرات بالضبط تظهر (العتبة 5 فأكثر، حدّ مغلق)', () => {
+  // هذا هو الحدّ المطلوب: سابقًا كان الشرط n <= lim فيسقط 5 بالضبط لأن العتبة 10.
+  const s = mkStudent('S1', 'طالبة خمس', 'C1');
+  const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: lateStudentAttendance('S1', 5), transfers:[], users:[] };
+  const { lateS } = sandbox(db);
+  const rows = lateS();
+  assert.equal(rows.length, 1, '5 مرات بالضبط تكفي للظهور');
+  assert.equal(rows[0].n, 5);
 });
 
 test('طالبة تأخّرت 11 مرة تظهر', () => {
@@ -350,15 +363,15 @@ test('طالبة تأخّرت 11 مرة تظهر', () => {
   assert.equal(rows[0].n, 11);
 });
 
-test('يوم غياب فيه لا يُحتسب تأخّرًا (العتبات تُحسب على أيام التأخّر وحدها)', () => {
+test('يوم غياب فيه لا يُحتسب تأخّرًا (العدّ على أيام التأخّر وحدها)', () => {
   // في البيانات الحقيقية سجلٌّ واحد لكل طالب/يوم بعد الدمج (__attWinner)،
-  // فاليوم إمّا غائب أو متأخر. هنا 11 يومًا: الأول غياب، والباقي 10 تأخّرًا.
+  // فاليوم إمّا غائب أو متأخر. هنا 5 أيام: الأول غياب، والباقي 4 تأخّرًا فقط.
   const s = mkStudent('S1', 'طالبة مختلطة', 'C1');
-  const days = thisMonthDates(11);
+  const days = thisMonthDates(5);
   const att = days.map((dte, i) => ({ id:`L${i}`, studentId:'S1', date:dte, status: i === 0 ? 'ABSENT' : 'LATE' }));
   const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: att, transfers:[], users:[] };
   const { lateS } = sandbox(db);
-  assert.equal(lateS().length, 0, '10 أيام تأخّر فقط — دون عتبة «أكثر من 10»');
+  assert.equal(lateS().length, 0, '4 أيام تأخّر فقط — دون عتبة 5');
 });
 
 test('يوم تأخّر مكرّر لنفس الطالبة يُحسب مرة واحدة', () => {
@@ -387,10 +400,10 @@ test('تأخر من الشهر الماضي لا يدخل عدّ الطالبا�
 
 test('سجل تأخّر محذوف (deleted) يُستبعد', () => {
   const s = mkStudent('S1', 'طالبة محذوفات', 'C1');
-  const att = lateStudentAttendance('S1', 12).map((a, i) => i < 3 ? { ...a, deleted:true } : a);
+  const att = lateStudentAttendance('S1', 8).map((a, i) => i < 4 ? { ...a, deleted:true } : a);
   const db = { students:[s], classes:[{id:'C1', name:'أ'}], attendance: att, transfers:[], users:[] };
   const { lateS } = sandbox(db);
-  assert.equal(lateS().length, 0, '12 منها 3 محذوفة = 9 دون العتبة');
+  assert.equal(lateS().length, 0, '8 منها 4 محذوفة = 4 دون العتبة 5');
 });
 
 test('طالبة غير نشطة لا تظهر في تأخر الطالبات', () => {
