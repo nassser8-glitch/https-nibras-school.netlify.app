@@ -98,11 +98,11 @@
   // ── 4) المموحاة: مؤشّر واحد يخدم الماوس واللمس والقلم ───────────────────
   function initEraser(root) {
     if (!root || root.__stwReady) return;
-    root.__stwReady = true;
     const cv = root.querySelector('canvas');
     if (!cv) return;
     const star = (state.view && state.view.stars || [])[Number(root.getAttribute('data-idx') || 0)];
     if (!star) return;
+    root.__stwReady = true;
     const pctEl = root.querySelector('[data-stw-pct]');
     const hint = root.querySelector('.stw-eraser-hint');
     const reduce = reducedMotion();
