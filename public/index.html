@@ -7659,9 +7659,19 @@ function renderClasses(){
         }).join('')}
       </div>
     </div>`;
+  const classStar = (c) => {
+    const classStudents = d.students
+      .filter(s => s.active && s.classId === c.id)
+      .sort((a,b) => (a.fullName || a.name || '').localeCompare((b.fullName || b.name || ''), 'ar'));
+    const selectedId = c.starStudentId || '';
+    return canManage ? `<select class="input" style="padding:4px 8px;font-size:12px;min-width:150px" aria-label="نجمة الفصل" onchange="setClassStar('${c.id}', this.value)">
+      <option value="">بدون نجمة فصل</option>
+      ${classStudents.map(s => `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${escapeHtml(s.fullName || s.name || s.id)}</option>`).join('')}
+    </select>` : (classStudents.find(s => s.id === selectedId) ? escapeHtml(classStudents.find(s => s.id === selectedId).fullName || classStudents.find(s => s.id === selectedId).name || selectedId) : '—');
+  };
 
   const ptsMapClass = studentPointsMap();
-  const rows = classes.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">لا توجد فصول — جرّب زر "توليد الهيكل الافتراضي"</td></tr>` :
+  const rows = classes.length === 0 ? `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">لا توجد فصول — جرّب زر "توليد الهيكل الافتراضي"</td></tr>` :
     classes.map(c => {
       const g = gradeById(c.gradeId);
       const students = d.students.filter(s => s.active && s.classId === c.id).sort((a,b)=>a.fullName.localeCompare(b.fullName,'ar'));
@@ -7673,10 +7683,11 @@ function renderClasses(){
         <td style="font-weight:600">${g?escapeHtml(g.name):'—'}</td>
         <td>${escapeHtml(c.name)}${c.capacity?`<span class="muted small"> (سعة ${c.capacity})</span>`:''}</td>
         <td>${canAssign ? teacherAssign(c.id, c.teacherIds||[]) : `<span style="font-size:12px">${teachersOf.length ? teachersOf.map(n=>escapeHtml(n)).join('، ') : '—'}</span>`}</td>
+        <td>${classStar(c)}</td>
         <td><a href="javascript:void(0)" onclick="toggleEl('classStudents-${c.id}')" style="font-weight:600;color:#2563eb">${count}</a></td>
         <td>${isAdmin ? `<button class="del-btn" onclick="deleteClass('${c.id}')">🗑 حذف</button>` : ''}</td>
       </tr>
-      <tr id="classStudents-${c.id}" style="display:none"><td colspan="5" style="padding:8px 16px;background:#f9fafb">${studentsHtml}</td></tr>`;
+      <tr id="classStudents-${c.id}" style="display:none"><td colspan="6" style="padding:8px 16px;background:#f9fafb">${studentsHtml}</td></tr>`;
     }).join('');
 
   return `
@@ -7695,7 +7706,7 @@ function renderClasses(){
     <button class="btn-primary" onclick="addClass()">حفظ</button>
   </div>
   <div class="card table-card">
-    <table class="data-table"><thead><tr><th>الصف</th><th>الفصل</th><th>${tl('معلمو الفصل')}</th><th>${tl('عدد الطلاب')}</th><th></th></tr></thead>
+    <table class="data-table"><thead><tr><th>الصف</th><th>الفصل</th><th>${tl('معلمو الفصل')}</th><th>نجمة الفصل</th><th>${tl('عدد الطلاب')}</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table>
   </div>`;
 }
@@ -7707,7 +7718,18 @@ function addClass(){
   const d = loadDB();
   const campus = getActiveSchool();
   if(d.classes.some(c => c.gradeId===gradeId && c.name===name)){ alert('هذا الفصل موجود مسبقًا لنفس الصف'); return; }
-  d.classes.push({ id:uid(), gradeId, name, campus, capacity, teacherIds:[] });
+  d.classes.push({ id:uid(), gradeId, name, campus, capacity, teacherIds:[], starStudentId:null });
+  saveDB(d);
+  renderApp();
+}
+function setClassStar(classId, studentId){
+  if(!isManager(currentUser())) return;
+  const d = loadDB();
+  const cls = d.classes.find(c => c.id === classId);
+  if(!cls) return;
+  const student = studentId ? d.students.find(s => s.active && s.id === studentId && s.classId === classId) : null;
+  if(studentId && !student){ alert('اختر طالبة من نفس الفصل'); renderApp(); return; }
+  cls.starStudentId = student ? student.id : null;
   saveDB(d);
   renderApp();
 }
@@ -11182,4 +11204,3 @@ setTimeout(function(){ maybeShowInstallHint(false); }, 1200);
 <script src="star-week.js?v=2026-09-30a"></script>
 </body>
 </html>
-
