@@ -25,6 +25,10 @@ function loadClient(){
     addEventListener: () => {},
     removeEventListener: () => {},
     setTimeout: (f) => f(),
+    // نُسجّل التنبيهات بدل إسكاتها: نتحقّق من نصّها، ونمنع نجاح اختبار
+    // لأن alert كان يرمي استثناءً بالنيابة عنه.
+    __alerts: [],
+    alert(m) { win.__alerts.push(String(m)); },
     console
   };
   win.window = win;
@@ -248,6 +252,84 @@ test('فحص الجلسة يميّز «ميتة» عن «سليمة» ويخرج
     assert.strictEqual(probed, 1, 'استعمل المسار المشترك بدل طلب مكرر');
     assert.strictEqual(p.alive, false, 'ميتة');
     assert.ok(!w.__kicked, 'onUnauthorized وحدها تستدعي الخروج');
+  });
+});
+
+test('انحدار: فشل واحد سابق لا يجمّد القسم — بعد حفظ ناجح تظهر النجمة لا رسالة الخطأ', () => {
+  // الحالة الحقيقية: طلب واحد فشل 401، ثم نجحت المحاولة التالية على الخادم.
+  // الواجهة كانت تُبقي state.error فيبقى خطأ قديم ظاهرًا، و paint() لا تمسحه،
+  // فترى «انتهت جلستك» أو «جلستك سليمة» إلى ما لا نهاية رغم نجاح الحفظ.
+  const w = loadClient();
+  const view = {
+    ok: true, school: 'GIRLS', traits: [{ id: 'khuluqa', label: 'خُلُقة' }],
+    stars: [{ id: 'w::C1', weekKey: '2026-10-01', classId: 'C1', studentId: 'S1',
+      studentName: 'نورة', className: '1/أ', traits: ['khuluqa'], traitsLabels: ['خُلُقة'] }],
+    owners: [], me: { role: 'ADMINISTRATIVE', isManager: true }, week: { key: '2026-10-01', label: 'أسبوع 1' }
+  };
+  let phase = 'fail';
+  let awardOpts = null;
+  w.fetch = (url, opt) => {
+    const u = String(url);
+    if (u.indexOf('/api/auth/me') >= 0)
+      return Promise.resolve({ status: 200, ok: true, json: () => Promise.resolve({ ok: true, user: { role: 'ADMINISTRATIVE' } }) });
+    if (opt && opt.method === 'POST') {
+      awardOpts = opt;
+      return Promise.resolve({ status: 200, ok: true, json: () => Promise.resolve(view) });
+    }
+    return phase === 'fail'
+      ? Promise.resolve({ status: 401, ok: false, json: () => Promise.resolve({ error: 'unauthorized', reason: 'no_session_row' }) })
+      : Promise.resolve({ status: 200, ok: true, json: () => Promise.resolve(view) });
+  };
+  return w.__stwLoad().then(() => {
+    assert.ok(w.__stwState.error, 'الخطأ سُجّل بعد 401');
+    const errCard = w.__stwSectionHTML();
+    assert.ok(errCard.includes('الجلسة') || errCard.includes('جلستك'), 'بطاقة الخطأ/الجلسة ظاهرة: ' + errCard.slice(0, 160));
+    assert.ok(!errCard.includes('نورة'), 'لا بطاقة نجمة عند الفشل');
+    phase = 'ok';                                  // الخادم صار سليمًا
+    w.__stwState.pick = { classId: 'C1', studentId: 'S1', traits: { khuluqa: true }, message: '' };
+    return w.__stwSavePick();
+  }).then(() => {
+    assert.strictEqual(awardOpts.credentials, 'include',
+      'طلب الحفظ يرسل الكوكي صريحًا (لا اعتماد على سلوك المتصفح الافتراضي)');
+    const html = w.__stwSectionHTML();
+    assert.strictEqual(w.__stwState.error, '', 'نجاح الحفظ يمسح الخطأ القديم');
+    assert.strictEqual(w.__stwState.probe, null, 'لا حكم جلسة قديم بعد النجاح');
+    assert.ok(!html.includes('انتهت جلستك'), 'لا رسالة جلسة بعد نجاح: ' + html.slice(0, 160));
+    assert.ok(html.includes('نورة'), 'بطاقة النجمة ظاهرة: ' + html.slice(0, 160));
+  });
+});
+
+test('انحدار: خطأ ليس 401 لا يُعرض كـ«انتهت جلستك» ويُظهر المسار الحقيقي', () => {
+  // خادم أرجع 403 مع اسم مسار: الواجهة القديمة كانت تحسبه unauthorized وتكتب 401.
+  const w = loadClient();
+  const view = { ok: true, traits: [], stars: [], owners: [], me: { role: 'ADMIN' }, week: { key: 'k', label: 'l' } };
+  w.fetch = (url, opt) => {
+    if (String(url).indexOf('/api/auth/me') >= 0)
+      return Promise.resolve({ status: 200, ok: true, json: () => Promise.resolve({ ok: true, user: { role: 'ADMIN' } }) });
+    if (opt && opt.method === 'POST')
+      return Promise.resolve({ status: 403, ok: false, json: () => Promise.resolve({ error: 'forbidden', reason: 'not_owner', path: '/api/stars/award' }) });
+    return Promise.resolve({ status: 200, ok: true, json: () => Promise.resolve(view) });
+  };
+  return w.__stwLoad().then(() => {
+    w.__stwState.pick = { classId: 'C1', studentId: 'S1', traits: { khuluqa: true }, message: '' };
+    return w.__stwSavePick();
+  }).then(() => {
+    const alerts = w.__alerts.join(' | ');
+    assert.ok(alerts.includes('forbidden'), 'السبب الحقيقي معروض للمستخدم: ' + alerts);
+    assert.ok(!alerts.includes('الجلسة') && !alerts.includes('جلستك'),
+      '403 لا يُعرض كأنه جلسة منتهية: ' + alerts);
+    assert.strictEqual(w.__stwState.errorStatus, 0, 'لا نحتفظ بـstate خطأ لـ403 (تبقى البطاقة صالحة)');
+    assert.ok(w.__stwSectionHTML().length > 0, 'القسم ما زال معروضًا بعد رفض 403');
+  });
+});
+
+test('انحدار: حكم الجلسة (probe) لا يبقى عالقًا بعد تحميل ناجح', () => {
+  const w = loadClient();
+  const view = { ok: true, traits: [], stars: [], owners: [], me: { role: 'ADMIN' }, week: { key: 'k', label: 'l' } };
+  w.fetch = () => Promise.resolve({ status: 200, ok: true, json: () => Promise.resolve(view) });
+  w.__stwState.probe = { alive: false, status: 401 };   // حكم قديم من طلب سابق
+  return w.__stwLoad().then(() => {
+    assert.strictEqual(w.__stwState.probe, null, 'حُمِس بعد نجاح التحميل');
   });
 });
 

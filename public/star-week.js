@@ -14,7 +14,10 @@
   const STW_COLS = 20, STW_ROWS = 12, STW_RADIUS = 1.6;
   const STW_THRESHOLD = 0.995;   // لوح البطاقة عند اكتمال المسح (تقريبًا)
 
-  const state = window.__stw = { loading: false, loaded: false, view: null, traits: [], error: '' };
+  const state = window.__stw = {
+    loading: false, loaded: false, view: null, traits: [],
+    error: '', errorStatus: 0, errorReason: '', errorPath: '', probe: null
+  };
 
   const esc = (v) => (typeof escapeHtml === 'function')
     ? escapeHtml(v)
@@ -77,11 +80,11 @@
 
   // ── 3) الاتصال بالخادم ─────────────────────────────────────────────────
   function api(path, body) {
-    const opt = { method: body ? 'POST' : 'GET', headers: {} };
+    const opt = { method: body ? 'POST' : 'GET', headers: {}, credentials: 'include' };
     if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
     return fetch(STARS_API + path, opt)
-      .then(r => r.json().catch(() => ({})).then(j => ({ status: r.status, ok: r.ok, j })))
-      .catch(() => ({ status: 0, ok: false, j: {} }));
+      .then(r => r.json().catch(() => ({})).then(j => ({ status: r.status, ok: r.ok, j, url: STARS_API + path })))
+      .catch(() => ({ status: 0, ok: false, j: {}, url: STARS_API + path }));
   }
   function load() {
     if (state.loading) return Promise.resolve();
@@ -90,11 +93,13 @@
       state.loading = false;
       state.loaded = true;
       if (r.ok && r.j && r.j.ok) {
-        state.view = r.j; state.traits = r.j.traits || []; state.error = ''; state.errorStatus = 0; state.errorReason = '';
+        state.view = r.j; state.traits = r.j.traits || [];
+        clearError();
       } else {
         state.error = (r.j && r.j.error) || 'load_failed';
         state.errorStatus = r.status || 0;
         state.errorReason = (r.j && r.j.reason) || '';
+        state.errorPath = (r.j && r.j.path) || '';
         console.warn('[star-week] تعذّر تحميل نجمة الأسبوع:', state.errorStatus, state.error, state.errorReason);
       }
       if (state.errorStatus === 401) return onUnauthorized();
@@ -102,8 +107,23 @@
     });
   }
   function retry() {
-    state.error = ''; state.errorStatus = 0; state.errorReason = ''; state.probe = null; state.loaded = false;
+    clearError();
+    state.loaded = false;
     return load();
+  }
+  // ===== سبب تجمّد القسم على رسالة واحدة بعد نجاح واحد =====
+  // sectionHTML() ترسم بطاقة الخطأ ما دام state.error غير فارغ، وpaint() لا تمسحه،
+  // وafterRender() لا يعيد التحميل بعد نجاح. فكان أي فشل واحد (401 أو 403 أو 500
+  // أو حتى فشل شبكة لحظي) يجمّد القسم على نفس الرسالة إلى الأبد — بينما الخادم
+  // صار سليمًا والحفظ التالي ينجح فعلًا ويكتب في القاعدة. عندها يبدو للمستخدم
+  // «النجمة لا تُحفظ والرسالة نفسها تتكرر» وهي في الحقيقة رسالة قديمة بالذات.
+  // الحل: كل نجاح (تحميل أو حفظ) يمسح الخطأ وحكم الجلسة القديم معًا.
+  function clearError() {
+    state.error = '';
+    state.errorStatus = 0;
+    state.errorReason = '';
+    state.errorPath = '';
+    state.probe = null;
   }
   // هل الجلسة نفسها حيّة على الخادم؟ /(api/auth/me) هو نفس requireAuth.
   // فائدته: يفصل بين حالتين متشابهة ظاهريًا — (أ) الجلسة منتهية فعلًا، فيجب الدخول،
@@ -113,7 +133,7 @@
       if (typeof __api === 'function')
         return __api('GET', 'me').then(r => ({ alive: r.status === 200, status: r.status }));
     } catch (e) { /* نكمل بمسار بديل */ }
-    return fetch('/api/auth/me')
+    return fetch('/api/auth/me', { credentials: 'include' })
       .then(r => ({ alive: r.status === 200, status: r.status }))
       .catch(() => ({ alive: false, status: 0 }));
   }
@@ -130,8 +150,11 @@
   function errorHTML() {
     const code = state.error || 'load_failed';
     const st = state.errorStatus || 0;
-    const why = { no_cookie: 'لا يوجد كوكي جلسة في المتصفح',
-                  no_session_row: 'الجلسة غير موجودة أو منتهية على الخادم' }[state.errorReason] || '';
+    let why = { no_cookie: 'لا يوجد كوكي جلسة في المتصفح',
+                no_session_row: 'الجلسة غير موجودة أو منتهية على الخادم' }[state.errorReason] || '';
+    // سبب غير معروف ⇒ نعرض ما أعاده الخادم حرفيًا (سبب + المسار) بدل تعميمه.
+    if (!why) why = (state.errorReason ? 'reason=' + state.errorReason : 'reason=(فارغ)')
+      + (state.errorPath ? ' · path=' + state.errorPath : '');
     if (st === 401 || code === 'unauthorized') {
       // sessions حيّة + مسار النجمة يرفض ⇒ ليست مشكلة جلسة، فنتصرّف ونطلب الإصلاح.
       if (state.probe && state.probe.alive)
@@ -331,9 +354,11 @@
 
   function sectionHTML() {
     const v = state.view;
-    if (!v) return '<div data-stw-mount class="stw-wrap"><div class="stw-card stw-hint-sm">جارِ تحميل «نجمة الأسبوع»…</div></div>';
+    // الخطأ يُفحص قبل «لا توجد بيانات»: وإلا فإن فشل أول تحميل (لا view بعد)
+    // يبقى يعرض «جارِ التحميل…» إلى الأبد ويخفي سبب الرفض تمامًا.
     if (state.error)
       return '<div data-stw-mount class="stw-wrap"><div class="stw-card">' + errorHTML() + '</div></div>';
+    if (!v) return '<div data-stw-mount class="stw-wrap"><div class="stw-card stw-hint-sm">جارِ تحميل «نجمة الأسبوع»…</div></div>';
     const stars = v.stars || [];
     let html = '';
     if (!stars.length) {
@@ -484,29 +509,35 @@
 
   function savePick() {
     const p = state.pick;
-    if (!p || !p.classId) { alert('اختاري الفصل أولًا من جدول الإدارة.'); return; }
-    if (!p.studentId) { alert('اختاري الطالبة أولًا'); return; }
-    if (!Object.keys(p.traits).length) { alert('اختاري صفة واحدة على الأقل'); return; }
+    if (!p || !p.classId) { alert('اختاري الفصل أولًا من جدول الإدارة.'); return Promise.resolve(false); }
+    if (!p.studentId) { alert('اختاري الطالبة أولًا'); return Promise.resolve(false); }
+    if (!Object.keys(p.traits).length) { alert('اختاري صفة واحدة على الأقل'); return Promise.resolve(false); }
     const g = {
       classId: p.classId, studentId: p.studentId,
       message: p.message || '', traits: Object.keys(p.traits)
     };
-    api('award', g).then(r => {
+    // نُعيد الوعد بنتيجة صريحة: هي التي تسمح للاختبار بانتظار الحفظ فعليًا،
+    // وتسمح للواجهة بمعرفة هل نجح قبل إغلاق منتقي الطالبة.
+    return api('award', g).then(r => {
       if (r.ok && r.j && r.j.ok) {
         state.view = r.j; state.traits = r.j.traits || []; state.pick = null;
-        return paint();
+        clearError();          // الحفظ نجح ⇒ لا يبقى خطأ قديم معروضًا
+        paint();
+        return true;
       }
       const code = (r.j && r.j.error) || 'save_failed';
       if (r.status === 401 || code === 'unauthorized') {
         // 401 عند الحفظ: نفس التشخيص (جلسة ميتة أم عطل في مسار النجمة؟).
         state.error = 'unauthorized'; state.errorStatus = 401;
         state.errorReason = (r.j && r.j.reason) || '';
-        return onUnauthorized();
+        state.errorPath = (r.j && r.j.path) || '';
+        return onUnauthorized().then(() => false);
       }
       if (code === 'not_owner') alert('لست الجهة المخوّلة لهذا الفصل.');
       else if (code === 'student_not_in_class') alert('الطالبة لا تنتمي إلى هذا الفصل.');
       else if (code === 'bad_traits') alert('اختاري صفة على الأقل.');
       else alert('تعذّر حفظ النجمة: ' + code);
+      return false;
     });
   }
 
