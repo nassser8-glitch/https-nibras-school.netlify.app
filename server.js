@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const express = require('express');
+const { rateLimit: expressRateLimit } = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const db = require('./db');
@@ -1675,10 +1676,13 @@ function requireStarAdmin(req, res, next) {
   if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
   next();
 }
-function starWriteRateLimit(req, res, next) {
-  if (rateLimit('starwrite', 60, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
-  next();
-}
+const starWriteRateLimit = expressRateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'rate_limited' }
+});
 app.post('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward);
 app.put('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward);
 app.patch('/api/stars/award', requireAuth, requireStarAdmin, starWriteRateLimit, saveStarAward);
