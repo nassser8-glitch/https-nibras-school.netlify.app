@@ -89,10 +89,34 @@
     return api('').then(r => {
       state.loading = false;
       state.loaded = true;
-      if (r.ok && r.j && r.j.ok) { state.view = r.j; state.traits = r.j.traits || []; state.error = ''; }
-      else state.error = (r.j && r.j.error) || 'load_failed';
+      if (r.ok && r.j && r.j.ok) {
+        state.view = r.j; state.traits = r.j.traits || []; state.error = ''; state.errorStatus = 0;
+      } else {
+        state.error = (r.j && r.j.error) || 'load_failed';
+        state.errorStatus = r.status || 0;
+        console.warn('[star-week] تعذّر تحميل نجمة الأسبوع:', state.errorStatus, state.error);
+      }
       return paint();
     });
+  }
+  function retry() {
+    state.error = ''; state.errorStatus = 0; state.loaded = false;
+    return load();
+  }
+  // رسالة الخطأ: سببٌ صريح بدل «تعذّر»_general — خصوصًا 401 (انتهت الجلسة على
+  // الخادم بينما الواجهة ما زالت تعرض بيانات localStorage القديمة).
+  function errorHTML() {
+    const code = state.error || 'load_failed';
+    const st = state.errorStatus || 0;
+    if (st === 401 || code === 'unauthorized')
+      return '<div>انتهت جلستك على الخادم — هذا الميزة تقرأ من الخادم مباشرة، ' +
+        'فلا تظهر ببيانات الجهاز القديمة. سجّلي الدخول من جديد وستعود النجمة.</div>'
+        + '<div class="stw-actions"><button class="stw-btn" onclick="location.hash=\'#/login\';' +
+        ' if(typeof renderApp===\'function\') renderApp();">تسجيل الدخول</button>'
+        + '<button class="stw-btn ghost" onclick="__stwRetry()">إعادة المحاولة</button></div>';
+    return '<div>تعذّر تحميل نجمة الأسبوع.</div>'
+      + '<div class="stw-actions"><button class="stw-btn ghost" onclick="__stwRetry()">إعادة المحاولة</button></div>'
+      + '<div class="stw-hint-sm" dir="ltr" style="text-align:left">http=' + esc(String(st)) + ' · error=' + esc(code) + '</div>';
   }
 
   // ── 4) المموحاة: مؤشّر واحد يخدم الماوس واللمس والقلم ───────────────────
@@ -278,7 +302,7 @@
     const v = state.view;
     if (!v) return '<div data-stw-mount class="stw-wrap"><div class="stw-card stw-hint-sm">جارِ تحميل «نجمة الأسبوع»…</div></div>';
     if (state.error)
-      return '<div data-stw-mount class="stw-wrap"><div class="stw-card stw-hint-sm">تعذّر عرض نجمة الأسبوع الآن.</div></div>';
+      return '<div data-stw-mount class="stw-wrap"><div class="stw-card">' + errorHTML() + '</div></div>';
     const stars = v.stars || [];
     let html = '';
     if (!stars.length) {
@@ -442,6 +466,11 @@
         return paint();
       }
       const code = (r.j && r.j.error) || 'save_failed';
+      if (r.status === 401 || code === 'unauthorized') {
+        // جلسة الخادم انتهت: نعرض رسالة تسجيل الدخول بدل تنبيه غامض.
+        state.error = 'unauthorized'; state.errorStatus = 401;
+        return paint();
+      }
       if (code === 'not_owner') alert('لست الجهة المخوّلة لهذا الفصل.');
       else if (code === 'student_not_in_class') alert('الطالبة لا تنتمي إلى هذا الفصل.');
       else if (code === 'bad_traits') alert('اختاري صفة على الأقل.');
@@ -451,6 +480,8 @@
 
   // ── 7) الربط: أي re-render في التطبيق يحدّث البطاقات ───────────────────
   window.__stwOpenPick = openPick;
+  window.__stwRetry = retry;
+  window.__stwErrorHTML = errorHTML;
   window.__stwSavePick = savePick;
   window.__stwClosePick = closePick;
   window.__stwRenderPicker = renderPicker;

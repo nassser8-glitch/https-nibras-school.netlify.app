@@ -214,6 +214,20 @@ test('الطالبة والمعلمة بلا زر اختيار، والإدار�
 });
 
 
+test('رسالة الخطأ: 401 تعطي تسجيل دخول (لا «تعذّر» غامض) وغيره يذكر الكود', () => {
+  const w = loadClient();
+  w.__stwState.error = 'unauthorized'; w.__stwState.errorStatus = 401;
+  const h401 = w.__stwErrorHTML();
+  assert.ok(h401.includes('انتهت جلستك'), 'شرح سبب 401');
+  assert.ok(h401.includes('تسجيل الدخول'), 'زر تسجيل الدخول');
+  assert.ok(!h401.includes('تعذّر تحميل نجمة الأسبوع.'), 'لا رسالة غامضة عند 401');
+
+  w.__stwState.error = 'bad_school'; w.__stwState.errorStatus = 400;
+  const h400 = w.__stwErrorHTML();
+  assert.ok(h400.includes('bad_school') && h400.includes('400'), 'رمز الخطأ ظاهر للتشخيص');
+  assert.ok(h400.includes('إعادة المحاولة'), 'زر إعادة المحاولة');
+});
+
 test('كل ملفات JS المعدَّلة تُحلَّل فعلًا (حارس ضد ملف معطوب يشلّ الميزة بصمت)', () => {
   // حدث فعلي: اقتباس ناقص في public/sw.js جعل الملف كله يفشل في التحليل،
   // فتعطّل تسجيل الـSW وظهر خلل غير مفهوم بدل رسالة واضحة.
