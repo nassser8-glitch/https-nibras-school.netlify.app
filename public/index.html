@@ -8228,15 +8228,17 @@ function teacherStats(u){
   const yearEnd = month >= 8 ? new Date(year+1, 5, 30) : new Date(year, 5, 30);
   const startKey = localDateKey(yearStart);
   const todayKey = localDateKey(now);
-  const absDates = (u.absences || []).filter(x => x >= startKey && x <= todayKey);
+  // بيانات الجلسة للمصادقة لا تتضمن حقول الحضور؛ مصدرها سجل المستخدم في بيانات المدرسة.
+  const storedUser = (loadDB().users || []).find(x => x.id === u.id) || u;
+  const absDates = (storedUser.absences || []).filter(x => x >= startKey && x <= todayKey);
   const absent = absDates.length;
   const lateDaysSet = new Set(); let lateMin = 0, firstLoginToday = null;
   // أيام التأخر المسجلة يدويًا من المدير/الوكيل
-  (u.markedLate || []).forEach(x => {
+  (storedUser.markedLate || []).forEach(x => {
     if(x >= startKey && x <= todayKey) lateDaysSet.add(x);
   });
   // دقائق التأخر المدخلة يدويًا من شاشة الحضور
-  Object.entries(u.lateMinutes || {}).forEach(([date, mins]) => {
+  Object.entries(storedUser.lateMinutes || {}).forEach(([date, mins]) => {
     if(date >= startKey && date <= todayKey){ lateDaysSet.add(date); if(mins) lateMin += Number(mins); }
   });
   // أول دخول اليوم
@@ -11184,4 +11186,3 @@ setTimeout(function(){ maybeShowInstallHint(false); }, 1200);
 <script src="star-week.js?v=2026-10-01e"></script>
 </body>
 </html>
-

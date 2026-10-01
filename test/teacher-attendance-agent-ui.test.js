@@ -93,6 +93,29 @@ test('سحب الخادم لا يُعيد إحياء تأخراً ألغاه ه�
   assert.equal(merged._attTs, 7000);
 });
 
+test('بطاقة الحضور تقرأ الغياب والتأخر من سجل المدرسة لا من جلسة المصادقة', () => {
+  const today = new Date();
+  const todayKey = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
+  const context = {
+    Date,
+    Object,
+    loadDB: () => ({ users: [{
+      id: 'u_teacher',
+      absences: [todayKey],
+      markedLate: [todayKey],
+      lateMinutes: { [todayKey]: 18 },
+    }] }),
+    localDateKey: d => [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-'),
+  };
+  vm.createContext(context);
+  vm.runInContext(extractFn('teacherStats'), context);
+
+  const stats = context.teacherStats({ id: 'u_teacher', role: 'TEACHER', absences: [], markedLate: [], lateMinutes: {} });
+  assert.equal(stats.absent, 1, 'يظهر الغياب المحفوظ في بيانات المدرسة');
+  assert.equal(stats.lateMin, 18, 'تظهر دقائق التأخر المحفوظة');
+  assert.equal(stats.lateDays, 1, 'يظهر يوم التأخر المحفوظ');
+});
+
 test('جهاز أقدم لا يُعيد إحياء غيابٍ ألغاه جهاز أحدث', () => {
   const { __mergeUserAtt } = loadUserAttMerge();
   const server = { id: 'u_nahla', absences: ['2026-01-04'], markedLate: [], _attTs: 8000 };
