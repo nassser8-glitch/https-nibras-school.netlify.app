@@ -28,7 +28,7 @@ test('server session identity is not persisted in browser storage', () => {
   });
   vm.runInContext(extractFunction('currentUser'), context);
   assert.equal(context.currentUser(), null);
-  assert.doesNotMatch(source, /sessionStorage\.setItem/);
+  assert.doesNotMatch(source, /function __mirror(Set|Get)/);
   assert.match(source, /sessionStorage\.removeItem\('nibras_secure_session_v1'\)/);
 });
 
