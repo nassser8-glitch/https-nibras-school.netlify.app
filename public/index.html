@@ -4358,15 +4358,28 @@ function renderDashboard(){
 
   // ====== لمحات سريعة خاصة بالمعلم (تُبنى هنا وتُدرج في الواجهة) ======
   const tStats = isTeacher ? teacherStats(user) : null;
+  // الحالة الفعّالة لكل طالبة اليوم، بنفس ترجيح attCountsByDate بالضبط:
+  // الغائب يفوز على المتأخر، والمتأخر يفوز على الحاضر.
+  // كان teacherDayAtt يبحث بـ todayAtt.find في القائمة الخام، فيفوز أول سجل
+  // لليوم: لو كان للطالبة سجل قديم PRESENT وآخر أحدث LATE حُسبت حاضرة — بينما
+  // بطاقة الحضور في نفس الشاشة تحسبها متأخرة. البطاقتان كانتا تتعارضان.
+  const dayFlagById = new Map();
+  for(const a of todayAtt){
+    if(!a || !a.studentId) continue;
+    let g = dayFlagById.get(a.studentId);
+    if(!g){ g = { absent:false, late:false }; dayFlagById.set(a.studentId, g); }
+    const eff = __attEffStatus(a);
+    if(eff === 'ABSENT') g.absent = true;
+    else if(eff === 'LATE') g.late = true;
+  }
   const teacherDayAtt = () => {
     const out = { present:0, absent:0, late:0, names:[] };
     for(const c of myClasses){
       for(const s of d.students){
         if(!s.active || s.classId !== c.id) continue;
-        const rec = todayAtt.find(a => a.studentId === s.id);
-        const eff = __attEffStatus(rec);
-        if(eff === 'ABSENT'){ out.absent++; out.names.push(firstNameOf(s.fullName||s.name)); }
-        else if(eff === 'LATE') out.late++;
+        const g = dayFlagById.get(s.id);
+        if(g && g.absent){ out.absent++; out.names.push(firstNameOf(s.fullName||s.name)); }
+        else if(g && g.late) out.late++;
         else out.present++;
       }
     }
@@ -4402,7 +4415,11 @@ function renderDashboard(){
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 14px">
       ${statTile('🏫', myClasses.length, 'فصولي', mySubjects.length ? mySubjects.length + ' مادة' : 'لا مواد بعد', 'location.hash=\'#/timetable\'')}
       ${statTile('👦', myStudentsCount, 'طلابي', 'في فصولي', 'location.hash=\'#/students\'')}
-      ${statTile('✅', (tDayAtt?tDayAtt.present:0) + '/' + ((tDayAtt?tDayAtt.present:0)+(tDayAtt?tDayAtt.absent:0)+(tDayAtt?tDayAtt.late:0)), 'حضور اليوم', (tDayAtt&&tDayAtt.absent) ? tDayAtt.absent + ' غائب' : 'الكل حاضر', 'showTodayAttendance()')}
+      ${(() => { const a = tDayAtt||{present:0,absent:0,late:0};
+        // المتأخر حاضر لا غائب: يُعدّ في الحضور ولا يُطرح من الإحصائية
+        // (نفس اتفاق attGroup في 4632 ونسبة tpct أدناه).
+        const attended = a.present + a.late;
+        return statTile('✅', attended + '/' + (attended + a.absent), 'حضور اليوم', a.absent ? a.absent + ' غائب' : 'الكل حاضر', 'showTodayAttendance()'); })()}
       ${statTile('📝', myAssignments.length, 'التكليفات', 'مفتوحة لفصلي', 'location.hash=\'#/assignments\'')}
     </div>
     ${(() => { const sup = supervisionForUser(user); if(!sup) return ''; return `
