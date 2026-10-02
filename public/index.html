@@ -7772,7 +7772,25 @@ function addTransfer(){
   }
   saveDB(d);
   notifyTransferReceivers(d, tr);
+  NRC_notifyTransferServer(tr, ids.map(sid => { const s = studentById(sid); return s ? s.fullName : 'طالب/طالبة'; }).join('، '));
   renderApp();
+}
+/* إشعار التحويل عبر الخادم: المستلِم يُقرأ من جدول الحسابات لا من ذاكرة الجهاز.
+   نسخة المدير غير موجودة في قائمة المستخدمين على الجهاز (حساب التهيئة يعيش
+   في جدول الحسابات ولا يُنسخ إلى بيانات المدرسة)، فكانت التصفية المحلية لا
+   تطابق أحداً ولم يُكتب إشعار واحد. الخادم هو المرجع لوجود الحسابات، وتبقى
+   النسخة المحلية أعلاه وسيلة عمل عند انقطاع الشبكة أو في الوضع التجريبي. */
+async function NRC_notifyTransferServer(tr, studentName){
+  if(!__serverEnabled() || !tr) return;
+  try{
+    const r = await __api('POST', '/api/transfer/notify', {
+      school: getActiveSchool(), transferId: String(tr.id), target: tr.target,
+      targetLabel: targetLabel(tr.target), reason: tr.reason, studentName: studentName || ''
+    });
+    if(r.status === 200 && r.j && r.j.ok) return;
+    if(r.status === 409 && r.j && r.j.error === 'no_receivers')
+      console.warn('[transfer-notify] لا يوجد حساب نشط للدور', tr.target);
+  }catch(e){ /* الشبكة قد تكون مقطوعة: النسخة المحلية أعلاه ما زالت قائمة */ }
 }
 function notifyTransferReceivers(d, tr){
   const me = currentUser();

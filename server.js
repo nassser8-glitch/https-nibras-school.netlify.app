@@ -2201,6 +2201,59 @@ app.post('/api/notes/claim/decide', requireAuth, async (req, res) => {
   } catch (e) { fail(res)(e); }
 });
 
+/* ===== إشعار التحويل: المستلِم من جدول الحسابات، لا من نسخة الجهاز =====
+   كان الإشعار يُبنى على قائمة المستخدمين الموجودة في ذاكرة الجهاز، فإذا لم
+   تكن هناك نسخة من حساب المدير (وهو ما يحدث لحساب التهيئة: يُنشأ في جدول
+   users ولا يُنسخ إلى school_data.users إلا عند إنشائه من شاشة المستخدمين)
+  خرجت التصفية فارغة ولم يُكتب إشعار واحد — بينما ظهر التحويل نفسه في
+   قائمته لأن التحويلات تُزامَن. هنا الخادم هو المرجع: يجد المستلِم من جدول
+   الحسابات (مصدر الحقيقة) ويكتب الرسالة بنفسه. */
+app.post('/api/transfer/notify', requireAuth, async (req, res) => {
+  const school = String(req.body && req.body.school || req.session.school || '').toUpperCase();
+  if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+  if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+  const transferId = req.body && req.body.transferId;
+  if (!transferId) return res.status(400).json({ error: 'missing_transfer_id' });
+  try {
+    // 1) من جدول الحسابات (مصدر الحقيقة): من الهدف موجود فعلاً، ومن هو نشط.
+    const receivers = (await db.listUsers(school))
+      .filter(u => u && u.role && String(u.role) === String((req.body && req.body.target) || '') && u.active)
+      .map(u => ({ id: String(u.id), name: String(u.name || '') }));
+    if (!receivers.length) return res.status(409).json({ error: 'no_receivers' });
+
+    const studentLabel = school === 'GIRLS' ? 'الطالبات' : 'الطلاب';
+    const targetLabel = req.body && req.body.targetLabel || receivers[0].name;
+    const sName = String(req.body && req.body.studentName || '').trim();
+    const reason = String(req.body && req.body.reason || '').trim();
+    const text = `📨 تحويل ${studentLabel}: ${sName} — إلى: ${targetLabel} — السبب: ${reason}`;
+
+    // 2) الكتابة: داخل mutateSchoolData (قفل صف + معاملة) ومعها منع التكرار
+    //    بمعرّف التحويل والمستلِم، فجهازان يكرّران الطلب لا يضاعفان الرسالة.
+    const r = await db.mutateSchoolData(school, data => {
+      const msgs = Array.isArray(data.adminMsgs) ? data.adminMsgs.slice() : [];
+      const before = msgs.length;
+      for (const rcv of receivers) {
+        if (msgs.some(m => m && m.transferId === String(transferId) && m.teacherId === rcv.id)) continue;
+        msgs.push({
+          id: 'srv_' + String(transferId) + '_' + rcv.id,
+          teacherId: rcv.id, teacherName: rcv.name, text,
+          createdAt: new Date().toISOString(), read: false, dismissed: false, views: 0,
+          senderRole: 'TRANSFER', senderName: String(req.session.name || ''), senderId: String(req.session.user_id),
+          transferId: String(transferId), studentName: sName,
+        });
+      }
+      const added = msgs.length - before;
+      if (!added) return { changed: false, value: { added: 0, total: msgs.length } };
+      data.adminMsgs = msgs;
+      return { changed: true, value: { added, total: msgs.length } };
+    });
+    const info = (r.value && typeof r.value === 'object') ? r.value : { added: 0, total: 0 };
+    console.log('[transfer-notify]', school, 'تحويل', transferId, '=> مستلِمون:', receivers.length,
+      '| رسائل جديدة:', info.added, r.written ? '(كُتبت)' : '(موجودة مسبقاً)');
+    res.json({ ok: true, school, receivers: receivers.length, added: info.added });
+  } catch (e) { fail(res)(e); }
+});
+
 /* ================= النسخ الاحتياطي والاسترجاع ================= */
 // لقطة دورية للقسمين تُخزَّن في جدول منفصل (data_backups) فلا تُمسح حتى لو استُبدلت
 // بيانات school_data نفسها — حماية من فقدان كل شيء وتكرار حادثة الأمس.
