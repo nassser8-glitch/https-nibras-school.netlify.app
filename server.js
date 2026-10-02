@@ -12,6 +12,7 @@ const nodemailer = require('nodemailer');
 const db = require('./db');
 // خصوصية الملاحظات + حساب أرصدة النقاط على الخادم (مصدر الحقيقة بعد إخفاء النصوص)
 const notePrivacy = require('./notes-privacy');
+const transferPrivacy = require('./transfers-privacy');
 
 // قراءة متغير: من Environment أولاً، ثم من ملف سري في /etc/secrets (بديل Render)
 function envOrSecret(name, fallback) {
@@ -1680,6 +1681,18 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
       if (rec.data.notes.length !== before) {
         console.log('[note-privacy] رُشّحت الملاحظات لـ', school, '| دور:', viewer.role,
           '| من', before, 'إلى', rec.data.notes.length);
+      }
+    }
+    // ===== خصوصية التحويلات: من أرسل التحويل + طبقة الإشراف ترى، وغيرها لا =====
+    // التحويلات كانت تُرسَل كاملة لكل جهاز: كل معلمة تسحب تحويلات زميلاتها
+    // (أسماء طلاب وأسباب تحويل). القاعدة على الاستجابة لا على الواجهة — وإلا
+    // بقيت البيانات في تخزين المتصفح قابلة للاستخراج.
+    if (Array.isArray(rec.data.transfers)) {
+      const tBefore = rec.data.transfers.length;
+      rec.data.transfers = transferPrivacy.filterTransfersForViewer(rec.data.transfers, viewer);
+      if (rec.data.transfers.length !== tBefore) {
+        console.log('[transfer-privacy] رُشّحت التحويلات لـ', school, '| دور:', viewer.role,
+          '| من', tBefore, 'إلى', rec.data.transfers.length);
       }
     }
     // الحقل يُرسَل كمصدر موحّد لأرقام النقاط؛ إن فشل الحساب نُرسل null فيقرأ

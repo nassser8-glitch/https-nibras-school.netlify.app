@@ -2975,7 +2975,7 @@ function getSchoolOverview(school){
     present: att.present,
     absent: att.absent,
     late: att.late,
-    pendingTransfers: d.transfers.filter(t => t.status === 'PENDING').length,
+    pendingTransfers: d.transfers.filter(t => t.status === 'PENDING' && transferForMe(t)).length,
     teachers: d.users.filter(u => u.role === 'TEACHER' && u.active).length,
   };
 }
@@ -5301,6 +5301,7 @@ function __insightFrequentTransfers(threshold){
   const count = new Map();
   for(const t of (d.transfers || [])){
     if(!t || t.deleted) continue;
+    if(!transferForMe(t)) continue;   // لا إحصاء تحويلات زميلات: لا اسم ولا عدّاد
     const ids = Array.isArray(t.studentIds) ? t.studentIds : (t.studentId ? [t.studentId] : []);
     for(const sid of ids) count.set(sid, (count.get(sid) || 0) + 1);
   }
@@ -7825,13 +7826,15 @@ function adminSeesTransferMsg(m){
     return t.target === 'ADMIN' || t.createdBy === me?.id;
   } catch(e){ return false; }
 }
+/* من يرى التحويل؟ — الإشراف (المدير/الوكيل/الموجهة) يرى كل التحويلات،
+   والمعلمة ترى ما أرسلته هي فقط.
+   القاعدة نفسها على الخادم (transfers-privacy.js)؛ وهذا خط ثانٍ بعده. */
 function transferForMe(t){
   const u = currentUser();
-  if(!u) return false;
-  if(u.role === 'ADMIN') return t.target === 'ADMIN' || t.createdBy === u.id;
-  if(u.role === 'AGENT' || u.role === 'COUNSELOR') return t.target === u.role || t.createdBy === u.id;
-  const visible = new Set(getVisibleStudents().map(s => s.id));
-  return t.createdBy === u.id || studentIdsOf(t).some(id => visible.has(id));
+  if(!u || !t) return false;
+  if(u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'COUNSELOR') return true;
+  const owner = t.createdBy == null ? '' : String(t.createdBy).trim();
+  return !!owner && owner === String(u.id == null ? '' : u.id).trim();
 }
 function openTransferSolve(id){
   const d = loadDB();

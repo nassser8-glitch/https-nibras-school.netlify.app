@@ -30,7 +30,8 @@ const pad2 = (n) => String(n).padStart(2, '0');
 const keyOf = (d) => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
 const iso = (ms) => keyOf(new Date(ms));
 
-function sandbox(db){
+function sandbox(db, { role = 'ADMIN', me = 't1' } = {}){
+  const __tRole = role, __tMe = me;
   const context = {
     console,
     Date,
@@ -50,6 +51,10 @@ function sandbox(db){
       return rec.status === 'LATE' ? 'LATE' : (rec.status === 'ABSENT' ? 'ABSENT' : 'PRESENT');
     },
     classLabel: (c) => `${c ? c.name : '?'}`,
+    // «الأكثر تحويلاً» يعدّ ما تراه المعلمة فقط: RuleMatchesProduction
+    // (الإشراف يسم الكل، والمعلمة تحويلاتها هي). صفر = لا شيء مرئي.
+    __currentUserRole: 'ADMIN',
+    transferForMe: (t) => __tRole === 'ADMIN' || (t && String(t.createdBy) === String(__tMe)),
   };
   vm.createContext(context);
   vm.runInContext(extractInsightsCode() + '\n;globalThis.__r = __insightRepeatedAbsence; globalThis.__f = __insightFrequentTransfers; globalThis.__lt = __insightLateTeachers; globalThis.__ls = __insightLateStudents; globalThis.__ms = __insightMonthStart;', context);
