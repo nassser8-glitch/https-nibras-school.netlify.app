@@ -101,8 +101,10 @@ test('البند 5: saveDB يقارن قبل الكتابة متجاهلاً _ts
 
 /* ---------- 6) حصانة: لا تراجع للسلوك القديم ---------- */
 test('البند 4: حلقة الأقسام ما زالت تدمج-localOnly عند الاختلاف', () => {
-  assert.ok(SRC.includes("['students','classes','grades','videos','transfers','maintenance','escapeAlerts']"),
+  assert.ok(SRC.includes("['students','classes','grades','videos','escapeAlerts']"),
     'الأقسام نفسها مشمولة');
+  assert.ok(SRC.includes('sd.transfers = mergeTransfersByIdNewer(sd.transfers, obj.transfers)'),
+    'التحويلات تدمج بحسب المعرّف والأحدث بدل الإلحاق الذي يتجاهل تحديث السجل');
   assert.ok(SRC.includes('if(__canonEq(obj[sec], sd[sec])) return;'), 'الشرط الجديد موجود');
 });
 
