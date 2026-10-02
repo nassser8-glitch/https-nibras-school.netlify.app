@@ -1,7 +1,7 @@
 'use strict';
 // حارس النشر: يلتقط ما فشلت فيه النشر فعليًا.
 //
-// هذا الملف يمنع تكرار ذلك: أي require('./x') من الجذر يجب أن يكون في Dockerfile.
+// هذا الملف يمنع أخطاء الإقلاع: أي require('./x') من الجذر يجب أن يكون في Dockerfile.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -54,6 +54,11 @@ test('نسخة Docker لا تتضمن ميزة نجمة الأسبوع المح�
   const dockerfile = fs.readFileSync(DOCKERFILE, 'utf8');
   assert.ok(!/star-week\.js/.test(dockerfile), 'وحدة النجمة محذوفة من الصورة');
   const copied = [...copiedRootFiles(dockerfile)];
+  // كل ملف من الجذر منقول إلى /app يجب أن يشارك server.js فعليًا
+  for (const f of copied) {
+    if (f === 'public' || f.includes('/')) continue;
+    assert.ok(fs.existsSync(path.join(ROOT, f)), 'مُدرج لكنه غير موجود: ' + f);
+  }
   // لا يجوز نسخ .env أو أي ملف أسرار
   for (const f of copied) assert.ok(!/^\.env|secret|credential/i.test(f), 'لا أسرار: ' + f);
 });

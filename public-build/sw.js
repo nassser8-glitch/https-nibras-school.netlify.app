@@ -1,5 +1,5 @@
 ﻿/* نبراس — Service Worker للتثبيت والعمل دون اتصال */
-const CACHE_NAME = 'nibras-v62-star-feature-removed';
+const CACHE_NAME = 'nibras-v63-star-feature-removed';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -8,7 +8,7 @@ const CORE_ASSETS = [
   './icon-180.png',
   './icon-192.png',
   './icon-512.png',
-  './logo.jpg'
+  './logo.jpg',
 ];
 
 self.addEventListener('install', (event) => {

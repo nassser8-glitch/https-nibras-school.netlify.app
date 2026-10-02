@@ -341,7 +341,9 @@ function renewSessionIfNeeded(req, res, s) {
 }
 function requireAuth(req, res, next) {
   authUser(req).then(s => {
-    if (!s) return res.status(401).json({ error: 'unauthorized', reason: req._authReason || 'unauthorized' });
+    // path داخل الرد: عميل واحد يخلط عدّة مسارات، و«غير مصرّح» بلا مسار ولا سبب
+    // لا يمكن تشخيصه. المسار فقط (بلا استعلام) ولا شيء من الكوكي/الرمز.
+    if (!s) return res.status(401).json({ error: 'unauthorized', reason: req._authReason || 'unauthorized', path: req.path });
     req.session = s;
     renewSessionIfNeeded(req, res, s);
     next();
