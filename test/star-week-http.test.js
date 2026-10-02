@@ -135,13 +135,10 @@ function request(method, endpoint, { cookie, body } = {}) {
   });
 }
 
-test('server serves the feature and its dashboard integration', async () => {
-  const script = await request('GET', '/star-week.js');
-  assert.equal(script.status, 200);
-  assert.match(script.headers.get('content-type') || '', /javascript/);
+test('server no longer integrates Star of the Week into account dashboards', async () => {
   const index = await request('GET', '/');
   assert.equal(index.status, 200);
-  assert.match(await index.text(), /data-stw-mount/);
+  assert.doesNotMatch(await index.text(), /data-stw-mount|star-week\.js/);
 });
 
 test('HTTP acceptance: 16/16 ADMIN, authorization, persistence, integrity, and reveal checks PASS', async () => {

@@ -1,5 +1,5 @@
 ﻿/* نبراس — Service Worker للتثبيت والعمل دون اتصال */
-const CACHE_NAME = 'nibras-v60-session2';
+const CACHE_NAME = 'nibras-v61-no-star-week-ui';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -8,8 +8,7 @@ const CORE_ASSETS = [
   './icon-180.png',
   './icon-192.png',
   './icon-512.png',
-  './logo.jpg',
-  './star-week.js'
+  './logo.jpg'
 ];
 
 self.addEventListener('install', (event) => {
@@ -70,4 +69,3 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
-

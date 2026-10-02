@@ -129,22 +129,23 @@ test('البطاقة تُبنى من نفس كائن الخادم عبر قاع�
   assert.ok(!/اسم|نجمة جديدة تلقائيًا/.test(empty.replace(/<[^>]+>/g, '').replace(/\s/g, '')), 'لا بيانات مخترعة');
 });
 
-// ══════════ ربط الملفات ══════════
-test('الربط: نقطتا تركيب (طالبات + معلّمين) ووسم السكربت وكاش SW', () => {
+// ══════════ الميزة معطلة في لوحات الحسابات ══════════
+test('واجهة نجمة الأسبوع غير مركبة في الحسابات أو ملفات الكاش', () => {
   const idx = fs.readFileSync(INDEX, 'utf8');
-  assert.strictEqual((idx.match(/data-stw-mount/g) || []).length, 2, 'نقطة تركيب واحدة لكل لوحة');
-  assert.ok(idx.includes('star-week.js'), 'وسم السكربت موجود');
+  assert.ok(!idx.includes('data-stw-mount'), 'لا نقطة عرض في أي لوحة');
+  assert.ok(!/<script[^>]+star-week\.js/.test(idx), 'لا يتم تحميل واجهة نجمة الأسبوع');
   const sw = fs.readFileSync(SW, 'utf8');
-  assert.ok(sw.includes("'./star-week.js'"), 'الملف في CORE_ASSETS');
+  assert.ok(!sw.includes("'./star-week.js'"), 'الواجهة ليست ضمن ملفات الكاش الأساسية');
+  assert.match(sw, /nibras-v61-no-star-week-ui/, 'نسخة كاش جديدة لتحديث العملاء الحاليين');
 });
 
-test('التركيب داخل لوحتَي renderStudentDashboard و renderDashboard', () => {
+test('واجهة نجمة الأسبوع غير موجودة في لوحة الطالبات أو لوحة الموظفين والإدارة', () => {
   const idx = fs.readFileSync(INDEX, 'utf8').replace(/\r\n/g, '\n');
   const before = idx.slice(0, idx.indexOf('function renderDashboard()'));
   const after = idx.slice(idx.indexOf('function renderDashboard()'));
   const sd = before.slice(before.indexOf('function renderStudentDashboard()'));
-  assert.ok(sd.includes('data-stw-mount'), 'داخل لوحة الطالبات');
-  assert.ok(after.includes('data-stw-mount'), 'داخل لوحة المعلمين/الإدارة');
+  assert.ok(!sd.includes('data-stw-mount'), 'غير موجودة في لوحة الطالبات');
+  assert.ok(!after.includes('data-stw-mount'), 'غير موجودة في لوحة المعلمين/الإدارة');
 });
 
 test('التهيئة: الميزة تظهر من أول رسم حتى لو لم يحدث renderApp بعد التحميل', () => {
