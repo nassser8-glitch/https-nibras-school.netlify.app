@@ -1,10 +1,6 @@
 'use strict';
 // حارس النشر: يلتقط ما فشلت فيه النشر فعليًا.
 //
-// الاختبار الفعلي: star-week.js كُتب في جذر المشروع، لكن Dockerfile ينسخ قائمة
-// صريحة (server.js db.js seed.js) + public. فبُنيت صورة بلا الملف، فشل
-// الإقلاع بـCannot find module './star-week'، ووقع الموقع بالكامل.
-//
 // هذا الملف يمنع تكرار ذلك: أي require('./x') من الجذر يجب أن يكون في Dockerfile.
 const test = require('node:test');
 const assert = require('node:assert');
@@ -54,9 +50,9 @@ test('كل ملفات الجذر التي يتطلبها الخادم موجود
   }
 });
 
-test('الملفات الجديدة مُدرجة في نسخة Docker (Database/secrets غير مسرّبة)', () => {
+test('نسخة Docker لا تتضمن ميزة نجمة الأسبوع المحذوفة', () => {
   const dockerfile = fs.readFileSync(DOCKERFILE, 'utf8');
-  assert.ok(/star-week\.js/.test(dockerfile), 'star-week.js مُدرج');
+  assert.ok(!/star-week\.js/.test(dockerfile), 'وحدة النجمة محذوفة من الصورة');
   const copied = [...copiedRootFiles(dockerfile)];
   // لا يجوز نسخ .env أو أي ملف أسرار
   for (const f of copied) assert.ok(!/^\.env|secret|credential/i.test(f), 'لا أسرار: ' + f);
