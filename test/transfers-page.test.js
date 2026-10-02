@@ -7,6 +7,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+const serverSrc = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
 
 function extractFunction(name) {
   const start = src.indexOf('function ' + name + '(');
@@ -18,6 +19,18 @@ function extractFunction(name) {
     else if (src[i] === '}' && --depth === 0) return src.slice(start, i + 1);
   }
   throw new Error('unterminated function: ' + name);
+}
+
+function extractServerFunction(name) {
+  const start = serverSrc.indexOf('function ' + name + '(');
+  assert.notEqual(start, -1, 'server function exists: ' + name);
+  const brace = serverSrc.indexOf('{', start);
+  let depth = 0;
+  for (let i = brace; i < serverSrc.length; i++) {
+    if (serverSrc[i] === '{') depth++;
+    else if (serverSrc[i] === '}' && --depth === 0) return serverSrc.slice(start, i + 1);
+  }
+  throw new Error('unterminated server function: ' + name);
 }
 
 const TRANSFER = {
@@ -180,4 +193,49 @@ test('المعلمة التي أنشأت التحويل ترى الحل بعد �
   assert.match(html, /تم حل المشكلة/);
   assert.match(html, /المرشدة/);
   assert.doesNotMatch(html, /بانتظار الجهة المعنية/);
+});
+
+test('رفع نسخة معلمة قديمة لا يعيد التحويل المحلول إلى قيد المتابعة على الخادم', () => {
+  const context = { Array, Date, JSON, Map, String };
+  vm.createContext(context);
+  vm.runInContext(extractServerFunction('mergeTransfers'), context);
+
+  const pending = { ...TRANSFER, createdAt: '2026-10-01T08:00:00.000Z' };
+  const resolved = {
+    ...pending,
+    status: 'RESOLVED',
+    solution: 'تم حل المشكلة',
+    resolvedAt: '2026-10-02T12:00:00.000Z',
+    updatedAt: '2026-10-02T12:00:00.000Z',
+  };
+  const afterStalePush = context.mergeTransfers([resolved], [pending]);
+
+  assert.equal(afterStalePush.length, 1);
+  assert.equal(afterStalePush[0].id, pending.id);
+  assert.equal(afterStalePush[0].status, 'RESOLVED');
+  assert.equal(afterStalePush[0].solution, 'تم حل المشكلة');
+});
+
+test('دمج الخادم يختار الحل المحدّث بين نسختين محلولتين', () => {
+  const context = { Array, Date, JSON, Map, String };
+  vm.createContext(context);
+  vm.runInContext(extractServerFunction('mergeTransfers'), context);
+
+  const olderResolution = {
+    ...TRANSFER,
+    status: 'RESOLVED',
+    solution: 'حل سابق',
+    resolvedAt: '2026-10-02T10:00:00.000Z',
+  };
+  const latestResolution = {
+    ...olderResolution,
+    solution: 'الحل النهائي',
+    resolvedAt: '2026-10-02T12:00:00.000Z',
+  };
+  const merged = context.mergeTransfers([olderResolution], [latestResolution]);
+
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].solution, 'الحل النهائي');
+  assert.match(serverSrc, /if \(key === 'transfers'\) \{ merged\[key\] = mergeTransfers\(a, b\); continue; \}/);
+  assert.match(serverSrc, /cf\.transfers = mergeTransfers\(prev\.data\.transfers, cf\.transfers\)/);
 });
