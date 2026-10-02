@@ -10,6 +10,8 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const db = require('./db');
+// خصوصية الملاحظات + حساب أرصدة النقاط على الخادم (مصدر الحقيقة بعد إخفاء النصوص)
+const notePrivacy = require('./notes-privacy');
 
 // قراءة متغير: من Environment أولاً، ثم من ملف سري في /etc/secrets (بديل Render)
 function envOrSecret(name, fallback) {
@@ -1654,6 +1656,35 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
         return u;
       });
     }
+    // ===== خصوصية الملاحظات: تُصفّى سطرياً هنا، فلا تُرجَع أصلاً للغير المخوّل =====
+    // قبل: كانت data.notes تُرسل كاملةً لكل من له صلاحية المدرسة، فترى كل معلمة
+    // نصّ ملاحظات زميلاتها. الآن: الإدارة (ADMIN/AGENT) ترى الكل، وكل دور آخر
+    // يرى ملاحظاته فقط (createdBy = sessions.user_id). ملاحظة بلا createdBy صالح
+    // تبقى «غير مملوكة» حصراً عند الإدارة — لا حذف ولا إسناد بالاسم.
+    const viewer = { role: req.session.role, user_id: req.session.user_id };
+    // ===== أرصدة النقاط أولاً: من المخزون الكامل قبل أي تصفية =====
+    // الترتيب مقصود: نقاط الطالبة تُحسب في الواجهة من pointItems() على النسخة
+    // الكاملة. فلو فلترنا أولاً لأصبح المجموع ناقصاً بقدر ما كتبته الزميلات، وهو
+    // عكس المطلوب تماماً. لذلك نحسب ثم نُصفّي.
+    let pointsTotals = null;
+    try {
+      const stCut = await db.getSchoolSettings(school);
+      const cutDate = (stCut.pointsStartFrom || '2026-09-07').slice(0, 10);
+      pointsTotals = notePrivacy.computePointsTotals(rec.data, cutDate);
+    } catch (e) {
+      console.warn('[note-privacy] تعذّر حساب أرصدة النقاط:', e.message);
+    }
+    if (Array.isArray(rec.data.notes)) {
+      const before = rec.data.notes.length;
+      rec.data.notes = notePrivacy.filterNotesForViewer(rec.data.notes, viewer);
+      if (rec.data.notes.length !== before) {
+        console.log('[note-privacy] رُشّحت الملاحظات لـ', school, '| دور:', viewer.role,
+          '| من', before, 'إلى', rec.data.notes.length);
+      }
+    }
+    // الحقل يُرسَل كمصدر موحّد لأرقام النقاط؛ إن فشل الحساب نُرسل null فيقرأ
+    // فيعود العميل للحساب المحلي بدل عرض أرقام ناقصة.
+    rec.data.pointsTotals = pointsTotals;
     // أسافين الحذف (deleted) تُرسل للعملاء كشواهد حذف: هكذا يعرف كل جهازٍ التكليفات
     // المحذوفة فيحذفها محلياً (لا تُصفّى هنا — التصفية للعرض تتم في loadDB داخل العميل).
     // إرسالها يضمن انتشار الحذف عبر كل الأجهزة مهما احتفظ بعضها بنسخة قديمة.
@@ -1736,6 +1767,10 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       if (data[k] === undefined) data[k] = [];
       else if (!Array.isArray(data[k])) return res.status(400).json({ error: 'invalid_section:' + k });
     }
+    // pointsTotals حقل مشتقّ: الخادم يحسبه ويعرضه، ولا يُكتب من أي جهاز. نُسقطه
+    // من الوارد عند الاستقبال لا عند الدمج فقط، لأن مسار الاستبدال الكامل
+    // (المدير/الوكيل، نسخة غير قديمة) لا يمرّ بـ applyMerged أصلاً.
+    delete data.pointsTotals;
     const ts = Number(req.body.ts) || Date.now();
     // ===== تطبيع المعلمات المكررة عند الحفظ: أي جهاز كان (حتى نسخة قديمة) تمر قائمة
     // users بترتيب يحذف المعرّف اليتيم لصالح المعرّف الحقيقي + إعادة توجيه مرجعاته.
@@ -1816,8 +1851,14 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       const merged = JSON.parse(JSON.stringify(base));
       delete merged._ts;
       const allKeys = new Set([...SECTION_KEYS, ...Object.keys(src || {})]);
+      // ===== حقول مشتقّة من الخادم: لا تُكتب من العميل ولا تُدمج =====
+      // pointsTotals ناتج حسابي (computePointsTotals) يعيد حسابه الخادم في كل GET.
+      // لو ادمجناه لأمكن لعميل أن يكتب أرقام نقاط في نسخته المخزّنة، ولأن handler
+      // PUT يمرّ بـ replace كامل (canEditUsers) لكتب السجل كما هو. فنسقطه هنا،
+      // والعميل لن يجد فرقاً بين ما يرسله وما يلقاه (jsonEqual) لن يتكرر الحفظ.
+      const SERVER_DERIVED_KEYS = new Set(['_ts', 'pointsTotals']);
       for (const key of allKeys) {
-        if (key === '_ts') continue;
+        if (SERVER_DERIVED_KEYS.has(key)) continue;
         const a = base[key];
         const b = src[key];
         if (jsonEqual(a, b)) continue;
@@ -1883,6 +1924,19 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       // المعلم والإداري ووكيل الشؤون المدرسية: يُسمح لهم بتعديل حقول التأخر للطلاب (lateMinutes/lateType) فقط
       data.students = mergeStudentsLateOnly(prev.data ? prev.data.students : [], incomingStudents);
     }
+
+    // ===== فرض مالك الملاحظة من الجلسة قبل أي دمج =====
+    // يُطبَّق على النسخة *الواردة* قبل الدمج، فتصبح قيمة `createdBy` القادمة من
+    // العميل بلا أثر: ملاحظة جديدة تأخذ sessions.user_id، وملاحظة موجودة تأخذ
+    // مالك نسخة الخادم. ولا يستطيع حتى المدير نقل ملكية ملاحظة إلى غيره.
+    // الملاحظات القديمة بلا createdBy تصل كما هي (غير مملوكة): لا يُحذف شيء ولا
+    // يُنسب لأحد — تبقى في المخزون كما هي، ويراها لا أحد غير الإدارة.
+    try {
+      const prevNotes = prev.data && Array.isArray(prev.data.notes) ? prev.data.notes : [];
+      if (Array.isArray(data.notes)) {
+        data.notes = notePrivacy.enforceNoteOwners(data.notes, req.session, prevNotes);
+      }
+    } catch (e) { console.warn('[note-privacy] enforceNoteOwners:', e.message); }
 
     // حماية «بداية النقاط»: أي ملاحظة سلبية (points < 0) بتاريخ قبل بداية العام الدراسي تُحذف
     // حتى لو حملها جهاز قديم لا يزال يحتوي نسخة كاملة — تمنع عودة النقاط السلبية المحذوفة.
@@ -2066,6 +2120,85 @@ app.put('/api/settings/:school', requireAuth, (req, res) => {
     await db.setSchoolSettings(school, data);
     res.json({ ok: true });
   })().catch(fail(res));
+});
+
+/* ===== استرداد ملكية الملاحظات غير المملوكة: مطالبة + موافقة =====
+   الملاحظات القديمة بلا createdBy لا تُحذف ولا تُنسب بالاسم، لكن صاحبتها
+   الشرعية لا تراها. هذا المسار يعالج ذلك في خطوتين:
+     1) POST /api/notes/claim  — المعلمة تقول «هذه ملاحظتي». لا ينقل الملكية.
+     2) POST /api/notes/claim/decide — الإدارة تعتمد أو ترفض. الاعتماد هو
+        النمط الوحيد الذي يُكتب فيه createdBy لمملوك سابق.
+   لولا خط الموافقة لأمكنت أي معلمة أن تسحب ملكية ملاحظة زميلة بمجرد معرّفها،
+   وهو ليس سرّاً يُبنى هذا النظام أصلاً على حمايته. */
+function _claimsSchool(req) {
+  return String(req.body && req.body.school || req.session.school || '').toUpperCase();
+}
+const _CLAIM_REASON_STATUS = {
+  unauthenticated: 401, forbidden: 403, invalid_school: 400, bad_school: 400,
+  not_found: 404, not_claimable: 409, already_owned: 409, no_pending_claim: 409,
+  claim_expired: 409, too_many_claims: 429,
+};
+function _failClaim(res, reason) {
+  return res.status(_CLAIM_REASON_STATUS[reason] || 400).json({ error: reason });
+}
+
+app.post('/api/notes/claim', requireAuth, async (req, res) => {
+  const school = _claimsSchool(req);
+  if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+  if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+  const noteId = req.body && req.body.noteId;
+  if (!noteId) return res.status(400).json({ error: 'missing_note_id' });
+  try {
+    // mutateSchoolData يقرأ الصف ويقفله داخل معاملة ويكتب إن changed=true فقط،
+    // فلا نكتب شيئاً عند رفض الطلب ولا عند تكرار مطالبة مفتوحة.
+    const r = await db.mutateSchoolData(school, data => {
+      const before = Array.isArray(data.notes) ? data.notes : [];
+      const out = notePrivacy.requestNoteClaim(before, req.session, noteId);
+      if (!out.ok) return { changed: false, value: out.reason };
+      data.notes = out.notes;
+      return { changed: true, value: out.note };
+    });
+    // mutateSchoolData يردّ { written, value, reason:'no_change' } عند الرفض،
+    // والسبب الدقيق الذي أعادته الدالة هو value لا reason.
+    if (!r.written) return _failClaim(res, typeof r.value === 'string' ? r.value : 'no_change');
+    res.json({ ok: true, pending: true, noteId: String(noteId) });
+  } catch (e) { fail(res)(e); }
+});
+
+app.get('/api/notes/claims', requireAuth, async (req, res) => {
+  const school = _claimsSchool(req);
+  if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+  if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+  // الإدارة فقط: القائمة تكشف من طالب بماذا، فهي بيانات إدارية.
+  if (!notePrivacy.isPrivilegedNotesRole(req.session.role)) return res.status(403).json({ error: 'forbidden' });
+  try {
+    const rec = await db.getSchoolData(school);
+    const notes = rec && rec.data && Array.isArray(rec.data.notes) ? rec.data.notes : [];
+    res.json({ ok: true, school, claims: notePrivacy.listPendingClaims(notes) });
+  } catch (e) { fail(res)(e); }
+});
+
+app.post('/api/notes/claim/decide', requireAuth, async (req, res) => {
+  const school = _claimsSchool(req);
+  if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+  if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+  if (!notePrivacy.isPrivilegedNotesRole(req.session.role)) return res.status(403).json({ error: 'forbidden' });
+  const noteId = req.body && req.body.noteId;
+  const approve = !!(req.body && req.body.approve);
+  if (!noteId) return res.status(400).json({ error: 'missing_note_id' });
+  try {
+    const r = await db.mutateSchoolData(school, data => {
+      const before = Array.isArray(data.notes) ? data.notes : [];
+      const out = notePrivacy.decideNoteClaim(before, req.session, noteId, approve);
+      if (!out.ok) return { changed: false, value: out.reason };
+      data.notes = out.notes;
+      return { changed: true, value: { note: out.note, approved: out.approved } };
+    });
+    if (!r.written) return _failClaim(res, typeof r.value === 'string' ? r.value : 'no_change');
+    console.log('[note-claim]', school, 'ملاحظة', noteId, approve ? '=> اعتُمدت' : '=> رُفضت',
+      'بواسطة', req.session.user_id);
+    res.json({ ok: true, approved: !!r.value && r.value.approved, noteId: String(noteId) });
+  } catch (e) { fail(res)(e); }
 });
 
 /* ================= النسخ الاحتياطي والاسترجاع ================= */

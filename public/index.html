@@ -546,6 +546,7 @@ const AUTH_API = '/api/auth/';
 const SYNC_API = '/api/db/';
 const SETTINGS_API = '/api/settings/';
 const SUPERVISION_API = '/api/supervision/';
+const NOTES_CLAIM_API = '/api/notes/claim';
 const SYNC_INTERVAL = 300000;
 const __origSetItem = localStorage.setItem.bind(localStorage);
 let __sessionUser = null; // المستخدم الحالي (من الخادم) — المرجع الوحيد للصلاحيات
@@ -1841,6 +1842,97 @@ const notePointsMap = {
 function notePoints(type, category){
   if(notePointsMap[category] != null) return notePointsMap[category];
   return type === 'POSITIVE' ? 2 : -3; // لأخرى وتحرير
+}
+/* ===== خصوصية ملاحظات الطالبات =====
+   المالك هو createdBy (معرّف مستخدم ثابت). لا يُشتق من الاسم ولا من الطالبة.
+   الطبقتان: الخادم (requireAuth + filterNotesForViewer) يمنع الإرجاع أساساً،
+   وهذه الطبقة تمنع إحياء أي نسخة قديمة محفوظة في التخزين المحلي.
+   ملاحظة بلا createdBy صالح => «غير مملوكة» تُرى للإدارة فقط — لا تُحذف ولا تُنسب. */
+function NRC_isAdminNotesRole(me){ return !!me && (me.role === 'ADMIN' || me.role === 'AGENT'); }
+// لا يُعدّ الوكيل مالكاً لمجرد قدرته على القراءة: createdBy هو الفيصل.
+function NRC_canSeeNote(n, me){
+  const u = me || currentUser();
+  if(NRC_isAdminNotesRole(u)) return true;
+  const owner = n && n.createdBy != null ? String(n.createdBy).trim() : '';
+  if(!owner) return false;               // غير مملوكة => الإدارة فقط
+  return !!u && owner === String(u.id || '');
+}
+/* هل الملاحظة مملوكة **لشخص محدَّد** غيري؟ (معيار الإزالة من التخزين المحلي)
+   - غير مملوكة (بلا createdBy) => false: لا نعرف صاحبتها فلا نحذف شيئاً.
+   - مملوكة لي أو للإدارة => false.
+   - مملوكة لزميلة أخرى => true: تُسقط من عرض هذا الجهاز. */
+/* ===== استرداد ملكية ملاحظة قديمة بلا createdBy =====
+  Such الملاحظة تبقى محفوظة على جهازها (لا تُطهَّر)، لكن لا تُنسب لأحد ولا
+   تُعرض في شاشة الملاحظات. صاحبتها الشرعية تعرف نصّها، فتسجّل مطالبةً من
+   جهازها؛ والإدارة هي وحدها من يعتمدها فيصبح createdBy صاحبها.
+   المطالبة لا تكتب createdBy إطلاقاً — لو كانت تفعل لأمكنت أي معلمة سرقة
+   ملاحظة زميلة بمجرد معرّفها. */
+/* ===== حالة «طلبتُها» محلية فقط =====
+   لا نكتب ownershipClaims من العميل إطلاقاً: هي سجلّ ي寫ه الخادم وحده،
+   ولو كتبناه محلياً لصار جهازنا مصدراً يمكن تزويره. فنتابع الطلبات بمعرّفات
+   في تخزين مستقلّ لا يمرّ في أي دفعة. */
+const NOTE_PENDING_KEY = s => 'nibras_notepending_'+s+'_v1';
+function NRC_pendingClaimIds(){
+  try{ const a = JSON.parse(localStorage.getItem(NOTE_PENDING_KEY(getActiveSchool())) || '[]');
+       return new Set(Array.isArray(a) ? a.map(String) : []); }catch(e){ return new Set(); }
+}
+function NRC_markPendingClaim(noteId){
+  try{
+    const k = NOTE_PENDING_KEY(getActiveSchool()), a = Array.from(NRC_pendingClaimIds());
+    a.push(String(noteId));
+    localStorage.setItem(k, JSON.stringify(Array.from(new Set(a))));
+  }catch(e){}
+}
+function NRC_clearPendingClaim(noteId){
+  try{
+    const k = NOTE_PENDING_KEY(getActiveSchool());
+    localStorage.setItem(k, JSON.stringify(Array.from(NRC_pendingClaimIds()).filter(x => x !== String(noteId))));
+  }catch(e){}
+}
+function NRC_noteHasPendingClaim(n){
+  return !!n && (Array.isArray(n.ownershipClaims) && n.ownershipClaims.some(c => c && c.status === 'PENDING')
+    || NRC_pendingClaimIds().has(String(n.id)));
+}
+/** ملاحظات بلا مالك قد تكون لي: لا تُعرض في الجدول، لكن زر المطالبة متاح. */
+function NRC_claimableLegacyNotes(d){
+  const me = currentUser();
+  if(!me || NRC_isAdminNotesRole(me)) return [];
+  return (d && Array.isArray(d.notes) ? d.notes : [])
+    .filter(n => n && !n.deleted && !NRC_canSeeNote(n) && !NRC_noteBelongsToOther(n) && !NRC_noteHasPendingClaim(n));
+}
+async function NRC_requestClaim(noteId){
+  if(!noteId) return { ok:false, error:'missing_note_id' };
+  if(!confirm('هل هذه الملاحظة لك؟\n\nسيُسجَّل طلب باسمك، ويحدّده المدير قبل أن تصبح ملكيتك. لن تراها في القائمة قبل الاعتماد.')) return { ok:false, error:'cancelled' };
+  try{
+    const r = await __api('POST', NOTES_CLAIM_API, { school: getActiveSchool(), noteId: String(noteId) });
+    if(r.status === 200 && r.j && r.j.ok){
+      NRC_markPendingClaim(noteId); // محلياً فقط: يمنع تكرار الزر قبل وصول الرد التالي
+      return { ok:true };
+    }
+    // طلب موجود أصلاً على الخادم: نعتبره «مرسلاً» بدل إزعاج المستخدم برسالة خطأ.
+    if(r.status === 409){ NRC_markPendingClaim(noteId); return { ok:true, alreadyPending:true }; }
+    return { ok:false, error: (r.j && r.j.error) || ('http_' + r.status) };
+  }catch(e){ return { ok:false, error:'network' }; }
+}
+const NRC_CLAIM_ERRORS = {
+  not_claimable: 'هذه الملاحظة لها طلب مفتوح بالفعل، أو هي ملاحظة مملوكة.',
+  already_owned: 'صارت هذه الملاحظة مملوكة.',
+  no_pending_claim: 'لا يوجد طلب مفتوح على هذه الملاحظة.',
+  claim_expired: 'انتهت مهلة الطلب. اطلب المطالبة من جديد.',
+  too_many_claims: 'عدد الطلبات على هذه الملاحظة بلغ الحدّ.',
+  not_found: 'الملاحظة غير موجودة على الخادم.',
+  forbidden: 'ليست لديك صلاحية لهذه العملية.',
+  network: 'تعذّر الاتصال بالخادم.',
+};
+function NRC_claimErrorText(code){
+  return NRC_CLAIM_ERRORS[code] || ('تعذّر إتمام الطلب (' + code + ').');
+}
+function NRC_noteBelongsToOther(n, me){
+  const u = me || currentUser();
+  if(NRC_isAdminNotesRole(u)) return false;
+  const owner = n && n.createdBy != null ? String(n.createdBy).trim() : '';
+  if(!owner) return false;               // لا مالك معروف => لا تُحذف أبداً
+  return !!u && owner !== String(u.id || '');
 }
 /* صلاحية حذف نقطة/ملاحظة: المعلمة لحقّ نقاطها (createdBy) والمدير لأي نقطة.
    النقاط التلقائية من الغياب (بادئتها طولية بلا _auto) والتحويلات/تكليفات تُدار من شاشاتها
@@ -3283,7 +3375,12 @@ function renderLayout(user, hash){
   if(page === 'home') pageHtml = (user.role === 'STUDENT') ? renderStudentDashboard() : renderDashboard();
   else if(page === 'students') pageHtml = renderStudents();
   else if(page === 'attendance') pageHtml = renderAttendance();
-  else if(page === 'notes') pageHtml = renderNotes();
+  else if(page === 'notes'){
+    pageHtml = renderNotes();
+    // طابور مطالبات إعادة الملكية: يظهر للإدارة فقط، ويُجلب بعد الرسم
+    // لأن عناصره غير موجودة في HTML المُعاد.
+    if(user.role !== 'STUDENT') setTimeout(NRC_loadClaims, 0);
+  }
   else if(page === 'memo') pageHtml = renderMemo();
   else if(page === 'transfers') pageHtml = renderTransfers();
   else if(page === 'reports') pageHtml = renderReports();
@@ -4580,12 +4677,12 @@ function renderDashboard(){
     }
     if(lateStudents.length){
       const meta = lateStudents.slice(0,3).map(t => `${t.name}${cls(t)} — ${t.n} مرة`).join(' · ');
-      // صندوق بنفسجي للتأخّر مثل صندوق المعلمة:一个问题 من نوع واحد = لون واحد،
+      // صندوق بنفسجي للتأخّر مثل صندوق المعلمة: مشكلة من نوع واحد = لون واحد،
       // ويفرّق بينهما الأيقونة والعنوان لا لونًا مستحدثًا.
       items.push(card({ icon:'⌛', bg:'#fffbeb', fg:'var(--orange,#f59e0b)',
         name:'تأخّر الطالبات', meta, num:lateStudents.length, click:'showLateStudents()' }));
     }
-    // شريط ملخّص: كم مؤشرًا ت无机 اليوم (4 كحد أقصى)، فيرى القارئ صورة واحدة لا أرقامًا متفرقة
+    // شريط ملخّص: كم مؤشرًا تتراكم اليوم (4 كحد أقصى)، فيرى القارئ صورة واحدة لا أرقامًا متفرقة
     const bar = items.length ? `<div class="nbr-bar" title="${items.length} من 4"><span style="width:${Math.round(items.length/4*100)}%"></span></div>` : '';
     const foot = items.length
       ? `🔎 ${items.length} من 4 مؤشرات تحتاج متابعة · العتبات: غياب ${A.daysThreshold} يومًا أو ${A.runThreshold} متتالية · تحويلات ${__insightTransfersThreshold + 1}+ · معلمة ${L.teacherThreshold + 1}+ · طالبة ${L.studentThreshold}+`
@@ -5572,7 +5669,34 @@ function showStudentPoints(studentId){
   const items = pointItems(d).filter(it => it.studentId === studentId);
   items.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
   let pos = 0, neg = 0;
-  const rows = items.map(n => {
+  // ===== مبالغ لا تُعرض، فيبقى الصافي مطابقاً لرصيد الخادم =====
+  // بعد إخفاء نصوص الزميلات لا تصل ملاحظاته أصلاً إلى هذا الجهاز، فلا يستطيع
+  // pointItems أن يبني صفّاً «مخفياً» يقابل ما لو كان النص موجوداً. فبدل تخمين
+  // ذلك الصف، نأخذ الفارق بين رصيد الخادم (pointsTotals المرسَل من المخزون
+  // الكامل) ومجموع ما هو معروض هنا، ونعرضه سطراً واحداً بلا أي محتوى.
+  // وهذا يغطّي ما لم نره لا الملاحظات الأخرى فحسب، بل أيضاً خصم التكليف الذي
+  // كُفِف على الخادم لأن ملاحظة زميلة غطّته.
+  let hiddenCount = 0, hiddenNet = 0;
+  const visible = [];
+  for(const it of items){
+    if(it.hiddenNote){ hiddenCount++; hiddenNet += it.points; continue; }
+    visible.push(it);
+  }
+  const shownNet = items.reduce((sum, it) => sum + (it.points || 0), 0);
+  const srvRow = __pointsTotals();
+  const srvTotal = (srvRow && srvRow[studentId]) ? srvRow[studentId].total : null;
+  if(srvTotal != null) {
+    const diff = srvTotal - shownNet;
+    if(diff !== 0){ hiddenNet += diff; hiddenCount++; }
+  }
+  const hiddenRow = (hiddenCount || hiddenNet) ? `<tr style="background:#f8fafc">
+        <td style="color:#94a3b8">🔒</td>
+        <td colspan="2" style="color:#64748b">${hiddenCount ? 'سجلات خاصة — للمعلّمات الأخريات' : 'سجلات محسوبة على الخادم'}</td>
+        <td class="muted small">—</td>
+        <td class="muted small">—</td>
+        <td style="font-weight:700;color:${hiddenNet>=0?'#16a34a':'#dc2626'}">${hiddenNet>0?'+':''}${hiddenNet}</td>
+      </tr>` : '';
+  const rows = visible.map(n => {
     const pts = n.points;
     if(pts >= 0) pos += pts; else neg += pts;
     const by = userById(n.createdBy);
@@ -5584,7 +5708,9 @@ function showStudentPoints(studentId){
       <td class="muted small">${new Date(n.createdAt).toLocaleDateString('ar-SA')}</td>
       <td style="font-weight:700;color:${pts>=0?'#16a34a':'#dc2626'}">${pts>0?'+':''}${pts}</td>
     </tr>`;
-  }).join('');
+  }).join('') + hiddenRow;
+  // الصافي يشمل مجموع المخفي، فيطابق رصيد الخادم رغم عدم عرض محتواه.
+  if(hiddenNet > 0) pos += hiddenNet; else if(hiddenNet < 0) neg += hiddenNet;
   const net = pos + neg;
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
@@ -6164,9 +6290,19 @@ const UNDONE_DEDUCTION = -4;
 function pointItems(d){
   const items = [];
   const today = todayStr();
+  // ===== خصوصية الملاحظات داخل قوائم النقاط =====
+  // هذه القائمة تُعرض في تفاصيل نقاط الطالبة (showStudentPoints) وفي لوحات
+  // أخرى، وكانت تكشف description واسم كاتبة ملاحظات زميلات المعلمة.
+  // نُسقط ما لا تملكه، ثم نجمعه في سطر واحد بلا نصّ ولا اسم ولا تاريخ — رقم
+  // فقط — حتى يبقى «الصافي» المعروض مطابقاً للرصيد الحقيقي للمدير دون كشف
+  // أي محتوى. العَلَم hiddenNote يجعل العنصر يُحسَب في الرقم ويُخفى في العرض.
   d.notes.forEach(n => {
     if(n && n.deleted) return;
-    items.push({ studentId:n.studentId, type:n.type, category:n.category, description:n.description, points:(n.points ?? notePoints(n.type, n.category)), createdBy:n.createdBy, createdAt:n.createdAt, kind:'note' });
+    const pts = (n.points ?? notePoints(n.type, n.category));
+    items.push({ studentId:n.studentId, type:n.type, category:n.category,
+      description:NRC_canSeeNote(n) ? n.description : null,
+      points:pts, createdBy:n.createdBy, createdAt:n.createdAt, kind:'note',
+      hiddenNote: !NRC_canSeeNote(n) });
   });
   d.attendance.forEach(a => {
     const eff = __attEffStatus(a);
@@ -6204,14 +6340,57 @@ function pointItems(d){
     return true;
   });
 }
+/* ===== أرصدة النقاط: مصدرها الخادم بعد فلترة الخصوصية =====
+   نقاط الطالبة تُحسب من كل الملاحظات، والخادم لم يعد يرسل نصّ ملاحظات غير
+   المالك. فلو حُسبت محلياً من النسخة المُصفّاة، ناقص مجموع كل معلمة بقدر ما
+   كتبت زميلاتها وتغيّر ترتيب الطالبات. لذلك نقرأ pointsTotals الذي يحسبه
+   الخادم من المخزون الكامل، ونعود للحساب المحلي فقط إذا غاب (وضع بلا خادم). */
+function __pointsTotals(){
+  try{
+    const t = loadDB().pointsTotals;
+    return (t && typeof t === 'object' && !Array.isArray(t)) ? t : null;
+  }catch(e){ return null; }
+}
 function studentPointsMap(){
+  const srv = __pointsTotals();
+  if(srv){
+    const m = {};
+    for(const sid in srv){ const r = srv[sid]; if(r) m[sid] = r.total; }
+    return m;
+  }
   const m = {};
   pointItems(loadDB()).forEach(it => {
     m[it.studentId] = (m[it.studentId]||0) + it.points;
   });
   return m;
 }
+/* تعديل رصيد محلي بعد إضافة/حذف ملاحظة، بلا انتظار السحب التالي.
+   لقطة pointsTotals القادمة من الخادم لا تعرف شيئاً عمّا كتبناه توّاً، فالرقم
+   على الشاشة يبقى الرصيد القديم حتى يصل الرد التالي. نصحّح الفرق محلياً على
+   المدخل الموجود فقط: إن لم تكن للطالبة خانة أصلاً فلا نخمّن أساسها، وتركها
+   للناسخ التالية (تبدأ من صفر كما كانت). */
+function __adjustLocalPoints(sid, delta){
+  try{
+    if(!sid || !delta) return;
+    const d = loadDB();
+    const t = d.pointsTotals;
+    if(!t || typeof t !== 'object' || Array.isArray(t)) return;
+    const r = t[sid];
+    if(!r) return;
+    const total = (typeof r.total === 'number' ? r.total : 0) + delta;
+    const pos = (typeof r.pos === 'number' ? r.pos : 0) + (delta > 0 ? delta : 0);
+    const neg = (typeof r.neg === 'number' ? r.neg : 0) + (delta < 0 ? delta : 0);
+    t[sid] = { total, pos, neg };
+    saveDB(d);
+  }catch(e){}
+}
 function studentPointsSplit(){
+  const srv = __pointsTotals();
+  if(srv){
+    const m = {};
+    for(const sid in srv){ const r = srv[sid]; if(r) m[sid] = { pos:r.pos, neg:r.neg }; }
+    return m;
+  }
   const m = {};
   pointItems(loadDB()).forEach(it => {
     if(!m[it.studentId]) m[it.studentId] = {pos:0, neg:0};
@@ -7175,9 +7354,9 @@ function renderNotes(){
   if(isStudent){
     notes = d.notes.slice().reverse().filter(n => n.studentId === user.id && !n.deleted);
   } else {
-    const students = getVisibleStudents();
-    const visibleIds = new Set(students.map(s => s.id));
-    notes = d.notes.slice().reverse().filter(n => !n.deleted && visibleIds.has(n.studentId));
+    // خصوصية: المعلمة ترى ملاحظاتها هي فقط. ADMIN/AGENT يرون الكل.
+    // (الخادم لا يرسل غير المملوك أصلاً — الشرط هنا طبقة ثانية وعرض أمتن.)
+    notes = d.notes.slice().reverse().filter(n => !n.deleted && NRC_canSeeNote(n));
   }
   const ptsMapNotes = studentPointsMap();
   const me = currentUser();
@@ -7199,6 +7378,32 @@ function renderNotes(){
         <td>${canDel ? `<button class="del-btn" onclick="deleteNote('${n.id}')" title="حذف النقطة (عند الخطأ)">🗑</button>` : (isStudent ? '<span class="muted" style="font-size:11px">—</span>' : `<span class="muted" style="font-size:11px" title="يمكن لحاملة النقطة حذفها (أو المدير)">—</span>`)}</td>
       </tr>`;
     }).join('');
+  // ===== استرداد ملاحظة قديمة بلا مالك =====
+  // لا تُعرض في الجدول ولا تُنسب لأحد. إن كانت على جهازك فقد تكون ملاحظتك
+  // القديمة (قبل أن يُسجَّل صاحبها)، فتأخذينها من هنا دون أن يقرأ أحد نصّها.
+  const legacyClaimable = isStudent ? [] : NRC_claimableLegacyNotes(d);
+  const legacyPending = isStudent ? [] : (d.notes || []).filter(n => n && !n.deleted && !NRC_canSeeNote(n) && NRC_noteHasPendingClaim(n));
+  const legacySection = (legacyClaimable.length || legacyPending.length) ? `
+  <div class="card mb" style="background:#fffbeb;border:1px solid #fde68a">
+    <h2 class="section-title" style="margin:0 0 8px">ملاحظات قديمة بلا مُدخل</h2>
+    <p class="muted small" style="margin:0 0 10px">ملاحظات محفوظة على هذا الجهاز من قبل أن يُسجَّل صاحبها. إن كانت إحداها لك، اطلبي إعادتها إليك — يحدّدها المدير قبل أن تصير ملكيتك. النصّ لا يظهر لأحد قبل الاعتماد.</p>
+    <table class="data-table"><thead><tr><th>الطالب</th><th>الفئة</th><th>التاريخ</th><th>الحالة</th><th></th></tr></thead><tbody>
+    ${legacyClaimable.map(n => `<tr>
+        <td>${escapeHtml(n.studentName || studentById(n.studentId)?.fullName || '—')}</td>
+        <td>${escapeHtml(n.category || '—')}</td>
+        <td class="muted small">${n.createdAt ? new Date(n.createdAt).toLocaleDateString('ar-SA') : '—'}</td>
+        <td><span class="muted small">بانتظار الطلب</span></td>
+        <td><button class="btn-secondary" onclick="NRC_claimLegacy(this,'${n.id}')">طلب إعادتها إلي</button></td>
+      </tr>`).join('')}
+    ${legacyPending.map(n => `<tr>
+        <td>${escapeHtml(n.studentName || studentById(n.studentId)?.fullName || '—')}</td>
+        <td>${escapeHtml(n.category || '—')}</td>
+        <td class="muted small">${n.createdAt ? new Date(n.createdAt).toLocaleDateString('ar-SA') : '—'}</td>
+        <td><span class="muted small">⏳ طلبك قيد المراجعة</span></td>
+        <td class="muted small">—</td>
+      </tr>`).join('')}
+    </tbody></table>
+  </div>` : '';
 
   return `
   <div class="header-row"><h1 class="page-title">${isStudent ? 'ملاحظاتي' : 'الملاحظات'}</h1>${isStudent ? '' : '<button class="btn-primary" onclick="toggleEl(\'noteForm\')">+ إضافة ملاحظة</button>'}</div>
@@ -7226,7 +7431,76 @@ function renderNotes(){
   </div>
   ${isStudent ? `<hr style="margin:26px 0;border:none;border-top:1px dashed var(--border,#e5e7eb)">
   <h2 class="section-title">📒 مفكرتي الشخصية</h2>
-  ${renderNotebookSection()}` : ''}`;
+  ${renderNotebookSection()}` : ''}
+  ${legacySection}
+  ${NRC_isAdminNotesRole(me) ? NRC_claimsQueueHtml() : ''}`;
+}
+/* ===== طابور مطالبات إعادة الملكية (للإدارة) =====
+   طلب المعلمة لا يحمل نصّ الملاحظة: المدير يميّزها من جدول الملاحظات
+   أعلاه (تراه الإدارة كاملاً). لا نضع النصّ هنا حتى لا يتحوّل الطابور إلى
+   قناة تسريب لو تسرّبت الجلسة يوماً ما. */
+function NRC_claimsQueueHtml(){
+  return `<div class="card mb" id="nrcClaimsQueue" style="display:none">
+    <h2 class="section-title" style="margin:0 0 6px">طلبات إعادة ملاحظات قديمة</h2>
+    <div id="nrcClaimsBody"><div class="muted small">جارٍ التحميل…</div></div>
+  </div>`;
+}
+async function NRC_loadClaims(){
+  const box = document.getElementById('nrcClaimsQueue');
+  const body = document.getElementById('nrcClaimsBody');
+  if(!box || !body) return;
+  if(!__serverEnabled()){ box.style.display = 'none'; return; }
+  try{
+    const r = await __api('GET', NOTES_CLAIM_API + '/s');
+    if(r.status !== 200 || !r.j || !r.j.ok){ box.style.display = 'none'; return; }
+    const rows = (r.j.claims || []).map(c => {
+      const by = userById(c.requestedBy);
+      const when = c.requestedAt ? new Date(c.requestedAt).toLocaleDateString('ar-SA') : '—';
+      return `<tr>
+        <td>${escapeHtml(c.studentName || '—')}</td>
+        <td>${escapeHtml(c.category || '—')}</td>
+        <td>${escapeHtml((by && by.name) || c.requestedBy || '—')}</td>
+        <td class="muted small">${when}</td>
+        <td class="muted small">${c.hasText ? 'نصّ محفوظ' : 'بلا نصّ'}</td>
+        <td>${c.expired ? '<span class="muted small">مهلة انتهت</span>' : ''}
+            <button class="btn-primary" onclick="NRC_decideClaim(this,'${c.noteId}',true)" ${c.expired?'disabled':''}>اعتماد</button>
+            <button class="btn-secondary" onclick="NRC_decideClaim(this,'${c.noteId}',false)">رفض</button></td>
+      </tr>`;
+    }).join('');
+    box.style.display = 'block';
+    body.innerHTML = rows ? `<table class="data-table"><thead><tr><th>الطالب</th><th>الفئة</th><th>طالبة الإعادة</th><th>التاريخ</th><th>النصّ</th><th>القرار</th></tr></thead><tbody>${rows}</tbody></table>` :
+      '<div class="muted small">لا توجد طلبات مفتوحة.</div>';
+  }catch(e){ box.style.display = 'none'; }
+}
+/** قرار الإدارة: نمسح «طلبك قيد المراجعة» من هذا الجهاز. الاعتماد يجعل
+    الملاحظة مرئية للمعلمة، والرفض يعيد زر الطلب متاحاً. */
+async function NRC_decideClaim(btn, noteId, approve){
+  if(btn && btn.disabled) return;
+  if(approve && !confirm('اعتماد الطلب يعني أن تصير هذه الملاحظة ملكاً للمعلمة المطلوبة — لا يمكن التراجع عنه.\n\nهل تتأكد أنها ملاحظتها فعلاً؟')) return;
+  if(btn) btn.disabled = true;
+  try{
+    const r = await __api('POST', NOTES_CLAIM_API + '/decide', { noteId: String(noteId), approve: !!approve });
+    if(r.status === 200 && r.j && r.j.ok){
+      // الطلب صار محلّاً بلا معلّق: إما اعتُمد (والملكية انتقلت) أو رُفض.
+      NRC_clearPendingClaim(noteId);
+      alert(approve ? 'اعتُمد الطلب. صارت الملاحظة ملكاً للمعلمة، وستظهر لها بعد التحديث.' : 'رُفض الطلب. تبقى الملاحظة بلا مالك.');
+      render();
+      return;
+    }
+    if(btn) btn.disabled = false;
+    alert(NRC_claimErrorText((r.j && r.j.error) || ('http_' + r.status)));
+  }catch(e){ if(btn) btn.disabled = false; alert(NRC_claimErrorText('network')); }
+}
+/** زر «طلب إعادتها إلي» — يعطّل نفسه أثناء الطلب ثم يحدّث الشاشة. */
+async function NRC_claimLegacy(btn, noteId){
+  if(btn && btn.disabled) return;
+  if(btn) btn.disabled = true;
+  const r = await NRC_requestClaim(noteId);
+  if(btn) btn.disabled = false;
+  if(r.ok){ alert('تم تسجيل طلبك. ستصبح الملاحظة لك بعد موافقة المدير.'); render(); return; }
+  if(r.error === 'cancelled') return;
+  alert(NRC_claimErrorText(r.error));
+  render();
 }
 let noteType = 'POSITIVE';
 let savingNote = false;
@@ -7302,20 +7576,22 @@ function addNote(){
     }
     const points = notePoints(effType, category);
     const batchId = uid();
-    // المعرّف الرسمي الفعلي للمنشئ: إن كان معرّف الجلسة قديماً/يتيماً (بعد إعادة توجيه
-    // معلمات مكررة)، نربط النقطة بمعرّف المستخدم الموجود فعلاً في قائمة القسم.
-    let createdById = currentUser() && currentUser().id;
-    if(createdById && !d.users.some(u => u && u.id === createdById)){
-      const me = currentUser();
-      const alias = (d.users || []).find(u => u && u.name === me.name && (u.role === me.role));
-      if(alias) createdById = alias.id;
-    }
+    // ===== ملكية الملاحظة: معرّف المستخدم الثابت من الجلسة، بلا مطابقة بالاسم =====
+    // كان السطر القديم يجرّب مطابقة الاسم والدور إن كان المعرّف يتيماً — وهو
+    // بالضبط ما لا يجوز: الأسماء تتكرر وتتغير، ونسبة الملاحظة بالاسم تسرّب
+    // ملكيتها. الآن المالك يأتي من الجلسة فقط، والخادم يفرضه عند PUT أياً كان
+    // ما يرسله العميل (notes-privacy.enforceNoteOwners).
+    const me0 = currentUser();
+    const createdById = (me0 && me0.id) ? String(me0.id) : null;
     ids.forEach(sid => {
       const stRec = (d.students || []).find(s => s && s.id === sid);
       const me = currentUser();
       d.notes.push({ id:uid(), studentId:sid, studentNo: stRec && stRec.studentNo != null ? String(stRec.studentNo) : '', studentName: stRec ? (stRec.fullName || stRec.name || '') : '', type:effType, category, description, points, createdBy: createdById, createdByName: me ? me.name : '', createdByRole: me ? me.role : '', createdAt: new Date().toISOString(), batchId });
     });
     saveDB(d);
+    // الرصيد على الشاشة محدَّث فوراً: أرصددة الخادم لم تصل بعد، فنضيف الفرق
+    // محلياً حتى لا تقرأ المعلمة رقماً قديماً لثوانٍ بعد حفظها.
+    ids.forEach(sid => __adjustLocalPoints(sid, points));
     __syncLogAdd({ ev:'note-saved', school:getActiveSchool(), batch:batchId, count:ids.length, type:effType, cat:category, by:createdById, byName:(currentUser()||{}).name || '?' });
     try{
       const bn = ids.slice(0,3).map(sid => {(d.students||[]).find(s=>s.id===sid)?.name || ''}).filter(Boolean);
@@ -7354,6 +7630,7 @@ function deleteNote(id){
   n.deletedAt = new Date().toISOString();
   n.deletedBy = me.id;
   saveDB(d);
+  __adjustLocalPoints(n.studentId, -pts);
   __syncLogAdd({ ev:'note-deleted', school:getActiveSchool(), id, studentId:n.studentId, pts, by:me.id, byName:me.name || '?' });
   try{ if(typeof __syncSchedule === 'function') __syncSchedule(getActiveSchool(), 0); }catch(e){}
   renderApp();
@@ -7364,12 +7641,28 @@ function deleteNote(id){
 function NRC_mergeNotes(base, add){
   if(!Array.isArray(base) || !Array.isArray(add)) return base || [];
   const m = new Map();
-  for(const x of base) if(x && x.id != null) m.set(x.id, { n:x, v:0 });
+  // ===== خصوصية الملاحظات: إسقاط النسخ المحلية المملوكة لغيري فقط =====
+  // يُطبَّق على الطرفين (base و add): فـ base قد يكون نسخة localStorage قديمة
+  // نزلت قبل التطبيق وفيها كل الملاحظات، وإسقاطها منه هو ما يمنع بقاء نص
+  // زميلة على هذا الجهاز.
+  // معيار الإسقاط: «مملوكة **لشخص محدَّد** غيري» فقط. أما الملاحظة **غير
+  // المملوكة** (بلا createdBy) فلا تُسقط أبداً: لا نعرف صاحبتها، وفقدان وصول
+  // المعلمة إلى ملاحظة قديمة كتبتها غير مقبول قبل مراجعة الأثر. تبقى محفوظة
+  // على الجهاز، والعرض وحده يقرّر ما يظهر (§renderNotes).
+  for(const x of base) if(x && x.id != null && !NRC_noteBelongsToOther(x)) m.set(x.id, { n:x, v:0 });
   for(const x of add){
+    if(x && NRC_noteBelongsToOther(x)) continue;
     if(!x || x.id == null) continue;
     const ex = m.get(x.id);
     const nv = (typeof x._v === 'number') ? x._v : 0;
     if(!ex){ m.set(x.id, { n:x, v:nv }); continue; }
+    // ===== ملكية مُكتسبة لا تُرجَع للنسخة المحلية =====
+    // نسخة الخادم تحمل createdBy بعد اعتماد المطالبة، والنسخة المحلية بلا
+    // مالك. لو رجّحنا محلياً لاختفت الملاحظة من جديد وظهر «طلبك قيد المراجعة»
+    // إلى الأبد. لا نقبل createdBy من جهة العميل أصلاً — يقرّره الخادم وحده.
+    const oa = !!(x && x.createdBy != null && String(x.createdBy).trim());
+    const ob = !!(ex.n && ex.n.createdBy != null && String(ex.n.createdBy).trim());
+    if(oa && !ob){ m.set(x.id, { n:x, v:nv }); continue; }
     // المحذوف يفوز (لا يُعاد إحياء نقطة حُذفت عن قصد من أي جهاز)
     if(!!x.deleted || !!ex.n.deleted){ m.set(x.id, { n: (x.deleted ? x : ex.n), v: Math.max(nv, ex.v) }); continue; }
     if(nv !== ex.v){ m.set(x.id, nv > ex.v ? { n:x, v:nv } : ex); continue; }
@@ -10331,7 +10624,7 @@ function computeReportRows(){
     }
   } else if(type === 'notes'){
     rows = d.notes
-      .filter(n => { const s = studentById(n.studentId); return !n.deleted && canSeeStudent(n.studentId) && (!classId || s?.classId===classId) && (!from && !to || inRange(n.createdAt.slice(0,10))); })
+      .filter(n => { const s = studentById(n.studentId); return !n.deleted && NRC_canSeeNote(n) && canSeeStudent(n.studentId) && (!classId || s?.classId===classId) && (!from && !to || inRange(n.createdAt.slice(0,10))); })
       .sort((a,b) => b.createdAt.localeCompare(a.createdAt))
       .map(n => { const s = studentById(n.studentId); const by = userById(n.createdBy);
         const pts = n.points ?? notePoints(n.type, n.category);
