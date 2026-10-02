@@ -7523,7 +7523,7 @@ function adminSeesTransferMsg(m){
 function transferForMe(t){
   const u = currentUser();
   if(!u) return false;
-  if(u.role === 'ADMIN') return t.target === 'ADMIN' || t.createdBy === u.id;
+  if(u.role === 'ADMIN') return true;
   if(u.role === 'AGENT' || u.role === 'COUNSELOR') return t.target === u.role || t.createdBy === u.id;
   const visible = new Set(getVisibleStudents().map(s => s.id));
   return t.createdBy === u.id || studentIdsOf(t).some(id => visible.has(id));
