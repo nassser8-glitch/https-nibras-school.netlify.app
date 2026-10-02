@@ -1015,6 +1015,26 @@ function mergeClassesLocal(lArr, sArr){
   }
   return out;
 }
+function mergeTransfersByIdNewer(serverTransfers, localTransfers){
+  const m = new Map();
+  const keyOf = x => x && x.id != null ? x.id : '__anon:' + JSON.stringify(x);
+  for(const x of (Array.isArray(serverTransfers) ? serverTransfers : [])){
+    if(x) m.set(keyOf(x), x);
+  }
+  for(const x of (Array.isArray(localTransfers) ? localTransfers : [])){
+    if(!x) continue;
+    const key = keyOf(x);
+    const existing = m.get(key);
+    if(!existing){ m.set(key, x); continue; }
+    const stamp = record => Math.max(
+      Date.parse(record.updatedAt || '') || 0,
+      Date.parse(record.resolvedAt || '') || 0,
+      Date.parse(record.createdAt || '') || 0
+    );
+    if(stamp(x) >= stamp(existing)) m.set(key, x);
+  }
+  return Array.from(m.values());
+}
 async function __syncPush(school){
   if(!__syncEnabled()) return;
   const key = 'nibras_'+school+'_db_v1';
@@ -1229,11 +1249,14 @@ async function __syncPush(school){
               }
               return Array.from(m.values());
             };
-            ['students','classes','grades','videos','transfers','escapeAlerts'].forEach(sec => {
+            ['students','classes','grades','videos','escapeAlerts'].forEach(sec => {
               if(!Array.isArray(obj[sec])) return;
               if(__canonEq(obj[sec], sd[sec])) return; // بلا تعديل محلي ⇒ نسخة الخادم تكفي
               sd[sec] = (sec === 'classes') ? mergeClassesLocal(obj[sec], sd[sec]) : locallyOnly(obj[sec], sd[sec]);
             });
+            if(Array.isArray(obj.transfers) && !__canonEq(obj.transfers, sd.transfers)){
+              sd.transfers = mergeTransfersByIdNewer(sd.transfers, obj.transfers);
+            }
             if(Array.isArray(obj.maintenance) && !__canonEq(obj.maintenance, sd.maintenance)){
               sd.maintenance = mergeMaintByIdNewer(sd.maintenance, obj.maintenance);
             }
@@ -1539,12 +1562,15 @@ async function __syncPull(school){
         }
         return out;
       };
-      ['students','classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
+      ['students','classes','grades','videos','maintenance','escapeAlerts'].forEach(sec => {
         if(!Array.isArray(local[sec])) return;
         merged[sec] = (sec === 'classes')
           ? mergeClassesLocal(local[sec], merged[sec])
           : locallyOnlyP(local[sec], merged[sec]);
       });
+      if(Array.isArray(local.transfers)){
+        merged.transfers = mergeTransfersByIdNewer(merged.transfers, local.transfers);
+      }
       // تنقية الفصول على العميل: تمنع عودة الفصول الزائدة (مكررة/بدون مرحلة/بمرحلة وهمية بلا طلاب)
       // التي تحملها النسخة المحلية لكن الخادم كرّسها (deleted). دون هذا يظهر العدد 24 بدل 12.
       // «بلا طلاب ⇒ تُحذف» تخصّ الفصل الشبح المحلي وحده: أي فصل يعرفه الخادم — حتى لو كان
@@ -7564,6 +7590,7 @@ function saveTransferSolution(id){
   t.resolvedBy = me?.id;
   t.resolvedByName = me?.name;
   t.resolvedAt = new Date().toISOString();
+  t.updatedAt = t.resolvedAt;
   saveDB(d);
   closeDetails();
   renderApp();

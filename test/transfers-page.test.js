@@ -30,11 +30,10 @@ const TRANSFER = {
   createdBy: 'former-teacher',
 };
 
-function makePage(initialData, existingStorage) {
+function makePage(initialData, existingStorage, user = { id: 'admin-1', role: 'ADMIN' }) {
   const storage = existingStorage || new Map([
     ['nibras_GIRLS_db_v1', JSON.stringify(initialData)],
   ]);
-  const user = { id: 'admin-1', role: 'ADMIN' };
   const context = {
     Array, JSON, Map, Set, Object, String, Date,
     localStorage: {
@@ -43,6 +42,7 @@ function makePage(initialData, existingStorage) {
     },
     currentUser: () => user,
     getActiveSchool: () => 'GIRLS',
+    getVisibleStudents: () => [],
     loadDB: () => JSON.parse(storage.get('nibras_GIRLS_db_v1')),
     saveDB: data => storage.set('nibras_GIRLS_db_v1', JSON.stringify(data)),
     pointItems: () => [],
@@ -64,6 +64,7 @@ function makePage(initialData, existingStorage) {
         tReason: { value: 'New case' },
         tOther: { value: '' },
         tReasonComment: { value: '' },
+        trSolveText: { value: 'متابعة الحالة وحل المشكلة' },
       }[id] || null),
     },
     getCheckedStudentIds: () => ['S-NEW-1'],
@@ -71,10 +72,11 @@ function makePage(initialData, existingStorage) {
     uid: () => 'T-NEW-1',
     notifyTransferReceivers: () => {},
     renderApp: () => {},
+    closeDetails: () => {},
     alert: () => {},
   };
   vm.createContext(context);
-  for (const name of ['studentIdsOf', 'renderTransfers', 'transferForMe', 'addTransfer']) {
+  for (const name of ['studentIdsOf', 'renderTransfers', 'transferForMe', 'addTransfer', 'saveTransferSolution', 'mergeTransfersByIdNewer']) {
     vm.runInContext(extractFunction(name), context);
   }
   return { context, storage };
@@ -120,4 +122,62 @@ test('إضافة تحويل جديد تحافظ على التحويل القدي
   assert.match(html, /Historical student/);
   assert.match(html, /New student/);
   assert.doesNotMatch(html, /لا توجد تحويلات بعد/);
+});
+
+test('حفظ الحل يحدّث التحويل نفسه مع إبقاء معرّفه ومنشئه', () => {
+  const sourceTeacherTransfer = { ...TRANSFER, createdBy: 'teacher-1' };
+  const { context, storage } = makePage(initialDB([sourceTeacherTransfer]), undefined, {
+    id: 'counselor-1', name: 'المرشدة', role: 'COUNSELOR',
+  });
+
+  context.saveTransferSolution('T-OLD-1');
+
+  const saved = JSON.parse(storage.get('nibras_GIRLS_db_v1'));
+  assert.equal(saved.transfers.length, 1);
+  assert.equal(saved.transfers[0].id, 'T-OLD-1');
+  assert.equal(saved.transfers[0].createdBy, 'teacher-1');
+  assert.equal(saved.transfers[0].status, 'RESOLVED');
+  assert.equal(saved.transfers[0].solution, 'متابعة الحالة وحل المشكلة');
+  assert.equal(saved.transfers[0].resolvedBy, 'counselor-1');
+  assert.ok(saved.transfers[0].updatedAt);
+});
+
+test('دمج المزامنة يحدّث سجل التحويل الموجود ولا يُسقطه أو يُبقي نسخة معلقة', () => {
+  const { context } = makePage(initialDB([]));
+  const resolved = {
+    ...TRANSFER,
+    status: 'RESOLVED',
+    solution: 'تم حل المشكلة',
+    resolvedAt: '2026-10-02T12:00:00.000Z',
+    updatedAt: '2026-10-02T12:00:00.000Z',
+  };
+  const merged = context.mergeTransfersByIdNewer(
+    [TRANSFER],
+    [resolved, { ...TRANSFER, id: 'T-OLD-2' }],
+  );
+
+  assert.equal(merged.length, 2, 'السجل المحفوظ سابقًا والجديد كلاهما باقيان');
+  assert.equal(merged.find(item => item.id === 'T-OLD-1').status, 'RESOLVED');
+  assert.equal(merged.find(item => item.id === 'T-OLD-1').solution, 'تم حل المشكلة');
+  assert.equal(merged.find(item => item.id === 'T-OLD-2').status, 'PENDING');
+  assert.match(src, /sd\.transfers = mergeTransfersByIdNewer\(sd\.transfers, obj\.transfers\)/);
+  assert.match(src, /merged\.transfers = mergeTransfersByIdNewer\(merged\.transfers, local\.transfers\)/);
+});
+
+test('المعلمة التي أنشأت التحويل ترى الحل بعد مزامنة السجل المحلول', () => {
+  const resolved = {
+    ...TRANSFER,
+    createdBy: 'teacher-1',
+    status: 'RESOLVED',
+    solution: 'تم حل المشكلة',
+    resolvedByName: 'المرشدة',
+  };
+  const { context } = makePage(initialDB([resolved]), undefined, {
+    id: 'teacher-1', role: 'TEACHER',
+  });
+  const html = context.renderTransfers();
+
+  assert.match(html, /تم حل المشكلة/);
+  assert.match(html, /المرشدة/);
+  assert.doesNotMatch(html, /بانتظار الجهة المعنية/);
 });
