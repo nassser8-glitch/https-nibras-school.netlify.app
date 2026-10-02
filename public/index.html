@@ -6475,6 +6475,18 @@ function generateUsername(fullName){
   const clean = (base || 'user').replace(/[^a-z0-9\u0600-\u06FF]/g, '') || 'user';
   return clean + Math.floor(Math.random()*900+100);
 }
+function secureRandomString(length, alphabet){
+  if(!window.crypto || typeof window.crypto.getRandomValues !== 'function' || !alphabet) return null;
+  const max = Math.floor(0x100000000 / alphabet.length) * alphabet.length;
+  const random = new Uint32Array(1);
+  let result = '';
+  while(result.length < length){
+    window.crypto.getRandomValues(random);
+    if(random[0] >= max) continue;
+    result += alphabet[random[0] % alphabet.length];
+  }
+  return result;
+}
 async function setStudentCreds(studentId, studentName){
   const box = document.getElementById('studentCredsModal');
   if(!box) return;
@@ -6631,7 +6643,9 @@ function importTeachers(evt){
         if(!name){ skipped++; errors.push('سطر بدون اسم'); continue; }
         let email = String(row['البريد الإلكتروني'] ?? '').trim();
         if(!email) email = name.replace(/\s+/g,'.').toLowerCase() + '@school.local';
-        const genPw = 'IniT@' + Math.random().toString(36).slice(2,8) + 'Z';
+        const randomPart = secureRandomString(6, '0123456789abcdefghijklmnopqrstuvwxyz');
+        if(!randomPart){ skipped++; errors.push('تعذر إنشاء كلمة مرور آمنة لهذا الحساب على هذا الجهاز'); continue; }
+        const genPw = 'IniT@' + randomPart + 'Z';
         const prefUser = String(row['اسم المستخدم'] ?? row['اسم المستخدم (اختياري)'] ?? '').trim();
         const r = await __api('POST', 'admin/create-user', { name, email, role:'TEACHER', password: genPw, username: prefUser });
         if(r.status === 200 && r.j && r.j.ok){ created++; const uname = (r.j.user && r.j.user.username) || ''; temps.push(`${name} | دخول: ${uname} | ${genPw}`); }

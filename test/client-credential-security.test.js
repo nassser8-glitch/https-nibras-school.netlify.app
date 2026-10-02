@@ -62,3 +62,21 @@ test('local teacher password reset uses cryptographic randomness only', () => {
   assert.match(reset, /crypto\.getRandomValues/);
   assert.doesNotMatch(reset, /Math\.random/);
 });
+
+test('bulk-import temporary passwords use cryptographically secure random strings', () => {
+  const randomString = extractFunction('secureRandomString');
+  const context = vm.createContext({
+    window: { crypto: { getRandomValues: values => { values[0] = 0; return values; } } },
+    Uint32Array
+  });
+  vm.runInContext(randomString, context);
+  assert.equal(context.secureRandomString(6, '0123456789abcdefghijklmnopqrstuvwxyz'), '000000');
+  assert.equal(context.secureRandomString(3, ''), null);
+
+  const importStart = source.indexOf('function importTeachers(');
+  const importEnd = source.indexOf('function importStudents(', importStart);
+  assert.ok(importStart !== -1 && importEnd > importStart, 'teacher import function found');
+  const importer = source.slice(importStart, importEnd);
+  assert.match(importer, /secureRandomString\(6,\s*'0123456789abcdefghijklmnopqrstuvwxyz'\)/);
+  assert.doesNotMatch(importer, /Math\.random/);
+});
