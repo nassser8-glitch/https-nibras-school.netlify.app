@@ -685,8 +685,16 @@ async function __loadSupervisionHistory(){
 
 // وضع الخادم = الجلسة الحقيقية وبيانات قاعدة البيانات؛ وضع العرض/المحلي = نسخة المتصفح فقط
 function __serverEnabled(){ return !DEMO_MODE && location.protocol.indexOf('http') === 0; }
-// مرآة غير موثوقة (واجهة فقط) للاحتفاظ بالمستخدم عند إعادة التحميل حتى يرد الخادم
-function __mirrorSet(u){ try{ sessionStorage.setItem(SESS_MIRROR_KEY, JSON.stringify(u)); }catch(e){} }
+// مرآة غير موثوقة للواجهة فقط؛ لا نخزن حقول الحساب الحساسة في sessionStorage.
+function __mirrorSet(u){
+  try{
+    const safe = {};
+    ['id','school','name','username','email','role','active','firstLogin','granted','session'].forEach(k => {
+      if(u && u[k] !== undefined) safe[k] = u[k];
+    });
+    sessionStorage.setItem(SESS_MIRROR_KEY, JSON.stringify(safe));
+  }catch(e){}
+}
 function __mirrorGet(){ try{ const j = JSON.parse(sessionStorage.getItem(SESS_MIRROR_KEY) || 'null'); return j || null; }catch(e){ return null; } }
 function __mirrorClear(){ try{ sessionStorage.removeItem(SESS_MIRROR_KEY); }catch(e){} }
 
@@ -8035,7 +8043,15 @@ async function resetTeacherSecret(id){
   const d = loadDB();
   const t = d.users.find(x => x.id === id);
   if(!t) return;
-  const ns = String(Math.floor(100000000 + Math.random()*900000000));
+  if(!window.crypto || typeof window.crypto.getRandomValues !== 'function'){
+    window.__teacherMsg = 'تعذر إنشاء كلمة مرور آمنة على هذا الجهاز.';
+    renderApp();
+    return;
+  }
+  const max = Math.floor(0x100000000 / 900000000) * 900000000;
+  const random = new Uint32Array(1);
+  do { window.crypto.getRandomValues(random); } while(random[0] >= max);
+  const ns = String(100000000 + (random[0] % 900000000));
   t.password = ns;
   t.firstLogin = true;
   saveDB(d);
