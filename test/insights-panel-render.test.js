@@ -40,6 +40,9 @@ function renderPanel(db, user){
     fmtDateOnly: (d) => String(d).slice(0, 10),
     todayStr: () => keyOf(new Date()),
     user,
+    // «الأكثر تحويلاً» يعدّ ما تراه هذه المعلمة فقط (القاعدة نفسها في الإنتاج)
+    transferForMe: (t) => (user && user.role === 'ADMIN')
+      || (!!t && !!user && String(t.createdBy) === String(user.id)),
     __cap: html,
     __insightAbsOpts: undefined,
   };
