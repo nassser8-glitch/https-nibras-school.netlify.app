@@ -13,7 +13,7 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
 const guard = (() => {
   const a = src.indexOf('// ===== حارس اسم المستخدم =====');
   assert.ok(a !== -1, 'حارس اسم المستخدم غير موجود في الخادم');
-  const b = src.indexOf('let putRes = await db.setSchoolData', a);
+  const b = src.indexOf('// ===== نهاية حارس اسم المستخدم =====', a);
   assert.ok(b > a, 'نهاية الحارس غير محددة');
   return src.slice(a, b);
 })();
@@ -109,4 +109,18 @@ test('حارس اسم المستخدم موجود قبل كتابة نسخة ا�
   const guardAt = src.indexOf('// ===== حارس اسم المستخدم =====');
   const writeAt = src.indexOf('let putRes = await db.setSchoolData', guardAt);
   assert.ok(guardAt !== -1 && writeAt > guardAt, 'الحارس يجب أن يسبق setSchoolData');
+});
+
+test('طلب تصحيح اسم المستخدم يُطبَّق على جدول الحسابات قبل فرضه من الجدول', async () => {
+  // العلّة التي كانت تمنع التصحيح: سطر يفرض اسم المستخدم من جدول الحسابات على
+  // كل حفظ، فيُلغي الطلب قبل أن يصل إلى الجدول ولا يُحفظ أبداً.
+  const guardAt = src.indexOf('// ===== حارس اسم المستخدم =====');
+  const readAt = src.indexOf('const unameMap0 = await db.usernamesByIds');
+  const applyAt = src.indexOf('db.updateUserIdentity(w.id');
+  const rereadAt = src.indexOf('wantedNames.length ? await db.usernamesByIds');
+  const forceAt = src.indexOf('clean.users.forEach(u => { if (unameMap.has(u.id)) u.username');
+  assert.ok(guardAt !== -1 && guardAt < readAt, 'الحارس يجب أن يسبق قراءة الأسماء');
+  assert.ok(readAt < applyAt, 'يجب قراءة الاسم الحالي قبل تطبيق الطلب');
+  assert.ok(applyAt < rereadAt, 'يجب تطبيق الطلب على جدول الحسابات قبل إعادة القراءة');
+  assert.ok(rereadAt < forceAt, 'الفرض من الجدول يجب أن يأتي بعد إعادة القراءة وإلا لغي الطلب');
 });

@@ -1990,9 +1990,62 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     // تطبيع ثانٍ بعد الدمج: الدمج (mergeSection/mergeClasses...) قد يعيد مرجعات يتيمة
     // لمعلمات مكررة من نسخة جهاز قديم، فننظف النتيجة النهائية التي ستُخزن.
     try { await normalizeTeacherDuplicates(school, clean); } catch (e) { console.warn('[normalize#2]', e.message); }
+    // ===== حارس اسم المستخدم =====
+    // اسم المستخدم فريد في جدول الحسابات، ولا يُطبَّق تغييره في ذلك الجدول
+    // إلا بعد حفظ نسخة القسم. فلو كُتبت النسخة قبل الفحص لأمكن أن تحمل اسماً
+    // لا يقبله الجدول: تناقض صامت بين الأجهزة.
+    // وموضع الفحص هنا مقصود: فهناك خطوة لاحقة في هذا المعالج تفرض اسم
+    // المستخدم من جدول الحسابات على كل حفظ (حمايةً من النسخ القديمة)، فكانت
+    // تُلغي أي طلب تعديل قبل أن يصل إلى جدول الحسابات — فلا يُحفظ أبداً.
+    // الشكل المقبول: من 3 إلى 32 رمزاً بحروف لاتينية صغيرة أو أرقام أو
+    // . _ - فقط، بلا مسافات.
+    try {
+      const prevMapU = new Map((prevUsers || []).map(u => [u.id, String(u.username || '').trim().toLowerCase()]));
+      const seenLocal = new Set();
+      for (const nu of (clean.users || [])) {
+        const uname = String((nu && nu.username) || '').trim().toLowerCase();
+        if (!uname) continue;
+        if (!/^[a-z0-9._-]{3,32}$/.test(uname))
+          return res.status(400).json({ error: 'username_invalid', username: uname });
+        if (seenLocal.has(uname))
+          return res.status(409).json({ error: 'username_taken', username: uname });
+        seenLocal.add(uname);
+        if (prevMapU.get(nu.id) === uname) continue;
+        if (!['ADMIN', 'AGENT'].includes(req.session.role))
+          return res.status(403).json({ error: 'username_change_forbidden', username: uname });
+        const holder = await db.userByUsername(uname);
+        if (holder && String(holder.id) !== String(nu.id))
+          return res.status(409).json({ error: 'username_taken', username: uname });
+      }
+    } catch (e) {
+      console.warn('[username-guard]', e.message);
+      return res.status(500).json({ error: 'username_check_failed' });
+    }
+    // ===== نهاية حارس اسم المستخدم =====
     if (Array.isArray(clean.users) && clean.users.length) {
       const uidSet = new Set(clean.users.map(u => u.id));
-      const unameMap = await db.usernamesByIds([...uidSet]);
+      const unameMap0 = await db.usernamesByIds([...uidSet]);
+      // طلب تغيير اسم المستخدم يصل من زر التصحيح في صفحة الإداريين. كان السطر
+      // التالي يفرض اسم المستخدم من جدول الحسابات على النسخة في كل حفظ، فيلغي
+      // الطلب قبل أن يصل إلى جدول الحسابات ولا يُحفظ أبداً. لذلك نطبّق الطلب
+      // على جدول الحسابات هنا — بعد التحقق الذي سبق — ثم نعيد القراءة فيصير
+      // الاسم الجديد هو المرجع الذي تُحقن به النسخة.
+      const wantedNames = [];
+      for (const u of clean.users) {
+        const want = String((u && u.username) || '').trim().toLowerCase();
+        const cur = unameMap0.has(u.id) ? String(unameMap0.get(u.id) || '').trim().toLowerCase() : '';
+        if (want && want !== cur) wantedNames.push({ id: u.id, username: want });
+      }
+      for (const w of wantedNames) {
+        try {
+          await db.updateUserIdentity(w.id, { username: w.username });
+          console.log('[username-apply]', school, 'طلب تصحيح اسم مستخدم →', w.username, '|', req.session.user_id);
+        } catch (e) {
+          console.warn('[username-apply] فشل', w.id, e.message);
+          return res.status(409).json({ error: 'username_taken', username: w.username });
+        }
+      }
+      const unameMap = wantedNames.length ? await db.usernamesByIds([...uidSet]) : unameMap0;
       // حالة «أول دخول» إلزامية من جدول الحسابات (مصدر الحقيقة): أي جهاز (حتى مدير بنسخة قديمة)
       // يدفع users بعلامة تقدّم قديمة يُعاد تصحيحها — فلا يمكن لمن دخل فعلاً أن يظهر «بانتظار أول دخول»
       const statusRows = await db.usersForLoginStats(school);
@@ -2061,36 +2114,6 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         });
       }
     } catch (e) { console.warn('[joinedAt-preserve]', e.message); }
-
-    // ===== حارس اسم المستخدم =====
-    // اسم المستخدم فريد في جدول الحسابات (users_username_key)، والتغييرات عليه
-    // تُطبَّق في جدول الحسابات بعد حفظ نسخة القسم (reconcileUserTable). فلو
-    // كان الاسم الجديد محجوزاً لغيره، حُفظت النسخة ثم فشل التطبيق في جدول
-    // الحسابات — فتبقى النسخة تحمل اسماً لا يقبله الجدول: تناقض صامت. نتحقق
-    // قبل أي كتابة فيُرفض الطلب كاملاً ويبقى الجهازان متطابقين.
-    try {
-      const prevMapU = new Map((prevUsers || []).map(u => [u.id, String(u.username || '').trim().toLowerCase()]));
-      const seenLocal = new Set();
-      for (const nu of (clean.users || [])) {
-        const uname = String((nu && nu.username) || '').trim().toLowerCase();
-        if (!uname) continue;
-        if (!/^[a-z0-9._-]{3,32}$/.test(uname))
-          return res.status(400).json({ error: 'username_invalid', username: uname });
-        if (seenLocal.has(uname))
-          return res.status(409).json({ error: 'username_taken', username: uname });
-        seenLocal.add(uname);
-        const prevName = prevMapU.get(nu.id);
-        if (prevName === uname) continue; // لم يتغيّر
-        if (!['ADMIN', 'AGENT'].includes(req.session.role))
-          return res.status(403).json({ error: 'username_change_forbidden', username: uname });
-        const holder = await db.userByUsername(uname);
-        if (holder && String(holder.id) !== String(nu.id))
-          return res.status(409).json({ error: 'username_taken', username: uname });
-      }
-    } catch (e) {
-      console.warn('[username-guard]', e.message);
-      return res.status(500).json({ error: 'username_check_failed' });
-    }
 
     let putRes = await db.setSchoolData(school, clean, nextTs);
     // nextTs = max(saneTs, prev.ts)+1 فيلزم أن يسبق الصف المخزَّن. إن رُفضت الكتابة
