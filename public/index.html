@@ -12,6 +12,55 @@
 <meta name="theme-color" content="#0f4f88" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" href="icon-192.png" type="image/png" />
+<script>
+/* حارس الإقلاع: أول سكربت في الصفحة.
+   إن لم يقلع التطبيق (بياض بالكامل) نمسح ذاكرة Service Worker ونعيد التحميل مرة
+   واحدة فقط؛ فإن تكرر الإقلاع الفاشل نعرض نص الخطأ على الصفحة نفسها بدل
+   الصمت — حتى لا يحتاج المستخدم لفتح أدوات المطوّر لمعرفة السبب.
+   ملاحظة: لا نمسح localStorage لأنه يحتوي بيانات المدرسة وكل عمل المستخدم. */
+window.__nibrasBooted = false;
+window.__nibrasBootErr = '';
+(function(){
+  var KEY = 'nibrasBootRepair_v1';
+  var already = false;
+  try { already = sessionStorage.getItem(KEY) === '1'; sessionStorage.setItem(KEY, '1'); } catch(_){}
+  window.addEventListener('error', function(e){
+    if (window.__nibrasBooted) return;
+    window.__nibrasBootErr = String((e && (e.message || e.type)) || e || 'unknown error');
+  }, true);
+  var esc = function(s){
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  };
+  setTimeout(function(){
+    if (window.__nibrasBooted) return;
+    if (!already) {
+      try {
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations)
+          navigator.serviceWorker.getRegistrations().then(function(rs){
+            for (var i = 0; i < rs.length; i++) rs[i].unregister();
+          });
+        if (window.caches && window.caches.keys)
+          window.caches.keys().then(function(ks){
+            for (var i = 0; i < ks.length; i++) window.caches.delete(ks[i]);
+          });
+      } catch(_){}
+      location.reload();
+      return;
+    }
+    var box = document.createElement('div');
+    box.style.cssText = 'max-width:560px;margin:60px auto;padding:22px;border:2px solid #dc2626;border-radius:14px;background:#fff;color:#111;font-family:inherit';
+    box.setAttribute('dir', 'rtl');
+    box.innerHTML =
+      '<div style="font-size:17px;font-weight:800;color:#b91c1c;margin-bottom:8px">' +
+      'تعذّر تشغيل التطبيق — أرسل النص لمدير النظام:</div>' +
+      '<pre style="white-space:pre-wrap;direction:ltr;text-align:left;font-size:12px;background:#f8fafc;padding:12px;border-radius:8px;overflow:auto;max-height:240px">' +
+      esc(window.__nibrasBootErr || 'لا يوجد نص خطأ — تعطّل قبل تسجيل السكربت') +
+      '</pre>' +
+      '<button onclick="location.reload()" style="margin-top:12px;padding:8px 16px">إعادة المحاولة</button>';
+    (document.body || document.documentElement).appendChild(box);
+  }, 7000);
+})();
+</script>
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -1996,7 +2045,7 @@ const feminineLabels = {
   'طلابي':'طالباتي', 'فصولي':'فصولي',
   'ادخل الجدول':'ادخلي الجدول', 'جدول الحصص':'جدول الحصص', 'جدولي':'جدولي',
   'المعلمون':'المعلمات', 'معلم':'معلمة', 'المعلم':'المعلمة',
-  'وكيل':'وكيلة', 'الوكيل':'الوكيلة', 'وكيل الشؤون المدرسية':'وكيلة الشؤون المدرسية',
+  'وكيل':'وكيلة', 'الوكيل':'الوكيلة',
   'موجه طلابي':'موجهة طلابية', 'الموجه الطلابي':'الموجهة الطلابية',
   'مساعد إداري':'مساعدة إدارية', 'المساعد الإداري':'المساعدة الإدارية',
   'المعلم المسؤول':'المعلمة المسؤولة', 'عدد الطلاب':'عدد الطالبات',
@@ -2549,6 +2598,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if(!window.__notifTimer) window.__notifTimer = setInterval(checkNotifications, 15000);
     checkNotifications();
     setupPasswordToggles();
+    window.__nibrasBooted = true;
   }catch(__bootErr){
     const __app = document.getElementById('app');
     if(__app){
@@ -3824,6 +3874,10 @@ function dismissAdminMsg(id){
     m.lastViewByName = u.name || '';
     m.lastViewBy = u.id;
     m.read = true;
+    // dismissed هو الحقل الذي تحترمه كل الفروع (المدير والمعلم…) عند العرض،
+    // فنضبطه هنا أيضاً: الاكتفاء بـ clearedBy كان سبب بقاء الإشعار على شاشة
+    // المدير، وقد يضيع إن سحبت نسخة من الخادم لا تحمله.
+    m.dismissed = true;
     m.updatedAt = stamp;
   });
   saveAdminMsgsFor(school, arr);
@@ -4011,8 +4065,12 @@ function renderAdminMsgAlerts(){
       return Array.from(seen.values());
     };
     if(isAdmin){
+      // المدير: «تم الاطلاع» يُخفي الإشعار عنه أيضاً — كان هذا الفرع يكتفي بـ
+      // !m.dismissed فلا يحترم clearedBy، فيبقى الإشعار على الشاشة إلى الأبد.
       return dedup(['GIRLS'].map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s })))
-        .flat().filter(m => m.senderRole === 'TRANSFER' && !m.dismissed && adminSeesTransferMsg(m))
+        .flat().filter(m => m.senderRole === 'TRANSFER' && !m.dismissed
+          && !(m.clearedBy && user.id && (user.id in m.clearedBy))
+          && adminSeesTransferMsg(m))
         .sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))));
     }
     let arr = dedup(adminMsgsFor(user.id).filter(m => !m.dismissed));
@@ -4065,7 +4123,10 @@ function renderAdminMsgAlerts(){
       const colText = fromEscape ? '#7f1d1d' : (fromTransfer ? '#4c1d95' : (fromActivity ? '#134e4a' : (fromCounselor ? '#14532d' : (fromAgent ? '#9a3412' : '#7f1d1d'))));
       const bg = fromEscape ? 'linear-gradient(135deg,#fef2f2,#fecaca)' : (fromTransfer ? 'linear-gradient(135deg,#f5f3ff,#ede9fe)' : (fromActivity ? 'linear-gradient(135deg,#f0fdfa,#ccfbf1)' : (fromCounselor ? 'linear-gradient(135deg,#f0fdf4,#dcfce7)' : (fromAgent ? 'linear-gradient(135deg,#fff7ed,#ffedd5)' : 'linear-gradient(135deg,#fef2f2,#fee2e2)'))));
       const senderLabel = fromEscape ? '🔔 تنبيه هروب من الحصة' : (fromTransfer ? '📨 إشعار تحويل' : (fromActivity ? '🎨 طلب مشاركة في نشاط' : (fromCounselor ? ('💬 رسالة من ' + tl(targetLabels.COUNSELOR)) : (fromAgent ? ('🚨 رسالة من ' + tl(targetLabels.AGENT)) : '🚨 رسالة مهمة من المدير'))));
-      const badgeLabel = fromEscape ? 'عاجل' : (fromTransfer ? (m._school ? 'تحويل بنات' : 'تحويل') : (fromActivity ? 'نشاط' : (fromCounselor ? tl(targetLabels.COUNSELOR) : (fromAgent ? tl(targetLabels.AGENT) : 'مهمة'))));
+      // الشارة تذكر نوع الإشعار فقط. كان نص «إشعار تحويل» متبوعاً بشارة
+      // «تحويل بنات» فيظهر مكرّراً، والبادئة الآن تشير إلى أن الإشعار محفوظ
+      // على الخادم فيصل لكل الأجهزة.
+      const badgeLabel = fromEscape ? 'عاجل' : (fromTransfer ? (m._school ? 'مشترك' : 'تحويل') : (fromActivity ? 'نشاط' : (fromCounselor ? tl(targetLabels.COUNSELOR) : (fromAgent ? tl(targetLabels.AGENT) : 'مهمة'))));
       if(!m.revealed && m.senderRole !== 'ACTIVITY' && !(user.role === 'ADMIN' && m.senderRole === 'TRANSFER')){
         return `
         <div style="flex:${flexW(m)} 1 0;min-width:200px;background:${bg};border:2px solid ${col};border-radius:12px;padding:10px 12px;box-shadow:0 2px 10px rgba(220,38,38,.2);animation:msgPulse 1.5s infinite;display:flex;flex-direction:column">
@@ -7849,14 +7910,14 @@ function notifyTransferReceivers(d, tr){
 /* هل يرى المدير إشعار التحويل؟ — يرى فقط ما وُجّه إليه فعليًا (إلى: المدير) أو تحويلًا أنشأه بنفسه */
 function adminSeesTransferMsg(m){
   const me = currentUser();
+  if(!me) return false;
   if(m.senderRole !== 'TRANSFER') return true;
-  const school = m._school || getActiveSchool();
-  try {
-    const d = loadSchoolDB(school);
-    const t = d.transfers.find(x => x.id === m.transferId);
-    if(!t) return false;
-    return t.target === 'ADMIN' || t.createdBy === me?.id;
-  } catch(e){ return false; }
+  // الإشراف (المدير/الوكيل/الموجهة) يرى كل إشعارات التحويل — القاعدة نفسها
+  // التي اعتمدها transfers-privacy.js. كان الشرط القديم يقصرها على
+  // «المستهدفة أو من أنشأتها»، فكانت إشعارات التحويل إلى الوكيل/الموجهة
+  // مخفية عن المدير، كما كان اختفاء التحويل من قاعدة البيانات يُخفي الإشعار
+  // كله. الإشعار سجلٌّ يبقى معروضاً ويُغلق بزر «تم الاطلاع».
+  return me.role === 'ADMIN' || me.role === 'AGENT' || me.role === 'COUNSELOR';
 }
 /* من يرى التحويل؟ — الإشراف (المدير/الوكيل/الموجهة) يرى كل التحويلات،
    والمعلمة ترى ما أرسلته هي فقط.
@@ -8208,12 +8269,31 @@ async function renameAdminUser(id){
   const u = (d.users || []).find(x => x.id === id);
   if(!u){ alert('المستخدم غير موجود'); return; }
   const school = getActiveSchool();
-  const fresh = prompt('الاسم الحالي:\n' + (u.name || '') + '\n\nأدخل الاسم الصحيح ثم اضغط موافق:', u.name || '');
-  if(fresh == null) return;
-  const cleanName = String(fresh).trim();
+  // الاسم المعروض
+  const freshName = prompt('الاسم الحالي:\n' + (u.name || '') + '\n\nأدخل الاسم الصحيح ثم اضغط موافق (أو اتركه كما هو):', u.name || '');
+  if(freshName == null) return;
+  const cleanName = String(freshName).trim();
   if(!cleanName){ alert('لا يمكن أن يكون الاسم فارغاً'); return; }
-  if(cleanName === u.name){ alert('الاسم لم يتغير'); return; }
-  if(!confirm('تعديل اسم «' + u.name + '» إلى «' + cleanName + '»؟ سيظهر الاسم الجديد لكل الأجهزة.')) return;
+  // اسم المستخدم: كان هذا الزر يعدّل الاسم فقط رغم عنوانه «تعديل اسم المستخدم»،
+  // فلم يكن بالإمكان تصحيح خطأ إملائي في اسم الدخول (مثل bukhaith ← bukhait).
+  const freshUser = prompt('اسم المستخدم الحالي: ' + (u.username || '—') + '\n\nأدخل اسم المستخدم الصحيح بحروف لاتينية صغيرة بلا مسافات (أو اتركه كما هو):', u.username || '');
+  if(freshUser == null) return;
+  const cleanUser = String(freshUser).trim().toLowerCase();
+  const nameChanged = cleanName !== u.name;
+  const userChanged = !!cleanUser && cleanUser !== String(u.username || '').trim().toLowerCase();
+  if(cleanUser && !/^[a-z0-9._-]{3,32}$/.test(cleanUser)){
+    alert('اسم المستخدم يجب أن يكون من 3 إلى 32 رمزاً، بحروف لاتينية صغيرة أو أرقام أو . _ - فقط، بلا مسافات');
+    return;
+  }
+  if(userChanged){
+    const taken = (d.users || []).some(x => x.id !== id && String(x.username || '').trim().toLowerCase() === cleanUser);
+    if(taken){ alert('اسم المستخدم «' + cleanUser + '» محجوز لحساب آخر. اختر اسماً آخر.'); return; }
+  }
+  if(!nameChanged && !userChanged){ alert('لا تغيير'); return; }
+  const what = [];
+  if(nameChanged) what.push('الاسم: ' + u.name + ' ← ' + cleanName);
+  if(userChanged) what.push('اسم المستخدم: ' + u.username + ' ← ' + cleanUser);
+  if(!confirm('تعديل الحساب؟\n' + what.join('\n') + '\n\nسيظهر التعديل لكل الأجهزة، ويحتاج المستخدم إلى الاسم الجديد عند الدخول.')) return;
   try{
     const resp = await fetch(SYNC_API + school);
     if(resp.status === 401){ __handleAuthError(resp); return; }
@@ -8224,26 +8304,34 @@ async function renameAdminUser(id){
     const target = (data.users || []).find(x => x.id === id);
     if(!target){ alert('المستخدم غير موجود في نسخة الخادم'); return; }
     target.name = cleanName;
+    if(userChanged) target.username = cleanUser;
     const put = await fetch(SYNC_API + school, { method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ ts: Date.now(), data }) });
     if(put.status === 401){ __handleAuthError({ status: 401 }); return; }
     if(!put.ok){
       let msg = 'فشل الحفظ';
-      try{ const e = await put.json(); msg += ': ' + (e && e.error || '') + (e && e.reason ? ' (' + e.reason + ')' : ''); }catch(_){}
+      try{
+        const e = await put.json();
+        if(e && e.error === 'username_taken') msg = 'اسم المستخدم «' + (e.username || '') + '» محجوز لحساب آخر — لم يُحفظ أي تعديل';
+        else msg += ': ' + (e && e.error || '') + (e && e.reason ? ' (' + e.reason + ')' : '');
+      }catch(_){}
       alert(msg); return;
     }
-    // حدّث النسخة المحلية كي لا تحمل أي مزامنة لاحقة الاسم القديم
+    // حدّث النسخة المحلية كي لا تحمل أي مزامنة لاحقة القيم القديمة
     try{
       const k = 'nibras_' + school + '_db_v1';
       const raw = localStorage.getItem(k);
       if(raw){
         const lobj = JSON.parse(raw);
         const lu = (lobj.users || []).find(x => x.id === id);
-        if(lu) lu.name = cleanName;
+        if(lu){
+          lu.name = cleanName;
+          if(userChanged) lu.username = cleanUser;
+        }
         localStorage.setItem(k, JSON.stringify(lobj));
       }
     }catch(_){}
     try{ __pushState(school).lastOkTs = 0; }catch(_){}
-    __uiToast('تم تعديل الاسم بنجاح');
+    __uiToast(userChanged ? 'تم تعديل الاسم واسم المستخدم بنجاح' : 'تم تعديل الاسم بنجاح');
     renderApp();
   }catch(e){ alert('خطأ: ' + (e && e.message || e)); }
 }
