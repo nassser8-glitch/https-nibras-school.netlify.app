@@ -2022,7 +2022,7 @@ const feminineLabels = {
   'طلابي':'طالباتي', 'فصولي':'فصولي',
   'ادخل الجدول':'ادخلي الجدول', 'جدول الحصص':'جدول الحصص', 'جدولي':'جدولي',
   'المعلمون':'المعلمات', 'معلم':'معلمة', 'المعلم':'المعلمة',
-  'وكيل':'وكيلة', 'الوكيل':'الوكيلة', 'وكيل الشؤون المدرسية':'وكيلة الشؤون المدرسية',
+  'وكيل':'وكيلة', 'الوكيل':'الوكيلة',
   'موجه طلابي':'موجهة طلابية', 'الموجه الطلابي':'الموجهة الطلابية',
   'مساعد إداري':'مساعدة إدارية', 'المساعد الإداري':'المساعدة الإدارية',
   'المعلم المسؤول':'المعلمة المسؤولة', 'عدد الطلاب':'عدد الطالبات',
@@ -8236,12 +8236,31 @@ async function renameAdminUser(id){
   const u = (d.users || []).find(x => x.id === id);
   if(!u){ alert('المستخدم غير موجود'); return; }
   const school = getActiveSchool();
-  const fresh = prompt('الاسم الحالي:\n' + (u.name || '') + '\n\nأدخل الاسم الصحيح ثم اضغط موافق:', u.name || '');
-  if(fresh == null) return;
-  const cleanName = String(fresh).trim();
+  // الاسم المعروض
+  const freshName = prompt('الاسم الحالي:\n' + (u.name || '') + '\n\nأدخل الاسم الصحيح ثم اضغط موافق (أو اتركه كما هو):', u.name || '');
+  if(freshName == null) return;
+  const cleanName = String(freshName).trim();
   if(!cleanName){ alert('لا يمكن أن يكون الاسم فارغاً'); return; }
-  if(cleanName === u.name){ alert('الاسم لم يتغير'); return; }
-  if(!confirm('تعديل اسم «' + u.name + '» إلى «' + cleanName + '»؟ سيظهر الاسم الجديد لكل الأجهزة.')) return;
+  // اسم المستخدم: كان هذا الزر يعدّل الاسم فقط رغم عنوانه «تعديل اسم المستخدم»،
+  // فلم يكن بالإمكان تصحيح خطأ إملائي في اسم الدخول (مثل bukhaith ← bukhait).
+  const freshUser = prompt('اسم المستخدم الحالي: ' + (u.username || '—') + '\n\nأدخل اسم المستخدم الصحيح بحروف لاتينية صغيرة بلا مسافات (أو اتركه كما هو):', u.username || '');
+  if(freshUser == null) return;
+  const cleanUser = String(freshUser).trim().toLowerCase();
+  const nameChanged = cleanName !== u.name;
+  const userChanged = !!cleanUser && cleanUser !== String(u.username || '').trim().toLowerCase();
+  if(cleanUser && !/^[a-z0-9._-]{3,32}$/.test(cleanUser)){
+    alert('اسم المستخدم يجب أن يكون من 3 إلى 32 رمزاً، بحروف لاتينية صغيرة أو أرقام أو . _ - فقط، بلا مسافات');
+    return;
+  }
+  if(userChanged){
+    const taken = (d.users || []).some(x => x.id !== id && String(x.username || '').trim().toLowerCase() === cleanUser);
+    if(taken){ alert('اسم المستخدم «' + cleanUser + '» محجوز لحساب آخر. اختر اسماً آخر.'); return; }
+  }
+  if(!nameChanged && !userChanged){ alert('لا تغيير'); return; }
+  const what = [];
+  if(nameChanged) what.push('الاسم: ' + u.name + ' ← ' + cleanName);
+  if(userChanged) what.push('اسم المستخدم: ' + u.username + ' ← ' + cleanUser);
+  if(!confirm('تعديل الحساب؟\n' + what.join('\n') + '\n\nسيظهر التعديل لكل الأجهزة، ويحتاج المستخدم إلى الاسم الجديد عند الدخول.')) return;
   try{
     const resp = await fetch(SYNC_API + school);
     if(resp.status === 401){ __handleAuthError(resp); return; }
@@ -8252,26 +8271,34 @@ async function renameAdminUser(id){
     const target = (data.users || []).find(x => x.id === id);
     if(!target){ alert('المستخدم غير موجود في نسخة الخادم'); return; }
     target.name = cleanName;
+    if(userChanged) target.username = cleanUser;
     const put = await fetch(SYNC_API + school, { method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ ts: Date.now(), data }) });
     if(put.status === 401){ __handleAuthError({ status: 401 }); return; }
     if(!put.ok){
       let msg = 'فشل الحفظ';
-      try{ const e = await put.json(); msg += ': ' + (e && e.error || '') + (e && e.reason ? ' (' + e.reason + ')' : ''); }catch(_){}
+      try{
+        const e = await put.json();
+        if(e && e.error === 'username_taken') msg = 'اسم المستخدم «' + (e.username || '') + '» محجوز لحساب آخر — لم يُحفظ أي تعديل';
+        else msg += ': ' + (e && e.error || '') + (e && e.reason ? ' (' + e.reason + ')' : '');
+      }catch(_){}
       alert(msg); return;
     }
-    // حدّث النسخة المحلية كي لا تحمل أي مزامنة لاحقة الاسم القديم
+    // حدّث النسخة المحلية كي لا تحمل أي مزامنة لاحقة القيم القديمة
     try{
       const k = 'nibras_' + school + '_db_v1';
       const raw = localStorage.getItem(k);
       if(raw){
         const lobj = JSON.parse(raw);
         const lu = (lobj.users || []).find(x => x.id === id);
-        if(lu) lu.name = cleanName;
+        if(lu){
+          lu.name = cleanName;
+          if(userChanged) lu.username = cleanUser;
+        }
         localStorage.setItem(k, JSON.stringify(lobj));
       }
     }catch(_){}
     try{ __pushState(school).lastOkTs = 0; }catch(_){}
-    __uiToast('تم تعديل الاسم بنجاح');
+    __uiToast(userChanged ? 'تم تعديل الاسم واسم المستخدم بنجاح' : 'تم تعديل الاسم بنجاح');
     renderApp();
   }catch(e){ alert('خطأ: ' + (e && e.message || e)); }
 }

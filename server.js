@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 // ============================================================
 // نبراس — خادم آمن (Express + PostgreSQL + جلسات حقيقية)
 // الاستبدال الكامل لخادم JSON + SYNC_KEY القديم
@@ -2061,6 +2061,36 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         });
       }
     } catch (e) { console.warn('[joinedAt-preserve]', e.message); }
+
+    // ===== حارس اسم المستخدم =====
+    // اسم المستخدم فريد في جدول الحسابات (users_username_key)، والتغييرات عليه
+    // تُطبَّق في جدول الحسابات بعد حفظ نسخة القسم (reconcileUserTable). فلو
+    // كان الاسم الجديد محجوزاً لغيره، حُفظت النسخة ثم فشل التطبيق في جدول
+    // الحسابات — فتبقى النسخة تحمل اسماً لا يقبله الجدول: تناقض صامت. نتحقق
+    // قبل أي كتابة فيُرفض الطلب كاملاً ويبقى الجهازان متطابقين.
+    try {
+      const prevMapU = new Map((prevUsers || []).map(u => [u.id, String(u.username || '').trim().toLowerCase()]));
+      const seenLocal = new Set();
+      for (const nu of (clean.users || [])) {
+        const uname = String((nu && nu.username) || '').trim().toLowerCase();
+        if (!uname) continue;
+        if (!/^[a-z0-9._-]{3,32}$/.test(uname))
+          return res.status(400).json({ error: 'username_invalid', username: uname });
+        if (seenLocal.has(uname))
+          return res.status(409).json({ error: 'username_taken', username: uname });
+        seenLocal.add(uname);
+        const prevName = prevMapU.get(nu.id);
+        if (prevName === uname) continue; // لم يتغيّر
+        if (!['ADMIN', 'AGENT'].includes(req.session.role))
+          return res.status(403).json({ error: 'username_change_forbidden', username: uname });
+        const holder = await db.userByUsername(uname);
+        if (holder && String(holder.id) !== String(nu.id))
+          return res.status(409).json({ error: 'username_taken', username: uname });
+      }
+    } catch (e) {
+      console.warn('[username-guard]', e.message);
+      return res.status(500).json({ error: 'username_check_failed' });
+    }
 
     let putRes = await db.setSchoolData(school, clean, nextTs);
     // nextTs = max(saneTs, prev.ts)+1 فيلزم أن يسبق الصف المخزَّن. إن رُفضت الكتابة
