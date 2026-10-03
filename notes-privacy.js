@@ -401,6 +401,53 @@ function computePointsTotals(data, cutDate) {
   return totals;
 }
 
+
+// ===== حق الحذف على مستوى الخادم =====
+// الحذف عندنا ناعم: deleted:true ويبقى شاهد قبر لئلا يعود السجل بالسحب.
+// لكن بقاء الشاهد لا يعني أن يُترك لأي عميل. القاعدة نفسها التي في
+// الواجهة: المدير يحذف أي ملاحظة، والمعلمة تحذف ملاحظتها هي فقط،
+// وسائر الأدوار لا تحذف. من لا يملك الحق يُلغى عنده عَلَم الحذف
+// ويبقى السجل كما هو: لا يُرفض دفعه كاملاً فتبقى بقية حفظه سليمة.
+function canDeleteNote(note, session) {
+  if (!session || !session.user_id) return false;
+  if (session.role === 'ADMIN') return true;
+  if (session.role !== 'TEACHER') return false;
+  const owner = noteOwnerId(note);
+  return !!owner && owner === String(session.user_id);
+}
+
+/**
+ * يُطبَّق بعد enforceNoteOwners (فنكون نعرف المالك الحقيقي).
+ * يعيد { notes, blocked }: قائمة منقاة، ومحاولات حذف مرفوضة للتسجيل.
+ */
+function enforceNoteDeleteRights(incomingNotes, session, serverNotes) {
+  if (!Array.isArray(incomingNotes)) return { notes: incomingNotes, blocked: [] };
+  const serverById = new Map();
+  for (const n of (Array.isArray(serverNotes) ? serverNotes : [])) {
+    if (n && n.id != null) serverById.set(String(n.id), n);
+  }
+  const blocked = [];
+  const out = [];
+  for (const n of incomingNotes) {
+    if (!n || typeof n !== 'object' || n.deleted !== true) { out.push(n); continue; }
+    if (canDeleteNote(n, session)) { out.push(n); continue; }
+    const server = n.id != null ? serverById.get(String(n.id)) : null;
+    // محذوفة عند الخادم أصلا: لا نحييها بازالة العَلَم ولا نبقه بلا فائدة
+    if (server && server.deleted === true) { out.push(n); continue; }
+    const copy = Object.assign({}, n);
+    delete copy.deleted;
+    delete copy.deletedAt;
+    delete copy.deletedBy;
+    blocked.push({
+      id: n.id != null ? String(n.id) : null,
+      owner: noteOwnerId(server || n),
+      by: session && session.user_id ? String(session.user_id) : null,
+      role: session && session.role ? String(session.role) : null,
+    });
+    out.push(copy);
+  }
+  return { notes: out, blocked };
+}
 module.exports = {
   ALL_NOTES_ROLES,
   OWNER_ROLES,
@@ -411,6 +458,8 @@ module.exports = {
   canReadNote,
   filterNotesForViewer,
   enforceNoteOwners,
+  canDeleteNote,
+  enforceNoteDeleteRights,
   canClaimNote,
   requestNoteClaim,
   decideNoteClaim,

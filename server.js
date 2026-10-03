@@ -1962,6 +1962,17 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       const prevNotes = prev.data && Array.isArray(prev.data.notes) ? prev.data.notes : [];
       if (Array.isArray(data.notes)) {
         data.notes = notePrivacy.enforceNoteOwners(data.notes, req.session, prevNotes);
+        // ===== حق الحذف: الخادم يمنع حذفَ ملاحظة غير مالكها =====
+        // الواجهة تُظهر الزر للمدير ولمالكة المعلمة لنفسها فقط، لكن أي عميل
+        // يستطيع من الـ API أن يرسل deleted:true لملاحظة زميلة. الخادم الآن
+        // يلغي العَلَم عند من لا يملك الحق (ويُبقي بقية دفعه سليمة) ويسجّل
+        // المحاولة المرفوضة باسم من حاول والمالك الحقيقي.
+        const delRights = notePrivacy.enforceNoteDeleteRights(data.notes, req.session, prevNotes);
+        data.notes = delRights.notes;
+        for (const bad of delRights.blocked) {
+          console.warn('[note-delete-rights] حذف مرفوض | ملاحظة:', bad.id,
+            '| صاحبها:', bad.owner, '| يحاول:', bad.by, '(' + bad.role + ')');
+        }
       }
     } catch (e) { console.warn('[note-privacy] enforceNoteOwners:', e.message); }
 
