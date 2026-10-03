@@ -1701,9 +1701,23 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
     // أسافين الحذف (deleted) تُرسل للعملاء كشواهد حذف: هكذا يعرف كل جهازٍ التكليفات
     // المحذوفة فيحذفها محلياً (لا تُصفّى هنا — التصفية للعرض تتم في loadDB داخل العميل).
     // إرسالها يضمن انتشار الحذف عبر كل الأجهزة مهما احتفظ بعضها بنسخة قديمة.
-    res.json({ ts: rec.ts, data: rec.data });
+    res.json({ ts: rec.ts, data: ensureDataSections(rec.data) });
   })().catch(fail(res));
 });
+
+// ===== سلامة الأقسام: كل قسم في التطبيق مصفوفة، ولا تُسلَّم نسخة ناقصة =====
+// النسخة القديمة الناقصة مفتاحاً كانت تُسلَّم للعميل كما هي، فيرمي بناء الصفحة
+// استثناءً وتظهر شاشة بيضاء. الناقص يُؤخذ من نسخة الخادم السابقة إن وُجدت،
+// وإلا فقائمة فارغة — لا حذف ولا محو: ما لا وجود له عندنا لا وجود له عند غيرنا.
+const DATA_SECTION_KEYS = ['users','grades','classes','students','attendance','notes','transfers','maintenance','adminMsgs','announcements','suggestions'];
+function ensureDataSections(data, prev){
+  if(!data || typeof data !== 'object' || Array.isArray(data)) return data;
+  for(const k of DATA_SECTION_KEYS){
+    if(Array.isArray(data[k])) continue;
+    data[k] = (prev && Array.isArray(prev[k])) ? JSON.parse(JSON.stringify(prev[k])) : [];
+  }
+  return data;
+}
 
 // ===== تطبيع المعلمات المكررة (مركزي، يُستدعى عند كل حفظ/تنظيف) =====
 // مشكلة تكرار معلمة واحدة بمعرّفين (نسخة قديمة + جديدة). لكل اسم مستخدم نُبقي المعرّف
@@ -2114,6 +2128,10 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         });
       }
     } catch (e) { console.warn('[joinedAt-preserve]', e.message); }
+
+    // لا تُكتب نسخة بلا قسم: المفتاح الناقص يُملأ من نسخة الخادم السابقة أو
+    // بقائمة فارغة، فيتوقف زوال المفتاح من الجذر (كان يُسقط شاشات العميل).
+    ensureDataSections(clean, prev ? prev.data : null);
 
     let putRes = await db.setSchoolData(school, clean, nextTs);
     // nextTs = max(saneTs, prev.ts)+1 فيلزم أن يسبق الصف المخزَّن. إن رُفضت الكتابة
