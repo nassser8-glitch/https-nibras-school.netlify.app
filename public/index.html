@@ -2283,10 +2283,17 @@ function saveDB(d){
   // في كل مرة، ما يُشعل حلقة سحب/دفع لا تنتهي. المقارنة تتم على الحالة الحيّة
   // (لا على ذاكرة مؤقتة) حتى لو كتب هنا كاتبٌ آخر، فنُعيد الكتابة بدل إسقاط حفظ.
   const k = dbKey();
+  let cur = null;
   try{
-    const cur = JSON.parse(localStorage.getItem(k) || 'null');
+    cur = JSON.parse(localStorage.getItem(k) || 'null');
     if(cur && __canonNoTs(cur) === __canonNoTs(d)) return;
   }catch(e){}
+  if(d && typeof d === 'object' && !Array.isArray(d)){
+    const curTs = Number(cur && cur._ts);
+    const dataTs = Number(d._ts);
+    const previousTs = Math.max(Number.isFinite(curTs) ? curTs : 0, Number.isFinite(dataTs) ? dataTs : 0);
+    d._ts = Math.max(Date.now(), previousTs + 1);
+  }
   localStorage.setItem(k, JSON.stringify(d));
 }
 function dbKeyFor(school){ return 'nibras_GIRLS_db_v1'; } // نظام قسم واحد: GIRLS
