@@ -807,6 +807,13 @@ function __canonEq(a, b){ return __canon(a) === __canon(b); }
    كان يُسقَط من ذاكرة الجهاز قبل أن يُرفع؛ وعند التحديث تُعاد النسخة الحيّة
    من الخادم: «تحذفت التحويلات ثم عادت». ندمج المحوَّلات بالقاعدة نفسها التي
    يطبّقها الخادم في mergeSection: الحذف لاصق، وما عداه الخادم يكسب. */
+/* بصمة زمنية لحل التحويل: الأحدث بين وقت الحل ووقت الإنشاء.
+   نستخدمها فقط عند وجود حلّين متنافسين على جهازين. */
+function __transferSolveStamp(x){
+  if(!x) return 0;
+  const t = [x.resolvedAt, x.updatedAt, x.createdAt].map(v => Date.parse(v || '')).filter(Number.isFinite);
+  return t.length ? Math.max.apply(null, t) : 0;
+}
 function __mergeTransfersPull(lArr, sArr){
   const srv = Array.isArray(sArr) ? sArr : (Array.isArray(lArr) ? lArr : []);
   if(!Array.isArray(lArr)) return Array.isArray(sArr) ? srv : [];
@@ -830,7 +837,20 @@ function __mergeTransfersPull(lArr, sArr){
       continue;
     }
     if(tomb.has(k)) continue;  // مدفون في الخادم: لا يُحيا من نسخة محلية
-    if(!idx.has(k)){ out.push(copy); idx.set(k, out.length - 1); }
+    if(!idx.has(k)){ out.push(copy); idx.set(k, out.length - 1); continue; }
+    // حلٌّ محلي لم يُرفع بعد: الخادم أقدم منه ولا حل عنده، فنحفظ الحل بدل أن
+    // يُمحى بالسحب. الحل موجود على جهاز واحد فقط (من كتبه)، فشرط «الخادم بلا
+    // حل» يمنع أي جهاز آخر من نزع حلٍّ محفوظ على الخادم. والأحدث زمنياً يكسب
+    // إن ت-solving على جهازين، كما في بقية السجلات.
+    const srvRec = out[idx.get(k)];
+    if(srvRec && !srvRec.solution && x.solution){
+      out[idx.get(k)] = copy;
+      continue;
+    }
+    if(srvRec && srvRec.solution && x.solution && String(srvRec.status || '') === 'RESOLVED'
+       && __transferSolveStamp(x) >= __transferSolveStamp(srvRec)){
+      out[idx.get(k)] = copy;
+    }
   }
   return out;
 }
@@ -8033,6 +8053,11 @@ function saveTransferSolution(id){
   t.resolvedByName = me?.name;
   t.resolvedAt = new Date().toISOString();
   saveDB(d);
+  // الرفع الفوري: بدونه يبقى الحل في ذاكرة الجهاز وحدها، والسحب الدوري (كل 5 دقائق)
+  // بدونه يبقى الحل في ذاكرة الجهاز وحدها، والسحب الدوري (كل خمس دقائق)
+  // يزاحمه فيهدم الحل: يعيد نسخة الخادم بلا حل فيختفي بعد التحديث.
+  // ونفس اللحظة نفتح نافذة الدفعة المعلّقة (عبر __syncSchedule) فيمتنع السحب عن المساس بحلٍّ لم يُرفع بعد.
+  try{ if(typeof __syncSchedule === 'function') __syncSchedule(getActiveSchool(), 0); }catch(e){}
   closeDetails();
   renderApp();
   alert('تم حفظ الحل ✅ سيظهر للمعلم فورًا');
