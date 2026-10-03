@@ -1976,6 +1976,22 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       }
     } catch (e) { console.warn('[note-privacy] enforceNoteOwners:', e.message); }
 
+    // ===== حق حذف التحويل: المدير وحده =====
+    // كما في الملاحظات: الواجهة تُظهر الزر للمدير فقط، لكن أي عميل يستطيع
+    // من الـ API أن يرسل deleted:true. الخادم يلغي العَلَم عند من لا يملك
+    // الحق (ويُبقي بقية دفعه سليمة) ويسجّل المحاولة المرفوضة.
+    try {
+      const prevTransfers = prev.data && Array.isArray(prev.data.transfers) ? prev.data.transfers : [];
+      if (Array.isArray(data.transfers)) {
+        const tDel = transferPrivacy.enforceTransferDeleteRights(data.transfers, req.session, prevTransfers);
+        data.transfers = tDel.transfers;
+        for (const bad of tDel.blocked) {
+          console.warn('[transfer-delete-rights] حذف مرفوض | تحويل:', bad.id,
+            '| صاحبه:', bad.owner, '| يحاول:', bad.by, '(' + bad.role + ')');
+        }
+      }
+    } catch (e) { console.warn('[transfer-delete-rights]', e.message); }
+
     // حماية «بداية النقاط»: أي ملاحظة سلبية (points < 0) بتاريخ قبل بداية العام الدراسي تُحذف
     // حتى لو حملها جهاز قديم لا يزال يحتوي نسخة كاملة — تمنع عودة النقاط السلبية المحذوفة.
     try {

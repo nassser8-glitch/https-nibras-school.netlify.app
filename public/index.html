@@ -7779,6 +7779,7 @@ function renderTransfers(){
     const pts = {};
     pointItems(d).forEach(it => { pts[it.studentId] = (pts[it.studentId]||0) + it.points; });
     d.transfers.slice().reverse().forEach(t => {
+      if(t && t.deleted) return; // شاهد القبر: محذوف وناشر للحذف، لا يُعرض
       if(isStudent){
         const ids = studentIdsOf(t);
         if(!ids.includes(user.id)) return;
@@ -7799,7 +7800,7 @@ function renderTransfers(){
         <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.reason)}</td>
         <td style="text-align:center">${t.deductedPoints ? `<span style="color:#dc2626;font-weight:700">${t.deductedPoints} نقطة</span>` : '<span class="muted">—</span>'}</td>
         <td>${t.status==='PENDING' ? '<span style="color:#d97706">قيد المتابعة</span>' : '<span style="color:#16a34a">تم الحل</span>'}</td>
-        <td>${t.status==='PENDING' ? (canResolve(t) ? `<button class="del-btn" style="color:#1d7fd6" onclick="openTransferSolve('${t.id}')">حل المشكلة</button>` : '<span class="muted" style="font-size:12px">بانتظار الجهة المعنية</span>') : (t.solution ? `<div style="max-width:280px;white-space:pre-wrap"><span style="font-weight:700;color:#16a34a">الحل:</span> ${escapeHtml(t.solution)}</div><div class="muted small">بواسطة ${escapeHtml(t.resolvedByName || '—')}</div>` : '<span style="color:#16a34a">تم الحل</span>')}</td>
+        <td>${t.status==='PENDING' ? (canResolve(t) ? `<button class="del-btn" style="color:#1d7fd6" onclick="openTransferSolve('${t.id}')">حل المشكلة</button>` : '<span class="muted" style="font-size:12px">بانتظار الجهة المعنية</span>') : (t.solution ? `<div style="max-width:280px;white-space:pre-wrap"><span style="font-weight:700;color:#16a34a">الحل:</span> ${escapeHtml(t.solution)}</div><div class="muted small">بواسطة ${escapeHtml(t.resolvedByName || '—')}</div>` : '<span style="color:#16a34a">تم الحل</span>')}${isAdmin ? ` <button class="del-btn" style="color:#dc2626" onclick="deleteTransfer('${t.id}')" title="حذف التحويل (للمدير فقط)">🗑</button>` : ''}</td>
       </tr>`;
     }).join('');
 
@@ -7822,6 +7823,23 @@ function renderTransfers(){
     <table class="data-table"><thead><tr><th>الطالب</th><th>إلى</th><th>الأولوية</th><th>السبب</th><th>خصم النقاط</th><th>الحالة</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table>
   </div>`;
+}
+function deleteTransfer(id){
+  const me = currentUser();
+  if(!me || me.role !== 'ADMIN'){ alert('حذف التحويل للمدير فقط.'); return; }
+  const d = loadDB();
+  const t = (d.transfers || []).find(x => x && x.id === id);
+  if(!t){ alert('هذا التحويل غير موجود (ربما حُذف من جهاز آخر).'); return; }
+  if(t.deleted){ alert('هذا التحويل محذوف بالفعل.'); return; }
+  const names = studentIdsOf(t).map(sid => (d.students || []).find(s => s && s.id === sid)).filter(Boolean).map(s => s.fullName).join('، ');
+  if(!confirm('حذف التحويل' + (names ? ' للطالبات: ' + names : '') + '؟\n\nسيختفي من كل الأجهزة ولن يعود بعد التحديث. سجل التحويل يبقى محفوظاً على الخادم.')) return;
+  t.deleted = true;
+  t.deletedAt = new Date().toISOString();
+  t.deletedBy = me.id;
+  saveDB(d);
+  __syncLogAdd({ ev:'transfer-deleted', school:getActiveSchool(), id, by:me.id, byName:me.name || '?' });
+  try{ if(typeof __syncSchedule === 'function') __syncSchedule(getActiveSchool(), 0); }catch(e){}
+  renderApp();
 }
 function updateReasonUI(){
   const val = document.getElementById('tReason').value;
