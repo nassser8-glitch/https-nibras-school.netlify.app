@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <!--
@@ -1917,7 +1917,7 @@ function NRC_canSeeNote(n, me){
    المطالبة لا تكتب createdBy إطلاقاً — لو كانت تفعل لأمكنت أي معلمة سرقة
    ملاحظة زميلة بمجرد معرّفها. */
 /* ===== حالة «طلبتُها» محلية فقط =====
-   لا نكتب ownershipClaims من العميل إطلاقاً: هي سجلّ ي寫ه الخادم وحده،
+   لا نكتب ownershipClaims من العميل إطلاقاً: هي سجلّ ييكتبهه الخادم وحده،
    ولو كتبناه محلياً لصار جهازنا مصدراً يمكن تزويره. فنتابع الطلبات بمعرّفات
    في تخزين مستقلّ لا يمرّ في أي دفعة. */
 const NOTE_PENDING_KEY = s => 'nibras_notepending_'+s+'_v1';
@@ -2247,6 +2247,12 @@ function loadDB(){
   }
   // ترقية: بلاغات الصيانة
   if(!Array.isArray(d.maintenance)){ d.maintenance = []; cleaned = true; }
+  // سلامة الأقسام: كل قسم في هذا التطبيق مصفوفة. نسخة قديمة أو نسخة خادم ناقصة
+  // قد تخلو من أحدها، فكان قسم الملاحظات يرمي استثناءً عند البناء فيخرج
+  // الرسم كله وتظهر صفحة بيضاء بلا أي رسالة. الناقص يُرمَّم هنا لكل قسم.
+  ['users','grades','classes','students','attendance','notes','transfers','maintenance','adminMsgs','announcements','suggestions'].forEach(k => {
+    if(!Array.isArray(d[k])){ d[k] = []; cleaned = true; }
+  });
   // أسافين الحذف للتكليفات: تُبقي في التخزين المحلي (لا تُمسح هنا) حتى يرفعها المتصفح
   // للخادم فتنتشر الحذف فعلياً. مجرد عرضٍ حذف الشوهد من القائمة لا يُفقدها.
   (function(){})(); // (لا تصفية لأشجار الحذف في loadDB — تُصفّى عند العرض فقط)
@@ -2464,7 +2470,29 @@ function wmGuard(){
   wmShowLock();
 }
 setInterval(wmGuard, 1000);
+// حارس الرسم: كان أي استثناء في بناء الصفحة يخرج من renderApp قبل كتابة أي
+// HTML، فتبقى الشاشة بيضاء بلا رسالة ولا أثر. الآن يُعرض الخطأ ويُسجَّل.
+function __showRenderError(e){
+  try{ console.error('[render]', e); }catch(_){}
+  const app = document.getElementById('app');
+  if(!app) return;
+  const msg = String((e && (e.message || e)) || 'خطأ غير معروف');
+  app.innerHTML = `<div style="padding:24px">
+    <div class="card" style="border:1px solid #fca5a5;background:#fef2f2">
+      <h2 style="margin:0 0 8px;color:#b91c1c">تعذّر عرض الصفحة</h2>
+      <p style="margin:0 0 10px">حدث خطأ أثناء بناء هذه الصفحة. الأجزاء الأخرى تعمل؟ إن تكرر الأمر أرسل نص الخطأ.</p>
+      <pre style="white-space:pre-wrap;direction:ltr;text-align:left;background:#fff;padding:10px;border-radius:8px;font-size:12px">${escapeHtml(msg)}</pre>
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button class="btn-primary" onclick="location.reload()">تحديث الصفحة</button>
+        <button class="btn-secondary" onclick="location.hash='#/'">الرئيسية</button>
+      </div>
+    </div></div>`;
+}
 function renderApp(){
+  try{ __renderAppInner(); }
+  catch(e){ __showRenderError(e); }
+}
+function __renderAppInner(){
   ensureDefaultAccounts();
   const app = document.getElementById('app');
   const user = currentUser();
@@ -5306,7 +5334,7 @@ const __insightLateOpts = { teacherThreshold:5, studentThreshold:5 };
 /* بداية الشهر بالتقويم المحلي للمتصفح، وهي التقويم نفسه الذي كُتبت به مفاتيح
    التواريخ في البيانات: todayStr() في أعلى الملف هي التي تولّد attendance.date
    وتواريخ teacher.markedLate. فلو حسبنا الشهر بتوقيت المدرسة (Asia/Karachi) لاختلف
-   الشهر عند حدّ الفجر على جهاز不在 توقيت المدرسة، وحُسب يومٌ خطأً. القاعدة:
+   الشهر عند حدّ الفجر على جهاز لا يوافق توقيت المدرسة، وحُسب يومٌ خطأً. القاعدة:
    نرشّح بتلك المفاتيح كما هي، فنحدّد الشهر بمنهج كاتبها لا بمنهج مستقل.
    المعامل d اختياري (يصلح للحساب على تاريخ معيّن) وهو ما يجعل السلوك قابلًا للاختبار. */
 function __insightMonthStart(d0){
@@ -5398,7 +5426,7 @@ function __insightLateTeachers(threshold){
   out.sort((a,b) => b.n - a.n);
   return out;
 }
-/* تأخر الطالبات المتكرر خلال الشهر: من سجل الحضور،日为 واحد يُحسب مرة واحدة،
+/* تأخر الطالبات المتكرر خلال الشهر: من سجل الحضور، يوم واحد يُحسب مرة واحدة،
    ويُستبعد اليوم الذي صار فيه الطالب غائبًا (الغائب يفوز على المتأخر في القاعدة
    الواحدة __attEffStatus، فلا يُحتسب اليوم تأخرًا وحضورًا في آن). */
 function __insightLateStudents(threshold){
@@ -7409,16 +7437,17 @@ function saveAttendance(){
 /* ============ الملاحظات ============ */
 function renderNotes(){
   const d = loadDB();
+  const notesArr = Array.isArray(d.notes) ? d.notes : [];
   const user = currentUser();
   const isAdmin = user?.role === 'ADMIN';
   const isStudent = user?.role === 'STUDENT';
   let notes;
   if(isStudent){
-    notes = d.notes.slice().reverse().filter(n => n.studentId === user.id && !n.deleted);
+    notes = notesArr.slice().reverse().filter(n => n.studentId === user.id && !n.deleted);
   } else {
     // خصوصية: المعلمة ترى ملاحظاتها هي فقط. ADMIN/AGENT يرون الكل.
     // (الخادم لا يرسل غير المملوك أصلاً — الشرط هنا طبقة ثانية وعرض أمتن.)
-    notes = d.notes.slice().reverse().filter(n => !n.deleted && NRC_canSeeNote(n));
+    notes = notesArr.slice().reverse().filter(n => !n.deleted && NRC_canSeeNote(n));
   }
   const ptsMapNotes = studentPointsMap();
   const me = currentUser();
@@ -7444,7 +7473,7 @@ function renderNotes(){
   // لا تُعرض في الجدول ولا تُنسب لأحد. إن كانت على جهازك فقد تكون ملاحظتك
   // القديمة (قبل أن يُسجَّل صاحبها)، فتأخذينها من هنا دون أن يقرأ أحد نصّها.
   const legacyClaimable = isStudent ? [] : NRC_claimableLegacyNotes(d);
-  const legacyPending = isStudent ? [] : (d.notes || []).filter(n => n && !n.deleted && !NRC_canSeeNote(n) && NRC_noteHasPendingClaim(n));
+  const legacyPending = isStudent ? [] : notesArr.filter(n => n && !n.deleted && !NRC_canSeeNote(n) && NRC_noteHasPendingClaim(n));
   const legacySection = (legacyClaimable.length || legacyPending.length) ? `
   <div class="card mb" style="background:#fffbeb;border:1px solid #fde68a">
     <h2 class="section-title" style="margin:0 0 8px">ملاحظات قديمة بلا مُدخل</h2>
