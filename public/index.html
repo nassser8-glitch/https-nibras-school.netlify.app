@@ -12,6 +12,55 @@
 <meta name="theme-color" content="#0f4f88" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" href="icon-192.png" type="image/png" />
+<script>
+/* حارس الإقلاع: أول سكربت في الصفحة.
+   إن لم يقلع التطبيق (بياض بالكامل) نمسح ذاكرة Service Worker ونعيد التحميل مرة
+   واحدة فقط؛ فإن تكرر الإقلاع الفاشل نعرض نص الخطأ على الصفحة نفسها بدل
+   الصمت — حتى لا يحتاج المستخدم لفتح أدوات المطوّر لمعرفة السبب.
+   ملاحظة: لا نمسح localStorage لأنه يحتوي بيانات المدرسة وكل عمل المستخدم. */
+window.__nibrasBooted = false;
+window.__nibrasBootErr = '';
+(function(){
+  var KEY = 'nibrasBootRepair_v1';
+  var already = false;
+  try { already = sessionStorage.getItem(KEY) === '1'; sessionStorage.setItem(KEY, '1'); } catch(_){}
+  window.addEventListener('error', function(e){
+    if (window.__nibrasBooted) return;
+    window.__nibrasBootErr = String((e && (e.message || e.type)) || e || 'unknown error');
+  }, true);
+  var esc = function(s){
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  };
+  setTimeout(function(){
+    if (window.__nibrasBooted) return;
+    if (!already) {
+      try {
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations)
+          navigator.serviceWorker.getRegistrations().then(function(rs){
+            for (var i = 0; i < rs.length; i++) rs[i].unregister();
+          });
+        if (window.caches && window.caches.keys)
+          window.caches.keys().then(function(ks){
+            for (var i = 0; i < ks.length; i++) window.caches.delete(ks[i]);
+          });
+      } catch(_){}
+      location.reload();
+      return;
+    }
+    var box = document.createElement('div');
+    box.style.cssText = 'max-width:560px;margin:60px auto;padding:22px;border:2px solid #dc2626;border-radius:14px;background:#fff;color:#111;font-family:inherit';
+    box.setAttribute('dir', 'rtl');
+    box.innerHTML =
+      '<div style="font-size:17px;font-weight:800;color:#b91c1c;margin-bottom:8px">' +
+      'تعذّر تشغيل التطبيق — أرسل النص لمدير النظام:</div>' +
+      '<pre style="white-space:pre-wrap;direction:ltr;text-align:left;font-size:12px;background:#f8fafc;padding:12px;border-radius:8px;overflow:auto;max-height:240px">' +
+      esc(window.__nibrasBootErr || 'لا يوجد نص خطأ — تعطّل قبل تسجيل السكربت') +
+      '</pre>' +
+      '<button onclick="location.reload()" style="margin-top:12px;padding:8px 16px">إعادة المحاولة</button>';
+    (document.body || document.documentElement).appendChild(box);
+  }, 7000);
+})();
+</script>
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -2529,6 +2578,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if(!window.__notifTimer) window.__notifTimer = setInterval(checkNotifications, 15000);
     checkNotifications();
     setupPasswordToggles();
+    window.__nibrasBooted = true;
   }catch(__bootErr){
     const __app = document.getElementById('app');
     if(__app){
