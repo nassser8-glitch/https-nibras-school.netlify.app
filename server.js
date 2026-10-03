@@ -1192,6 +1192,29 @@ function mergeSection(prevVal, inVal) {
   // لا دمج ممكن: الأحدث (الواصل) يرجح إن كان من نوع الكائن/أو يرجح الموجودة
   return inVal !== undefined ? inVal : prevVal;
 }
+function mergeTransfers(prevVal, inVal) {
+  const keyOf = r => (r && typeof r === 'object' && r.id != null) ? r.id : '__anon:' + JSON.stringify(r);
+  const isResolved = r => !!r.resolved || String(r.status || '').toUpperCase() === 'RESOLVED';
+  const stamp = r => Math.max(
+    Date.parse(r && r.updatedAt || '') || 0,
+    Date.parse(r && r.resolvedAt || '') || 0,
+    Date.parse(r && r.createdAt || '') || 0
+  );
+  const map = new Map();
+  for (const r of (Array.isArray(prevVal) ? prevVal : [])) {
+    if (r && typeof r === 'object') map.set(keyOf(r), r);
+  }
+  for (const r of (Array.isArray(inVal) ? inVal : [])) {
+    if (!r || typeof r !== 'object') continue;
+    const key = keyOf(r);
+    const existing = map.get(key);
+    if (!existing || (isResolved(r) && !isResolved(existing)) ||
+        (isResolved(r) === isResolved(existing) && stamp(r) >= stamp(existing))) {
+      map.set(key, r);
+    }
+  }
+  return Array.from(map.values());
+}
 // ===== دمج رسائل المدير/الإشعارات (adminMsgs) =====
 // دمج حسب id مع «إزالة تكرار المصدر»: تحويل/نشاط كان يُنشئ سابقاً نسختين متطابقتين
 // (نفس transferId/partReqId لجهتين مرسلتين) فتبقى بعد دمجها رسالةٌ شقيقة بنفس المحتوى
@@ -1884,6 +1907,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         // قسم الحضور يُدمج بمنطق خاص (last-write-wins حسب studentId|date) لكافة الأدوار
         // حتى يبقى الغياب المسجَّل قائماً ولا يختفي بأي نسخة قديمة من أي دور.
         if (key === 'attendance') { merged[key] = mergeAttendance(a, b); continue; }
+        if (key === 'transfers') { merged[key] = mergeTransfers(a, b); continue; }
         if (key === 'activities') { merged[key] = mergeActivities(a, b); continue; }
         if (key === 'adminMsgs') { merged[key] = mergeAdminMsgs(a, b); continue; }
         if (key === 'classes') { merged[key] = mergeClasses(a, b); continue; }
@@ -1916,6 +1940,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           if (!jsonEqual(prev.data.classes, cf.classes)) cf.classes = mergeClasses(prev.data.classes, cf.classes);
           if (!jsonEqual(prev.data.timetable, cf.timetable)) cf.timetable = mergeTimetable(prev.data.timetable, cf.timetable);
           if (!jsonEqual(prev.data.attendance, cf.attendance)) cf.attendance = mergeAttendance(prev.data.attendance, cf.attendance);
+          if (!jsonEqual(prev.data.transfers, cf.transfers)) cf.transfers = mergeTransfers(prev.data.transfers, cf.transfers);
           // الرسائل/الإعلان/الاقتراحات: تُدمج دائماً حتى مع استبدال المدير الكامل،
           // حتى لا يمسح حفظٌ إداري على جهاز قديم رسائلَ وصلت حديثاً للمعلمين من جهات أخرى.
           if (Array.isArray(prev.data.adminMsgs) && !jsonEqual(prev.data.adminMsgs, cf.adminMsgs)) cf.adminMsgs = mergeAdminMsgs(prev.data.adminMsgs, cf.adminMsgs);
@@ -1987,6 +2012,15 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
 
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
     const clean = JSON.parse(JSON.stringify(data));
+    // Keep legacy star records server-owned so outdated clients cannot modify them.
+    {
+      const serverStars = (prev.data || {}).stars;
+      if ('stars' in data && !jsonEqual(serverStars, data.stars)) {
+        console.warn('[stars] dropped client-supplied stars from', (req.session && req.session.role) || '?');
+      }
+      if (Array.isArray(serverStars)) clean.stars = serverStars;
+      else delete clean.stars;
+    }
     // تطبيع ثانٍ بعد الدمج: الدمج (mergeSection/mergeClasses...) قد يعيد مرجعات يتيمة
     // لمعلمات مكررة من نسخة جهاز قديم، فننظف النتيجة النهائية التي ستُخزن.
     try { await normalizeTeacherDuplicates(school, clean); } catch (e) { console.warn('[normalize#2]', e.message); }

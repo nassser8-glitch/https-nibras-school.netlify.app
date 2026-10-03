@@ -1,5 +1,5 @@
 ﻿/* نبراس — Service Worker للتثبيت والعمل دون اتصال */
-const CACHE_NAME = 'nibras-v62-nostar';
+const CACHE_NAME = 'nibras-v63-star-feature-removed';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -69,4 +69,3 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
-

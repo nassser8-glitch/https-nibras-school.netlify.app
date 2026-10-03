@@ -590,7 +590,7 @@ const ANNOUNCEMENT_KEY = s => 'nibras_announcement_'+s+'_v1';
 const ANNOUNCEMENT_SENDER_KEY = s => 'nibras_announcement_sender_'+s+'_v1';
 function firstNameOf(name){ return String(name || '').trim().split(/\s+/)[0] || ''; }
 const ADMIN_MSGS_KEY = s => 'nibras_adminmsgs_'+s+'_v1';
-const SESS_MIRROR_KEY = 'nibras_secure_session_v1';
+try{ sessionStorage.removeItem('nibras_secure_session_v1'); }catch(e){}
 const AUTH_API = '/api/auth/';
 const SYNC_API = '/api/db/';
 const SETTINGS_API = '/api/settings/';
@@ -735,11 +735,6 @@ async function __loadSupervisionHistory(){
 
 // وضع الخادم = الجلسة الحقيقية وبيانات قاعدة البيانات؛ وضع العرض/المحلي = نسخة المتصفح فقط
 function __serverEnabled(){ return !DEMO_MODE && location.protocol.indexOf('http') === 0; }
-// مرآة غير موثوقة (واجهة فقط) للاحتفاظ بالمستخدم عند إعادة التحميل حتى يرد الخادم
-function __mirrorSet(u){ try{ sessionStorage.setItem(SESS_MIRROR_KEY, JSON.stringify(u)); }catch(e){} }
-function __mirrorGet(){ try{ const j = JSON.parse(sessionStorage.getItem(SESS_MIRROR_KEY) || 'null'); return j || null; }catch(e){ return null; } }
-function __mirrorClear(){ try{ sessionStorage.removeItem(SESS_MIRROR_KEY); }catch(e){} }
-
 async function __api(method, path, body){
   const opt = { method, headers: {} };
   if(body){ opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
@@ -750,7 +745,7 @@ async function __api(method, path, body){
 }
 function __handleAuthError(resp){
   if(resp && resp.status === 401){
-    __sessionUser = null; __mirrorClear();
+    __sessionUser = null;
     if(location.hash !== '#/login') location.hash = '#/login';
   }
 }
@@ -758,7 +753,7 @@ async function __restoreSession(){
   if(!__serverEnabled()) return false;
   try{
     const r = await __api('GET', 'me');
-    if(r.status === 200 && r.j && r.j.user){ __sessionUser = r.j.user; __mirrorSet(r.j.user); return true; }
+    if(r.status === 200 && r.j && r.j.user){ __sessionUser = r.j.user; return true; }
     __handleAuthError(r);
   }catch(e){}
   return false;
@@ -841,19 +836,21 @@ function __syncLogAdd(entry){
     let arr = [];
     try{ arr = JSON.parse(localStorage.getItem(__SYNC_LOG_KEY) || '[]'); }catch(e){ arr = []; }
     if(!Array.isArray(arr)) arr = [];
-    arr.push(Object.assign({ at: new Date().toISOString() }, entry));
+    const safe = { at: new Date().toISOString() };
+    const events = ['note-saved','note-deleted','push-ok','push-fail','push-gave-up','push-resume','pull-replace-fresh','pull-merged','pull-skipped-busy'];
+    if(entry && events.includes(entry.ev)) safe.ev = entry.ev;
+    ['count','notes','att','attempt','attempts','notesLocal','notesServer','notesOut'].forEach(k => {
+      const value = Number(entry && entry[k]);
+      if(Number.isSafeInteger(value) && value >= 0) safe[k] = value;
+    });
+    if(entry && typeof entry.hasPending === 'boolean') safe.hasPending = entry.hasPending;
+    arr.push(safe);
     if(arr.length > 500) arr = arr.slice(-500);
     localStorage.setItem(__SYNC_LOG_KEY, JSON.stringify(arr));
   }catch(e){}
 }
 function __syncLogRead(){
   try{ const raw = localStorage.getItem(__SYNC_LOG_KEY); if(!raw) return []; const a = JSON.parse(raw); return Array.isArray(a) ? a : []; }catch(e){ return []; }
-}
-function eByCurrentUsers(entry){
-  if(!entry || !entry.by) return '';
-  const d = loadDB();
-  const u = (d && Array.isArray(d.users)) ? d.users.find(x => x && x.id === entry.by) : null;
-  return u ? u.name : '';
 }
 // قاعدة التأكيد المزدوج للغياب: الطالب يُحسب غائباً فور تسجيله، مهما سجّله معلم واحد أو اثنان.
 // شارة «⏳ بانتظار معلم ثانٍ» تنبيه إرشادي فقط (من سجّل المعلّمَين مختلفَيْن لا يزال يستفيد
@@ -1067,6 +1064,26 @@ function mergeClassesLocal(lArr, sArr){
     out[i] = merged;
   }
   return out;
+}
+function mergeTransfersByIdNewer(serverTransfers, localTransfers){
+  const m = new Map();
+  const keyOf = x => x && x.id != null ? x.id : '__anon:' + JSON.stringify(x);
+  for(const x of (Array.isArray(serverTransfers) ? serverTransfers : [])){
+    if(x) m.set(keyOf(x), x);
+  }
+  for(const x of (Array.isArray(localTransfers) ? localTransfers : [])){
+    if(!x) continue;
+    const key = keyOf(x);
+    const existing = m.get(key);
+    if(!existing){ m.set(key, x); continue; }
+    const stamp = record => Math.max(
+      Date.parse(record.updatedAt || '') || 0,
+      Date.parse(record.resolvedAt || '') || 0,
+      Date.parse(record.createdAt || '') || 0
+    );
+    if(stamp(x) >= stamp(existing)) m.set(key, x);
+  }
+  return Array.from(m.values());
 }
 async function __syncPush(school){
   if(!__syncEnabled()) return;
@@ -1282,11 +1299,14 @@ async function __syncPush(school){
               }
               return Array.from(m.values());
             };
-            ['students','classes','grades','videos','transfers','escapeAlerts'].forEach(sec => {
+            ['students','classes','grades','videos','escapeAlerts'].forEach(sec => {
               if(!Array.isArray(obj[sec])) return;
               if(__canonEq(obj[sec], sd[sec])) return; // بلا تعديل محلي ⇒ نسخة الخادم تكفي
               sd[sec] = (sec === 'classes') ? mergeClassesLocal(obj[sec], sd[sec]) : locallyOnly(obj[sec], sd[sec]);
             });
+            if(Array.isArray(obj.transfers) && !__canonEq(obj.transfers, sd.transfers)){
+              sd.transfers = mergeTransfersByIdNewer(sd.transfers, obj.transfers);
+            }
             if(Array.isArray(obj.maintenance) && !__canonEq(obj.maintenance, sd.maintenance)){
               sd.maintenance = mergeMaintByIdNewer(sd.maintenance, obj.maintenance);
             }
@@ -1592,12 +1612,15 @@ async function __syncPull(school){
         }
         return out;
       };
-      ['students','classes','grades','videos','transfers','maintenance','escapeAlerts'].forEach(sec => {
+      ['students','classes','grades','videos','maintenance','escapeAlerts'].forEach(sec => {
         if(!Array.isArray(local[sec])) return;
         merged[sec] = (sec === 'classes')
           ? mergeClassesLocal(local[sec], merged[sec])
           : locallyOnlyP(local[sec], merged[sec]);
       });
+      if(Array.isArray(local.transfers)){
+        merged.transfers = mergeTransfersByIdNewer(merged.transfers, local.transfers);
+      }
       // تنقية الفصول على العميل: تمنع عودة الفصول الزائدة (مكررة/بدون مرحلة/بمرحلة وهمية بلا طلاب)
       // التي تحملها النسخة المحلية لكن الخادم كرّسها (deleted). دون هذا يظهر العدد 24 بدل 12.
       // «بلا طلاب ⇒ تُحذف» تخصّ الفصل الشبح المحلي وحده: أي فصل يعرفه الخادم — حتى لو كان
@@ -2275,8 +2298,7 @@ function loadDBFor(school){
 function currentUser(){
   if(__serverEnabled()){
     if(__sessionUser) return __sessionUser;
-    const u = __mirrorGet();
-    return (u && u.active !== false) ? u : null;
+    return null;
   }
   // النسخة المحلية (عرض/ملف مباشر)
   const id = localStorage.getItem(LOCAL_SESSION_KEY);
@@ -2302,7 +2324,6 @@ async function login(login, password){
       const r = await __api('POST', 'login', { login, password });
       if(r.status === 200 && r.j && r.j.user){
         __sessionUser = r.j.user;
-        __mirrorSet(r.j.user);
         setActiveSchool(r.j.user.school);
         return { ok:true };
       }
@@ -2341,7 +2362,6 @@ function logout(){
   if(__serverEnabled()){
     fetch(AUTH_API + 'logout', { method:'POST' }).catch(() => {});
     __sessionUser = null;
-    __mirrorClear();
     localStorage.removeItem(SCHOOL_KEY);
     // الخادم هو مصدر البيانات: لا تُترك نسخة من بيانات المدرسة في المتصفح بعد الخروج
     ['GIRLS'].forEach(s => { try{ localStorage.removeItem(dbKeyFor(s)); }catch(e){} });
@@ -2599,7 +2619,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-01e session';
+const __APP_VER = '2026-10-02a';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -2832,7 +2852,6 @@ async function saveFirstLogin(){
       const r = await __api('POST', 'change-password', body);
       if(r.status === 200 && r.j && r.j.user){
         __sessionUser = r.j.user;
-        __mirrorSet(r.j.user);
         await __refreshSchool(r.j.user.school);
         location.hash = '#/';
         renderApp();
@@ -2924,7 +2943,6 @@ async function saveAccount(){
       const r = await __api('POST', 'update-profile', body);
       if(r.status === 200 && r.j && r.j.user){
         __sessionUser = r.j.user;
-        __mirrorSet(r.j.user);
         renderApp();
         alert('تم حفظ التغييرات بنجاح');
       } else {
@@ -4820,7 +4838,7 @@ function renderDashboard(){
   const tPct = fmtRate(tRateAll);
   const donutHTML = `
     <div class="att-card">
-      ${attGroup('👨‍🎓 حضور الطلاب', present, absent, late, sPct, 'showTodayAttendance()')}
+      ${attGroup('👨‍🎓 حضور الطلاب', present + late, absent, late, sPct, 'showTodayAttendance()', false, true)}
       ${attGroup('👨‍🏫 حضور المعلمين والإداريين', tPresent, absentTeachers.length, lateTeachers.length, tPct, canMgrT ? 'showTeacherAbsenceList()' : 'showTodayAttendance()', true, true)}
       <button class="att-report-btn colA" onclick="showTodayAttendance()"><span>عرض تقرير الحضور</span><span>←</span></button>
       <button class="att-report-btn colB" onclick="showTeacherTodayAttendance()"><span>عرض تقرير الحضور</span><span>←</span></button>
@@ -6724,6 +6742,18 @@ function generateUsername(fullName){
   const clean = (base || 'user').replace(/[^a-z0-9\u0600-\u06FF]/g, '') || 'user';
   return clean + Math.floor(Math.random()*900+100);
 }
+function secureRandomString(length, alphabet){
+  if(!window.crypto || typeof window.crypto.getRandomValues !== 'function' || !alphabet) return null;
+  const max = Math.floor(0x100000000 / alphabet.length) * alphabet.length;
+  const random = new Uint32Array(1);
+  let result = '';
+  while(result.length < length){
+    window.crypto.getRandomValues(random);
+    if(random[0] >= max) continue;
+    result += alphabet[random[0] % alphabet.length];
+  }
+  return result;
+}
 async function setStudentCreds(studentId, studentName){
   const box = document.getElementById('studentCredsModal');
   if(!box) return;
@@ -6880,7 +6910,9 @@ function importTeachers(evt){
         if(!name){ skipped++; errors.push('سطر بدون اسم'); continue; }
         let email = String(row['البريد الإلكتروني'] ?? '').trim();
         if(!email) email = name.replace(/\s+/g,'.').toLowerCase() + '@school.local';
-        const genPw = 'IniT@' + Math.random().toString(36).slice(2,8) + 'Z';
+        const randomPart = secureRandomString(6, '0123456789abcdefghijklmnopqrstuvwxyz');
+        if(!randomPart){ skipped++; errors.push('تعذر إنشاء كلمة مرور آمنة لهذا الحساب على هذا الجهاز'); continue; }
+        const genPw = 'IniT@' + randomPart + 'Z';
         const prefUser = String(row['اسم المستخدم'] ?? row['اسم المستخدم (اختياري)'] ?? '').trim();
         const r = await __api('POST', 'admin/create-user', { name, email, role:'TEACHER', password: genPw, username: prefUser });
         if(r.status === 200 && r.j && r.j.ok){ created++; const uname = (r.j.user && r.j.user.username) || ''; temps.push(`${name} | دخول: ${uname} | ${genPw}`); }
@@ -7933,6 +7965,7 @@ function saveTransferSolution(id){
   t.resolvedBy = me?.id;
   t.resolvedByName = me?.name;
   t.resolvedAt = new Date().toISOString();
+  t.updatedAt = t.resolvedAt;
   saveDB(d);
   closeDetails();
   renderApp();
@@ -8459,7 +8492,15 @@ async function resetTeacherSecret(id){
   const d = loadDB();
   const t = d.users.find(x => x.id === id);
   if(!t) return;
-  const ns = String(Math.floor(100000000 + Math.random()*900000000));
+  if(!window.crypto || typeof window.crypto.getRandomValues !== 'function'){
+    window.__teacherMsg = 'تعذر إنشاء كلمة مرور آمنة على هذا الجهاز.';
+    renderApp();
+    return;
+  }
+  const max = Math.floor(0x100000000 / 900000000) * 900000000;
+  const random = new Uint32Array(1);
+  do { window.crypto.getRandomValues(random); } while(random[0] >= max);
+  const ns = String(100000000 + (random[0] % 900000000));
   t.password = ns;
   t.firstLogin = true;
   saveDB(d);
@@ -8612,15 +8653,17 @@ function teacherStats(u){
   const yearEnd = month >= 8 ? new Date(year+1, 5, 30) : new Date(year, 5, 30);
   const startKey = localDateKey(yearStart);
   const todayKey = localDateKey(now);
-  const absDates = (u.absences || []).filter(x => x >= startKey && x <= todayKey);
+  // بيانات الجلسة للمصادقة لا تتضمن حقول الحضور؛ مصدرها سجل المستخدم في بيانات المدرسة.
+  const storedUser = (loadDB().users || []).find(x => x.id === u.id) || u;
+  const absDates = (storedUser.absences || []).filter(x => x >= startKey && x <= todayKey);
   const absent = absDates.length;
   const lateDaysSet = new Set(); let lateMin = 0, firstLoginToday = null;
   // أيام التأخر المسجلة يدويًا من المدير/الوكيل
-  (u.markedLate || []).forEach(x => {
+  (storedUser.markedLate || []).forEach(x => {
     if(x >= startKey && x <= todayKey) lateDaysSet.add(x);
   });
   // دقائق التأخر المدخلة يدويًا من شاشة الحضور
-  Object.entries(u.lateMinutes || {}).forEach(([date, mins]) => {
+  Object.entries(storedUser.lateMinutes || {}).forEach(([date, mins]) => {
     if(date >= startKey && date <= todayKey){ lateDaysSet.add(date); if(mins) lateMin += Number(mins); }
   });
   // أول دخول اليوم
@@ -10865,9 +10908,8 @@ function computeReportRows(){
       'pull-merged': '🔀 سحب دمج مع الخادم',
     };
     rows = __syncLogRead().slice().reverse().slice(0, 300).map(e => {
-      const teacherName = (eByCurrentUsers(e)) || '';
       const notePayload = e.ev === 'note-saved'
-        ? ('عدد النقاط: ' + (e.count || 0) + (e.cat ? ' — ' + e.cat : '') + (e.type ? ' (' + (e.type === 'NEGATIVE' ? 'سلبية' : 'إيجابية') + ')' : ''))
+        ? ('عدد النقاط: ' + (e.count || 0))
         : (e.ev === 'push-ok' || e.ev === 'push-fail')
           ? ('ملاحظات: ' + (e.notes ?? '?') + ' | حضور: ' + (e.att ?? '?'))
           : (e.ev === 'pull-merged')
@@ -10877,8 +10919,6 @@ function computeReportRows(){
         'الوقت': fmtTime(e.at),
         'الحدث': evLabel[e.ev] || e.ev,
         'التفاصيل': notePayload,
-        'المدرسة': e.school || '',
-        'بواسطة': (e.byName || teacherName || '—'),
         '__at': e.at,
       };
     }).sort((a,b) => String(b['__at']).localeCompare(String(a['__at'])))
@@ -11318,7 +11358,7 @@ async function saveMyPassword(){
     if(__serverEnabled()){
       const r = await __api('POST', 'change-password', { newPassword: s1 });
       if(r.status === 200 && r.j && r.j.ok){
-        if(r.j.user){ __sessionUser = r.j.user; __mirrorSet(r.j.user); }
+        if(r.j.user){ __sessionUser = r.j.user; }
         if(document.getElementById('passNew')) document.getElementById('passNew').value = '';
         if(document.getElementById('passConfirm')) document.getElementById('passConfirm').value = '';
         if(okEl){ okEl.style.display = 'block'; okEl.textContent = '✅ تم تغيير الرقم السري بنجاح — ستدخل به من الآن.'; }
@@ -11567,4 +11607,3 @@ setTimeout(function(){ maybeShowInstallHint(false); }, 1200);
 </script>
 </body>
 </html>
-
