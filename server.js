@@ -1192,6 +1192,53 @@ function mergeSection(prevVal, inVal) {
   // لا دمج ممكن: الأحدث (الواصل) يرجح إن كان من نوع الكائن/أو يرجح الموجودة
   return inVal !== undefined ? inVal : prevVal;
 }
+// ===== دمج التحويلات: الحذف لاصق والحلّ لا يُمحى =====
+// mergeSection عامّ: الواصل يكسب، وهو كافٍ للأقسام التي لا تحمل تاريخاً. أما
+// التحويل ففيه مساران لا يجوز أن يمحوهما جهاز قديم:
+//   1) شاهد الحذف (deleted) — mergeSection يغطيه فعلاً (tomb لاصق).
+//   2) الحلّ (solution + status=RESOLVED) — لا يغطيه mergeSection: نسخة جهاز
+//      قدية بلا حل كانت تكتب فوق المحلول فتفقد اجتهاد من عالج الطلب، ويُظهر
+//      التحويل «قيد المتابعة» من جديد. الحلّ يُنقل إن كان في الخادم وغاب عن
+    // حلّان على جهازين: الأحدث (resolvedAt) يكسب أيّهما كان على الخادم.
+//      دائماً فلا يُحيي حلٌّ محليٌّ تحويلاً محذوفاً.
+function mergeTransfers(prev, incoming) {
+  if (!Array.isArray(prev)) prev = [];
+  if (!Array.isArray(incoming)) incoming = [];
+  const base = mergeSection(prev, incoming);
+  const prevById = new Map();
+  for (const t of prev) if (t && t.id != null) prevById.set(String(t.id), t);
+  const incById = new Map();
+  for (const t of incoming) if (t && t.id != null) incById.set(String(t.id), t);
+  const solveStamp = (x) => {
+    if (!x) return 0;
+    const ts = [x.resolvedAt, x.updatedAt, x.createdAt]
+      .map((v) => Date.parse(v || '')).filter(Number.isFinite);
+    return ts.length ? Math.max.apply(null, ts) : 0;
+  };
+  return base.map((t) => {
+    if (!t || t.id == null || t.deleted === true) return t;
+    const id = String(t.id);
+    const p = prevById.get(id), inc = incById.get(id);
+    // الحل في الخادم والوارد بلا حل ⇒ نحفظ الحل ولا ننتظر الدفعة التالية.
+    if (p && p.solution && !(inc && inc.solution)) {
+      return Object.assign({}, t, {
+        solution: p.solution, status: p.status || 'RESOLVED',
+        resolvedBy: p.resolvedBy, resolvedByName: p.resolvedByName,
+        resolvedAt: p.resolvedAt,
+      });
+    }
+    // حلّان على جهازين: الأحدث (resolvedAt) يكسب أيّهما كان على الخادم.
+    if (p && p.solution && inc && inc.solution) {
+      const newer = solveStamp(inc) > solveStamp(p) ? inc : p;
+      return Object.assign({}, t, {
+        solution: newer.solution, status: newer.status || 'RESOLVED',
+        resolvedBy: newer.resolvedBy, resolvedByName: newer.resolvedByName,
+        resolvedAt: newer.resolvedAt,
+      });
+    }
+    return t;
+  });
+}
 // ===== دمج رسائل المدير/الإشعارات (adminMsgs) =====
 // دمج حسب id مع «إزالة تكرار المصدر»: تحويل/نشاط كان يُنشئ سابقاً نسختين متطابقتين
 // (نفس transferId/partReqId لجهتين مرسلتين) فتبقى بعد دمجها رسالةٌ شقيقة بنفس المحتوى
@@ -1901,6 +1948,9 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         if (key === 'activities') { merged[key] = mergeActivities(a, b); continue; }
         if (key === 'adminMsgs') { merged[key] = mergeAdminMsgs(a, b); continue; }
         if (key === 'classes') { merged[key] = mergeClasses(a, b); continue; }
+        // التحويلات: شاهد الحذف لاصق والحل لا يُمحى (mergeTransfers)،
+        // بخلاف mergeSection العام الذي يترك الواصل يكفي فتفقد الحلول.
+        if (key === 'transfers') { merged[key] = mergeTransfers(a, b); continue; }
         if (canEditU) { merged[key] = mergeSection(a, b); continue; }
         // غير المدير: يكتب الأقسام المصرَّح بها فقط، والباقي يبقى نسخة الخادم سليمة
         if (SECTION_RULES[key] && SECTION_RULES[key].includes(role)) merged[key] = mergeSection(a, b);
@@ -1938,6 +1988,13 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           // نقاط المعلمات (notes): تُدمج دائماً حتى مع استبدال المدير الكامل، حتى لا يمسح
           // حفظٌ إداري على جهازٍ قديم ملاحظاتِ معلمات أُضيفت حديثاً من جهات أخرى.
           if (Array.isArray(prev.data.notes) && !jsonEqual(prev.data.notes, cf.notes)) cf.notes = mergeSection(prev.data.notes, cf.notes);
+          // التحويلات: تُدمج دائماً كما يُدمج كل قسم آخر. كان الاستبدال الكامل للمدير
+          // يمسحها بلا دمج، فدفعة من جهاز قديم (أو من متصفح نُسخت بياناته قبل الحذف)
+          // تُعيد تحويلاً محذوفاً أو محلولاً: الشاهد يُ والحل يختفي — وتظهر
+          // العلة للمدير بعد الخروج وإعادة الدخول لأن logout يمسح ذاكرة الجهاز.
+          if (Array.isArray(prev.data.transfers) && !jsonEqual(prev.data.transfers, cf.transfers)) {
+            cf.transfers = mergeTransfers(prev.data.transfers, cf.transfers);
+          }
           if (Array.isArray(prev.data.users) && !jsonEqual(prev.data.users, cf.users)) cf.users = mergeUsersAttendanceNewer(prevUsers, cf.users);
           data = cf;
         }
@@ -2698,7 +2755,7 @@ app.listen(PORT, async () => {
   if (!dbOk) {
     // وضع التدهور: نبقى شغالين لخدمة الواجهة والملفات الثابتة، ونعيد محاولة
     // الاتصال بالقاعدة في الخلفية حتى تتعافى (أو يُرفع حدّ نقل البيانات في القاعدة).
-    console.warn('⚠️ القاعدة غير متاحة الآن — الخادم يخدم الواجهة فقط ويعيد المحاولة دوريًا.');
+    console.warn('⚠ القاعدة غير متاحة الآن — الخادم يخدم الواجهة فقط ويعيد المحاولة دوريًا.');
     const tryConn = async () => {
       try {
         await db.initSchema();
