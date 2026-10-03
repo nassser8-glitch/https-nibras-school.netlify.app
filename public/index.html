@@ -3856,6 +3856,10 @@ function dismissAdminMsg(id){
     m.lastViewByName = u.name || '';
     m.lastViewBy = u.id;
     m.read = true;
+    // dismissed هو الحقل الذي تحترمه كل الفروع (المدير والمعلم…) عند العرض،
+    // فنضبطه هنا أيضاً: الاكتفاء بـ clearedBy كان سبب بقاء الإشعار على شاشة
+    // المدير، وقد يضيع إن سحبت نسخة من الخادم لا تحمله.
+    m.dismissed = true;
     m.updatedAt = stamp;
   });
   saveAdminMsgsFor(school, arr);
@@ -4043,8 +4047,12 @@ function renderAdminMsgAlerts(){
       return Array.from(seen.values());
     };
     if(isAdmin){
+      // المدير: «تم الاطلاع» يُخفي الإشعار عنه أيضاً — كان هذا الفرع يكتفي بـ
+      // !m.dismissed فلا يحترم clearedBy، فيبقى الإشعار على الشاشة إلى الأبد.
       return dedup(['GIRLS'].map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s })))
-        .flat().filter(m => m.senderRole === 'TRANSFER' && !m.dismissed && adminSeesTransferMsg(m))
+        .flat().filter(m => m.senderRole === 'TRANSFER' && !m.dismissed
+          && !(m.clearedBy && user.id && (user.id in m.clearedBy))
+          && adminSeesTransferMsg(m))
         .sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))));
     }
     let arr = dedup(adminMsgsFor(user.id).filter(m => !m.dismissed));
@@ -4097,7 +4105,10 @@ function renderAdminMsgAlerts(){
       const colText = fromEscape ? '#7f1d1d' : (fromTransfer ? '#4c1d95' : (fromActivity ? '#134e4a' : (fromCounselor ? '#14532d' : (fromAgent ? '#9a3412' : '#7f1d1d'))));
       const bg = fromEscape ? 'linear-gradient(135deg,#fef2f2,#fecaca)' : (fromTransfer ? 'linear-gradient(135deg,#f5f3ff,#ede9fe)' : (fromActivity ? 'linear-gradient(135deg,#f0fdfa,#ccfbf1)' : (fromCounselor ? 'linear-gradient(135deg,#f0fdf4,#dcfce7)' : (fromAgent ? 'linear-gradient(135deg,#fff7ed,#ffedd5)' : 'linear-gradient(135deg,#fef2f2,#fee2e2)'))));
       const senderLabel = fromEscape ? '🔔 تنبيه هروب من الحصة' : (fromTransfer ? '📨 إشعار تحويل' : (fromActivity ? '🎨 طلب مشاركة في نشاط' : (fromCounselor ? ('💬 رسالة من ' + tl(targetLabels.COUNSELOR)) : (fromAgent ? ('🚨 رسالة من ' + tl(targetLabels.AGENT)) : '🚨 رسالة مهمة من المدير'))));
-      const badgeLabel = fromEscape ? 'عاجل' : (fromTransfer ? (m._school ? 'تحويل بنات' : 'تحويل') : (fromActivity ? 'نشاط' : (fromCounselor ? tl(targetLabels.COUNSELOR) : (fromAgent ? tl(targetLabels.AGENT) : 'مهمة'))));
+      // الشارة تذكر نوع الإشعار فقط. كان نص «إشعار تحويل» متبوعاً بشارة
+      // «تحويل بنات» فيظهر مكرّراً، والبادئة الآن تشير إلى أن الإشعار محفوظ
+      // على الخادم فيصل لكل الأجهزة.
+      const badgeLabel = fromEscape ? 'عاجل' : (fromTransfer ? (m._school ? 'مشترك' : 'تحويل') : (fromActivity ? 'نشاط' : (fromCounselor ? tl(targetLabels.COUNSELOR) : (fromAgent ? tl(targetLabels.AGENT) : 'مهمة'))));
       if(!m.revealed && m.senderRole !== 'ACTIVITY' && !(user.role === 'ADMIN' && m.senderRole === 'TRANSFER')){
         return `
         <div style="flex:${flexW(m)} 1 0;min-width:200px;background:${bg};border:2px solid ${col};border-radius:12px;padding:10px 12px;box-shadow:0 2px 10px rgba(220,38,38,.2);animation:msgPulse 1.5s infinite;display:flex;flex-direction:column">
@@ -7867,14 +7878,14 @@ function notifyTransferReceivers(d, tr){
 /* هل يرى المدير إشعار التحويل؟ — يرى فقط ما وُجّه إليه فعليًا (إلى: المدير) أو تحويلًا أنشأه بنفسه */
 function adminSeesTransferMsg(m){
   const me = currentUser();
+  if(!me) return false;
   if(m.senderRole !== 'TRANSFER') return true;
-  const school = m._school || getActiveSchool();
-  try {
-    const d = loadSchoolDB(school);
-    const t = d.transfers.find(x => x.id === m.transferId);
-    if(!t) return false;
-    return t.target === 'ADMIN' || t.createdBy === me?.id;
-  } catch(e){ return false; }
+  // الإشراف (المدير/الوكيل/الموجهة) يرى كل إشعارات التحويل — القاعدة نفسها
+  // التي اعتمدها transfers-privacy.js. كان الشرط القديم يقصرها على
+  // «المستهدفة أو من أنشأتها»، فكانت إشعارات التحويل إلى الوكيل/الموجهة
+  // مخفية عن المدير، كما كان اختفاء التحويل من قاعدة البيانات يُخفي الإشعار
+  // كله. الإشعار سجلٌّ يبقى معروضاً ويُغلق بزر «تم الاطلاع».
+  return me.role === 'ADMIN' || me.role === 'AGENT' || me.role === 'COUNSELOR';
 }
 /* من يرى التحويل؟ — الإشراف (المدير/الوكيل/الموجهة) يرى كل التحويلات،
    والمعلمة ترى ما أرسلته هي فقط.
