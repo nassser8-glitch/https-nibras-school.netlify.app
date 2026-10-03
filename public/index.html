@@ -801,6 +801,39 @@ function __canon(v){
   return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + __canon(v[k])).join(',') + '}';
 }
 function __canonEq(a, b){ return __canon(a) === __canon(b); }
+/* ===== دمج المحوَّلات عند السحب: الحذف لاصق، لاiszقط مع السحب =====
+   كان السحب يمرّ على `locallyOnly` للقسم كله: يُلحق المحلي فقط ما لا id له في
+   الخادم. فشاهد الحذف (deleted:true) — وهو id موجود في الخادم بحيّ —
+   كان يُسقَط من ذاكرة الجهاز قبل أن يُرفع؛ وعند التحديث تُعاد النسخة الحيّة
+   من الخادم: «تحذفت التحويلات ثم عادت». ندمج المحوَّلات بالقاعدة نفسها التي
+   يطبّقها الخادم في mergeSection: الحذف لاصق، وما عداه الخادم يكسب. */
+function __mergeTransfersPull(lArr, sArr){
+  const srv = Array.isArray(sArr) ? sArr : (Array.isArray(lArr) ? lArr : []);
+  if(!Array.isArray(lArr)) return Array.isArray(sArr) ? srv : [];
+  const out = srv.slice();
+  const idx = new Map();      // id => موقعه في out
+  const tomb = new Set();     // معرّفات محذوفة نهائياً (لاصقة)
+  out.forEach((x, i) => {
+    if(!x) return;
+    const k = (x.id != null) ? x.id : '__anon:' + JSON.stringify(x);
+    idx.set(k, i);
+    if(x.deleted) tomb.add(k);
+  });
+  for(const x of lArr){
+    if(!x) continue;
+    const k = (x.id != null) ? x.id : '__anon:' + JSON.stringify(x);
+    const copy = JSON.parse(JSON.stringify(x));
+    if(x.deleted){             // شاهد حذف محلي: يعلو على النسخة الحيّة في الخادم
+      const i = idx.get(k);
+      if(i != null) out[i] = copy; else { out.push(copy); idx.set(k, out.length - 1); }
+      tomb.add(k);
+      continue;
+    }
+    if(tomb.has(k)) continue;  // مدفون في الخادم: لا يُحيا من نسخة محلية
+    if(!idx.has(k)){ out.push(copy); idx.set(k, out.length - 1); }
+  }
+  return out;
+}
 /* نفس المقارنة لكن متجاهلةً _ts: الطابع وحده يتغيّر مع كل نداء حفظ، فلو قُورن
    لتغيّر النص دائماً وظهر «تعديل» وهي لا تعديل. */
 function __canonNoTs(d){ const c = Object.assign({}, d || {}); delete c._ts; return __canon(c); }
@@ -1285,7 +1318,9 @@ async function __syncPush(school){
             ['students','classes','grades','videos','transfers','escapeAlerts'].forEach(sec => {
               if(!Array.isArray(obj[sec])) return;
               if(__canonEq(obj[sec], sd[sec])) return; // بلا تعديل محلي ⇒ نسخة الخادم تكفي
-              sd[sec] = (sec === 'classes') ? mergeClassesLocal(obj[sec], sd[sec]) : locallyOnly(obj[sec], sd[sec]);
+              sd[sec] = (sec === 'classes') ? mergeClassesLocal(obj[sec], sd[sec])
+                      : (sec === 'transfers') ? __mergeTransfersPull(obj[sec], sd[sec])
+                      : locallyOnly(obj[sec], sd[sec]);
             });
             if(Array.isArray(obj.maintenance) && !__canonEq(obj.maintenance, sd.maintenance)){
               sd.maintenance = mergeMaintByIdNewer(sd.maintenance, obj.maintenance);
@@ -1596,6 +1631,8 @@ async function __syncPull(school){
         if(!Array.isArray(local[sec])) return;
         merged[sec] = (sec === 'classes')
           ? mergeClassesLocal(local[sec], merged[sec])
+          : (sec === 'transfers')
+          ? __mergeTransfersPull(local[sec], merged[sec])
           : locallyOnlyP(local[sec], merged[sec]);
       });
       // تنقية الفصول على العميل: تمنع عودة الفصول الزائدة (مكررة/بدون مرحلة/بمرحلة وهمية بلا طلاب)
