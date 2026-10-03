@@ -2327,6 +2327,13 @@ function saveDB(d){
     const cur = JSON.parse(localStorage.getItem(k) || 'null');
     if(cur && __canonNoTs(cur) === __canonNoTs(d)) return;
   }catch(e){}
+  // ختم زمني عند كل تغيير حقيقي: به تميّز __syncPush النسخةَ المعدَّلة عن آخر نسخة
+  // ختم زمني عند كل تغيير حقيقي: به تميّز __syncPush النسخة المعدّلة عن آخر نسخة رُفعت
+  // بنجاح (المقارنة مع st.lastOkTs). كان الحذف لا يغيّر _ts، فيتخطّى __syncPush
+  // الدفعةَ كلها بحجة أنها لم تتغيّر: يبقى الشاهد محلياً (فيبدو الحذف ناجحاً،
+  // والحديث يحفظه لأن الدمج يحمل القبر) لكن الخادم لم يستقبله قط، فيعود
+  // التحويل كاملاً عند الخروج وإعادة الدخول لأن logout يمسح ذاكرة المدرسة فيُنزَّل الخادم.
+  d._ts = Date.now();
   localStorage.setItem(k, JSON.stringify(d));
 }
 function dbKeyFor(school){ return 'nibras_GIRLS_db_v1'; } // نظام قسم واحد: GIRLS
