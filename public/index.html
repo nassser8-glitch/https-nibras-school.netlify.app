@@ -7869,12 +7869,27 @@ function deleteTransfer(id){
   if(!t){ alert('هذا التحويل غير موجود (ربما حُذف من جهاز آخر).'); return; }
   if(t.deleted){ alert('هذا التحويل محذوف بالفعل.'); return; }
   const names = studentIdsOf(t).map(sid => (d.students || []).find(s => s && s.id === sid)).filter(Boolean).map(s => s.fullName).join('، ');
-  if(!confirm('حذف التحويل' + (names ? ' للطالبات: ' + names : '') + '؟\n\nسيختفي من كل الأجهزة ولن يعود بعد التحديث. سجل التحويل يبقى محفوظاً على الخادم.')) return;
+  if(!confirm('حذف التحويل' + (names ? ' للطالبات: ' + names : '') + '؟\n\nسيختفي من كل الأجهزة ولن يعود بعد التحديث. سجل التحويل يبقى محفوظاً على الخادم.' + (t.deductedPoints ? '\n\nوستعود النقاط التي خُصمت تلقائياً مع هذا التحويل.' : ''))) return;
   t.deleted = true;
   t.deletedAt = new Date().toISOString();
   t.deletedBy = me.id;
+  // الخصم التلقائي للنقاط ليس في السجل نفسه بل ملاحظات سالبة مرتبطة بمعرّف
+  // التحويل (addTransfer يولّد note لكل طالبة مع transferId). حذف التحويل وحده
+  // كان يُخفي الطلب ويبقى الخصم في الرصيد؛ فندفن ملاحظات هذا التحويل لتعود
+  // النقاط. نقتصر على type NEGATIVE حتى لا تُمس ملاحظة كتبتها المعلمة يدوياً.
+  let restored = 0;
+  (d.notes || []).forEach(n => {
+    if(!n || n.deleted) return;
+    if(n.type !== 'NEGATIVE' || String(n.transferId || '') !== String(id)) return;
+    n.deleted = true;
+    n.deletedAt = new Date().toISOString();
+    n.deletedBy = me.id;
+    n.deletedWithTransfer = String(id);
+    restored++;
+  });
   saveDB(d);
-  __syncLogAdd({ ev:'transfer-deleted', school:getActiveSchool(), id, by:me.id, byName:me.name || '?' });
+  __syncLogAdd({ ev:'transfer-deleted', school:getActiveSchool(), id, by:me.id, byName:me.name || '?', notesRestored:restored });
+  try{ if(restored > 0 && typeof __pointsTotals === 'function'){ const pt = __pointsTotals(); if(pt) pt.stale = true; } }catch(e){}
   try{ if(typeof __syncSchedule === 'function') __syncSchedule(getActiveSchool(), 0); }catch(e){}
   renderApp();
 }

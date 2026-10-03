@@ -100,9 +100,11 @@ test('الواجهة: الزر للمدير فقط ودالة الحذف موج�
   assert.ok(fn !== -1, 'deleteTransfer غير موجودة');
   const roleCheck = CLIENT.slice(fn, fn + 260);
   assert.ok(roleCheck.includes("me.role !== 'ADMIN'"), 'deleteTransfer لا تتحقق من الدور');
-  const tomb = CLIENT.slice(fn, fn + 1400);
+  const end = CLIENT.indexOf('\nfunction ', fn + 10);
+  const tomb = CLIENT.slice(fn, end === -1 ? fn + 3000 : end);
   assert.ok(tomb.includes('t.deleted = true'), 'الحذف يجب أن يكون ناعماً بشاهد');
   assert.ok(tomb.includes('__syncSchedule'), 'الحذف يجب أن يُرفع للمزامنة');
+  assert.ok(tomb.includes('n.transferId'), 'الحذف يجب أن يدفن ملاحظات الخصم المرتبطة');
 });
 
 test('الواجهة: المحذوف لا يظهر في القائمة', () => {
