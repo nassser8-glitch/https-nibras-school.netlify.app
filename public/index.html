@@ -1359,6 +1359,7 @@ async function __syncPush(school){
     const stillEmpty = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
     if(stillEmpty) return;
     let attempt = 0;
+    let lastErr = '';
     const respOf = await (async () => {
       for(; attempt < 3; attempt++){
         let resp = null;
@@ -1368,8 +1369,13 @@ async function __syncPush(school){
             headers:{ 'Content-Type':'application/json' },
             body: JSON.stringify({ ts: __syncTS(obj) || Date.now(), baseTs: __pushBaseTs, data: obj })
           });
-        }catch(e){ resp = null; }
+        }catch(e){ resp = null; lastErr = 'network:' + ((e && e.message) || e); }
         if(!resp){ await new Promise(res => setTimeout(res, 1000 * (attempt + 1))); continue; }
+        // سبب الرفض: نقرأ رسالة الخادم فتُعرف في السجل وفي التنبيه سبب رفض الدفعة.
+        if(resp.status !== 200 && resp.status !== 401 && resp.status !== 403 && resp.status !== 429){
+          try{ lastErr = resp.status + ':' + (await resp.text()).slice(0, 160); }
+          catch(e){ lastErr = String(resp.status); }
+        }
         if(resp.status === 401){ __handleAuthError(resp); return null; }
         if(resp.status === 403){
           // الحساب ينتظر تغيير كلمة مروره (firstLogin) — الرفع محجوب مؤقتاً.
@@ -1405,10 +1411,10 @@ async function __syncPush(school){
     st.attempts++;
     st.lastFail = Date.now();
     try{ localStorage.setItem(pendKey, JSON.stringify(obj)); }catch(e){}
-    __syncLogAdd({ ev:'push-fail', school, notes:(obj && Array.isArray(obj.notes))?obj.notes.length:0, ts:__syncTS(obj), attempt });
+    __syncLogAdd({ ev:'push-fail', school, notes:(obj && Array.isArray(obj.notes))?obj.notes.length:0, ts:__syncTS(obj), attempt, err:lastErr });
     if(st.attempts < __PUSH_MAX_ATTEMPTS){
       __syncTimers[school] = setTimeout(() => __syncPush(school), 15000);
-      __uiToast('⚠️ تعذّر رفع حفظك للخادم الآن — سأعيد المحاولة تلقائياً ولا تختفي بياناتك.', true);
+      __uiToast('⚠️ تعذّر رفع حفظك للخادم الآن' + (lastErr ? ' (' + lastErr + ')' : '') + ' — سأعيد المحاولة تلقائياً ولا تختفي بياناتك.', true);
     } else {
       // استُنفد السقف: نتوقف عن الطلبات لكن النسخة المعلّقة باقية في التخزين، وبلَغ
       // المستخدم صراحةً حتى لا يظن أن حفظه ضاع. الاستئناف عند عودة الشبكة أو أي
