@@ -2103,12 +2103,16 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       for (const nu of (clean.users || [])) {
         const uname = String((nu && nu.username) || '').trim().toLowerCase();
         if (!uname) continue;
+        // حساب قديم اسمُه مخالف للشكل (قصير جداً أو برموز ممنوعة) كان يُرفض
+        // هنا فيسقط كل حفظ للمدرسة إلى الأبد: لا حذف تحويل ولا حفظ ولا مزامنة،
+        // مع أن الحساب لم يُمس. فنمرّر الاسم المخالف كما هو إن لم يكن مُعدَّلاً،
+        // ونفرض الشكل على الاسم المُعدَّل جديداً فقط، فيصحّح المستخدم حسابه بنفسه.
+        if (prevMapU.get(nu.id) === uname) { seenLocal.add(uname); continue; }
         if (!/^[a-z0-9._-]{3,32}$/.test(uname))
           return res.status(400).json({ error: 'username_invalid', username: uname });
         if (seenLocal.has(uname))
           return res.status(409).json({ error: 'username_taken', username: uname });
         seenLocal.add(uname);
-        if (prevMapU.get(nu.id) === uname) continue;
         if (!['ADMIN', 'AGENT'].includes(req.session.role))
           return res.status(403).json({ error: 'username_change_forbidden', username: uname });
         const holder = await db.userByUsername(uname);
