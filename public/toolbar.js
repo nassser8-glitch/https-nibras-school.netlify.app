@@ -439,12 +439,18 @@
   }
   function paint() {
     if (!root) return;
-    if (!open) { root.className = 'tb-root'; root.innerHTML = '<button class="tb-fab" id="tbFab">☰</button>'; return; }
+    if (!open) {
+      root.className = 'tb-root';
+      root.innerHTML = '<button class="tb-fab" id="tbFab" aria-label="tools">☰</button>';
+      window.__tbState = 'painted';
+      return;
+    }
     root.className = 'tb-root tb-open';
     root.innerHTML = panelHTML();
     var b = document.getElementById('tbBody');
     var cur = TABS.filter(function (t) { return t.id === tab; })[0] || TABS[0];
     cur.run(b);
+    window.__tbState = 'painted';
   }
   function setTab(id) { tab = id; lsSet('tab', id); paint(); }
 
@@ -491,14 +497,28 @@
     if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); return; }
     init();
   }
+  /* زر إنقاذ: إن فشل أي جزء أظهرناه بدل الصمت. صمتٌ بلا سبب هو ماضيّع
+   * وقتاً طويلاً في تشخيص هذه الأداة، فكل خطأ يظهر الآن في اللوحة. */
+  function fail(msg) {
+    try {
+      var d = document.createElement('div');
+      d.id = 'nibrasToolbar';
+      d.style.cssText = 'position:fixed;inset:auto 12px 12px auto;z-index:2147483000;' +
+        'background:#b3261e;color:#fff;font:13px/1.5 sans-serif;padding:10px 12px;' +
+        'border-radius:10px;max-width:280px;direction:ltr;text-align:left';
+      d.textContent = 'Toolbar: ' + msg;
+      document.body.appendChild(d);
+    } catch (e) {}
+  }
   function init() {
+    if (!document.body) { fail('document.body missing'); return; }
     root = document.createElement('div');
     root.id = 'nibrasToolbar';
     document.body.appendChild(root);
     root.addEventListener('click', onClick);
     root.addEventListener('input', onInput);
     document.addEventListener('keydown', onKey);
-    paint();
+    try { paint(); } catch (e) { fail('paint: ' + ((e && e.message) || e)); return; }
 
     /* موقع المستخدم إن سمح، وإلا عمّان. لا نرفض الإذن ولا نطلبه مرتين. */
     if (!lsGet('geo', false) && navigator.geolocation) {
@@ -524,7 +544,12 @@
     lsGet: lsGet, lsSet: lsSet, setLang: setLang, getLang: L
   };
   window.__tbStrings = LANGS;
+  /* عَلَم التشخيص: يميّز «السكربت لم يُحمَّل» عن «حمِل وفشل» عن «اشتغل». */
+  window.__tbState = 'loaded';
   window.__tbFmtZone = fmtZone;
   window.__tbBoot = boot;
-  if (document.readyState !== 'loading') boot(); else document.addEventListener('DOMContentLoaded', boot);
+  try {
+    if (document.readyState !== 'loading') boot();
+    else document.addEventListener('DOMContentLoaded', boot);
+  } catch (e) { fail('boot: ' + ((e && e.message) || e)); }
 })();

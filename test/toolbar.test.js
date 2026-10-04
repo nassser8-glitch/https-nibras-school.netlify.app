@@ -24,11 +24,23 @@ function makeEl(id) {
     appendChild(c) { this.children.push(c); c.parentNode = this; return c; },
     querySelector(sel) { return findBySel(this, sel); },
     querySelectorAll() { return []; },
-    addEventListener() {}, removeEventListener() {},
+    _l: {},
+    addEventListener(t, fn) { (this._l[t] = this._l[t] || []).push(fn); },
+    removeEventListener() {},
     setAttributeNS() {}
   };
   return el;
 }
+/* يشغّل مستمعاً كما يفعل المتصفح، فيختبر مسار الضغط الحقيقي لا الحالة
+ * الداخلية للأداة. */
+function fire(el, type, ev) {
+  const e = ev || {};
+  e.target = e.target || el;
+  e.preventDefault = e.preventDefault || function () {};
+  for (const fn of (el._l[type] || [])) fn(e);
+}
+/* عقد DOM مبنية من نصوص innerHTML: هذه الدالة تتنقل في الأشجار المبنية
+ * برمجياً، وتحتاج أن تجد أيضاً معرفات مذكورة داخل نص HTML. */
 function findBySel(root, sel) {
   const m = /^#([\w-]+)$/.exec(sel);
   if (!m) return null;
@@ -36,6 +48,13 @@ function findBySel(root, sel) {
   while (stack.length) {
     const n = stack.shift();
     if (n.id === m[1]) return n;
+    /* عنصر أُنشئ ضمن innerHTML: نعطيه كائناً يحمل نصه للاستخدام */
+    const h = typeof n.innerHTML === 'string' ? n.innerHTML : '';
+    if (h.indexOf('id="' + m[1] + '"') > -1) {
+      const el = makeEl(m[1]);
+      el.innerHTML = h;
+      return el;
+    }
     for (const c of n.children) stack.push(c);
   }
   return null;
@@ -323,6 +342,60 @@ test('files: toolbar is wired into index.html and sw.js', () => {
   const n = /nibras-v(\d+)/.exec(sw);
   assert.ok(m && n, 'both versioned');
   assert.ok(+n[1] >= 64, 'cache name bumped for this release');
+});
+
+test('boot: the fab is actually mounted on a live DOM, not just on paper', () => {
+  const t = loadToolbar();
+  assert.ok(t.ctx.window.__tbState, 'state flag must exist: loaded / painted / error');
+  assert.equal(t.ctx.window.__tbState, 'painted', 'must reach painted state');
+  const root = t.doc.body.children.find(c => c.id === 'nibrasToolbar');
+  assert.ok(root, 'root must be appended to body');
+  assert.ok(/tb-fab/.test(root.innerHTML), 'a visible fab button must be rendered');
+  assert.ok(/☰/.test(root.innerHTML), 'fab must have a visible glyph, not be blank');
+});
+
+test('boot: clicking the fab opens a panel with all six tabs', () => {
+  const t = loadToolbar();
+  const root = t.doc.body.children.find(c => c.id === 'nibrasToolbar');
+  assert.ok(root, 'root mounted');
+  /* the real click path: the fab handler must swap the fab for a panel */
+  fire(root, 'click', { target: { id: 'tbFab' } });
+  const root2 = t.doc.body.children.filter(c => c.id === 'nibrasToolbar').pop();
+  assert.ok(/tbPanel/.test(root2.innerHTML), 'panel must be rendered after clicking the fab');
+  for (const id of ['w', 'c', 'd', 'k', 't', 'p']) {
+    assert.ok(root2.innerHTML.indexOf('data-tab="' + id + '"') > -1, 'tab button missing: ' + id);
+  }
+  assert.ok(/tbBody/.test(root2.innerHTML), 'panel must have a body container');
+});
+
+test('boot: switching to each service tab renders its content', () => {
+  const t = loadToolbar();
+  const api = t.ctx.window.__tb;
+  const root = t.doc.body.children.find(c => c.id === 'nibrasToolbar');
+  fire(root, 'click', { target: { id: 'tbFab' } });
+  for (const id of ['w', 'c', 'd', 'k', 't', 'p']) {
+    fire(root, 'click', { target: { getAttribute: k => (k === 'data-tab' ? id : null) } });
+    const cur = t.doc.body.children.filter(c => c.id === 'nibrasToolbar').pop();
+    assert.ok(cur.innerHTML.length > 0, 'tab ' + id + ' rendered nothing');
+  }
+});
+
+test('boot: the six services are all registered with a renderer', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'public', 'toolbar.js'), 'utf8');
+  const m = /var TABS = \[([\s\S]*?)\];/.exec(src);
+  assert.ok(m, 'TABS array must exist');
+  const rows = m[1].match(/\{\s*id:\s*'([a-z])'[^}]*run:/g) || [];
+  assert.equal(rows.length, 6, 'six services registered');
+  assert.deepEqual(rows.map(r => /id:\s*'([a-z])'/.exec(r)[1]).sort(), ['c', 'd', 'k', 'p', 't', 'w']);
+});
+
+test('boot: failures surface instead of failing silently', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'public', 'toolbar.js'), 'utf8');
+  assert.ok(/function fail\(/.test(src), 'a fail() reporter must exist');
+  /* init must be guarded, and boot must be wrapped */
+  assert.ok(/if\s*\(!document\.body\)/.test(src), 'missing body must be reported');
+  assert.ok(/try\s*\{\s*paint\(\);/.test(src), 'paint must be wrapped in try/catch');
+  assert.ok(/catch\s*\(e\)\s*\{\s*fail\('boot:/.test(src), 'boot must report its own failure');
 });
 
 test('files: toolbar.js contains no eval or Function constructor', () => {
