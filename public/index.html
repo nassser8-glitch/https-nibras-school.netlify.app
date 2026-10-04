@@ -1359,14 +1359,29 @@ async function __syncPush(school){
     const stillEmpty = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
     if(stillEmpty) return;
     // الخادم يرفض الدفعة كاملة بـ400 إن كان أي قسم من الأقسام الثمانية ليس مصفوفة
-// (invalid_section). نُصلحها هنا قبل الإرسال بدل رفض الحفظ كله، ونُسجّل ما صُحّح.
-try{
-  if(obj && typeof obj === 'object'){
-    ['users','grades','classes','students','attendance','notes','transfers','maintenance'].forEach(k => {
-      if(!Array.isArray(obj[k])){ __syncLogAdd({ ev:'push-repair-section', school, section:k, was:typeof obj[k] }); obj[k] = []; }
-    });
-  }
-}catch(e){}
+    // (invalid_section). أصلحها هنا قبل الإرسال بدل رفض الحفظ كله.
+    // قسمcameobject غير مصفوفة قد يكون خريطة معرّف=>سجل من نسخة قديمة، فنستخرج
+    // سجلاته قبل التحويل إلى مصفوفة وإلا فُقدت بيانات حقيقية بصمت.
+    try{
+      if(obj && typeof obj === 'object'){
+        ['users','grades','classes','students','attendance','notes','transfers','maintenance'].forEach(k => {
+          if(Array.isArray(obj[k])) return;
+          const was = obj[k];
+          let salvaged = [];
+          if(was && typeof was === 'object'){
+            const vals = Object.keys(was).map(id => {
+              const rec = was[id];
+              if(rec && typeof rec === 'object' && !Array.isArray(rec) && rec.id == null) rec.id = id;
+              return rec;
+            }).filter(r => r && typeof r === 'object');
+            if(vals.length) salvaged = vals;
+          }
+          __syncLogAdd({ ev:'push-repair-section', school, section:k, was:typeof was, salvaged:salvaged.length });
+          try{ console.warn('[push-repair-section]', school, k, 'typeof=', typeof was, 'salvaged=', salvaged.length); }catch(e){}
+          obj[k] = salvaged;
+        });
+      }
+    }catch(e){}
 let attempt = 0;
     let lastErr = '';
     const respOf = await (async () => {
@@ -11602,7 +11617,10 @@ function saveAnnouncement(){
 /* تسجيل Service Worker للتثبيت والعمل دون اتصال — يعمل فقط عبر http/https */
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('sw.js?v=41', { updateViaCache: 'none' }).catch(function(){});
+    // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
+    // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
+    // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
+    navigator.serviceWorker.register('sw.js?v=42', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
