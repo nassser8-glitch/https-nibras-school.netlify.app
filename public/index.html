@@ -1358,7 +1358,16 @@ async function __syncPush(school){
     }catch(e){}
     const stillEmpty = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
     if(stillEmpty) return;
-    let attempt = 0;
+    // الخادم يرفض الدفعة كاملة بـ400 إن كان أي قسم من الأقسام الثمانية ليس مصفوفة
+// (invalid_section). نُصلحها هنا قبل الإرسال بدل رفض الحفظ كله، ونُسجّل ما صُحّح.
+try{
+  if(obj && typeof obj === 'object'){
+    ['users','grades','classes','students','attendance','notes','transfers','maintenance'].forEach(k => {
+      if(!Array.isArray(obj[k])){ __syncLogAdd({ ev:'push-repair-section', school, section:k, was:typeof obj[k] }); obj[k] = []; }
+    });
+  }
+}catch(e){}
+let attempt = 0;
     let lastErr = '';
     const respOf = await (async () => {
       for(; attempt < 3; attempt++){

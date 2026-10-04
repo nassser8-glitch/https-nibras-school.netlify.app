@@ -1,5 +1,5 @@
 ﻿/* نبراس — Service Worker للتثبيت والعمل دون اتصال */
-const CACHE_NAME = 'nibras-v62-nostar';
+const CACHE_NAME = 'nibras-v63-transferfix';
 const CORE_ASSETS = [
   './',
   './index.html',
