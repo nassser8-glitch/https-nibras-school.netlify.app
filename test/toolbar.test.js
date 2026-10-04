@@ -21,6 +21,7 @@ function makeEl(id) {
     attrs: {}, children: [], parentNode: null, isConnected: true, style: {},
     getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null; },
     setAttribute(k, v) { this.attrs[k] = String(v); },
+    removeAttribute(k) { delete this.attrs[k]; },
     appendChild(c) { this.children.push(c); c.parentNode = this; return c; },
     querySelector(sel) { return findBySel(this, sel); },
     querySelectorAll() { return []; },
@@ -333,15 +334,22 @@ test('isolation: toolbar never touches the app database keys', () => {
 /* ============================================================== الملفات */
 test('files: toolbar is wired into index.html and sw.js', () => {
   const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
-  assert.ok(html.includes('toolbar.css'), 'css linked');
-  assert.ok(/<script src="toolbar\.js\?v=\d+" defer>/.test(html), 'js loaded deferred');
+  assert.ok(/<link rel="stylesheet" href="toolbar\.css\?v=\d+">/.test(html), 'css linked with a version');
+  assert.ok(/<script src="toolbar\.js\?v=\d+"><\/script>/.test(html),
+    'js must NOT be deferred: defer races the app render and can leave it unstyled');
   const sw = fs.readFileSync(path.join(ROOT, 'public', 'sw.js'), 'utf8');
   assert.ok(sw.includes('./toolbar.js'), 'cached offline');
   assert.ok(sw.includes('./toolbar.css'), 'css cached offline');
   const m = /sw\.js\?v=(\d+)/.exec(html);
   const n = /nibras-v(\d+)/.exec(sw);
   assert.ok(m && n, 'both versioned');
-  assert.ok(+n[1] >= 64, 'cache name bumped for this release');
+  assert.ok(+n[1] >= 65, 'cache name bumped for this release');
+  /* رقم نسخة ورقة الأنماط يجب أن يطابق ما في sw.js وإلا خدم الحارس
+   * نسخة قديمة من الورقة باسم جديد فلا تصل التحديثات. */
+  const cj = /toolbar\.css\?v=(\d+)/.exec(html);
+  const cs = /toolbar\.css\?v=(\d+)/.exec(sw);
+  assert.ok(cj && cs && cj[1] === cs[1],
+    'css version must match between index.html and sw.js: ' + (cj && cj[1]) + ' vs ' + (cs && cs[1]));
 });
 
 test('boot: the fab is actually mounted on a live DOM, not just on paper', () => {
@@ -352,6 +360,14 @@ test('boot: the fab is actually mounted on a live DOM, not just on paper', () =>
   assert.ok(root, 'root must be appended to body');
   assert.ok(/tb-fab/.test(root.innerHTML), 'a visible fab button must be rendered');
   assert.ok(/☰/.test(root.innerHTML), 'fab must have a visible glyph, not be blank');
+  /* critical styles must be inline: the fab has to be visible even if the
+   * stylesheet never loads, which is how it silently disappeared before. */
+  const inline = root.getAttribute('style') || '';
+  assert.ok(/position:fixed/.test(inline),
+    'root must carry inline positioning, not rely on the stylesheet');
+  assert.ok(/z-index/.test(inline), 'root must raise itself inline');
+  assert.ok(/width:48px/.test(root.innerHTML), 'fab must size itself inline');
+  assert.ok(/background:/.test(root.innerHTML), 'fab must colour itself inline');
 });
 
 test('boot: clicking the fab opens a panel with all six tabs', () => {

@@ -441,11 +441,21 @@
     if (!root) return;
     if (!open) {
       root.className = 'tb-root';
-      root.innerHTML = '<button class="tb-fab" id="tbFab" aria-label="tools">☰</button>';
+      /* تنسيق حرج مضمّن في العنصر نفسه: لو لم يصل ملف CSS لظلت الأزرار
+       * ظاهرة وموضوعة وظاهرة على الشاشة. الاعتماد على ورقة خارجية وحدها
+       * كان يعني اختفاء الشريط كاملاً بصمت إن تأخر تحميلها أو حُجب. */
+      root.setAttribute('style', 'position:fixed;z-index:2147483000;' +
+        'inset:auto 16px 16px auto;display:block;line-height:0');
+      root.innerHTML = '<button class="tb-fab" id="tbFab" aria-label="tools" ' +
+        'style="display:flex;align-items:center;justify-content:center;' +
+        'width:48px;height:48px;border-radius:50%;font-size:20px;cursor:pointer;' +
+        'background:#fff;color:#16233a;border:1px solid #e3e9f2;' +
+        'box-shadow:0 10px 30px rgba(16,32,64,.16);padding:0;margin:0">☰</button>';
       window.__tbState = 'painted';
       return;
     }
     root.className = 'tb-root tb-open';
+    root.removeAttribute('style');
     root.innerHTML = panelHTML();
     var b = document.getElementById('tbBody');
     var cur = TABS.filter(function (t) { return t.id === tab; })[0] || TABS[0];

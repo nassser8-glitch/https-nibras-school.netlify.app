@@ -67,9 +67,9 @@ window.__nibrasBootErr = '';
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="نبراس" />
 <title>المدرسة السعودية في إسلام آباد - نظام إدارة المدرسة</title>
-<link rel="stylesheet" href="toolbar.css?v=1">
+<link rel="stylesheet" href="toolbar.css?v=2">
 <script src="vendor/xlsx.full.min.js"></script>
-<script src="toolbar.js?v=1" defer></script>
+<script src="toolbar.js?v=2"></script>
 <style>
   * { box-sizing: border-box; }
   body { margin:0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background:linear-gradient(180deg,#f7f9fc 0%,#edf3fa 100%); background-attachment:fixed; color:#1f2937; direction: rtl; padding-bottom:env(safe-area-inset-bottom); }
@@ -11622,7 +11622,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=43', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=44', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
