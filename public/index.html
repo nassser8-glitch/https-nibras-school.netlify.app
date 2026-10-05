@@ -1052,6 +1052,29 @@ function attCountsByDate(d, date, ids){
   }
   return { present: Math.max(0, idSet.size - absent - late), absent, late, records: agg.size };
 }
+/* تاريخ طالب واحد: سجلات الحضور مسطّحة (سجل لكل طالب/يوم) لا يومٌ يحوي قائمة
+ * طلاب. تجميعُها بأيامها هنا لأن صفحة «حضوري» تحتاج التاريخ كله لا يوماً واحداً.
+ *_policy نفسها التي في attCountsByDate حتى تطابق ما يراه المدير في السجلات،
+ * مع احترام قبر الحذف فلا يُحتسب سِجل محذوف. */
+function attCountsByStudent(d, studentId){
+  const byDay = new Map();
+  (Array.isArray(d.attendance) ? d.attendance : []).forEach(a => {
+    if(!a || a.studentId !== studentId) return;
+    const day = String(a.date || '');
+    if(!day) return;
+    byDay.set(day, byDay.has(day) ? __attWinner(byDay.get(day), a) : a);
+  });
+  let present = 0, absent = 0, late = 0, days = 0;
+  byDay.forEach(rec => {
+    if(rec.deleted) return;            // القبر يُسقط السِجل ولا يُحسب
+    days++;
+    const st = __attEffStatus(rec);
+    if(st === 'ABSENT') absent++;
+    else if(st === 'LATE') late++;
+    else present++;
+  });
+  return { present, absent, late, total: present + absent + late, days };
+}
 /* اختيار أحدث نسخة من رسالة (بأحدث وقت تعديل/اطلاع) عند الدمج حتى لا تختفي حالة الاطلاع والقراءة */
 function __pickMsg(a, b){
   if(!a) return b;
@@ -4328,16 +4351,8 @@ function renderStudentDashboard(){
   const maxAss = Math.max(...typeStats.map(s => s.total), 1);
   const myNotes = (d.notes||[]).slice().filter(n => n.studentId === user.id && !n.deleted).slice(-6).reverse();
   const myTransfers = (d.transfers||[]).slice().filter(t => studentIdsOf(t).includes(user.id)).slice(-4).reverse();
-  const attRecs = (d.attendance||[]).slice(-30);
-  let present = 0, absent = 0, late = 0;
-  attRecs.forEach(day => {
-    const rec = (day.students||[]).find(s => s.studentId === user.id);
-    if(rec){
-      if(rec.status === 'present') present++;
-      else if(rec.status === 'absent') absent++;
-      else if(rec.status === 'late') late++;
-    }
-  });
+  const attRecs = attCountsByStudent(d, user.id);
+  let present = attRecs.present, absent = attRecs.absent, late = attRecs.late;
   const total = present + absent + late;
   const attPct = total > 0 ? Math.round(((present + late)/total)*100) : 0;
   const maxPts = Math.max(sp.pos, Math.abs(sp.neg), 1);
