@@ -9,69 +9,93 @@
  */
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const test = require('node:test');
 const assert = require('node:assert');
 
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
 
 function usernameGuardBody() {
-  const start = SRC.indexOf('for (const nu of (clean.users || []))');
-  assert.ok(start > -1, 'username guard loop not found');
-  const end = SRC.indexOf('// ===== نهاية حارس اسم المستخدم =====', start);
-  assert.ok(end > start, 'username guard end marker not found');
-  return SRC.slice(start, end);
+  const loopAt = SRC.indexOf('for (const nu of (clean.users || []))');
+  assert.ok(loopAt > -1, 'username guard loop not found');
+  const end = SRC.indexOf('// ===== نهاية حارس اسم المستخدم =====', loopAt);
+  assert.ok(end > loopAt, 'username guard end marker not found');
+  /* نبدأ من كتلة try نفسها: الشريحة تبدأ من حلقة for فتبقى catch يتيمة،
+   * وتبدأ من try فتصير القطعة سليمة قابلة للتنفيذ وحدها. */
+  const tryAt = SRC.lastIndexOf('try {', loopAt);
+  assert.ok(tryAt > -1 && tryAt < loopAt, 'the guard try block must precede the loop');
+  return SRC.slice(tryAt, end);
 }
 
 const BODY = usernameGuardBody();
 
-function runGuard(users, prevUsers) {
-  const prevMapU = new Map(
-    (prevUsers || []).map((u) => [u.id, String(u.username || '').trim().toLowerCase()])
-  );
-  const seenLocal = new Set();
-  for (const nu of (users || [])) {
-    const uname = String((nu && nu.username) || '').trim().toLowerCase();
-    if (!uname) continue;
-    if (prevMapU.get(nu.id) === uname) { seenLocal.add(uname); continue; }
-    if (!/^[a-z0-9._-]{3,32}$/.test(uname)) return { error: 'username_invalid', username: uname };
-    if (seenLocal.has(uname)) return { error: 'username_taken', username: uname };
-    seenLocal.add(uname);
-  }
-  return null;
+/* ننفّذ الحارس الحقيقي من server.js داخل معزول، لا نسخةً منه.
+ * النسخة اليدوية التي كانت هنا قد انحرفت عن الخادم: لم تكن تفحص صلاحية
+ * المستخدم ولا مالك الاسم، فكانت ثمانية اختبارات تمرّ على شيفرة ليست التي
+ * تعمل في الإنتاج. عيب كهذا أسوأ من غياب الاختبار: يمنح طمأنينة زائفة. */
+async function runGuard(users, prevUsers, session) {
+  const out = { status: null, body: null };
+  const res = {
+    status(s) { out.status = s; return this; },
+    json(b) { out.body = b; return this; },
+  };
+  const ctx = {
+    console, Set, Map, JSON, String, Object, Array, RegExp,
+    req: { session: session || { role: 'ADMIN', user_id: 'A1' } },
+    res,
+    clean: { users },
+    prevUsers,
+    db: { userByUsername: async () => null },
+  };
+  vm.createContext(ctx);
+  await vm.runInContext('(async () => {' + BODY + '})()', ctx);
+  /* الرفض يمرّ عبر res.status().json()، والقبول لا يترك أثراً في res. */
+  return out.body;
 }
 
-test('unchanged legacy short username does not block the whole save', () => {
-  assert.equal(runGuard([{ id: 'u1', username: 'fy' }], [{ id: 'u1', username: 'fy' }]), null);
+test('unchanged legacy short username does not block the whole save', async () => {
+  assert.equal(await runGuard([{ id: 'u1', username: 'fy' }], [{ id: 'u1', username: 'fy' }]), null);
 });
 
-test('changing a legacy short username to a valid one is accepted', () => {
-  assert.equal(runGuard([{ id: 'u1', username: 'fatima' }], [{ id: 'u1', username: 'fy' }]), null);
+test('changing a legacy short username to a valid one is accepted', async () => {
+  assert.equal(await runGuard([{ id: 'u1', username: 'fatima' }], [{ id: 'u1', username: 'fy' }]), null);
 });
 
-test('changing a legacy short username to another invalid short one is rejected', () => {
-  const r = runGuard([{ id: 'u1', username: 'ab' }], [{ id: 'u1', username: 'fy' }]);
+test('changing a legacy short username to another invalid short one is rejected', async () => {
+  const r = await runGuard([{ id: 'u1', username: 'ab' }], [{ id: 'u1', username: 'fy' }]);
   assert.equal(r && r.error, 'username_invalid');
 });
 
-test('a brand new short username is still rejected', () => {
-  const r = runGuard([{ id: 'u2', username: 'fy' }], [{ id: 'u1', username: 'other' }]);
+test('a brand new short username is still rejected', async () => {
+  const r = await runGuard([{ id: 'u2', username: 'fy' }], [{ id: 'u1', username: 'other' }]);
   assert.equal(r && r.error, 'username_invalid');
 });
 
-test('duplicate unchanged names are not reported as taken', () => {
-  assert.equal(runGuard([{ id: 'u1', username: 'fy' }], [{ id: 'u1', username: 'fy' }]), null);
+test('duplicate unchanged names are not reported as taken', async () => {
+  assert.equal(await runGuard([{ id: 'u1', username: 'fy' }], [{ id: 'u1', username: 'fy' }]), null);
 });
 
-test('two changed users colliding is still rejected', () => {
-  const r = runGuard(
+test('two DIFFERENT legacy accounts sharing one name are still flagged', async () => {
+  /* بيانات تالفة قد تحوي حسابين على الاسم نفسه. الكاشف كان يرفض هذا قبل
+   * الإصلاح، لأن فحص التكرار كان يسبق التجاوز. إن أزلناه لتجاوز الاسم
+   * المخالف خسرنا كشف التكرار وجمدنا البيانات التالفة في القاعدة. */
+  const r = await runGuard(
+    [{ id: 'u1', username: 'fy' }, { id: 'u2', username: 'fy' }],
+    [{ id: 'u1', username: 'fy' }, { id: 'u2', username: 'fy' }]
+  );
+  assert.equal(r && r.error, 'username_taken');
+});
+
+test('two changed users colliding is still rejected', async () => {
+  const r = await runGuard(
     [{ id: 'u1', username: 'same.name' }, { id: 'u2', username: 'same.name' }],
     [{ id: 'u1', username: 'a' }, { id: 'u2', username: 'b' }]
   );
   assert.equal(r && r.error, 'username_taken');
 });
 
-test('accounts without a username are ignored', () => {
-  assert.equal(runGuard([{ id: 'u1' }, { id: 'u2', username: '' }], []), null);
+test('accounts without a username are ignored', async () => {
+  assert.equal(await runGuard([{ id: 'u1' }, { id: 'u2', username: '' }], []), null);
 });
 
 test('guard checks unchanged-before-shape (order is the fix)', () => {
