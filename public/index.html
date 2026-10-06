@@ -6140,6 +6140,19 @@ function studentNameLink(s, pts){
   }
   return `<a href="javascript:void(0)" onclick="showStudentPoints('${s.id}')" style="color:inherit;text-decoration:none;border-bottom:1px dashed #cbd5e1;cursor:pointer" title="عرض تفاصيل النقاط">${escapeHtml(s.fullName)}</a>${badge}${nibrasBadgeHTML(s.id)}`;
 }
+/* زر «تحديث الآن» في نافذة النقاط: يسحب أحدث نسخة من الخادم ثم يعيد فتح
+   النافذة نفسها بالبيانات الحقيقية — فيتبدّد صفُّ «سجلات خاصة» الوهمي أمام
+   المدير/الوكيل، وتظهر السطور الفعلية بعد أن تصل إلى جهازه. */
+async function __refreshPointsView(studentId){
+  try{
+    const school = getActiveSchool();
+    if(!school || !__serverEnabled() || !__syncEnabled()) return;
+    try{ await __syncPull(school); }catch(e){}
+    try{ await __syncPush(school); }catch(e){}
+    try{ __refreshUnpushedBar(); }catch(e){}
+    showStudentPoints(studentId);
+  }catch(e){}
+}
 function showStudentPoints(studentId){
   const d = loadDB();
   const s = studentById(studentId);
@@ -6164,17 +6177,31 @@ function showStudentPoints(studentId){
   const shownNet = items.reduce((sum, it) => sum + (it.points || 0), 0);
   const srvRow = __pointsTotals();
   const srvTotal = (srvRow && srvRow[studentId]) ? srvRow[studentId].total : null;
+  let diff = 0;
   if(srvTotal != null) {
-    const diff = srvTotal - shownNet;
+    diff = srvTotal - shownNet;
     if(diff !== 0){ hiddenNet += diff; hiddenCount++; }
   }
+  const meN = currentUser();
+  const privileged = NRC_isAdminNotesRole(meN);
+  // الفارق أمام مدير/وكيل (يريان كل الملاحظات) ليس خصوصيةَ زميلات أبداً:
+  // هو خللُ محليةٍ قديمة مقابل لقطةٍ أشملَ للخادم، فتوصَف بصدق مع زر «تحديث
+  // الآن» يحمل أحدث نسخة وتتبدّد الأسطر المبهمة. غيرُ المتميز يبقى له خصوصية
+  // حقيقية (نصوص زميلاته لا تصل أصلاً) فيُقالما هو عليه بوضوح.
+  const gapLabel = privileged
+    ? 'سجلات أحدث على الخادم لم تبلغ هذا الجهاز بعد'
+    : (hiddenCount ? 'سجلات خاصة — للمعلّمات الأخريات' : 'سجلات محسوبة على الخادم');
+  const needRefresh = !!privileged && diff !== 0 && __serverEnabled() && __syncEnabled();
   const hiddenRow = (hiddenCount || hiddenNet) ? `<tr style="background:#f8fafc">
         <td style="color:#94a3b8">🔒</td>
-        <td colspan="2" style="color:#64748b">${hiddenCount ? 'سجلات خاصة — للمعلّمات الأخريات' : 'سجلات محسوبة على الخادم'}</td>
+        <td colspan="2" style="color:#64748b">${gapLabel}${needRefresh ? ` — <a href="javascript:void(0)" onclick="__refreshPointsView('${studentId}')" style="color:#0f766e;font-weight:700;border-bottom:1px dashed">تحديث الآن</a>` : ''}</td>
         <td class="muted small">—</td>
         <td class="muted small">—</td>
         <td style="font-weight:700;color:${hiddenNet>=0?'#16a34a':'#dc2626'}">${hiddenNet>0?'+':''}${hiddenNet}</td>
       </tr>` : '';
+  // تشخيص مقتضب للوضع الشارد فقط: ظهور «فارق» أمام مدير/وكيل على نسخة
+  // مطابقة غريبٌ، فتُعرض الأرقام الحاسمة بدل الغموض.
+  const diagBox = (needRefresh && hiddenRow) ? `<div style="margin-top:10px;padding:9px 12px;background:#f1f5f9;border-radius:8px;font-size:11.5px;color:#475569;line-height:1.9;text-align:right">🔍 دورك: ${escapeHtml(meN?.role || '—')} (${escapeHtml(meN?.id || '—')}) — مجموع ما على هذا الجهاز: ${shownNet>0?'+':''}${shownNet} | رصيد الخادم الحقيقي: ${srvTotal>0?'+':''}${srvTotal} | الفارق: ${diff>0?'+':''}${diff} | ملاحظات مخفية محلياً: ${hiddenCount} (${hiddenNet>0?'+':''}${hiddenNet})<br>غالباً جهازك لم يسحب أحدث البيانات بعد — اضغط «تحديث الآن» بالأسفل إن لم يتحدّث تلقائياً.</div>` : '';
   const rows = visible.map(n => {
     const pts = n.points;
     if(pts >= 0) pos += pts; else neg += pts;
@@ -6209,6 +6236,7 @@ function showStudentPoints(studentId){
         <thead><tr><th>النوع</th><th>الفئة</th><th>الوصف</th><th>المعلم المانح</th><th>التاريخ</th><th>النقاط</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="6" style="text-align:center;padding:20px;color:#9ca3af">لا توجد سجلات نقاط لهذا الطالب</td></tr>`}</tbody>
       </table>
+      ${diagBox}
     </div>`;
   document.body.appendChild(overlay);
 }
