@@ -1620,6 +1620,29 @@ function __refreshUnpushedBar(){
 }
 /* زر «أعد الرفع الآن»: يدفع فوراً دون انتظار الجدولة — والمعلمة ترى النتيجة الصريحة */
 let __forceSyncBusy = false;
+let __warnedPendingOnOpen = false;
+/* تحذير عند فتح التطبيق: إن وُجدت نقاطٌ لم ترفع بعد (على أي صفحة، لا صفحة
+   الملاحظات فقط) تُعلم المعلمة فور دخولها — مرة واحدة لكل فتح صفحة، فلا
+   تلاحظ غياب النقطة صدفةً. يخفُّ النظام مع طوائف الأجيال الجديدة: السجلُّ
+   يُملأ عند الحفظ ويُفرَّغ تلقائياً عند أول رفع ناجح. */
+function __warnPendingOnOpen(){
+  try{
+    if(!__serverEnabled() || !__syncEnabled()) return;
+    const me = currentUser();
+    if(!me || me.role === 'STUDENT') return;
+    if(__warnedPendingOnOpen) return;
+    const school = getActiveSchool();
+    if(!school) return;
+    const ids = new Set(__unpushedIds(school));
+    if(ids.size === 0) return;
+    const d = loadDB();
+    const notes = (d.notes || []).filter(n => n && !n.deleted && ids.has(String(n.id)));
+    if(notes.length === 0){ __clearUnpushed(school); return; }
+    __warnedPendingOnOpen = true;
+    const pts = notes.reduce((a, n) => a + (n.points ?? notePoints(n.type, n.category)), 0);
+    __noteSaveBanner('⚠️ لديك ' + notes.length + ' نقطة (' + (pts > 0 ? '+' : '') + pts + ') لم تصل لخادم المدرسة بعد — محفوظة على هذا الجهاز ولن تختفي. افتحي صفحة «الملاحظات» واضغطي «أعد الرفع الآن».', true);
+  }catch(e){}
+}
 async function __forceSyncNow(){
   try{
     if(__forceSyncBusy) return;
@@ -3768,6 +3791,7 @@ function renderLayout(user, hash){
   else pageHtml = renderDashboard();
 
   const themeClass = 'theme-girls';
+  setTimeout(__warnPendingOnOpen, 0);
   const searchLive = `oninput="goSearchLive(this.value)"`;
   return `
   <div class="layout ${themeClass}">

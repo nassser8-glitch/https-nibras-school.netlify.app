@@ -87,6 +87,22 @@ test('4) الرفع الفوري يدفع مباشرة ويعيد التقييم
     'النتيجة الصريحة عند بقاء معلّق');
 });
 
+// --------------------------- 5) تحذير عند فتح التطبيق (على أي صفحة): مرة واحدة
+test('5) تحذير الفتح: يُستدعى عند كل رسم، مرةً واحدة، وللمعلم لا للتلميذة', () => {
+  assert.ok(SRC.includes('setTimeout(__warnPendingOnOpen, 0);'),
+    'التحذير يُجدول عند رسم أي صفحة'); 
+  const i = SRC.indexOf('function __warnPendingOnOpen');
+  assert.ok(i >= 0, 'الدالة مفقودة');
+  const body = SRC.slice(i, i + 1200);
+  assert.ok(body.includes("if(__warnedPendingOnOpen) return;"),
+    'مرة واحدة لكل فتح صفحة لا إزعاج متكرر');
+  assert.ok(body.includes("me.role === 'STUDENT'"),
+    'لا يُحذّر التلميذة');
+  assert.ok(body.includes("'{+pts}لم تصل لخادم المدرسة بعد")
+    || body.includes('لم تصل لخادم المدرسة بعد'),
+    'رسالة صريحة بعدد النقاط');
+});
+
 // ---------------------------------------------------------------- helper
 function extractFns(name) {
   const start = SRC.indexOf('function ' + name + '(');
