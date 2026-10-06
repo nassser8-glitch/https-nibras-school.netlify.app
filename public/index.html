@@ -5219,6 +5219,7 @@ function renderDashboard(){
         </div>
         <span style="background:${grade.c};color:#fff;border-radius:999px;padding:5px 14px;font-weight:800;font-size:12.5px;white-space:nowrap">${grade.t}</span>
       </div>
+      ${absentWarningHtml(tst.absent, user.id, true)}
       <div style="display:flex;gap:18px;padding:20px 18px;align-items:center;flex-wrap:wrap">
         <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0">
           <div style="width:132px;height:132px;border-radius:50%;background:conic-gradient(${grade.c} 0 ${segP}%, #f59e0b ${segP}% ${segP+segL}%, #ef4444 ${segP+segL}% ${segP+segL+segA}%, #eef2f7 ${segP+segL+segA}% 100%);display:flex;align-items:center;justify-content:center;position:relative">
@@ -8875,6 +8876,27 @@ function teacherStats(u){
     absent, lateDays: lateDaysSet.size, lateMin,
     absDates,
   };
+}
+/* تنبيه غياب المعلمة: يظهر على لوحتها حين يتجاوز الغياب الحدّ
+ * ABSENT_WARN_DAYS. والشرط تجاوزٌ لا مساواة: من بلغ 3 أيام لم يظهر بعد،
+ * ومن بلغ 4 ظهر. والعرض من غياب السجلّ فقط لا من التأخر، فالتأخر له
+ * مربّعه الأصفر القائم في البطاقة ذاتها. */
+const ABSENT_WARN_DAYS = 3;
+function absentWarningHtml(absent, teacherId, clickable){
+  const n = Number(absent) || 0;
+  if(!(n > ABSENT_WARN_DAYS)) return '';
+  const thrNoun = ABSENT_WARN_DAYS === 1 ? 'يوم' : 'أيام';
+  const noun = n === 1 ? 'يوم' : 'أيام';
+  const tip = clickable ? `onclick="openTeacherDetail('ABSENT','${teacherId}')"` : '';
+  const cur = clickable ? 'cursor:pointer;' : '';
+  return `<div style="${cur}display:flex;align-items:center;gap:12px;margin:14px 18px 0;padding:12px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:14px" ${tip} data-tip="اضغط لعرض أيام الغياب">
+    <div style="width:38px;height:38px;border-radius:10px;background:#fee2e2;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0">⚠️</div>
+    <div style="flex:1">
+      <div style="font-weight:800;font-size:13.5px;color:#b91c1c">تجاوز حدّ ${ABSENT_WARN_DAYS} ${thrNoun} غياب</div>
+      <div style="font-size:12px;color:#7f1d1d;margin-top:2px">${n} ${noun} غياب هذا العام</div>
+    </div>
+    ${clickable ? '<span style="font-size:12px;font-weight:700;color:#b91c1c;white-space:nowrap">عرض الأيام ←</span>' : ''}
+  </div>`;
 }
 const LATE_TYPE_NAMES = { MORNING:'تأخر صباحي', CLASS:'تأخر عن الحصة', EARLY_LEAVE:'خروج مبكر' };
 function fmtDateOnly(d){ try { return new Date(String(d).slice(0,10)+'T00:00:00').toLocaleDateString('ar-EG'); } catch(e){ return d; } }
