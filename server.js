@@ -1270,8 +1270,8 @@ function mergeAdminMsgs(prev, incoming) {
     out.clearedBy = Object.assign({}, cB, cA);
     const sA = (cur && cur.seenBy) || {}, sB = (m && m.seenBy) || {};
     out.seenBy = Object.assign({}, sB, sA);
-    for (const f of ['read','revealed','dismissed']) out[f] = !!(out[f] || m[f]);
-    for (const f of ['updatedAt','editedAt','lastViewAt','dismissedAt','revealedAt','firstViewAt','createdAt']) {
+    for (const f of ['read','revealed','dismissed','deleted']) out[f] = !!(out[f] || m[f]);
+    for (const f of ['updatedAt','editedAt','lastViewAt','dismissedAt','revealedAt','firstViewAt','createdAt','deletedAt']) {
       if (out[f] || m[f]) out[f] = String(m[f] || '') >= String(out[f] || '') ? (m[f] || out[f]) : (out[f] || m[f]);
     }
     bySrc.set(k, out);

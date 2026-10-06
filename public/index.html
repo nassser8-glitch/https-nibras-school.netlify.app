@@ -1104,8 +1104,8 @@ function __mergeMsg(a, b){
   out.clearedBy = { ...cB, ...cA };
   const sA = a.seenBy || {}, sB = b.seenBy || {};
   out.seenBy = { ...sB, ...sA };
-  for(const k of ['read','revealed','dismissed']) out[k] = !!(a[k] || b[k]);
-  for(const k of ['updatedAt','editedAt','lastViewAt','dismissedAt','revealedAt','firstViewAt','createdAt']){
+  for(const k of ['read','revealed','dismissed','deleted']) out[k] = !!(a[k] || b[k]);
+  for(const k of ['updatedAt','editedAt','lastViewAt','dismissedAt','revealedAt','firstViewAt','createdAt','deletedAt']){
     if(a[k] || b[k]) out[k] = String(b[k] || '') >= String(a[k] || '') ? (b[k] || a[k]) : (a[k] || b[k]);
   }
   if(!out.firstViewAt && (a.firstViewAt || b.firstViewAt)){
@@ -1791,7 +1791,7 @@ async function syncPullAll(){
   let sig = '';
   try{
     const d = JSON.parse(localStorage.getItem(key) || 'null');
-    if(d && Array.isArray(d.adminMsgs)) sig = d.adminMsgs.filter(m => m.senderRole === 'ACTIVITY' || m.teacherId === user.id || m.teacherId === 'ALL').map(m => m.id + ':' + (m.read?1:0) + ':' + (m.dismissed?1:0)).join(',');
+    if(d && Array.isArray(d.adminMsgs)) sig = aliveMsgs(d.adminMsgs).filter(m => m.senderRole === 'ACTIVITY' || m.teacherId === user.id || m.teacherId === 'ALL').map(m => m.id + ':' + (m.read?1:0) + ':' + (m.dismissed?1:0)).join(',');
   }catch(e){}
   if(sig && sig !== (window.__lastMsgSig || '') && location.hash !== '#/login'){ window.__lastMsgSig = sig; renderApp(); }
   // إعادة الرسم عند تغيّر محتوى قاعدة البيانات فعليًا (سجلات حضور/غياب/رسائل...) 
@@ -3837,7 +3837,7 @@ function notifItemsFor(user){
       if(!adminId) return;
       (loadAdminMsgsFor(s) || []).forEach(m => {
         const viewedBy = m.clearedBy && user && user.id && (user.id in m.clearedBy);
-        if(m.teacherId === adminId && !m.dismissed && !viewedBy){
+        if(m.teacherId === adminId && !m.deleted && !m.dismissed && !viewedBy){
           items.push({ kind:'adminmsg', href:'#/guide-msgs', title:'📨 رسالة موجهة إليك', text:(m.teacherName || '') + ' · ' + (m.text || ''), ts: Date.parse(m.createdAt) || 0, key:'adminmsg-' + s + '-' + m.id });
         }
       });
@@ -3942,6 +3942,11 @@ function __persistMsgs(school, arr){
   try{ localStorage.setItem(ADMIN_MSGS_KEY(school), JSON.stringify(arr)); }catch(e){}
   __syncSchedule(school, 0);
 }
+/* أسافين الحذف (deleted) لاصقة: الرسالة تُحذف بوضع علامة لا بمحوها، فتبقى شاهدًا
+   في القسم حتى يجمعها الخادم ولا تُعدَّ إحياؤها من جهاز قديم. والفلترة عند
+   القراءة لا عند التحميل، لأن كل مسار كتابة (إرسال/تعديل/حذف) يعيد كتابة القسم
+   من المصفوفة نفسها — ولو قُطعت الأسافين منها هناك لأعادها الخادم بعدها. */
+function aliveMsgs(arr){ return (Array.isArray(arr) ? arr : []).filter(m => m && !m.deleted); }
 /* البحث عن رسالة في كلا القسمين (للمدير) أو القسم النشط فقط */
 function findAdminMsgAcross(id){
   const user = currentUser();
@@ -3960,7 +3965,7 @@ function unreadForSchool(school, email){
     const u = d && d.users.find(x => x.email === email);
     if(!u) return 0;
     const arr = (d && Array.isArray(d.adminMsgs)) ? d.adminMsgs : [];
-    return arr.filter(m => m.senderId === u.id && !m.read && !m.dismissed).length;
+    return arr.filter(m => m && !m.deleted && m.senderId === u.id && !m.read && !m.dismissed).length;
   }catch(e){ return 0; }
 }
 function msgMonitorBadge(user){
@@ -3975,7 +3980,7 @@ function msgMonitorBadge(user){
 }
 function adminMsgsFor(teacherId){
   const order = { ADMIN:0, AGENT:1, COUNSELOR:2, TRANSFER:3 };
-  return loadAdminMsgs()
+  return aliveMsgs(loadAdminMsgs())
     .filter(m => m.teacherId === teacherId || m.teacherId === 'ALL')
     .sort((a,b) => ((order[a.senderRole] ?? 4) - (order[b.senderRole] ?? 4)) || b.createdAt.localeCompare(a.createdAt));
 }
@@ -4070,9 +4075,14 @@ function revealAdminMsg(id){
 function deleteAdminMsg(id){
   const found = findAdminMsgAcross(id);
   if(!found) return;
-  const { school, arr } = found;
+  const { school, arr, m } = found;
   if(!confirm('حذف هذه الرسالة؟')) return;
-  saveAdminMsgsFor(school, arr.filter(x => x.id !== id));
+  // علامة حذف لا محوا: المحواة تختفي محلياً ثم يعيدها دمج الخادم (الدمج اتحادي
+  // حسب id) فتعود للظهور بعد أي سحب — وهذا ما لاحظته الإدارة عند حذف رسائلٍ عدة.
+  m.deleted = true;
+  m.deletedAt = new Date().toISOString();
+  m.deletedBy = currentUser()?.name || '';
+  saveAdminMsgsFor(school, arr);
   renderApp();
 }
 function editAdminMsg(id){
@@ -4098,7 +4108,7 @@ function renderGuideMsgs(){
   const teachers = teacherSources.map(s => loadSchoolDB(s).users.filter(u => u.role === 'TEACHER' && u.active).map(t => ({ ...t, _school: s })))
     .flat().sort((a,b)=>a.name.localeCompare(b.name,'ar'));
   const msgSources = isAdmin ? ['GIRLS'] : [active];
-  const all = msgSources.map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s }))).flat();
+  const all = aliveMsgs(msgSources.map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s }))).flat());
   // المدير يرى جميع الرسائل المرسلة للمعلمين (من أي مرسل)، وغيره يرى رسائله فقط
   const msgs = all.filter(m => (isAdmin ? (m.senderRole !== 'TRANSFER' || adminSeesTransferMsg(m)) : m.senderId === user.id)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   const transIn = all.filter(m => m.senderRole === 'TRANSFER' && m.teacherId === user.id && !m.dismissed && (isAdmin ? adminSeesTransferMsg(m) : true)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
@@ -4224,8 +4234,8 @@ function renderAdminMsgAlerts(){
     if(isAdmin){
       // المدير: «تم الاطلاع» يُخفي الإشعار عنه أيضاً — كان هذا الفرع يكتفي بـ
       // !m.dismissed فلا يحترم clearedBy، فيبقى الإشعار على الشاشة إلى الأبد.
-      return dedup(['GIRLS'].map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s })))
-        .flat().filter(m => m.senderRole === 'TRANSFER' && !m.dismissed
+      return dedup(aliveMsgs(['GIRLS'].map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s })))
+        .flat()).filter(m => m.senderRole === 'TRANSFER' && !m.dismissed
           && !(m.clearedBy && user.id && (user.id in m.clearedBy))
           && adminSeesTransferMsg(m))
         .sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))));
@@ -5771,7 +5781,7 @@ function openRoleInbox(uid, school){
   const msgs = [];
   sources.forEach(({ school, d }) => {
     d.transfers.filter(t => t.status === 'PENDING' && transferForMe(t) && (t.target === u.role || t.createdBy === u.id)).forEach(t => pending.push({ t, school, d }));
-    loadAdminMsgsFor(school).filter(m => m.senderRole === 'TRANSFER' && m.teacherId === uid && !m.dismissed).forEach(m => msgs.push({ m, school }));
+    loadAdminMsgsFor(school).filter(m => !m.deleted && m.senderRole === 'TRANSFER' && m.teacherId === uid && !m.dismissed).forEach(m => msgs.push({ m, school }));
   });
   pending.sort((a,b) => (b.t.createdAt||'').localeCompare(a.t.createdAt||''));
   msgs.sort((a,b) => (b.m.createdAt||'').localeCompare(a.m.createdAt||''));
@@ -9065,7 +9075,7 @@ function renderTeacherPage(teacherId){
     return { name:a.name, icon, typeLabel, date:a.date, kind, status };
   }).filter(Boolean).sort((a,b) => String(b.date).localeCompare(String(a.date)));
   // الوكيل يرى رسائله هو فقط، والمدير يرى الكل
-  const msgs = loadAdminMsgs().filter(m => (m.teacherId === teacherId || m.teacherId === 'ALL') && (isAdmin || ownsMsg(m))).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+  const msgs = aliveMsgs(loadAdminMsgs()).filter(m => (m.teacherId === teacherId || m.teacherId === 'ALL') && (isAdmin || ownsMsg(m))).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
   const unread = msgs.filter(m => !m.revealed).length;
   const stat = (icon, val, lbl, color, type, desc, sub) => `
     <div class="card stat ${type ? 'clickable' : ''}" ${type ? `onclick="openTeacherDetail('${type}','${teacherId}')"` : ''} ${desc ? `data-tip="${escapeHtml(desc)}"` : ''}><span class="stat-icon">${icon}</span><div><p class="muted">${lbl}</p><p class="stat-value" style="color:${color || 'inherit'}">${val}</p>${sub ? `<p class="muted" style="margin-top:4px;font-size:12px">${sub}</p>` : ''}</div></div>`;
@@ -11084,7 +11094,7 @@ function computeReportRows(){
     });
     return rowsAll;
   } else if(type === 'messages'){
-    rows = loadAdminMsgs()
+    rows = aliveMsgs(loadAdminMsgs())
       .filter(m => inRange(m.createdAt.slice(0,10)))
       .sort((a,b) => b.createdAt.localeCompare(a.createdAt))
       .map(m => {
