@@ -1179,12 +1179,20 @@ async function __syncPush(school){
   if(st.running) return;
   st.running = true;
   try{
-    let raw = null;
-    try{ raw = localStorage.getItem(key); }catch(e){}
-    if(!raw) return;
-    let obj = null;
-    try{ obj = JSON.parse(raw); }catch(e){}
-    if(!obj) return;
+let raw = null;
+  try{ raw = localStorage.getItem(key); }catch(e){}
+  let obj = null;
+  if(raw){ try{ obj = JSON.parse(raw); }catch(e){} }
+  if(!obj){
+    // لا توجد نسخة محلية (خروج ثم دخول أو مسح تخزين): إن وُجدت نسخة احتياطية معلّقة
+    // فلا نتخلى عنها — كانت نافذةُ السحب ترميها قبل أن يلتقطها الرفع، فتختفي نقطة
+    // معلمة لم تُرفع بعد (مثل +10 تفوق) للأبد. نرفع النسخة الاحتياطية بدلاً منها.
+    try{
+      const pobj = JSON.parse(localStorage.getItem(pendKey) || 'null');
+      if(pobj && typeof pobj === 'object') obj = pobj;
+    }catch(e){}
+  }
+  if(!obj) return;
     // إذا وُجدت نسخة احتياطية لتعديلات لم تُرفع بعد (فشل سابق)، نفضّلها إن كانت أحدث
     // حتى لا تُفقد تعديلات المعلم إذا أُغلِق التطبيق قبل نجاح الرفع ثم أعيد فتحه.
     try{
@@ -1547,6 +1555,14 @@ function __syncPullPaused(){
   }
   return false;
 }
+/* هل نتخلى عن نسخة الدفعة المعلّقة (pendKey)؟ الإسقاط فقط لفقدانٍ محقق (لا تُقرأ)
+   أو لقِدَمٍ مثبت مُقارنةً بنسخةٍ محليةٍ موجودةٍ فعلاً. غياب النسخة المحلية (بعد
+   خروج/إعادة دخول أو مسح تخزين) ليس سبباً للتخلي أبداً: قد تحمل الدفعة نقاطَ
+   معلمةٍ لم تُرفع بعد — والدفعة تُرفع أولاً ثم يُستأنف السحب. */
+function __pendShouldDiscard(pend, local){
+  if(!pend || typeof pend !== 'object') return true;
+  return !!local && __syncTS(pend) <= __syncTS(local);
+}
 async function __syncPull(school){
   const __PULL_PAUSE_KEY = 'nibras_pull_pause_until_'+school;
   if(__syncPullPaused()) return; // قد يوقف المدير السحب مؤقتاً كي لا تهبط نسخةُ الخادم فوق عمل معلمٍ
@@ -1576,11 +1592,14 @@ async function __syncPull(school){
     try{ pendExists = !!localStorage.getItem(pendKey); }catch(e){}
     // إن كان الاحتياطي قديماً (لا يحوي تعديلات أحدث من التخزين الحالي)، فهو بقايا رفعٍ محجوب
     // (403 انتظار تغيير كلمة المرور) علّقت السحبَ إلى الأبد — نزيله فنستعيد جلب بيانات الخادم.
+    // والنقصُ الخطير كان: اعتبارُ غياب النسخة المحلية (خروج/إعادة دخول أو مسح تخزين) سبباً
+    // للتخلّي — فكانت تُرمى دفعةٌ معلّقة فيها نقاطٌ لم تُرفع (مثل +10 تفوق) قبل وصولها للخادم،
+    // فـ«تختفي» نقطةُ المعلمة للأبد رغم أنها كانت محفوظة. فلا نتخلى حين تنعدم المحلية.
     if(pendExists){
       let pendStale = false;
       try{
         const pend = JSON.parse(localStorage.getItem(pendKey));
-        pendStale = !pend || !local || __syncTS(pend) <= __syncTS(local);
+        pendStale = __pendShouldDiscard(pend, local);
       }catch(e){ pendStale = true; }
       if(pendStale){
         try{ localStorage.removeItem(pendKey); }catch(e){}
