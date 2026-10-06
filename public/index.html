@@ -4893,6 +4893,14 @@ function renderDashboard(){
       items.push(card({ icon:'🔁', bg:'#fef2f2', fg:'var(--red,#ef4444)',
         name:'غياب متكرر', meta, num:repeatedAbs.length, click:'showRepeatedAbsenceStudents()' }));
     }
+    const absentTeachers = __insightTeacherAbsence();
+    if(absentTeachers.length){
+      // لون الغياب نفسه كلون غياب الطالبات، والأيقونة والعنوان هما اللذان
+      // يفرّقان بين المؤشّرين — لا لونٌ مستحدث لمشكلة من نوع واحد.
+      const meta = absentTeachers.slice(0,3).map(t => `${t.name} — ${t.n} يوم غياب`).join(' · ');
+      items.push(card({ icon:'⚠️', bg:'#fef2f2', fg:'var(--red,#ef4444)',
+        name:'غياب المعلمات', meta, num:absentTeachers.length, click:'showTeacherAbsence()' }));
+    }
     if(frequentTransfers.length){
       const meta = frequentTransfers.slice(0,3).map(t => `${t.name}${cls(t)} — ${t.n} تحويلات`).join(' · ');
       items.push(card({ icon:'🔄', bg:'#f5f3ff', fg:'var(--purple,#8b5cf6)',
@@ -4910,10 +4918,11 @@ function renderDashboard(){
       items.push(card({ icon:'⌛', bg:'#fffbeb', fg:'var(--orange,#f59e0b)',
         name:'تأخّر الطالبات', meta, num:lateStudents.length, click:'showLateStudents()' }));
     }
-    // شريط ملخّص: كم مؤشرًا تتراكم اليوم (4 كحد أقصى)، فيرى القارئ صورة واحدة لا أرقامًا متفرقة
-    const bar = items.length ? `<div class="nbr-bar" title="${items.length} من 4"><span style="width:${Math.round(items.length/4*100)}%"></span></div>` : '';
+    // شريط ملخّص: كم مؤشرًا تتراكم اليوم (5 كحد أقصى)، فيرى القارئ صورة واحدة لا أرقامًا متفرقة
+    const TOTAL_IND = 5;
+    const bar = items.length ? `<div class="nbr-bar" title="${items.length} من ${TOTAL_IND}"><span style="width:${Math.round(items.length/TOTAL_IND*100)}%"></span></div>` : '';
     const foot = items.length
-      ? `🔎 ${items.length} من 4 مؤشرات تحتاج متابعة · العتبات: غياب ${A.daysThreshold} يومًا أو ${A.runThreshold} متتالية · تحويلات ${__insightTransfersThreshold + 1}+ · معلمة ${L.teacherThreshold + 1}+ · طالبة ${L.studentThreshold}+`
+      ? `🔎 ${items.length} من ${TOTAL_IND} مؤشرات تحتاج متابعة · العتبات: غياب طالبة ${A.daysThreshold} يومًا أو ${A.runThreshold} متتالية · غياب معلمة ${ABSENT_WARN_DAYS + 1}+ · تحويلات ${__insightTransfersThreshold + 1}+ · تأخّر معلمة ${L.teacherThreshold + 1}+ · تأخّر طالبة ${L.studentThreshold}+`
       : `✅ لا شيء يحتاج متابعة الآن — الغياب والتحويلات والتأخّر ضمن الحدود`;
     return `
     <div class="nbr-wrap">
@@ -5484,9 +5493,19 @@ function showTeacherTodayAttendance(){
    - تحويلات متكررة = أكثر من 3 تحويلات لنفس الطالب.
    - تأخر المعلمات المتكرر = أكثر من 5 مرات تأخّر خلال الشهر (teacher.markedLate).
    - تأخر طالبات متكرر = 5 مرات تأخّر فأكثر خلال الشهر (سجل الحضور status LATE).
+   - غياب المعلمات = أكثر من 3 أيام غياب في السنة الدراسية (teacher.absences).
+     ولم يكن موجودًا في الأصل، فلم يرَ أحدُ متابعَي لوحة التحليلات غياب
+     معلمةٍ تجاوز 3 أيام مع بقاء كل مؤشرات الطلاب سليمة — وعتبة المؤشر
+     غير عتبة الطلاب (3 لا 5)، وأفقه امتداد السنة لا آخر 30 يومًا.
    الأسس كلها سجلات الحضور/الحضور الفعلية، فتبقى الأرقام مطابقة لما في باقي اللوحة. */
 const __insightAbsOpts = { windowDays:30, daysThreshold:5, runThreshold:5 };
 const __insightTransfersThreshold = 3;
+/* حدّ غياب المعلمة: يتجاوز غيابها 3 أيام فتظهر. رقم واحد للتطبيق كلّه —
+   تنبيهُها في لوحتها (absentWarningHtml) ومؤشرُها في التحليلات يستدعيانه،
+   فلا يجوز أن يرى المدير شرطًا وتراه المعلمة شرطًا آخر. فالشرط تجاوز، لا
+   مساواة: 3 أيام لا تظهر، 4 تظهر. */
+const ABSENT_WARN_DAYS = 3;
+const __insightTeacherAbsThreshold = ABSENT_WARN_DAYS;
 // studentThreshold حدّ أدنى مُغلق: 5 مرات فأكثر تكفي للظهور (وليس «أكثر من 5»).
 // يُقرأ بـ n < lim في __insightLateStudents، بخلاف teacherThreshold الذي يبقى
 // «أكثر من 5» (n <= lim) لأن عتبته لم تتغيّر.
@@ -5586,6 +5605,33 @@ function __insightLateTeachers(threshold){
   out.sort((a,b) => b.n - a.n);
   return out;
 }
+/* غياب المعلمات: أكثر من 3 أيام غياب هذا العام الدراسي.
+   مصدره teacher.absences نفسه الذي يقرؤه teacherStats في لوحة المعلمة
+   وتنبيهها، فالأرقام لا تتعارض بيتَين. ونؤطّره بِسنة الدراسية لا بآخر
+   30 يومًا لأن هذا السجلّ سنويّ: معلمة غابت في أكتوبر لزم أن تُرى في مايو
+   بعدما يهبط دورها، وإلا كان الناقد أعمى بعد شهر. ونقتصر على TEACHER
+   لأن متابعة الغياب عندهم مربوطة بتلك البطاقة. */
+function __insightTeacherAbsence(threshold){
+  const lim = Number(threshold) || ABSENT_WARN_DAYS;
+  const d = loadDB();
+  const now = new Date();
+  const yearStart = now.getMonth() >= 8 ? new Date(now.getFullYear(), 8, 1) : new Date(now.getFullYear()-1, 8, 1);
+  const startKey = localDateKey(yearStart);
+  const todayKey = localDateKey(now);
+  const out = [];
+  for(const u of (d.users || [])){
+    if(!u || u.active === false) continue;
+    if(u.role !== 'TEACHER') continue;
+    const dates = Array.isArray(u.absences)
+      ? u.absences.filter(x => typeof x === 'string' && x >= startKey && x <= todayKey)
+      : [];
+    const n = new Set(dates).size;   // اليوم المكرر يُحسب مرة واحدة
+    if(n <= lim) continue;           // تجاوز لا مساواة: 3 لا تظهر، 4 تظهر
+    out.push({ id:u.id, name:u.name || u.id, n, dates:Array.from(new Set(dates)).sort().reverse() });
+  }
+  out.sort((a,b) => b.n - a.n);
+  return out;
+}
 /* تأخر الطالبات المتكرر خلال الشهر: من سجل الحضور، يوم واحد يُحسب مرة واحدة،
    ويُستبعد اليوم الذي صار فيه الطالب غائبًا (الغائب يفوز على المتأخر في القاعدة
    الواحدة __attEffStatus، فلا يُحتسب اليوم تأخرًا وحضورًا في آن). */
@@ -5674,6 +5720,21 @@ function showLateTeachers(){
       </tr>`).join('')}</tbody>
     </table>` : '<p class="muted" style="margin:12px 0">لا تأخر متكرر للمعلمات هذا الشهر ✅</p>';
   __insightModal('معلمات تأخّرن متكررًا هذا الشهر', '⏰', body);
+}
+function showTeacherAbsence(){
+  const rows = __insightTeacherAbsence();
+  const thrNoun = ABSENT_WARN_DAYS === 1 ? 'يوم' : 'أيام';
+  const body = rows.length ? `
+    <p class="muted small" style="margin:8px 0 10px">غياب المعلمة = أكثر من ${ABSENT_WARN_DAYS} ${thrNoun} غياب في السنة الدراسية الحالية، وعدُّها نفس الدالّة التي تقرؤها المعلمة في لوحتها — فالرقم بيتٌ واحد لا بيتان.</p>
+    <table class="data-table" style="margin-top:6px">
+      <thead><tr><th>المعلمة</th><th>عدد أيام الغياب</th><th>أيام الغياب</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td style="font-weight:700">${escapeHtml(r.name)}</td>
+        <td style="font-weight:800;color:#dc2626">${r.n} ${r.n === 1 ? 'يوم' : 'أيام'}</td>
+        <td class="muted small">${r.dates.slice(0,8).map(x => escapeHtml(fmtDateOnly(x))).join('، ')}${r.dates.length>8 ? ' …' : ''}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : `<p class="muted" style="margin:12px 0">لا غياب تجاوز ${ABSENT_WARN_DAYS} ${thrNoun} للمعلمات ✅</p>`;
+  __insightModal(`معلمات تجاوزن حدّ ${ABSENT_WARN_DAYS} ${thrNoun} غياب`, '⚠️', body);
 }
 function showLateStudents(){
   const rows = __insightLateStudents();
@@ -8877,11 +8938,10 @@ function teacherStats(u){
     absDates,
   };
 }
-/* تنبيه غياب المعلمة: يظهر على لوحتها حين يتجاوز الغياب الحدّ
- * ABSENT_WARN_DAYS. والشرط تجاوزٌ لا مساواة: من بلغ 3 أيام لم يظهر بعد،
- * ومن بلغ 4 ظهر. والعرض من غياب السجلّ فقط لا من التأخر، فالتأخر له
- * مربّعه الأصفر القائم في البطاقة ذاتها. */
-const ABSENT_WARN_DAYS = 3;
+/* تنبيه غياب المعلمة على لوحتها. والحدّ ABSENT_WARN_DAYS معرّف بجوار عتبات
+ * التحليلات فوق (قسم "نبراس يرى") لأنه واحد للاثنين: تنبيهُها في لوحتها
+ * ومؤشرُ المدير في التحليلات لا يجوز أن يختلفا رقمًا. والشرط تجاوزٌ لا
+ * مساواة: من بلغ 3 أيام لم يظهر بعد، ومن بلغ 4 ظهر. */
 function absentWarningHtml(absent, teacherId, clickable){
   const n = Number(absent) || 0;
   if(!(n > ABSENT_WARN_DAYS)) return '';

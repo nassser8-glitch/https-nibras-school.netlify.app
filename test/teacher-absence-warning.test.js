@@ -20,7 +20,11 @@ function sliceBetween(src, start, end){
 }
 
 function api(){
-  const SRC = sliceBetween(HTML, 'const ABSENT_WARN_DAYS', 'const LATE_TYPE_NAMES');
+  // الثابت انتقل قسم العتبات (أعلى الملف)، والدالة بقيت مكانها — نأخذ الاثنتين على حدة
+  const SRC = [
+    sliceBetween(HTML, 'const ABSENT_WARN_DAYS =', ';'),
+    sliceBetween(HTML, 'function absentWarningHtml(', 'const LATE_TYPE_NAMES'),
+  ].join('\n');
   return new Function(SRC + '\nreturn { absentWarningHtml, ABSENT_WARN_DAYS };')();
 }
 

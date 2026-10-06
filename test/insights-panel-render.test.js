@@ -38,6 +38,8 @@ function renderPanel(db, user){
     classLabel: (c) => (c ? c.name : '?'),
     escapeHtml: (v) => String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[ch])),
     fmtDateOnly: (d) => String(d).slice(0, 10),
+    // مؤشر غياب المعلمات يبني مفتاح تاريخ السنة الدراسية بنفس دالّة التطبيق
+    localDateKey: (d) => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()),
     todayStr: () => keyOf(new Date()),
     user,
     // «الأكثر تحويلاً» يعدّ ما تراه هذه المعلمة فقط (القاعدة نفسها في الإنتاج)
