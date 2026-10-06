@@ -1109,6 +1109,27 @@ function __mergeMsg(a, b){
   }
   return out;
 }
+/* اقتراحات رسالة اليوم لها آلة حالات: PENDING ثم APPROVED أو REJECTED، على
+ * خلاف رسائل الإدارة التي تُضاف ولا تُحال. فدمجها بـ__mergeMsg كان خطأً:
+ * ذلك الدمج يجعل نسخة الخادم تكتب فوق كل حقل منفرد (سطر out = {...b, ...a}
+ * وأولاهما الخادم)، فتُلغي نسخةُ الخادم القديمة (PENDING) قرارَ المدير
+ * وتُعيد الاقتراح إلى صندوق المعلّق — فيظهر المرفوض من جديد ولا يثبت
+ * المعتمد. لذلك ندمج بقرار رتيب: ما انتقل إلى قرارٍ لا يعود إلى PENDING
+ * أبداً، وبين قرارين يأخذ الأحدث وقتاً (ولكلٍّ decidedAt). */
+function __mergeSuggestion(a, b){
+  if(!a) return b;
+  if(!b) return a;
+  const out = { ...b, ...a };
+  const decided = s => s === 'APPROVED' || s === 'REJECTED';
+  const stamp = x => String((x && (x.decidedAt || x.approvedAt || x.rejectedAt || x.createdAt)) || '');
+  const sa = decided(a.status), sb = decided(b.status);
+  if(sb && !sa) out.status = b.status;
+  else if(sa && !sb) out.status = a.status;
+  else if(sa && sb) out.status = (stamp(b) > stamp(a)) ? b.status : a.status;
+  else out.status = a.status || b.status;
+  if(!out.status) delete out.status;
+  return out;
+}
 // دمج الفصول حقولاً بحقل — لا استبدال الكائن. مشترك بين الدفع (__syncPush) والسحب
 // (__syncPull): الاثنان كانا يمرّران قسم classes على locallyOnly وهي تبقي كائن الخادم
 // كاملاً حين يتطابق المعرّف، فتُمحى teacherIds المُضافة على الجهاز قبل الرفع، وتُمحى
@@ -1269,13 +1290,13 @@ async function __syncPush(school){
             };
             if(mj.data && Array.isArray(mj.data.assignments)) sd.assignments = mergeByIdBetter(sd.assignments, obj.assignments);
             if(mj.data && Array.isArray(mj.data.activities)) sd.activities = mergeByIdBetter(sd.activities, obj.activities);
-            const unionMsgs = (srvArr, locArr) => {
+            const unionMsgs = (srvArr, locArr, merge) => {
               const m = new Map();
               for(const x of (Array.isArray(srvArr) ? srvArr : [])) if(x && x.id != null) m.set(x.id, x);
               for(const x of (Array.isArray(locArr) ? locArr : [])){
                 if(!x || x.id == null) continue;
                 if(!m.has(x.id)) m.set(x.id, x);
-                else m.set(x.id, __mergeMsg(m.get(x.id), x));
+                else m.set(x.id, (merge || __mergeMsg)(m.get(x.id), x));
               }
               return Array.from(m.values());
             };
@@ -1284,9 +1305,12 @@ async function __syncPush(school){
             const msgsChanged = srvMsgs.length !== localMsgs.length || srvMsgs.some(x => !localMsgs.some(y => y && y.id === x.id));
             const srvSug = mj.data && Array.isArray(mj.data.suggestions) ? mj.data.suggestions : [];
             const localSug = Array.isArray(obj.suggestions) ? obj.suggestions : [];
-            const sugChanged = srvSug.length !== localSug.length || srvSug.some(x => !localSug.some(y => y && y.id === x.id));
+            const sugChanged = srvSug.length !== localSug.length || srvSug.some(x => {
+              const y = localSug.find(z => z && z.id === x.id);
+              return !y || y.status !== x.status;
+            });
             sd.adminMsgs = unionMsgs(srvMsgs, localMsgs);
-            sd.suggestions = unionMsgs(srvSug, localSug);
+            sd.suggestions = unionMsgs(srvSug, localSug, __mergeSuggestion);
             const srvAnn = mj.data && Array.isArray(mj.data.announcements) ? mj.data.announcements : [];
             const localAnn = Array.isArray(obj.announcements) ? obj.announcements : [];
             const annBest = (a, b) => {
@@ -1627,18 +1651,18 @@ async function __syncPull(school){
       };
       if(Array.isArray(local.assignments)) merged.assignments = mergeByIdBetterP(merged.assignments, local.assignments);
       if(Array.isArray(local.activities)) merged.activities = mergeByIdBetterP(merged.activities, local.activities);
-      const unionMsgsP = (srvArr, locArr) => {
+      const unionMsgsP = (srvArr, locArr, merge) => {
         const m = new Map();
         for(const x of (Array.isArray(srvArr) ? srvArr : [])) if(x && x.id != null) m.set(x.id, x);
         for(const x of (Array.isArray(locArr) ? locArr : [])){
           if(!x || x.id == null) continue;
           if(!m.has(x.id)) m.set(x.id, x);
-          else m.set(x.id, __mergeMsg(m.get(x.id), x));
+          else m.set(x.id, (merge || __mergeMsg)(m.get(x.id), x));
         }
         return Array.from(m.values());
       };
       if(Array.isArray(local.adminMsgs)) merged.adminMsgs = unionMsgsP(merged.adminMsgs, local.adminMsgs);
-      if(Array.isArray(local.suggestions)) merged.suggestions = unionMsgsP(merged.suggestions, local.suggestions);
+      if(Array.isArray(local.suggestions)) merged.suggestions = unionMsgsP(merged.suggestions, local.suggestions, __mergeSuggestion);
       if(Array.isArray(local.announcements)){
         const annBestP = (a, b) => {
           if(!a) return b;
@@ -11628,7 +11652,7 @@ function approveSuggestion(id){
   setAnnouncementFor(school, { id: uid(), text: s.text, senderName: s.authorName + ' (' + roleLabel(s.authorRole) + ')', updatedAt: new Date().toISOString() });
   const arr = loadSuggestions(school);
   const t = arr.find(x => x.id === id);
-  if(t){ t.status = 'APPROVED'; t.approvedAt = new Date().toISOString(); }
+  if(t){ t.status = 'APPROVED'; t.approvedAt = t.decidedAt = new Date().toISOString(); }
   saveSuggestions(arr, school);
   renderApp();
   alert('تم اعتماد العبارة وستظهر في رسالة اليوم للجميع ✅');
@@ -11640,7 +11664,7 @@ function rejectSuggestion(id){
   const school = s._school || getActiveSchool();
   const arr = loadSuggestions(school);
   const t = arr.find(x => x.id === id);
-  if(t){ t.status = 'REJECTED'; t.rejectedAt = new Date().toISOString(); }
+  if(t){ t.status = 'REJECTED'; t.rejectedAt = t.decidedAt = new Date().toISOString(); }
   saveSuggestions(arr, school);
   renderApp();
 }
