@@ -57,7 +57,7 @@ test('سجل مسطّح حقيقي: غياب يوم واحد يُحتسب غيا
   assert.equal(r.total, 1);
 });
 
-test('يطابق ما يراه المدير: نفس السجل يعطي نفس العدّ في обе الواجهتين', () => {
+test('يطابق ما يراه المدير: نفس السجل يعطي نفس العدّ في الواجهتين', () => {
   const ctx = buildCtx().api;
   const d = { attendance: [
     { id: 'r1', studentId: 'u1', date: '2026-02-01', status: 'ABSENT', absClerks: ['t1'] },
@@ -118,7 +118,7 @@ test('لا تُعدّ سجلات طالب غيري', () => {
     { studentId: 'u3', date: '2026-02-01', status: 'ABSENT' },
   ] };
   const r = attCountsByStudent(d, 'u1');
-  assert.equal(r.total, 0, 'لا 기록 لغيري');
+  assert.equal(r.total, 0, 'لا سجلّ لغيري');
 });
 
 test('قائمة حضور فارغة أو غير موجودة لا تكسر الصفحة', () => {

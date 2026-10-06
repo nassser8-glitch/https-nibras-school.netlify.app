@@ -125,7 +125,7 @@ test('الأسماء تُهرَّب (لا حقن HTML من بيانات المس
 });
 
 test('تاريخ اللوحة يأتي من مفتاح تاريخ لا من كائن Date', () => {
-  // fmtDateOnly يقصّ首个 10 محارف: لو مرّرنا كائن Date ل学着 "Wed Sep 30 ..."
+  // fmtDateOnly يقصّ أول 10 محارف: لو مرّرنا كائن Date لكان الناتج "Wed Sep 30 ..."
   // فطُبعت تواريخ إنجليزية داخل واجهة عربية. نتحقق أن الاستدعاء يمرّ بمفتاح.
   const srcPanel = src.slice(src.indexOf('const seesInsights ='));
   assert.ok(!/fmtDateOnly\(new Date\(\)\)/.test(srcPanel), 'لا تمرير كائن Date إلى fmtDateOnly');
