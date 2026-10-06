@@ -1398,8 +1398,20 @@ async function __syncPush(school){
             if(Array.isArray(obj.maintenance) && !__canonEq(obj.maintenance, sd.maintenance)){
               sd.maintenance = mergeMaintByIdNewer(sd.maintenance, obj.maintenance);
             }
+            // نقاط كُتبت تحوّاً على هذا الجهاز (لم يبلغ الخادمُها بعد): لا نَدَع لقطةَ
+            // الخادم القديمة تطمس تصحيحها المحلي، وإلا ارتدّ الرقم إلى سبق الحفظ
+            // «فوراً» فيبدو أن النقطة لم تُسجل. نمرر الأرصدة المعدَّلة محلياً لطالبات
+            // ملاحظاتُهن غير المرفوعة (بصمة adjustedAt). بعد ردّ الخادم بالاحتساب
+            // الحقيقي تعود الصورة للخادم في أول سحبٍ لاحق. نأسِر النسخة المحلية قبل
+            // محوها بتعيين obj = sd أدناه.
+            const locNotesCarry = Array.isArray(obj.notes) ? obj.notes.slice() : [];
+            const locPTCarry = obj.pointsTotals;
             obj = sd;
             obj._ts = mergedTs || Date.now();
+            try{
+              const unsync = __pointsUnsyncedStudents((mj.data && mj.data.notes) || [], locNotesCarry);
+              __carryLocalAdjustedPoints(sd.pointsTotals, locPTCarry, unsync);
+            }catch(e){}
             try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
           } else if(serverHasData && isEmptySeed0){
             // متصفح جديد فارغ تماماً: نأخذ نسخة الخادم (لا نرفع فارغاً فوق عملية)
@@ -1765,6 +1777,12 @@ async function __syncPull(school){
         }
       } catch(_){}
       merged._ts = Math.max(__syncTS(server), __syncTS(local), Date.now());
+      // كما في الدفع: لا نطمس تصحيحَ أرصدةٍ مُحدث محلياً ولم تنل من الخادم بعد —
+      // وإلا عاد رصيدَ النقطة الجديدة إلى القديم لدى إعادة فتح التطبيق قبل رفعه.
+      try{
+        const unsyncP = __pointsUnsyncedStudents((Array.isArray(server.notes) ? server.notes : []), (Array.isArray(local.notes) ? local.notes : []));
+        __carryLocalAdjustedPoints(merged.pointsTotals, local.pointsTotals, unsyncP);
+      }catch(e){}
       __syncLogAdd({ ev:'pull-merged', school, notesLocal:(Array.isArray(local.notes)?local.notes.length:0), notesServer:(Array.isArray(server.notes)?server.notes.length:0), notesOut:(Array.isArray(merged.notes)?merged.notes.length:0), hasPending:true });
       __origSetItem(key, JSON.stringify(merged));
     }
@@ -6701,8 +6719,46 @@ function __adjustLocalPoints(sid, delta){
     const total = (typeof r.total === 'number' ? r.total : 0) + delta;
     const pos = (typeof r.pos === 'number' ? r.pos : 0) + (delta > 0 ? delta : 0);
     const neg = (typeof r.neg === 'number' ? r.neg : 0) + (delta < 0 ? delta : 0);
-    t[sid] = { total, pos, neg };
+    // adjustedAt بُصمة أن هذا الرقم تصحيحٌ محلي (إضافة/حذف نقطة قبل رفع الخادم) —
+    // يحملها الدمج/السحب إلى لقطة الخادم حتى لا يرتدّ الرقم المعروض لسبق الحفظ.
+    t[sid] = { total, pos, neg, adjustedAt: Date.now() };
     saveDB(d);
+  }catch(e){}
+}
+/* حامل أرصدة النقاط المحلية غير المرفوعة بعد:
+   1) __pointsUnsyncedStudents(srvNotes, localNotes) — الطالبات اللواتي لهن على هذا
+      الجهاز ملاحظة (أو حذفُ ملاحظة) لم يبلغ الخادمَ بعد؛ فرسمُهنّ في الأرصدة المشتقّة
+      (pointsTotals) لم يُحتَسب لدى الخادم بعد.
+   2) __carryLocalAdjustedPoints(targetPT, localPT, unsynced) — يُدخل قيمة الطالبات
+      المحدثات محلياً (ذات adjustedAt) مكان لقطة الخادم في النسخة المدمجة قبل كتابتها.
+   السبب: لقطة pointsTotals القادمة من الخادم أقدم من تصحيحات هذا الجهاز المتزامنة مع
+   حفظٍ لم يصل بعد. دون هذا الناقل، يعود رقم النقطة الجديدة إلى السابق «فوراً» بعد
+   الحفظ (merge النص الصلب obj=sd في __syncPush يحلّ محل pointsTotals بلقطة الخادم)
+   فيظهر للحظة أن الملاحظة لم تُسجَّل، حتى يردّ الخادم باحتسابها فعلياً بعد سحبٍ لاحق. */
+function __pointsUnsyncedStudents(srvNotes, localNotes){
+  const srv = new Map((Array.isArray(srvNotes) ? srvNotes : []).map(n => [n && n.id, n]));
+  const out = new Set();
+  for(const n of (Array.isArray(localNotes) ? localNotes : [])){
+    if(!n || n.id == null) continue;
+    const srvN = srv.get(n.id);
+    if(srvN){
+      // الحذف الناعم لم يبلغ الخادم بعد: الخادم ما زال يحتسب النقطة
+      if(n.deleted && !srvN.deleted) out.add(n.studentId);
+      continue; // الموجودة عند الخادم يُحتسبها هو — لا نصوّب فوق حسابه
+    }
+    if(n.studentId) out.add(n.studentId);
+  }
+  return out;
+}
+function __carryLocalAdjustedPoints(targetPT, localPT, unsynced){
+  try{
+    if(!targetPT || !localPT || typeof targetPT !== 'object' || typeof localPT !== 'object') return;
+    for(const sid of unsynced){
+      if(sid == null) continue;
+      const lr = localPT[sid];
+      if(!lr || typeof lr !== 'object' || typeof lr.adjustedAt !== 'number') continue;
+      targetPT[sid] = JSON.parse(JSON.stringify(lr));
+    }
   }catch(e){}
 }
 function studentPointsSplit(){
