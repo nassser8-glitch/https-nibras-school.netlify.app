@@ -1497,6 +1497,7 @@ let attempt = 0;
       st.lastOkAt = Date.now();
       st.lastOkTs = __syncTS(obj);
       try{ localStorage.removeItem(pendKey); }catch(e){}
+      try{ __clearUnpushed(school); }catch(e){}
       const recovered = st.attempts > 0;
       st.attempts = 0;
       st.lastFail = 0;
@@ -1562,6 +1563,89 @@ function __syncPullPaused(){
 function __pendShouldDiscard(pend, local){
   if(!pend || typeof pend !== 'object') return true;
   return !!local && __syncTS(pend) <= __syncTS(local);
+}
+/* ===== سجلّ «النقاط التي لم ترفع بعد» للجهاز الحالي =====
+   يخزّن معرّفات الملاحظات التي أُنشئت على هذا الجهاز ولم يبلغ رفعُها الناجحُ
+   الخادمَ بعد. يُملأ عند كل حفظ ملاحظة، ويُفرَّغ عند كل رفعٍ ناجح — فتعرف
+   المعلمة كم نقطة ما زالت على جهازها فقط (ولم تصل الخادم/الطالبة)، بدل أن
+   تكتشف اختفاءها بالصدفة. السجلُ لكل جهازٍ على حدة، وهو عرضٌ لا يمس الخادم. */
+function __unpushedKey(school){ return 'nibras_' + school + '_unpushed_v1'; }
+function __unpushedIds(school){
+  try{
+    const a = JSON.parse(localStorage.getItem(__unpushedKey(school)) || 'null');
+    return Array.isArray(a) ? a : [];
+  }catch(e){ return []; }
+}
+function __markNotesUnpushed(school, ids){
+  try{
+    const s = new Set(__unpushedIds(school));
+    (Array.isArray(ids) ? ids : []).forEach(id => { if(id != null) s.add(String(id)); });
+    localStorage.setItem(__unpushedKey(school), JSON.stringify(Array.from(s)));
+  }catch(e){}
+}
+function __clearUnpushed(school){
+  try{ localStorage.removeItem(__unpushedKey(school)); }catch(e){}
+}
+/* تلويحة أعلى صفحة الملاحظات: كم نقطة لم تصل الخادم بعد + زر الرفع الفوري */
+function __refreshUnpushedBar(){
+  try{
+    const bar = document.getElementById('unpushedBar');
+    if(!bar) return;
+    const me = currentUser();
+    if(!me || me.role === 'STUDENT' || !__serverEnabled() || !__syncEnabled()){
+      bar.style.display = 'none';
+      return;
+    }
+    const school = getActiveSchool();
+    if(!school){ bar.style.display = 'none'; return; }
+    const ids = new Set(__unpushedIds(school));
+    if(ids.size === 0){ bar.style.display = 'none'; return; }
+    const d = loadDB();
+    const notes = (d.notes || []).filter(n => n && !n.deleted && ids.has(String(n.id)));
+    if(notes.length === 0){
+      // الملاحظات المسجلة لم تعد في المخزن (نُقلت/حُذفت) — سجل نظيف
+      __clearUnpushed(school);
+      bar.style.display = 'none';
+      return;
+    }
+    const pts = notes.reduce((a, n) => a + (n.points ?? notePoints(n.type, n.category)), 0);
+    const studs = new Set(notes.map(n => n.studentId).filter(Boolean)).size;
+    const txt = document.getElementById('unpushedText');
+    if(!txt) return;
+    txt.textContent = '⚠️ لديك ' + notes.length + ' نقطة لم تصل لخادم المدرسة بعد (' + (pts > 0 ? '+' : '') + pts + ' على ' + studs + ' طالبة) — هي محفوظة على هذا الجهاز ولن تختفي، وستُرفع تلقائيًا.';
+    bar.style.display = 'block';
+    const btn = document.getElementById('unpushedRetryBtn');
+    if(btn) btn.disabled = __forceSyncBusy;
+  }catch(e){}
+}
+/* زر «أعد الرفع الآن»: يدفع فوراً دون انتظار الجدولة — والمعلمة ترى النتيجة الصريحة */
+let __forceSyncBusy = false;
+async function __forceSyncNow(){
+  try{
+    if(__forceSyncBusy) return;
+    const me = currentUser();
+    const school = getActiveSchool();
+    if(!me || !school || !__serverEnabled() || !__syncEnabled()) return;
+    __forceSyncBusy = true;
+    __refreshUnpushedBar();
+    // إن كان رفعٌ جارٍ الآن فلننتظر انتهاءه لنعيد التقييم على حاله
+    for(let w = 0; w < 20; w++){
+      if(!__pushState(school).running) break;
+      await new Promise(r => setTimeout(r, 300));
+    }
+    await __syncPush(school);
+    const left = __unpushedIds(school).length;
+    if(left === 0){
+      __noteSaveBanner('✅ رُفعت كل نقاطك للخادم بنجاح — لن تختفي.', false);
+    } else {
+      __noteSaveBanner('⚠️ ما زالت ' + left + ' نقطة تنتظر الرفع — تحققي من اتصالك وحسابك، وسأعيد المحاولة تلقائيًا.', true);
+    }
+  }catch(e){
+    __noteSaveBanner('⚠️ تعذّر الرفع الآن — نقاطك محفوظة على الجهاز.', true);
+  }finally{
+    __forceSyncBusy = false;
+    __refreshUnpushedBar();
+  }
 }
 async function __syncPull(school){
   const __PULL_PAUSE_KEY = 'nibras_pull_pause_until_'+school;
@@ -3651,7 +3735,10 @@ function renderLayout(user, hash){
     pageHtml = renderNotes();
     // طابور مطالبات إعادة الملكية: يظهر للإدارة فقط، ويُجلب بعد الرسم
     // لأن عناصره غير موجودة في HTML المُعاد.
-    if(user.role !== 'STUDENT') setTimeout(NRC_loadClaims, 0);
+    if(user.role !== 'STUDENT'){
+      setTimeout(NRC_loadClaims, 0);
+      setTimeout(__refreshUnpushedBar, 0);
+    }
   }
   else if(page === 'memo') pageHtml = renderMemo();
   else if(page === 'transfers') pageHtml = renderTransfers();
@@ -7814,6 +7901,12 @@ function renderNotes(){
 
   return `
   <div class="header-row"><h1 class="page-title">${isStudent ? 'ملاحظاتي' : 'الملاحظات'}</h1>${isStudent ? '' : '<button class="btn-primary" onclick="toggleEl(\'noteForm\')">+ إضافة ملاحظة</button>'}</div>
+  ${isStudent ? '' : `<div id="unpushedBar" class="card mb" style="display:none;background:#fef3c7;border:1px solid #fcd34d;padding:10px 14px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span id="unpushedText" style="font-weight:700;flex:1;min-width:220px"></span>
+      <button id="unpushedRetryBtn" class="btn-primary" style="padding:8px 16px" onclick="__forceSyncNow()">🔄 أعد الرفع الآن</button>
+    </div>
+  </div>`}
   ${isStudent ? '' : `<div id="noteForm" class="card mb" style="display:none">
     <div class="form-grid-3">
       <select id="nClassId" class="input" onchange="fillStudentMulti('nClassId','nStudentList','n')" data-tip="اختر الفصل الذي ينتمي إليه الطلاب أولًا لتظهر قائمة الطلاب"><option value="">اختر الفصل</option>${getClassesSorted().map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
@@ -7990,12 +8083,21 @@ function addNote(){
     // ما يرسله العميل (notes-privacy.enforceNoteOwners).
     const me0 = currentUser();
     const createdById = (me0 && me0.id) ? String(me0.id) : null;
+    const savedIds = [];
     ids.forEach(sid => {
       const stRec = (d.students || []).find(s => s && s.id === sid);
       const me = currentUser();
-      d.notes.push({ id:uid(), studentId:sid, studentNo: stRec && stRec.studentNo != null ? String(stRec.studentNo) : '', studentName: stRec ? (stRec.fullName || stRec.name || '') : '', type:effType, category, description, points, createdBy: createdById, createdByName: me ? me.name : '', createdByRole: me ? me.role : '', createdAt: new Date().toISOString(), batchId });
+      const ntId = uid();
+      savedIds.push(ntId);
+      d.notes.push({ id:ntId, studentId:sid, studentNo: stRec && stRec.studentNo != null ? String(stRec.studentNo) : '', studentName: stRec ? (stRec.fullName || stRec.name || '') : '', type:effType, category, description, points, createdBy: createdById, createdByName: me ? me.name : '', createdByRole: me ? me.role : '', createdAt: new Date().toISOString(), batchId });
     });
     saveDB(d);
+    try{
+      if(__serverEnabled() && __syncEnabled()){
+        __markNotesUnpushed(getActiveSchool(), savedIds);
+        setTimeout(__refreshUnpushedBar, 0);
+      }
+    }catch(e){}
     // الرصيد على الشاشة محدَّث فوراً: أرصددة الخادم لم تصل بعد، فنضيف الفرق
     // محلياً حتى لا تقرأ المعلمة رقماً قديماً لثوانٍ بعد حفظها.
     ids.forEach(sid => __adjustLocalPoints(sid, points));
