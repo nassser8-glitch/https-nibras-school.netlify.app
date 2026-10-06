@@ -49,6 +49,13 @@ function noteOwnerId(note) {
 function canReadNote(note, session) {
   if (!session) return false;
   if (isPrivilegedNotesRole(session.role)) return true;
+  // الطالبة ترى ملاحظاتها هي: نقطُها وُضعت باسمها (studentId = معرّف حسابها).
+  // بلا هذا الشرط لا يصلها من الخادم أي ملاحظة (لا تملك غيرا منها) فتظهر
+  // نقاطُها الإيجابية صفراً على شاشة «نقاطي» رغم أن رصيدها يحتسبها كلها.
+  if (String(session.role || '') === 'STUDENT') {
+    return !!(note && note.studentId != null
+      && String(note.studentId).trim() === String(session.user_id || ''));
+  }
   const owner = noteOwnerId(note);
   // غير مملوكة: للإدارة فقط (وليس لكل معلمة، ولا حتى للمالكة المحتملة المجهولة)
   if (!owner) return false;
@@ -57,7 +64,8 @@ function canReadNote(note, session) {
 
 /**
  * فلترة قائمة ملاحظات لمشاهد معيّن. الأدوار الإدارية ترى الكل (بما فيها
- * غير المملوكة حرفياً — لا حذف ولا إسناد)، وكل دور آخر يرى ملاحظاته فقط.
+ * غير المملوكة حرفياً — لا حذف ولا إسناد)، وكل دور آخر يرى ملاحظاته فقط،
+ * والطالبة ترى ملاحظاتها هي (المرجوحة باسمها) دون ملاحظات زميلاتها.
  */
 function filterNotesForViewer(notes, session) {
   if (!Array.isArray(notes)) return [];

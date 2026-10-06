@@ -2060,6 +2060,10 @@ function NRC_isAdminNotesRole(me){ return !!me && (me.role === 'ADMIN' || me.rol
 function NRC_canSeeNote(n, me){
   const u = me || currentUser();
   if(NRC_isAdminNotesRole(u)) return true;
+  // الطالبة ترى ملاحظاتها هي: نقطُها وُضعت باسمها (studentId = حسابها).
+  if(u && String(u.role || '') === 'STUDENT'){
+    return !!(n && n.studentId != null && String(n.studentId) === String(u.id || ''));
+  }
   const owner = n && n.createdBy != null ? String(n.createdBy).trim() : '';
   if(!owner) return false;               // غير مملوكة => الإدارة فقط
   return !!u && owner === String(u.id || '');
@@ -2067,6 +2071,8 @@ function NRC_canSeeNote(n, me){
 /* هل الملاحظة مملوكة **لشخص محدَّد** غيري؟ (معيار الإزالة من التخزين المحلي)
    - غير مملوكة (بلا createdBy) => false: لا نعرف صاحبتها فلا نحذف شيئاً.
    - مملوكة لي أو للإدارة => false.
+   - الطالبة: مملوكةٌ غيرها **عنها** (studentId = حسابها) => false: تبقى لتجد
+     سبب نقاطها، وما عن غيرها يبقى مملوكاً لغيرها => true.
    - مملوكة لزميلة أخرى => true: تُسقط من عرض هذا الجهاز. */
 /* ===== استرداد ملكية ملاحظة قديمة بلا createdBy =====
   Such الملاحظة تبقى محفوظة على جهازها (لا تُطهَّر)، لكن لا تُنسب لأحد ولا
@@ -2137,6 +2143,10 @@ function NRC_claimErrorText(code){
 function NRC_noteBelongsToOther(n, me){
   const u = me || currentUser();
   if(NRC_isAdminNotesRole(u)) return false;
+  // الطالبة: بقاء ملاحظاتها هي على جهازها، وإسقاط ملاحظات غيرها.
+  if(u && String(u.role || '') === 'STUDENT'){
+    return !n || n.studentId == null || String(n.studentId) !== String(u.id || '');
+  }
   const owner = n && n.createdBy != null ? String(n.createdBy).trim() : '';
   if(!owner) return false;               // لا مالك معروف => لا تُحذف أبداً
   return !!u && owner !== String(u.id || '');
