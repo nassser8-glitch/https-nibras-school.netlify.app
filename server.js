@@ -990,24 +990,42 @@ app.post('/api/auth/admin/mark-activated', requireAuth, (req, res) => {
     if (rateLimit('markact', 30, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
     const userId = String(req.body && req.body.userId || '');
     const username = String(req.body && req.body.username || '').trim();
+    const school = String((req.body && req.body.school) || req.session.school || '').toUpperCase();
+    if (!school || !db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!canManageUsers(req.session, school)) return res.status(403).json({ error: 'forbidden' });
     // بحث بالمعرّف أولاً، ثم باسم المستخدم: بعد تطبيع الأسماء المكررة قد يبقى في الواجهة
     // معرّف يتيم غير موجود في جدول الحسابات، فيفشل db.userById ويبدو التفعيل بلا أثر.
     let target = userId ? await db.userById(userId) : null;
     if (!target && username) target = await db.userByUsername(username);
-    const school = String((target && target.school) || (req.body && req.body.school) || req.session.school || '').toUpperCase();
-    if (!school || !db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
-    if (!canManageUsers(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    if (!target) {
+      // ربط حساب الدخول عبر هوية سجل النسخة نفسها: قد يختلف معرّف سجل القسم واسم مستخدمه
+      // عن جدول الحسابات (تطبيع الأسماء المكررة) — نحفر من النسخة ثم نطابق البريد/الاسم.
+      const rec = await db.getSchoolData(school);
+      const list = (rec && rec.data && Array.isArray(rec.data.users)) ? rec.data.users : [];
+      let blobUser = userId ? list.find(u => u && String(u.id) === String(userId)) : null;
+      if (!blobUser && username) blobUser = list.find(u => u && String(u.username || '').trim().toLowerCase() === username.toLowerCase()) || null;
+      if (blobUser) {
+        const bId = blobUser.id != null ? String(blobUser.id) : '';
+        const bName = String(blobUser.username || '').trim();
+        const bEmail = String(blobUser.email || '').trim().toLowerCase();
+        if (bId && bId !== String(userId)) target = await db.userById(bId);
+        if (!target && bName) target = await db.userByUsername(bName);
+        if (!target && bEmail) { const es = await db.usersByEmail(bEmail); if (es.length) target = es[0]; }
+      }
+    }
+    let accountsCleared = false;
     if (target) {
       await db.grantUserAccess(target.id);
       // مصدر الحقيقة لِـ firstLogin هو جدول الحسابات (users.first_login) الذي تُبنى منه
-      // /api/db — فبدون ضبطه هنا تبقى «بانتظار أول دخول» رغم التفعيل.
+      // /api/db — فبدون ضبطه هنا تبقى «بانتظار أول دخول» رغم التفعيل (خصوصاً لدى المعلمة عند الدخول).
       await db.clearFirstLogin(target.id);
       await db.deleteUserSessions(target.id);
+      accountsCleared = true;
     }
     // مزامنة نسخ القسم كلها (بالمعرّف أو الاسم) حتى لو كان المعروض معرّفاً يتيماً.
     const updated = await markSchoolUsersActivated(school, target ? target.id : userId, username || (target && target.username));
     if (!target && !updated) return res.status(404).json({ error: 'not_found' });
-    res.json({ ok: true, userId: (target && target.id) || userId, name: (target && target.name) || '', updated });
+    res.json({ ok: true, accountsCleared, userId: (target && target.id) || userId, name: (target && target.name) || '', updated });
   })().catch(fail(res));
 });
 
@@ -1680,9 +1698,11 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
       const stats = await db.usersForLoginStats(school);
       const byId = new Map();
       const byLower = new Map();
+      const byEmail = new Map();
       for (const t of stats) {
         byId.set(t.id, t);
         if (t.username) byLower.set(String(t.username).toLowerCase(), t);
+        if (t.email) byEmail.set(String(t.email).toLowerCase(), t);
       }
       const overlay = (u, t) => {
         const d = t.data || {};
@@ -1699,7 +1719,8 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
       };
       const seen = new Set();
       rec.data.users = rec.data.users.map(u => {
-        const t = byId.get(u.id) || (u.username ? byLower.get(String(u.username).toLowerCase()) : null);
+        const t = byId.get(u.id) || (u.username ? byLower.get(String(u.username).toLowerCase()) : null)
+          || (u.email ? byEmail.get(String(u.email).toLowerCase()) : null);
         if (t) { seen.add(t.id); overlay(u, t); }
         return u;
       });
