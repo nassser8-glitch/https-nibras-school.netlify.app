@@ -411,6 +411,7 @@ async function activateAllTeachersFromList(school) {
   const teachers = list.filter(u => u && u.role === 'TEACHER' && u.active !== false);
   const protectIds = new Set();
   const protectNames = new Set();
+  const clearedIds = [];
   const report = [];
   let accountsCleared = 0;
   let unlinked = 0;
@@ -429,6 +430,7 @@ async function activateAllTeachersFromList(school) {
       await db.grantUserAccess(target.id);
       await db.clearFirstLogin(target.id);
       await db.deleteUserSessions(target.id);
+      clearedIds.push(target.id);
       accountsCleared++;
     } else {
       unlinked++;
@@ -461,7 +463,17 @@ async function activateAllTeachersFromList(school) {
     }
     return { changed: n > 0, value: n };
   });
-  return { teacherCount: teachers.length, accountsCleared, unlinked, listUpdated: r.value || 0, staleDeactivated, report };
+  // تحقق بعد التنفيذ: كم حساباً في جدول الحسابات ما زال first_login=true لمَن وُجّهنا له؟
+  let stillPendingAccounts = 0;
+  if (clearedIds.length) {
+    try {
+      const vq = await db.pool.query(
+        'SELECT count(*)::int AS n FROM users WHERE id = ANY($1) AND first_login = true', [clearedIds]);
+      stillPendingAccounts = vq.rows[0] ? vq.rows[0].n : 0;
+    } catch (e) { console.warn('[activateAll] فشل تحقق first_login', e.message); }
+  }
+  return { teacherCount: teachers.length, accountsCleared, unlinked, listUpdated: r.value || 0,
+    staleDeactivated, stillPendingAccounts, report };
 }
 async function appendSchoolUser(school, userObj) {
   const r = await db.mutateSchoolData(school, (d) => {
@@ -2670,7 +2682,7 @@ app.get('/api/diag/mail', async (req, res) => {
 });
 app.get('/api/diag/teacher-dup', async (req, res) => {
   try {
-    const r = await db.pool.query(`SELECT id, school, username, name, role, active FROM users WHERE school='GIRLS' ORDER BY username`);
+    const r = await db.pool.query(`SELECT id, school, username, name, role, active, first_login, granted FROM users WHERE school='GIRLS' AND role IN ('TEACHER','ADMIN','AGENT') ORDER BY username`);
     res.json({ total: r.rows.length, rows: r.rows });
   } catch (e) { console.error(e); res.status(500).json({ error: String(e) }); }
 });

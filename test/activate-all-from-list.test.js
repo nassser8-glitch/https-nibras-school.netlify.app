@@ -79,3 +79,31 @@ test('5) الواجهة: زر جماعي يستدعي المسار ويلصّق 
   assert.ok(body.includes('j.staleDeactivated ?? 0'), 'يعرض عدد المعطلات المحذوفات');
   assert.ok(body.includes('j.unlinked || 0') || body.includes('j.unlinked??0'), 'يكشف المعلمات بلا حساب مرتبط');
 });
+
+test('6) تحقق ما بعد التنفيذ وتقرير لكل معلمة رُبط حسابها', () => {
+  const i = SERVER.indexOf('async function activateAllTeachersFromList(school)');
+  const body = SERVER.slice(i, i + 3600);
+  assert.ok(body.includes('const clearedIds = [];'), 'يجمع معرّفات ما مُسح');
+  assert.ok(body.includes('SELECT count(*)::int AS n FROM users WHERE id = ANY($1) AND first_login = true'),
+    'يقرأ بعد التنفيذ كم حسابٍ ما زال بانتظار أول دخول فعلاً');
+  assert.ok(body.includes('stillPendingAccounts'), 'يردّ بالتحقق');
+  assert.ok(body.includes('report.push({ name: bu.name'), 'تقرير لكل معلمة');
+});
+
+test('7) نقطة التشخيص تعرض first_login و granted للتحقق من الحالة الفعلية', () => {
+  const i = SERVER.indexOf(`app.get('/api/diag/teacher-dup'`);
+  assert.ok(i >= 0, 'نقطة التشخيص موجودة');
+  const body = SERVER.slice(i, i + 500);
+  assert.ok(body.includes('first_login'), 'يُطالع جدول الحسابات بحالته الفعلية');
+  assert.ok(body.includes('granted'), 'بمعرفة منح الدخول');
+});
+
+test('8) الواجهة: التطبيق الفوري على النسخة المحلية من تقرير الخادم لا من سحب مُتجاهل', () => {
+  const j = SRC.indexOf('async function activateAllTeachersApi(){');
+  const body = SRC.slice(j, j + 2600);
+  assert.ok(body.includes('const names = new Set();'), 'يبني فهرس المعلمات المفعّلة من التقرير');
+  assert.ok(body.includes('if(names.has(k)){ u.firstLogin = false; u.granted = true; flipped++; }'),
+    'يقلب المحلي مباشرة فلا تبقى «بانتظار أول دخول» أمام المدير');
+  assert.ok(body.includes("__origSetItem(dbKey(), JSON.stringify(d))"), 'يكتب بلا دورة رفع على الخادم');
+  assert.ok(body.includes('j.stillPendingAccounts || 0'), 'يحذّر إن بقي حساب فعلاً بانتظار أول دخول');
+});

@@ -9012,6 +9012,11 @@ async function markUserActivated(id){
     const r = await __api('POST', 'admin/mark-activated', { userId: id, username: u.username, school: getActiveSchool() });
     if(r.status === 200 && r.j && r.j.ok){
       await __refreshSchool(getActiveSchool());
+      // تطبيقٌ فوري على النسخة المحلية حتى لو فشل السحب بصمت: المعلمة المعنيّة تصبح مفعّلة الآن.
+      const d = loadDB();
+      let flipped = false;
+      (d.users || []).forEach(x => { if(x && x.role === 'TEACHER' && (String(x.id) === String(id) || (u.username && String(x.username||'').trim().toLowerCase() === String(u.username).trim().toLowerCase())) && x.firstLogin){ x.firstLogin = false; x.granted = true; flipped = true; } });
+      if(flipped){ try{ __origSetItem(dbKey(), JSON.stringify(d)); }catch(e){} }
       const after = userById(id);
       const stillPending = !!(after && after.firstLogin);
       if(r.j.accountsCleared === false){
@@ -9053,8 +9058,24 @@ async function activateAllTeachersApi(){
   if(r.status === 200 && r.j && r.j.ok){
     await __refreshSchool(getActiveSchool());
     const j = r.j;
+    // تطبيقٌ فوري على النسخة المحلية من تقرير الخادم (لا نعتمد على سحبٍ قد يفشل بصمت):
+    // كل معلمة رُبط حسابُها تصبح «مفعّلة» هنا والآن أمام عين المدير.
+    const d = loadDB();
+    let flipped = 0;
+    if(Array.isArray(j.report)){
+      const names = new Set();
+      j.report.forEach(x => { if(x && x.accountLinked) names.add(String(x.username || '').trim().toLowerCase() + '|' + String(x.email || '').trim().toLowerCase()); });
+      (d.users || []).forEach(u => {
+        if(!u || u.role !== 'TEACHER' || u.firstLogin !== true) return;
+        const k = String(u.username || '').trim().toLowerCase() + '|' + String(u.email || '').trim().toLowerCase();
+        if(names.has(k)){ u.firstLogin = false; u.granted = true; flipped++; }
+      });
+      if(flipped > 0){ try{ __origSetItem(dbKey(), JSON.stringify(d)); }catch(e){} }
+    }
     let m = `سُجّلت الحالة «مفعّلة» لـ ${j.listUpdated ?? 0} معلمة في قائمة القسم، ورُبط ${j.accountsCleared ?? 0} حسابِ دخولٍ وحُذفت منها «بانتظار أول دخول»، وعُطّل ${j.staleDeactivated ?? 0} حسابَ معلمةٍ محذوفةٍ لا تظهر في القائمة.`;
+    if(flipped > 0) m += ` ظهر «مفعّلة» الآن مباشرة لـ ${flipped} معلمة على هذه الشاشة.`;
     if((j.unlinked || 0) > 0) m += ` ملاحظة: ${j.unlinked} معلمة بلا حساب دخول مرتبط في جدول الحسابات — اضبط بياناتها من «🔑 بيانات الدخول».`;
+    if((j.stillPendingAccounts || 0) > 0) m += ` تحذير: ${j.stillPendingAccounts} حساباً ما تزال «بانتظار أول دخول» في جدول الحسابات بعد التنفيذ — اضغط الزر مرة أخرى أو راجع لوحة التفعيل.`;
     window.__teacherMsg = m;
   } else {
     const errEl = document.getElementById('userErr');
