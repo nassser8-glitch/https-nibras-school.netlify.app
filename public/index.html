@@ -8679,7 +8679,7 @@ function renderUsers(){
     const authCell = u.role === 'TEACHER'
       ? `<div style="font-size:12px;line-height:1.7">
           ${u.email ? `<span style="display:block;direction:ltr">📧 ${escapeHtml(u.email)}</span>` : '<span style="display:block;color:#9ca3af">📧 لا يوجد بريد</span>'}
-          ${u.firstLogin ? '<span style="display:block;color:#b45309">⏳ بانتظار أول دخول</span>' : '<span style="display:block;color:#047857">✅ مفعّل</span>'}
+          <span style="display:block;color:#047857">✅ مفعّل</span>
         </div>` : '—';
     return `<tr>
     <td>${nameCell}</td>
@@ -8688,7 +8688,7 @@ function renderUsers(){
     <td>${roleLabel(u.role)}</td>
     <td>${authCell}</td>
     <td style="font-size:12px;color:#6b7280;max-width:200px">${u.role==='TEACHER'?assignedHtml:'—'}</td>
-    <td>${isSelf || !isAdmin ? '' : `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="showTeacherCreds('${u.id}','${escapeHtml(u.name)}','${escapeHtml(u.username||'')}')" title="عرض بيانات الدخول">🔑 بيانات الدخول</button> `}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="resetTeacherSecret('${u.id}')">🔄 إعادة تعيين</button> ` : '')}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' && u.firstLogin ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px;color:#047857" onclick="markUserActivated('${u.id}')" title="إزالة حالة «بانتظار أول دخول» — تُعامل كمعلمة فُعّلت بالفعل">✅ اعتبارها مُفعّلة</button> ` : '')}${isSelf || !isAdmin ? '' : `<button class="del-btn" onclick="deleteUser('${u.id}')">🗑 حذف</button>`}</td>
+    <td>${isSelf || !isAdmin ? '' : `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="showTeacherCreds('${u.id}','${escapeHtml(u.name)}','${escapeHtml(u.username||'')}')" title="عرض بيانات الدخول">🔑 بيانات الدخول</button> `}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="resetTeacherSecret('${u.id}')">🔄 إعادة تعيين</button> ` : '')}${isSelf || !isAdmin ? '' : `<button class="del-btn" onclick="deleteUser('${u.id}')">🗑 حذف</button>`}</td>
   </tr>`;
   }).join('');
   const teacherMsg = window.__teacherMsg;
@@ -8731,7 +8731,7 @@ function renderAdmins(){
     const nameCell = `<span style="font-weight:600">${escapeHtml(u.name)} <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="openRoleInbox('${u.id}','${schools[0]}')" title="${'متابعة هذا الحساب: آخر دخول وعدد مرات الدخول وتحويلاته وإشعاراته'}">👁</button> ${canManageTeachers(cur) ? `<button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="renameAdminUser('${u.id}')" title="${'تصحيح/تعديل اسم المستخدم — يُحفظ في الخادم وكل الأجهزة'}">✏️</button>` : ''}</span>`;
     const authCell = `<div style="font-size:12px;line-height:1.7">
         ${u.email ? `<span style="display:block;direction:ltr">📧 ${escapeHtml(u.email)}</span>` : '<span style="display:block;color:#9ca3af">📧 لا يوجد بريد</span>'}
-        ${u.firstLogin ? '<span style="display:block;color:#b45309">⏳ بانتظار أول دخول</span>' : '<span style="display:block;color:#047857">✅ مفعّل</span>'}
+        <span style="display:block;color:#047857">✅ مفعّل</span>
       </div>`;
     return `<tr>
     <td>${nameCell}</td>
@@ -9007,7 +9007,7 @@ async function resetTeacherSecret(id){
 async function markUserActivated(id){
   const u = userById(id);
   if(!u || u.role !== 'TEACHER') return;
-  if(!confirm(`اعتبار المعلمة "${u.name}" مُفعّلة (إزالة «بانتظار أول دخول»)؟ سيُسمح لها بالدخول مباشرة بما أنهت أول دخول فعلاً.`)) return;
+  if(!confirm(`اعتبار المعلمة "${u.name}" مُفعّلة؟ سيُسمح لها بالدخول مباشرة.`)) return;
   if(__serverEnabled()){
     const r = await __api('POST', 'admin/mark-activated', { userId: id, username: u.username, school: getActiveSchool() });
     if(r.status === 200 && r.j && r.j.ok){
@@ -9020,11 +9020,11 @@ async function markUserActivated(id){
       const after = userById(id);
       const stillPending = !!(after && after.firstLogin);
       if(r.j.accountsCleared === false){
-        window.__teacherMsg = `سُجّل اعتبار "${escapeHtml(u.name)}" مُفعّلة في نسخة القسم، لكن حساب الدخول (اسم المستخدم/البريد) لم يُطابَق في جدول الحسابات — قد تبقى «بانتظار أول دخول» لديها عند الدخول. أعد ضبط بيانات حسابها من «🔑 بيانات الدخول» ثم أعد المحاولة.`;
+        window.__teacherMsg = `سُجّل اعتبار "${escapeHtml(u.name)}" مُفعّلة في نسخة القسم، لكن حساب الدخول (اسم المستخدم/البريد) لم يُطابَق في جدول الحسابات — قد تبقى حالتها غير مفعّلة عند الدخول. أعد ضبط بيانات حسابها من «🔑 بيانات الدخول» ثم أعد المحاولة.`;
       } else if(stillPending){
-        window.__teacherMsg = `طُبّق التفعيل على الخادم لكن هذه الشاشة ما زالت تُظهر «بانتظار أول دخول» — أعد التحميل (Ctrl+Shift+R) مرتين ثم تحقق من حالتها.`;
+        window.__teacherMsg = `طُبّق التفعيل على الخادم لكن هذه الشاشة ما زالت تُظهرها غير مفعّلة — أعد التحميل (Ctrl+Shift+R) مرتين ثم تحقق من حالتها.`;
       } else {
-        window.__teacherMsg = `تم اعتبار المعلمة "${escapeHtml(u.name)}" مُفعّلة — لن يظهر لها «بانتظار أول دخول» بعد الآن.`;
+        window.__teacherMsg = `تم اعتبار المعلمة "${escapeHtml(u.name)}" مُفعّلة — وأصبحت مفعّلة بالكامل.`;
       }
     } else {
       const errEl = document.getElementById('userErr');
@@ -9042,9 +9042,9 @@ async function markUserActivated(id){
   renderApp();
 }
 // تفعيل جماعي: قائمة المعلمات الظاهرة في الواجهة هي الأساس — تُحلّ كل معلمة بحساب دخلها
-// وتُحذف «بانتظار أول دخول»، وتُعطَّل حسابات المعلمات المحذوفة التي لم تعد تظهر.
+// وتُحذف بقية حالات ما قبل التفعيل، وتُعطَّل حسابات المعلمات المحذوفة التي لم تعد تظهر.
 async function activateAllTeachersApi(){
-  if(!confirm('تطبيق «مفعّلة» على كل المعلمات الظاهرة (وفق قائمة الواجهة)، وإلغاء «بانتظار أول دخول»، وتعطيل أي حساب معلمة حذفتَها ولم تعد تظهر؟')) return;
+  if(!confirm('تطبيق «مفعّلة» على كل المعلمات الظاهرة (وفق قائمة الواجهة)، وتعطيل أي حساب معلمة حذفتَها ولم تعد تظهر؟')) return;
   if(!__serverEnabled()){
     const d = loadDB();
     let n = 0;
@@ -9072,10 +9072,10 @@ async function activateAllTeachersApi(){
       });
       if(flipped > 0){ try{ __origSetItem(dbKey(), JSON.stringify(d)); }catch(e){} }
     }
-    let m = `سُجّلت الحالة «مفعّلة» لـ ${j.listUpdated ?? 0} معلمة في قائمة القسم، ورُبط ${j.accountsCleared ?? 0} حسابِ دخولٍ وحُذفت منها «بانتظار أول دخول»، وعُطّل ${j.staleDeactivated ?? 0} حسابَ معلمةٍ محذوفةٍ لا تظهر في القائمة.`;
+    let m = `سُجّلت الحالة «مفعّلة» لـ ${j.listUpdated ?? 0} معلمة في قائمة القسم، ورُبط ${j.accountsCleared ?? 0} حسابِ دخولٍ فأصبح مفعّلاً، وعُطّل ${j.staleDeactivated ?? 0} حسابَ معلمةٍ محذوفةٍ لا تظهر في القائمة.`;
     if(flipped > 0) m += ` ظهر «مفعّلة» الآن مباشرة لـ ${flipped} معلمة على هذه الشاشة.`;
     if((j.unlinked || 0) > 0) m += ` ملاحظة: ${j.unlinked} معلمة بلا حساب دخول مرتبط في جدول الحسابات — اضبط بياناتها من «🔑 بيانات الدخول».`;
-    if((j.stillPendingAccounts || 0) > 0) m += ` تحذير: ${j.stillPendingAccounts} حساباً ما تزال «بانتظار أول دخول» في جدول الحسابات بعد التنفيذ — اضغط الزر مرة أخرى أو راجع لوحة التفعيل.`;
+    if((j.stillPendingAccounts || 0) > 0) m += ` تحذير: ${j.stillPendingAccounts} حساباً ما تزال غير مفعّلة في جدول الحسابات بعد التنفيذ — اضغط الزر مرة أخرى أو راجع لوحة التفعيل.`;
     window.__teacherMsg = m;
   } else {
     const errEl = document.getElementById('userErr');
@@ -11443,7 +11443,7 @@ function computeReportRows(){
       }
       return {
         'المعلمة': tc.name,
-        'الحساب': tc.firstLogin ? '⏳ بانتظار تغيير كلمة المرور' : 'مفعّل',
+        'الحساب': 'مفعّل',
         'آخر دخول': lastTime,
         'دخلت اليوم': inToday ? 'نعم' : 'لا',
         'دخولات الفترة': inPeriod,
