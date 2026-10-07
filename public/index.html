@@ -8700,6 +8700,7 @@ function renderUsers(){
       <button class="btn-secondary" onclick="downloadTeacherTemplate()">⬇ تنزيل القالب</button>
       <label class="btn-secondary file-btn">📥 استيراد Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importTeachers(event)"/></label>
       <button class="btn-secondary" onclick="exportCredentials()">📤 تصدير بيانات الدخول</button>
+      <button class="btn-secondary" onclick="activateAllTeachersApi()" title="تطبيق «مفعّلة» على كل المعلمات الظاهرة اعتماداً على أسمائها في هذه القائمة، وتعطيل حساب أي معلمة محذوفة لا تظهر هنا">⚡ تفعيل كل المعلمات</button>
       <button class="btn-primary" onclick="toggleEl('userForm')">+ إضافة ${tl('معلم')}</button>
     </div>
   </div>
@@ -9033,6 +9034,32 @@ async function markUserActivated(id){
   t.firstLogin = false;
   saveDB(d);
   window.__teacherMsg = `تم اعتبار المعلمة "${escapeHtml(u.name)}" مُفعّلة.`;
+  renderApp();
+}
+// تفعيل جماعي: قائمة المعلمات الظاهرة في الواجهة هي الأساس — تُحلّ كل معلمة بحساب دخلها
+// وتُحذف «بانتظار أول دخول»، وتُعطَّل حسابات المعلمات المحذوفة التي لم تعد تظهر.
+async function activateAllTeachersApi(){
+  if(!confirm('تطبيق «مفعّلة» على كل المعلمات الظاهرة (وفق قائمة الواجهة)، وإلغاء «بانتظار أول دخول»، وتعطيل أي حساب معلمة حذفتَها ولم تعد تظهر؟')) return;
+  if(!__serverEnabled()){
+    const d = loadDB();
+    let n = 0;
+    (d.users || []).forEach(u => { if(u && u.role === 'TEACHER' && u.active !== false && u.firstLogin){ u.firstLogin = false; u.granted = true; n++; } });
+    saveDB(d);
+    window.__teacherMsg = `فُعّلت ${n} معلمة في هذه النسخة المحلية.`;
+    renderApp();
+    return;
+  }
+  const r = await __api('POST', 'admin/activate-all-from-list', { school: getActiveSchool() });
+  if(r.status === 200 && r.j && r.j.ok){
+    await __refreshSchool(getActiveSchool());
+    const j = r.j;
+    let m = `سُجّلت الحالة «مفعّلة» لـ ${j.listUpdated ?? 0} معلمة في قائمة القسم، ورُبط ${j.accountsCleared ?? 0} حسابِ دخولٍ وحُذفت منها «بانتظار أول دخول»، وعُطّل ${j.staleDeactivated ?? 0} حسابَ معلمةٍ محذوفةٍ لا تظهر في القائمة.`;
+    if((j.unlinked || 0) > 0) m += ` ملاحظة: ${j.unlinked} معلمة بلا حساب دخول مرتبط في جدول الحسابات — اضبط بياناتها من «🔑 بيانات الدخول».`;
+    window.__teacherMsg = m;
+  } else {
+    const errEl = document.getElementById('userErr');
+    if(errEl) errEl.innerHTML = '<div class="card mb" style="color:#dc2626">تعذر التفعيل الجماعي — أعد المحاولة</div>';
+  }
   renderApp();
 }
 function addTeacherAbsenceFromList(){

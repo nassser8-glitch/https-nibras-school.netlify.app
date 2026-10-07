@@ -402,6 +402,67 @@ async function markSchoolUsersActivated(school, userId, username) {
   });
   return r.value == null ? 0 : r.value;
 }
+// تطبيق «مفعّلة» جماعياً انطلاقاً من قائمة المعلمات الظاهرة في واجهة المدير (نسخة القسم هي الأساس).
+// لكل معلمة: يُحلّ حسابُ دخلها من هوية سجلها (المعرّف ← اسم المستخدم ← البريد) ويُمحى first_login
+// وتُمنح وتُحذف جلساتها. الحسابات المتبقية من معلمات حُذفت من القائمة تُعطَّل (لا تُحذف) حتى لا تدخل بقاياها.
+async function activateAllTeachersFromList(school) {
+  const rec = await db.getSchoolData(school);
+  const list = (rec && rec.data && Array.isArray(rec.data.users)) ? rec.data.users : [];
+  const teachers = list.filter(u => u && u.role === 'TEACHER' && u.active !== false);
+  const protectIds = new Set();
+  const protectNames = new Set();
+  const report = [];
+  let accountsCleared = 0;
+  let unlinked = 0;
+  for (const bu of teachers) {
+    const bId = bu.id != null ? String(bu.id) : '';
+    const bName = String(bu.username || '').trim().toLowerCase();
+    const bEmail = String(bu.email || '').trim().toLowerCase();
+    if (bName) protectNames.add(bName);
+    if (bEmail) protectNames.add(bEmail);
+    let target = null;
+    if (bId) target = await db.userById(bId);
+    if (!target && bName) target = await db.userByUsername(bName);
+    if (!target && bEmail) { const es = await db.usersByEmail(bEmail); if (es.length) target = es[0]; }
+    if (target) {
+      protectIds.add(target.id);
+      await db.grantUserAccess(target.id);
+      await db.clearFirstLogin(target.id);
+      await db.deleteUserSessions(target.id);
+      accountsCleared++;
+    } else {
+      unlinked++;
+    }
+    report.push({ name: bu.name, username: bName, email: bEmail, accountLinked: !!target });
+  }
+  // تعطيل حسابات المعلمات غير الظاهرة في القائمة (المُحذوفة من الواجهة) — لا حذف صريح، يُحفظ بها أثرُها
+  const allRows = await db.listUsers(school);
+  let staleDeactivated = 0;
+  for (const r0 of allRows) {
+    if (!r0 || r0.role !== 'TEACHER' || r0.active !== true) continue;
+    if (protectIds.has(r0.id)) continue;
+    const n = String(r0.username || '').trim().toLowerCase();
+    const e = String(r0.email || '').trim().toLowerCase();
+    if ((n && protectNames.has(n)) || (e && protectNames.has(e))) continue; // نسخة مكرّرة من معلمة حيّة
+    await db.setUserActive(r0.id, false);
+    await db.deleteUserSessions(r0.id);
+    staleDeactivated++;
+  }
+  // مسح «بانتظار أول دخول» من سجل القسم نفسه فلا تظهر القائمة اللفظَ
+  const r = await db.mutateSchoolData(school, (d) => {
+    if (!d || !Array.isArray(d.users)) return { changed: false, value: 0 };
+    let n = 0;
+    for (const u of d.users) {
+      if (!u || u.role !== 'TEACHER' || u.active === false) continue;
+      const wasPending = !!u.firstLogin;
+      u.firstLogin = false;
+      u.granted = true;
+      if (wasPending) n++;
+    }
+    return { changed: n > 0, value: n };
+  });
+  return { teacherCount: teachers.length, accountsCleared, unlinked, listUpdated: r.value || 0, staleDeactivated, report };
+}
 async function appendSchoolUser(school, userObj) {
   const r = await db.mutateSchoolData(school, (d) => {
     if (!Array.isArray(d.users)) d.users = [];
@@ -1026,6 +1087,20 @@ app.post('/api/auth/admin/mark-activated', requireAuth, (req, res) => {
     const updated = await markSchoolUsersActivated(school, target ? target.id : userId, username || (target && target.username));
     if (!target && !updated) return res.status(404).json({ error: 'not_found' });
     res.json({ ok: true, accountsCleared, userId: (target && target.id) || userId, name: (target && target.name) || '', updated });
+  })().catch(fail(res));
+});
+
+// تفعيل جماعي وفق قائمة المعلمات الظاهرة في الواجهة (نسخة القسم هي الأساس): لكل معلمة تُربط
+// بحساب دخلها ويُمحى first_login وتسقط «بانتظار أول دخول»؛ وتُعطَّل حسابات المعلمات المحذوفة غير الظاهرة.
+app.post('/api/auth/admin/activate-all-from-list', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    if (rateLimit('activateall', 10, 60 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+    const school = String((req.body && req.body.school) || req.session.school || '').toUpperCase();
+    if (!db.SCHOOLS.includes(school) || !canManageUsers(req.session, school))
+      return res.status(403).json({ error: 'forbidden' });
+    const result = await activateAllTeachersFromList(school);
+    res.json({ ok: true, school, apply: true, ...result });
   })().catch(fail(res));
 });
 
