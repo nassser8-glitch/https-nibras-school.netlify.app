@@ -132,6 +132,8 @@
     'رجب', 'شعبان', 'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة'];
   var EN_MONTHS = ['Muharram', 'Safar', "Rabi' al-Awwal", "Rabi' al-Thani", 'Jumada al-Ula', 'Jumada al-Akhirah',
     'Rajab', "Sha'ban", 'Ramadan', 'Shawwal', "Dhu al-Qi'dah", 'Dhu al-Hijjah'];
+  var AR_GREG = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  var EN_GREG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   var EN_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   var AR_DOW = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
   var AR_DOW_SHORT = ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'];
@@ -143,7 +145,7 @@
     var today = new Date();
     var isToday = today.getFullYear() === y && today.getMonth() === m;
     var en = L() === 'en';
-    var mn = en ? EN_MONTHS[m] : AR_MONTHS[m];
+    var mn = en ? EN_GREG[m] : AR_GREG[m];
     var head = '<div class="tb-cal-head">' +
       '<button class="tb-btn" data-cal="-1">‹</button>' +
       '<span>' + esc(mn) + ' ' + y + '</span>' +
@@ -316,14 +318,28 @@
     return '';
   }
   function trRemote(src, from, to) {
-    var pair = from + '|' + to;
     var q = encodeURIComponent(src);
-    return fetch('https://api.mymemory.translated.net/get?q=' + q + '&langpair=' + encodeURIComponent(pair))
-      .then(function (r) { return r.json(); })
+    /* عبر خادمنا أولاً (نفس الأصل فلا CORS ويصوم توقفه)، وعند فشله نجرّب
+     * خدمة MyMemory مباشرة. */
+    return fetch('/api/translate?q=' + q + '&from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to))
+      .then(function (r) {
+        if (r.status !== 200) throw new Error('proxy status ' + r.status);
+        return r.json();
+      })
       .then(function (j) {
-        var t = j && j.responseData && j.responseData.translatedText;
+        var t = j && j.text;
         if (!t || /MYMEMORY WARNING|INVALID/i.test(String(t))) throw new Error('no translation');
         return String(t);
+      })
+      .catch(function () {
+        var pair = from + '|' + to;
+        return fetch('https://api.mymemory.translated.net/get?q=' + q + '&langpair=' + encodeURIComponent(pair))
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            var t = j && j.responseData && j.responseData.translatedText;
+            if (!t || /MYMEMORY WARNING|INVALID/i.test(String(t))) throw new Error('no translation');
+            return String(t);
+          });
       });
   }
   function trRender(box) {
@@ -368,10 +384,23 @@
   var P_TTL = 12 * 60 * 60 * 1000;
   var P_KEY = { fajr: 'الفجر', sunrise: 'الشروق', dhuhr: 'الظهر', asr: 'العصر', maghrib: 'المغرب', isha: 'العشاء' };
   var P_EN = { fajr: 'Fajr', sunrise: 'Sunrise', dhuhr: 'Dhuhr', asr: 'Asr', maghrib: 'Maghrib', isha: 'Isha' };
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
   function todayKey() { var d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+  function todayIso() { var d = new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+  function hmz(inst, tz) {
+    try {
+      return new Intl.DateTimeFormat(L() === 'en' ? 'en-GB' : 'ar-JO', {
+        timeZone: tz || undefined, hour: '2-digit', minute: '2-digit', hour12: false
+      }).format(new Date(inst));
+    } catch (e) { return '--:--'; }
+  }
   function prayerRender(box) {
     var c = lsGet('prayer', null);
-    if (!c || c.day !== todayKey()) { box.innerHTML = '<div class="tb-muted">' + esc(T('prayer')) + ' — …</div>'; fetchPrayer(box); return; }
+    var stale = !c || c.day !== todayKey();
+    /* لو حُمّلت بيانات قبل ثوانٍ وما زال تاريخها مختلفاً (اختلاف ثوانٍ حول منتصف
+     * الليل أو منطقة زمنية) فلا نعيد الطلب إلى ما لا نهاية — نعرضها كما هي. */
+    if (stale && c && c.t && Date.now() - c.at < 5000) stale = false;
+    if (stale) { box.innerHTML = '<div class="tb-muted">' + esc(T('prayer')) + ' — …</div>'; fetchPrayer(box); return; }
     var en = L() === 'en';
     var names = en ? P_EN : P_KEY;
     var now = new Date(), nx = null, nxName = '';
@@ -381,34 +410,59 @@
       if (!t) return;
       if (new Date(t) > now && !nx) { nx = t; nxName = names[k]; }
     });
+    var tz = c.tz || null;
     box.innerHTML = order.map(function (k) {
       if (!c.t[k]) return '';
       var on = (nx === c.t[k]) ? ' tb-next' : '';
       return '<div class="tb-row' + on + '"><span class="tb-k">' + esc(names[k]) + '</span><span class="tb-v">' +
-        esc(c.t[k].slice(11, 16)) + '</span></div>';
+        esc(hmz(c.t[k], tz)) + '</span></div>';
     }).join('') +
       (nx ? '<div class="tb-muted">' + (en ? 'next: ' : 'القادم: ') + esc(nxName) + '</div>' : '') +
       (en ? '' : '<div class="tb-muted">' + esc(c.city) + '</div>');
   }
   function fetchPrayer(box) {
-    var u = 'https://api.aladhan.com/v1/timings?latitude=' + CITY.lat + '&longitude=' + CITY.lon + '&method=4';
-    fetch(u).then(function (r) { return r.json(); }).then(function (j) {
-      var t = j && j.data && j.data.timings;
-      if (!t) throw new Error('bad');
-      var day = todayKey(), o = { at: Date.now(), day: day, city: CITY.name, t: {} };
-      Object.keys(t).forEach(function (k) {
-        var parts = String(t[k]).split(' ');
-        if (!parts[0]) return;
-        var iso = day + 'T' + parts[0] + ':00';
-        o.t[k] = iso;
+    /* عبر خادمنا أولاً (نفس الأصل فلا يحجبه الحاجز) ويُرجع لحظات زمنية بمنطقة
+     * عمّان، وعند فشله نجرّب خدمة المواقيت مباشرة من المتصفح. */
+    fetch('/api/prayer?lat=' + CITY.lat + '&lon=' + CITY.lon + '&method=4')
+      .then(function (r) { if (r.status !== 200) throw new Error('bad'); return r.json(); })
+      .then(function (j) {
+        if (!j || !j.t) throw new Error('bad');
+        var o = { at: Date.now(), day: todayKey(), tz: j.tz || null, city: CITY.name, t: {} };
+        Object.keys(j.t).forEach(function (k) {
+          var v = j.t[k];
+          if (typeof v === 'string') {
+            var p = String(v).match(/(\d{1,2}):(\d{2})/);
+            if (!p) return;
+            v = new Date(todayIso() + 'T' + p2(+p[1] % 24) + ':' + p[2] + ':00').getTime();
+          }
+          o.t[k.toLowerCase()] = v;
+        });
+        lsSet('prayer', o); if (box && box.isConnected) prayerRender(box);
+      })
+      .catch(function () {
+        return fetch('https://api.aladhan.com/v1/timings?latitude=' + CITY.lat + '&longitude=' + CITY.lon + '&method=4&timezonestring=Asia/Amman')
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            var t = j && j.data && j.data.timings;
+            if (!t) throw new Error('bad');
+            var tz = (j.data && j.data.meta && j.data.meta.timezone) || null;
+            var o = { at: Date.now(), day: todayKey(), tz: tz, city: CITY.name, t: {} };
+            Object.keys(t).forEach(function (k) {
+              var parts = String(t[k]).split(' ');
+              if (!parts[0]) return;
+              var hm = parts[0].split(':');
+              if (!hm[1]) return;
+              o.t[String(k).toLowerCase()] = new Date(todayIso() + 'T' + p2(+hm[0] % 24) + ':' + hm[1] + ':00').getTime();
+            });
+            lsSet('prayer', o); if (box && box.isConnected) prayerRender(box);
+          })
+          .catch(function () {
+            if (box && box.isConnected) {
+              var c = lsGet('prayer', null);
+              if (!c) box.innerHTML = '<div class="tb-muted">—</div>';
+            }
+          });
       });
-      lsSet('prayer', o); if (box && box.isConnected) prayerRender(box);
-    }).catch(function () {
-      if (box && box.isConnected) {
-        var c = lsGet('prayer', null);
-        if (!c) box.innerHTML = '<div class="tb-muted">—</div>';
-      }
-    });
   }
 
   /* ============================================================== اللوحة */
@@ -423,10 +477,22 @@
   var open = lsGet('open', false);
   var tab = lsGet('tab', 'w');
   var root = null;
+  var DOCK = false; /* رُسو الشريط داخل الصفحة تحت بطاقة «المتواجدون في الموقع» */
 
+  /* شريط الأيقونات الجانبي: ست أدوات في صفّين (3+3) ظاهرة دائماً. */
+  function sideHTML() {
+    var ICON = 'display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;' +
+      'margin:3px;border-radius:10px;cursor:pointer;font-size:20px;line-height:1;padding:0';
+    return '<div class="tb-side" role="toolbar" style="display:inline-grid;grid-template-columns:repeat(3, 1fr);text-align:center;gap:2px;padding:6px">' + TABS.map(function (t) {
+      return '<button class="tb-side-i' + (t.id === tab ? ' tb-on' : '') + '" data-tab="' + t.id +
+        '" title="' + esc(T(t.id)) + '" aria-label="' + esc(T(t.id)) + '" style="' + ICON + '">' +
+        t.ic + '</button>';
+    }).join('') + '</div>';
+  }
   function panelHTML() {
     var body = '<div class="tb-body" id="tbBody"></div>';
-    var tabs = TABS.map(function (t) {
+    /* عند المرسى لا نكرّر التبويب داخل اللوحة — الصف الجانبي هو المبدّل. */
+    var tabs = DOCK ? '' : TABS.map(function (t) {
       return '<button class="tb-tab' + (t.id === tab ? ' tb-on' : '') + '" data-tab="' + t.id + '" title="' + esc(T(t.id)) + '">' + t.ic + '</button>';
     }).join('');
     var langs = ['ar', 'en', 'jo'].map(function (k) {
@@ -437,8 +503,24 @@
       '<span class="tb-langs">' + langs + '</span>' +
       '<button class="tb-x" id="tbClose">×</button></div>' + tabs + body + '</div>';
   }
+  function runTab() {
+    var b = document.getElementById('tbBody');
+    var cur = TABS.filter(function (t) { return t.id === tab; })[0] || TABS[0];
+    if (b) cur.run(b);
+  }
   function paint() {
     if (!root) return;
+    var dockedNow = DOCK && document.getElementById('nibrasToolbarDock');
+    root.className = 'tb-root' + (open ? ' tb-open' : '') + (dockedNow ? ' tb-docked' : '');
+    if (dockedNow) {
+      /* مرسى داخل الصفحة تحت بطاقة المتواجدات — بلا تثبيت، يتحرّك مع التخطيط. */
+      root.removeAttribute('style');
+      if (root.parentNode !== dockedNow) dockedNow.appendChild(root);
+      root.innerHTML = sideHTML() + (open ? panelHTML() : '');
+      if (open) runTab();
+      window.__tbState = 'painted';
+      return;
+    }
     if (!open) {
       root.className = 'tb-root';
       /* تنسيق حرج مضمّن في العنصر نفسه: لو لم يصل ملف CSS لظلت الأزرار
@@ -457,12 +539,27 @@
     root.className = 'tb-root tb-open';
     root.removeAttribute('style');
     root.innerHTML = panelHTML();
-    var b = document.getElementById('tbBody');
-    var cur = TABS.filter(function (t) { return t.id === tab; })[0] || TABS[0];
-    cur.run(b);
+    runTab();
     window.__tbState = 'painted';
   }
-  function setTab(id) { tab = id; lsSet('tab', id); paint(); }
+  /* يُستدعى بعد أن ترسم الصفحة لوحة «المتواجدون في الموقع» (أو تزول) لنرست
+   * تحتها أو نعود عائمين. لا نعيد الرسم إلا عند تغيّر المرسى فعلاً حتى لا
+   * تُصفّر لوحة المترجم أثناء الكتابة في كل تحديث حضور. */
+  function reDock() {
+    var dock = document.getElementById('nibrasToolbarDock');
+    var now = !!dock;
+    if (root && now === DOCK) {
+      var inPlace = root.parentNode === (now ? dock : document.body);
+      if (inPlace) return;
+    }
+    DOCK = now;
+    paint();
+  }
+  function setTab(id) {
+    tab = id; lsSet('tab', id);
+    if (!open) { open = true; lsSet('open', true); }
+    paint();
+  }
 
   function onClick(e) {
     var t = e.target;
@@ -539,8 +636,10 @@
         if (open) paint();
       }, function () {}, { timeout: 8000, maximumAge: 600000 });
     }
-    /* الساعة تتحدّث كل 30 ثانية ما دامت اللوحة مفتوحة على تبويب الساعة. */
+    /* الساعة تتحدّث كل 30 ثانية ما دامت اللوحة مفتوحة على تبويب الساعة،
+     * ومعها نتحقق من المرسى (بطاقة المتواجدات) صعوداً أو هبوطاً. */
     setInterval(function () {
+      reDock();
       if (open && tab === 'c') { var b = document.getElementById('tbBody'); if (b) clockRender(b); }
     }, 30000);
   }
@@ -549,9 +648,11 @@
   window.__tb = {
     calcEval: calcEval, trDict: trDict, toJordanian: toJordanian,
     hijri: hijri, prayerRender: prayerRender, weatherRender: weatherRender,
+    calRender: calRender,
     trRemote: trRemote, fetchWeather: fetchWeather, fetchPrayer: fetchPrayer,
     getCity: function () { return CITY; }, setCity: function (c) { CITY = c; },
-    lsGet: lsGet, lsSet: lsSet, setLang: setLang, getLang: L
+    lsGet: lsGet, lsSet: lsSet, setLang: setLang, getLang: L,
+    redock: reDock
   };
   window.__tbStrings = LANGS;
   /* عَلَم التشخيص: يميّز «السكربت لم يُحمَّل» عن «حمِل وفشل» عن «اشتغل». */

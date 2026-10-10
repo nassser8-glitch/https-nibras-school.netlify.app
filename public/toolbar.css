@@ -25,6 +25,36 @@ body.tb-docked .tb-root{ position:absolute; }
 .tb-lang:focus-visible, .tb-key:focus-visible, .tb-x:focus-visible{
   outline:2px solid var(--tb-acc); outline-offset:2px; }
 
+/* ---------- شريط الأيقونات الجانبي (صفّان، 3+3) ---------- */
+.tb-side{ display:inline-grid; grid-template-columns:repeat(3,1fr); gap:2px;
+  background:var(--tb-bg); border:1px solid var(--tb-line); border-radius:14px;
+  padding:6px; box-shadow:var(--tb-shadow); }
+.tb-side-i{ border:1px solid transparent; background:transparent; color:var(--tb-fg);
+  padding:0; line-height:1; }
+.tb-side-i:hover{ background:var(--tb-btn); border-color:var(--tb-line); }
+.tb-side-i.tb-on{ background:var(--tb-acc-bg); border-color:var(--tb-acc); }
+.tb-root.tb-open{ display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+html[dir="rtl"] .tb-root.tb-open{ align-items:flex-start; }
+.tb-side-i:focus-visible, .tb-root :focus-visible{ outline:2px solid var(--tb-acc); outline-offset:2px; }
+
+/* ---------- المرسى: الشريط مرسى داخل الصفحة تحت «المتواجدات في الموقع» ----------
+ * القسم الجانبي كحلي متدرج (linear-gradient #123f6c→#0d3154) وبطاقاته شفافة شبه
+ * بيضاء، فتعيد هذه المتغيرات طباعة الشريط واللوحة كاملة بنفس الدرجات بدل الأبيض
+ * الصريح الذي يصطدم بالخلفية. */
+.tb-root.tb-docked{
+  --tb-bg:#122f52; --tb-fg:#eef4fd; --tb-dim:#a5b9d0; --tb-line:#2f5079;
+  --tb-acc:#7db2ff; --tb-acc-bg:#24446e; --tb-btn:#1d3c63; --tb-shadow:0 10px 26px rgba(4,20,44,.35);
+}
+.tb-root.tb-docked{ position:static; margin:2px 0 0; background:transparent; box-shadow:none; color:var(--tb-fg); }
+.tb-root.tb-docked .tb-side{ width:100%; box-sizing:border-box;
+  background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.14);
+  border-top:2px solid var(--blue,#1672c4); }
+.tb-root.tb-docked .tb-side-i{ color:var(--tb-fg); }
+.tb-root.tb-docked .tb-side-i:hover{ background:rgba(255,255,255,.13); border-color:rgba(255,255,255,.22); }
+.tb-root.tb-docked .tb-side-i.tb-on{ background:rgba(125,178,255,.30); border-color:rgba(125,178,255,.60); color:#fff; }
+.tb-root.tb-docked.tb-open{ align-items:stretch; }
+.tb-root.tb-docked .tb-panel{ width:100%; border-top:3px solid var(--blue,#1672c4); }
+
 /* ---------- اللوحة ---------- */
 .tb-panel{ width:min(340px, calc(100vw - 32px)); background:var(--tb-bg);
   border:1px solid var(--tb-line); border-radius:14px; box-shadow:var(--tb-shadow);

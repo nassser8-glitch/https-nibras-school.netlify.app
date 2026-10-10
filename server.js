@@ -69,6 +69,7 @@ const MAIL_SECURE = Number(MAIL_PORT) === 465;
 const MAIL_USER = envOrSecret('MAIL_USER', '');
 const MAIL_PASS = envOrSecret('MAIL_PASS', '');
 const MAIL_FROM = envOrSecret('MAIL_FROM', '') || MAIL_USER;
+const MAIL_API_KEY = envOrSecret('MAIL_API_KEY', '');
 let mailTransporter = null;
 function getMailer() {
   if (!MAIL_HOST || !MAIL_USER || !MAIL_PASS) return null;
@@ -2648,46 +2649,116 @@ app.get('/api/health', (req, res) => {
   res.json({
     ok: true, ver: 'nibras-server-v21', schools: db.SCHOOLS, db: 'postgres',
     supervisionRoles: db.supervisionVisibleRoles(),
-    mail: {
-      host: !!MAIL_HOST,
-      user: !!MAIL_USER,
-      pass: !!MAIL_PASS,
-      passLen: (MAIL_PASS || '').length,
-      port: MAIL_PORT,
-      from: MAIL_FROM || null,
-    },
+    /* صحة فحسب: لا نكشف البيانات الداخلية للبريد (المضيف/المستخدم/الطول/المفتاح). */
+    mail: { configured: !!(MAIL_HOST && MAIL_USER && (MAIL_PASS || MAIL_API_KEY)) },
   });
 });
-app.get('/api/diag/smtp', async (req, res) => {  const targets = [
-    ['smtp.gmail.com', 587], ['smtp.gmail.com', 465],
-    ['smtp.gmail.com', 25], ['142.251.127.108', 587],
-    ['smtp-relay.brevo.com', 587], ['smtp-relay.brevo.com', 465], ['smtp-relay.brevo.com', 25],
-    ['www.google.com', 443], ['example.com', 80],
-    ['api.brevo.com', 443], ['app.brevo.com', 443], ['smtp-relay.brevo.com', 443],
-  ];
-  const out = [];
-  for (const [h, p] of targets) {
-    out.push(h + ':' + p + ' => ' + await tcpTest(h, p, 8000));
-  }
-  res.json({ targets: out });
+
+/* =============== مترجم الوسيط (ترجمة اللوحة عبر خادمنا بدل مباشرة المتصفح) ===============
+ * البنات: المتصفح قد ينقطع عن خدمة الترجمة أو يحجبها الحاجز العام، فتمر الترجمة عبر
+ * خادمنا الذي يستشير MyMemory ويعيد النص الناتج إلى اللوحة (نفس الأصل فلا CORS). */
+app.get('/api/translate', requireAuth, (req, res) => {
+  (async () => {
+    const q = String(req.query.q || '').trim().slice(0, 1000);
+    const from = String(req.query.from || '').trim().slice(0, 10);
+    const to = String(req.query.to || '').trim().slice(0, 10);
+    if (!q || !from || !to) return res.status(400).json({ error: 'missing' });
+    if (!/^[a-z]{2,5}$/.test(from) || !/^[a-z]{2,5}$/.test(to)) return res.status(400).json({ error: 'bad_langs' });
+    const r = await fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(q) + '&langpair=' + encodeURIComponent(from + '|' + to));
+    const j = await r.json();
+    const t = j && j.responseData && j.responseData.translatedText;
+    if (!t || /MYMEMORY WARNING|INVALID/i.test(String(t))) return res.status(502).json({ error: 'no_translation' });
+    res.json({ ok: true, text: String(t) });
+  })().catch(() => res.status(502).json({ error: 'no_translation' }));
 });
-app.get('/api/diag/mail', async (req, res) => {
+
+/* =============== مواقيت الصلاة عبر خادمنا (يستشير aladhan ويحوّلها لمنطقة عمّان) =============== */
+app.get('/api/prayer', requireAuth, (req, res) => {
+  (async () => {
+    const lat = parseFloat(req.query.lat);
+    const lon = parseFloat(req.query.lon);
+    if (!isFinite(lat) || Math.abs(lat) > 90 || !isFinite(lon) || Math.abs(lon) > 180) return res.status(400).json({ error: 'bad_coords' });
+    let m = parseInt(req.query.method, 10);
+    if (!isFinite(m) || m < 1 || m > 99) m = 4;
+    const r = await fetch('https://api.aladhan.com/v1/timings?latitude=' + lat + '&longitude=' + lon + '&method=' + m + '&timezonestring=Asia/Amman');
+    const j = await r.json();
+    const timings = j && j.data && j.data.timings;
+    if (!timings) return res.status(502).json({ error: 'no_timings' });
+    const tz = (j.data && j.data.meta && j.data.meta.timezone) || 'Asia/Amman';
+    let y = 0, mo = 0, da = 0, off = 0;
+    if (/^[A-Za-z_/+-]{2,60}$/.test(String(tz))) {
+      const now = new Date();
+      try {
+        const wall = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now);
+        const sp = wall.split(', ');
+        const dp = sp[0].split('-'); const tp = sp[1].split(':');
+        y = +dp[0]; mo = +dp[1] - 1; da = +dp[2];
+        off = Date.UTC(y, mo, da, +tp[0] % 24, +tp[1], +tp[2]) - now.getTime();
+      } catch (e) { /* نبقى صفراً */ }
+    }
+    const day = y ? (y + '-' + String(mo + 1).padStart(2, '0') + '-' + String(da).padStart(2, '0')) : '';
+    const out = {};
+    Object.keys(timings).forEach(function (k) {
+      const p = String(timings[k]).match(/(\d{1,2}):(\d{2})/);
+      if (!p) return;
+      const hh = +p[1] % 24, mm = +p[2];
+      out[k.toLowerCase()] = y ? (Date.UTC(y, mo, da, hh, mm, 0) - off) : (hh + ':' + String(mm).padStart(2, '0'));
+    });
+    res.json({ ok: true, day: day, tz: tz || null, t: out });
+  })().catch(() => res.status(502).json({ error: 'no_timings' }));
+});
+app.get('/api/diag/smtp', requireAuth, (req, res) => {
+  if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+  /* فحص المنافذ بلا مصادقة كان مسارَ استنزافٍ للموارد؛ معطّل افتراضياً في الإنتاج
+   * إلا بضبط ENABLE_SMTP_DIAG=1 صراحةً. */
+  if (process.env.ENABLE_SMTP_DIAG !== '1') return res.status(403).json({ error: 'smtp_diag_disabled' });
+  (async () => {
+    const targets = [
+      ['smtp.gmail.com', 587], ['smtp.gmail.com', 465],
+      ['smtp.gmail.com', 25], ['142.251.127.108', 587],
+      ['smtp-relay.brevo.com', 587], ['smtp-relay.brevo.com', 465], ['smtp-relay.brevo.com', 25],
+      ['www.google.com', 443], ['example.com', 80],
+      ['api.brevo.com', 443], ['app.brevo.com', 443], ['smtp-relay.brevo.com', 443],
+    ];
+    const out = [];
+    for (const [h, p] of targets) {
+      out.push(h + ':' + p + ' => ' + await tcpTest(h, p, 8000));
+    }
+    res.json({ targets: out });
+  })().catch(() => res.status(500).json({ error: 'smtp_diag_failed' }));
+});
+app.get('/api/diag/mail', requireAuth, async (req, res) => {
+  if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
   try {
-    const apiKey = envOrSecret('MAIL_API_KEY', '') || (MAIL_PASS && String(MAIL_PASS).indexOf('xkeysib-') === 0 ? MAIL_PASS : '');
-    const sent = await sendResetEmail('nassser8@gmail.com', 'TEST' + Date.now() % 100000, 10);
-    res.json({ sent, host: MAIL_HOST, port: MAIL_PORT, user: MAIL_USER, from: MAIL_FROM, passLen: (MAIL_PASS || '').length, apiKeyLen: (apiKey || '').length, apiKeyPrefix: String(apiKey || '').slice(0, 12) });
+    /* لا نرسل بريداً بمجرد طلب المسار: الإرسال مقصود ومصرّح به بمعلمة send=1
+     * صراحةً من المدير، وبلا أي كشف للمفتاح/المستخدم/الطول. */
+    const configured = !!(MAIL_HOST && MAIL_USER && (MAIL_PASS || MAIL_API_KEY));
+    const out = { configured };
+    if (req.query.send === '1' && configured) {
+      const sent = await sendResetEmail('nassser8@gmail.com', 'TEST' + Date.now() % 100000, 10);
+      out.sent = !!sent;
+      if (!sent) {
+        console.warn('[diag:mail] إرسال تشخيصي فشل');
+        out.error = 'send_failed';
+      }
+    }
+    res.json(out);
   } catch (e) {
-    res.json({ error: e.message, stack: String(e && e.stack || '').split('\n').slice(0, 6) });
+    res.status(500).json({ error: 'mail_diag_failed' });
   }
 });
-app.get('/api/diag/teacher-dup', async (req, res) => {
+app.get('/api/diag/teacher-dup', requireAuth, async (req, res) => {
+  if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+  if (rateLimit('diag-teacher-dup', 10, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
   try {
     const r = await db.pool.query(`SELECT id, school, username, name, role, active, first_login, granted FROM users WHERE school='GIRLS' AND role IN ('TEACHER','ADMIN','AGENT') ORDER BY username`);
     res.json({ total: r.rows.length, rows: r.rows });
   } catch (e) { console.error(e); res.status(500).json({ error: String(e) }); }
 });
 
-app.get('/api/diag/db', async (req, res) => {
+app.get('/api/diag/db', requireAuth, async (req, res) => {
+  if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+  if (rateLimit('diag-db', 10, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
   try {
     const r = await db.pool.query('SELECT current_database() AS db, current_user AS usr, (SELECT count(*) FROM users) AS users');
     res.json({ ...r.rows[0], webroot: process.env.WEBROOT || '', root: ROOT, cwd: process.cwd(), hasIndex: staticHasIndex(ROOT) });
