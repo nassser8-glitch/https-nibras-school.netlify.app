@@ -67,9 +67,9 @@ window.__nibrasBootErr = '';
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="نبراس" />
 <title>المدرسة السعودية في إسلام آباد - نظام إدارة المدرسة</title>
-<link rel="stylesheet" href="toolbar.css?v=5">
+<link rel="stylesheet" href="toolbar.css?v=6">
 <script src="vendor/xlsx.full.min.js"></script>
-<script src="toolbar.js?v=5"></script>
+<script src="toolbar.js?v=6"></script>
 <style>
   * { box-sizing: border-box; }
   body { margin:0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background:linear-gradient(180deg,#f7f9fc 0%,#edf3fa 100%); background-attachment:fixed; color:#1f2937; direction: rtl; padding-bottom:env(safe-area-inset-bottom); }
@@ -5355,6 +5355,7 @@ function renderDashboard(){
     </div>
     <div style="padding:10px 18px 12px">${renderNibrasPioneers(true)}</div>
   </div>
+  ${isTeacher ? renderTeacherRecent(d, user) : ''}
   ${isTeacher ? (() => {
     const tst = teacherStats(teacherSelfRecord(d, user));
     // عدد أيام الدراسة المنقضية (الاثنين–الجمعة) منذ بداية السنة الدراسية
@@ -5441,6 +5442,81 @@ function renderDashboard(){
   ${isMgr ? renderCharts(d) : ''}
   ${todayAtt.length===0 ? `<div class="card mt"><p class="muted">لم يُسجَّل حضور اليوم بعد — انتقل إلى صفحة <a href="#/attendance" class="link">الحضور</a> لتسجيله.</p></div>` : ''}
   `;
+}
+
+/* ============ «آخر نشاطي» للمعلمة: آخر ثلاث حركات منها في تكليفاتها وتحويلاتها وملاحظاتها ============ */
+function renderTeacherRecent(d, user){
+  if(!user || user.role !== 'TEACHER') return '';
+  const items = {
+    assignments: (d.assignments||[]).filter(a => !(a && a.deleted) && a.teacherId === user.id)
+      .sort((a,b) => (b.created||0) - (a.created||0)).slice(0,3),
+    transfers: (d.transfers||[]).filter(t => !(t && t.deleted) && t.createdBy === user.id)
+      .sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,3),
+    notes: (d.notes||[]).filter(n => !(n && n.deleted) && n.createdBy === user.id)
+      .sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,3)
+  };
+  const tColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
+  const stLabels = { PENDING:'قيد المتابعة', RESOLVED:'تمت المعالجة' };
+  const stColors = { PENDING:'#d97706', RESOLVED:'#16a34a' };
+  const ghost = '<div style="padding:8px 4px;color:#9ca3af;font-size:12px">لا شيء بعد</div>';
+  const dateStr = v => {
+    try {
+      if(!v) return '—';
+      const iso = String(v).indexOf('T') >= 0 ? v : (String(v).slice(0,10) + 'T00:00:00');
+      return new Date(iso).toLocaleDateString('ar-EG');
+    } catch(e){ return '—'; }
+  };
+  const aCol = items.assignments.length ? items.assignments.map(a => {
+    return `<a href="#/assignments?step=list&cid=${encodeURIComponent(a.classId||'')}" style="text-decoration:none;color:inherit;display:block" title="فتح التكليفات">
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px dashed #e8eef5">
+        <span style="width:9px;height:9px;border-radius:50%;background:${tColors[a.type]||'#888'};flex-shrink:0"></span>
+        <span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(a.title||a.type||'تكليف')}</span>
+        <span class="muted" style="font-size:11px;white-space:nowrap">${escapeHtml(a.date||'')}</span>
+      </div></a>`;
+  }).join('') : ghost;
+  const tCol = items.transfers.length ? items.transfers.map(t => {
+    return `<a href="#/transfers" style="text-decoration:none;color:inherit;display:block" title="فتح التحويلات">
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px dashed #e8eef5">
+        <span style="font-size:15px;flex-shrink:0">🔁</span>
+        <span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.reason||t.target||'طلب تحويل')}</span>
+        <span style="font-size:11px;font-weight:700;color:${stColors[t.status]||'#6b7280'};white-space:nowrap">${stLabels[t.status]||escapeHtml(String(t.status||''))}</span>
+      </div>
+      <div class="muted" style="font-size:11px;padding:0 2px 6px;margin-top:-2px">${dateStr(t.createdAt)}</div></a>`;
+  }).join('') : ghost;
+  const nCol = items.notes.length ? items.notes.map(n => {
+    const sd = studentById(n.studentId);
+    const byName = (sd ? (sd.fullName || sd.name) : '') || n.studentName || '';
+    const pts = n.points ?? notePoints(n.type, n.category);
+    return `<a href="#/notes" style="text-decoration:none;color:inherit;display:block" title="فتح الملاحظات">
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px dashed #e8eef5">
+        <span style="font-size:15px;flex-shrink:0">${n.type==='POSITIVE'?'🟢':'🔴'}</span>
+        <span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(byName || n.category || 'ملاحظة')}</span>
+        <span style="font-size:12px;font-weight:800;color:${pts>=0?'#16a34a':'#dc2626'};white-space:nowrap">${pts>0?'+':''}${pts}</span>
+      </div>
+      <div class="muted" style="font-size:11px;padding:0 2px 6px;margin-top:-2px">${dateStr(n.createdAt)}</div></a>`;
+  }).join('') : ghost;
+  const col = (ico, title, href, body) => `
+    <div style="background:#f8fafc;border:1px solid #e6edf5;border-radius:14px;padding:10px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+        <span style="font-weight:800;font-size:13px;color:#0f172a">${ico} ${title}</span>
+        <a href="${href}" style="font-size:11px;color:#2563eb;text-decoration:none">عرض الكل</a>
+      </div>
+      ${body}
+    </div>`;
+  return `
+  <div style="border-radius:18px;overflow:hidden;border:1px solid #a7f3d0;margin-bottom:14px;background:#fff;box-shadow:0 4px 18px rgba(22,163,74,.12)">
+    <div style="background:linear-gradient(135deg,#34d399,#0f766e);color:#fff;padding:11px 18px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <div style="font-weight:800;font-size:15px">📌 آخر نشاطي — آخر ثلاث من كل قسم</div>
+      <span style="font-size:11px;font-weight:700;opacity:.95">تكليفاتي · تحويلاتي · ملاحظاتي</span>
+    </div>
+    <div style="padding:12px 16px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px">
+        ${col('📝', 'تكليفاتي', '#/assignments', aCol)}
+        ${col('🔁', 'تحويلاتي', '#/transfers', tCol)}
+        ${col('🟢', 'ملاحظاتي', '#/notes', nCol)}
+      </div>
+    </div>
+  </div>`;
 }
 
 /* ============ أقسام لوحة التحكم: الأنشطة والتقارير ============ */
@@ -12089,7 +12165,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=47', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=48', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
