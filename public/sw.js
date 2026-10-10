@@ -1,10 +1,10 @@
 ﻿/* نبراس — Service Worker للتثبيت والعمل دون اتصال */
-const CACHE_NAME = 'nibras-v67-toolbar-inline';
+const CACHE_NAME = 'nibras-v68-toolbar-inline';
 const CORE_ASSETS = [
   './',
   './index.html',
-  './toolbar.css?v=4',
-  './toolbar.js?v=4',
+  './toolbar.css?v=5',
+  './toolbar.js?v=5',
   './manifest.webmanifest',
   './apple-touch-icon.png',
   './icon-180.png',

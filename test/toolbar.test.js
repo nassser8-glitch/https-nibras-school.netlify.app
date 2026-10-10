@@ -166,36 +166,29 @@ test('translator: unknown phrase yields empty string, never a wrong guess', () =
   assert.equal(api.trDict('xyz', 'ar', 'en'), '');
 });
 
-test('translator: jordanian is a dialect layer over arabic, not a new language', () => {
+test('translator: urdu is a real separate language, never a latinised script', () => {
   const { api } = loadToolbar();
-  /* the output stays in arabic script, it is never latinised */
-  assert.equal(api.trDict('كيفك', 'ar', 'jo'), 'كيفك');
-  assert.equal(api.trDict('شو', 'ar', 'jo'), 'شو');
-  /* a fusha phrase becomes its shami equivalent */
-  assert.equal(api.toJordanian('كيف حالك'), 'كيفك');
-  assert.equal(api.toJordanian('الآن'), 'هلق');
-  assert.equal(api.toJordanian('أين'), 'وين');
+  /* the output stays in urdu script, it is never latinised */
+  assert.equal(api.trDict('اسکول', 'ur', 'en'), 'school');
+  assert.equal(api.trDict('طالبہ', 'ur', 'ar'), 'طالبة');
+  /* a known school word translates offline */
+  assert.equal(api.toUrdu('school'), 'اسکول');
+  assert.equal(api.toUrdu('اسکول'), 'اسکول');
 });
 
-test('translator: jordanian conversion never emits latin or leftover tokens', () => {
+test('translator: urdu conversion never emits latin or leftover tokens', () => {
   const { api } = loadToolbar();
-  const samples = ['كيفك شو هلق', 'معلمة في المدرسة', 'أريد أن أرسل', 'من فضلك', ''];
+  const samples = ['اسکول طالبات حاضری', 'استانی کلاس میں ہے', ''];
   for (const s of samples) {
-    const j = api.toJordanian(s);
+    const j = api.toUrdu(s);
     assert.ok(!/[A-Za-z]/.test(j), 'no latin leaked for: ' + s + ' -> ' + j);
     assert.ok(!/\|\||plea|ancien/.test(j), 'no leftover tokens for: ' + s);
   }
 });
 
-test('translator: jordanian turns a final t marbuta into ha', () => {
+test('translator: stock english words translate to urdu offline', () => {
   const { api } = loadToolbar();
-  assert.equal(api.toJordanian('مدرسة'), 'مدرسه');
-});
-
-test('translator: english -> jordanian goes through arabic', () => {
-  const { api } = loadToolbar();
-  /* المدرسة ← «مدرسه» بالعامية الشامية، لا تُترجَم إلى حروف لاتينية */
-  assert.equal(api.trDict('school', 'en', 'jo'), 'مدرسه');
+  assert.equal(api.trDict('school', 'en', 'ur'), 'اسکول');
 });
 
 /* ================================================================== التقويم */
@@ -291,9 +284,9 @@ test('weather: geolocation override changes the coordinates used', () => {
 test('languages: three locales, each with its own direction', () => {
   const { api } = loadToolbar();
   const s = loadToolbar().ctx.window.__tbStrings;
-  assert.deepEqual(Object.keys(s).sort(), ['ar', 'en', 'jo']);
+  assert.deepEqual(Object.keys(s).sort(), ['ar', 'en', 'ur']);
   assert.equal(s.ar.dir, 'rtl');
-  assert.equal(s.jo.dir, 'rtl');
+  assert.equal(s.ur.dir, 'rtl');
   assert.equal(s.en.dir, 'ltr');
   for (const k of Object.keys(s)) {
     for (const t of ['weather', 'clock', 'cal', 'calc', 'tr', 'prayer']) {

@@ -27,12 +27,13 @@
   }
 
   /* ------------------------------------------------------------------ واللغات
-   * ar = العربية، en = English، jo = لهجة أردنية شامية.
-   * jo ليست لغة مستقلة في المترجم: هي عربية تُمرَّر بطبقة لهجة في النهاية. */
+   * ar = العربية، en = English، ur = الأردية (اردو).
+   * «الأردية» لغة مستقلة بخطّها: نغطي مفردات مدرسية شائعة دون اتصال، وما عداها
+   * عبر MyMemory من خادمنا. */
   var LANGS = {
     ar: { dir: 'rtl', label: 'عربي',  weather: 'الطقس',   clock: 'الساعة',  cal: 'التقويم', calc: 'الحاسبة', tr: 'المترجم', prayer: 'الصلاة' },
     en: { dir: 'ltr', label: 'English', weather: 'Weather', clock: 'Clock',  cal: 'Calendar', calc: 'Calculator', tr: 'Translate', prayer: 'Prayer' },
-    jo: { dir: 'rtl', label: 'أردني',  weather: 'الجو',     clock: 'الساعة',  cal: 'التقويم', calc: 'الحاسبة', tr: 'المترجم', prayer: 'الصلاة' }
+    ur: { dir: 'rtl', label: 'اردو',  weather: 'موسم',     clock: 'گھڑی',     cal: 'کیلنڈر', calc: 'کیلکولیٹر', tr: 'مترجم', prayer: 'نماز' }
   };
   function L() { var c = lsGet('lang', 'ar'); return LANGS[c] ? c : 'ar'; }
   function setLang(c) { if (!LANGS[c]) return; lsSet('lang', c); paint(); }
@@ -253,7 +254,7 @@
 
   /* ============================================================ 5) المترجم */
   /* قاموس مدرسي صغير يعمل بلا إنترنت؛ وعند توفّره يُستشار MyMemory للترجمة
-   * الكاملة. «الأردني» طبقة لهجة فوق العربية لا لغة منفصلة. */
+   * الكاملة. «الأردية» لغة مستقلة بخطّها، نُترجم منها وإليها مفردات مدرسية. */
   var DICT_EN_AR = {
     'hello': 'مرحبا', 'hi': 'أهلا', 'good morning': 'صباح الخير', 'goodbye': 'مع السلامة',
     'school': 'مدرسة', 'student': 'طالبة', 'students': 'طالبات', 'teacher': 'معلمة', 'teachers': 'معلمات',
@@ -274,35 +275,51 @@
   var DICT_AR_EN = {};
   Object.keys(DICT_EN_AR).forEach(function (k) { DICT_AR_EN[DICT_EN_AR[k]] = k; });
 
-  /* طبقة اللهجة الأردنية: العربية الفصحى ← لهجة أردنية شامية.
-   * القواعد مطبَّقة بالترتيب: الأطول أولاً حتى لا يبتلع «كيف» جذرَ «كيفك».
-   *  1) صيغ الحوار: «كيف حالك» ← «كيفك»، «ما عندك» ← «ماعندك».
-   *  2) أدوات الجواب: «نعم/لا» ← «إي/لا».
-   *  3) ضمائر المخاطبة: التاء المربوطة ← الهاء عند المنادىMale.
-   *  4) التحول إلى المضارع الشاميiah: ستقبل ← «رح»، ستذهب ← «رح تروح». */
-  var JO_RULES = [
-    /* صيغ مركّبة قبل المفردات */
-    ['كيف حالك', 'كيفك'], ['كيف الحال', 'كيفك'], ['ما عندك', 'ماعندك'], ['ما في داعي', 'مافي داعي'],
-    ['بإذن الله', 'إن شاء الله'], ['أريدك', 'بديك'], ['أريد', 'بدي'], ['أرسل', 'ابعت'],
-    ['يجب أن', 'لازم'], ['فقط', 'بس'], ['كثيراً', 'كتير'], ['قليلاً', 'شوي'], ['جداً', 'كتير'],
-    ['الآن', 'هلق'], ['غداً', 'بكرا'], ['أمس', 'امبارح'], ['متى', 'إمتى'], ['أين', 'وين'],
-    ['ماذا', 'شو'], ['من', 'مين'], ['نعم', 'إي'], ['أجل', 'إي'],
-    ['حسناً', 'ماشي'], ['حسنًا', 'ماشي'], ['أوكي', 'ماشي'], ['تمام', 'ماشي'], ['هيا', 'يلا'],
-    ['من فضلك', 'لو سمحت'], ['انظر', 'شوف'], ['انظري', 'شوفي'], ['تكلم', 'احكي'],
-    ['اذهب', 'روح'], ['اذهبي', 'روحي'], ['أنت', 'إنت'], ['نحن', 'إحنا']
-  ];
-  function toJordanian(s) {
-    var out = String(s == null ? '' : s);
-    if (!out.trim()) return out;
-    JO_RULES.forEach(function (r) {
-      if (!r[0] || r[1] === '' || r[0] === r[1]) return;
-      if (out.indexOf(r[0]) === -1) return;
-      out = out.split(r[0]).join(r[1]);
-    });
-    /* التاء المربوطة في آخر الكلمة تصير هاء عند المخاطبة الشامية.
-     * لا نستعمل \b هنا: حدود الكلمة في JS مبنية على [A-Za-z0-9_] فقط،
-     * وحرف التاء المربوطة خارجها، فلا يتحقق \b أبداً بعده. */
-    return out.replace(/ة(?=$|[\s.,،!؟;:؛()\[\]])/g, 'ه');
+  /* قاموس الأردية المدرسي (إنجليزية ← أردية) يعمل دون اتصال. */
+  var DICT_EN_UR = {
+    'hello': 'ہیلو', 'hi': 'ہائے', 'good morning': 'صبح بخیر', 'goodbye': 'خدا حافظ',
+    'school': 'اسکول', 'student': 'طالبہ', 'students': 'طالبات', 'teacher': 'استانی', 'teachers': 'اساتذہ',
+    'admin': 'ایڈمن', 'principal': 'پرنسپل', 'manager': 'منیجر', 'class': 'کلاس', 'grade': 'کلاس',
+    'attendance': 'حاضری', 'absence': 'غیرحاضری', 'absent': 'غیرحاضر', 'present': 'حاضر', 'late': 'دیر',
+    'grade/a': 'نمبر', 'exam': 'امتحان', 'exams': 'امتحانات', 'homework': 'ہوم ورک', 'notes': 'نوٹس',
+    'note': 'نوٹ', 'points': 'پوائنٹس', 'point': 'پوائنٹ', 'warning': 'انتباہ', 'praise': 'تعریف',
+    'message': 'پیغام', 'messages': 'پیغامات', 'transfer': 'منتقلی', 'transfers': 'منتقلات',
+    'delete': 'حذف کریں', 'edit': 'ترمیم', 'save': 'محفوظ کریں', 'cancel': 'منسوخ', 'close': 'بند کریں',
+    'add': 'شامل کریں', 'new': 'نیا', 'search': 'تلاش', 'filter': 'فلٹر', 'report': 'رپورٹ',
+    'reports': 'رپورٹس', 'settings': 'ترتیبات', 'logout': 'لاگ آؤٹ', 'login': 'لاگ ان', 'password': 'پاس ورڈ',
+    'username': 'صارف نام', 'today': 'آج', 'tomorrow': 'کل', 'yesterday': 'کل', 'week': 'ہفتہ',
+    'month': 'مہینہ', 'year': 'سال', 'day': 'دن', 'date': 'تاریخ', 'time': 'وقت', 'now': 'ابھی',
+    'weather': 'موسم', 'prayer': 'نماز', 'calendar': 'کیلنڈر', 'thank you': 'شکریہ',
+    'good': 'اچھا', 'bad': 'برا', 'important': 'اہم', 'follow up': 'فالو اپ', 'low': 'کم',
+    'medium': 'درمیانہ', 'high': 'زیادہ', 'pending': 'زیر التوا', 'authority': 'ادارہ'
+  };
+  var DICT_UR_EN = {};
+  Object.keys(DICT_EN_UR).forEach(function (k) { DICT_UR_EN[DICT_EN_UR[k]] = k; });
+
+  /* عربية ← أردية: نفس مفردات المدرسة الأساسية. */
+  var DICT_AR_UR = {
+    'مرحبا': 'ہیلو', 'مدرسة': 'اسکول', 'طالبة': 'طالبہ', 'طالبات': 'طالبات', 'معلمة': 'استانی',
+    'معلمات': 'اساتذہ', 'مدير': 'ایڈمن', 'مديرة': 'پرنسپل', 'صف': 'کلاس', 'حضور': 'حاضری',
+    'غياب': 'غیرحاضری', 'غائبة': 'غیرحاضر', 'حاضرة': 'حاضر', 'تأخر': 'دیر', 'درجة': 'نمبر',
+    'امتحان': 'امتحان', 'امتحانات': 'امتحانات', 'واجب': 'ہوم ورک', 'ملاحظات': 'نوٹس', 'ملاحظة': 'نوٹ',
+    'نقاط': 'پوائنٹس', 'نقطة': 'پوائنٹ', 'إنذار': 'انتباہ', 'شكر': 'تعریف', 'رسالة': 'پیغام',
+    'رسائل': 'پیغامات', 'تحويل': 'منتقلی', 'تحويلات': 'منتقلات', 'حذف': 'حذف کریں', 'تعديل': 'ترمیم',
+    'حفظ': 'محفوظ کریں', 'إلغاء': 'منسوخ', 'إغلاق': 'بند کریں', 'إضافة': 'شامل کریں', 'جديد': 'نیا',
+    'بحث': 'تلاش', 'تصفية': 'فلٹر', 'تقرير': 'رپورٹ', 'تقارير': 'رپورٹس', 'إعدادات': 'ترتیبات',
+    'خروج': 'لاگ آؤٹ', 'دخول': 'لاگ ان', 'كلمة المرور': 'پاس ورڈ', 'اسم المستخدم': 'صارف نام',
+    'اليوم': 'آج', 'غداً': 'کل', 'أمس': 'کل', 'أسبوع': 'ہفتہ', 'شهر': 'مہینہ', 'سنة': 'سال',
+    'يوم': 'دن', 'تاريخ': 'تاریخ', 'وقت': 'وقت', 'الآن': 'ابھی', 'الطقس': 'موسم', 'الصلاة': 'نماز',
+    'تقويم': 'کیلنڈر', 'شكرا': 'شکریہ', 'جيد': 'اچھا', 'سيء': 'برا', 'مهم': 'اہم',
+    'منخفضة': 'کم', 'متوسطة': 'درمیانہ', 'عالية': 'زیادہ', 'قيد الانتظار': 'زیر التوا', 'الجهة المعنية': 'ادارہ'
+  };
+  var DICT_UR_AR = {};
+  Object.keys(DICT_AR_UR).forEach(function (k) { DICT_UR_AR[DICT_AR_UR[k]] = k; });
+
+  function toUrdu(s) {
+    /* بحث مباشر في قاموس الأردية بمفتاحه الإنجليزي؛ وإلا يبقى النص كما هو. */
+    var t = String(s == null ? '' : s).trim().toLowerCase();
+    var w = DICT_EN_UR[t];
+    return w || String(s == null ? '' : s);
   }
 
   function trDict(src, from, to) {
@@ -310,11 +327,10 @@
     if (!t) return '';
     if (from === 'en' && to === 'ar') return DICT_EN_AR[t] || '';
     if (from === 'ar' && to === 'en') return DICT_AR_EN[t] || '';
-    if (from === 'ar' && to === 'jo') return toJordanian(t);
-    if (from === 'en' && to === 'jo') {
-      var a = DICT_EN_AR[t];
-      return a ? toJordanian(a) : '';
-    }
+    if (from === 'en' && to === 'ur') return DICT_EN_UR[t] || '';
+    if (from === 'ur' && to === 'en') return DICT_UR_EN[t] || '';
+    if (from === 'ar' && to === 'ur') return DICT_AR_UR[t] || '';
+    if (from === 'ur' && to === 'ar') return DICT_UR_AR[t] || '';
     return '';
   }
   function trRemote(src, from, to) {
@@ -346,11 +362,11 @@
     var from = lsGet('tr_from', 'ar'), to = lsGet('tr_to', 'en');
     var out = lsGet('tr_out', '');
     var src = lsGet('tr_in', '');
-    var names = { ar: 'عربي', en: 'English', jo: 'أردني' };
-    var opts = ['ar', 'en', 'jo'].map(function (k) {
+    var names = { ar: 'عربي', en: 'English', ur: 'اردو' };
+    var opts = ['ar', 'en', 'ur'].map(function (k) {
       return '<option value="' + k + '"' + (k === from ? ' selected' : '') + '>' + names[k] + '</option>';
     }).join('');
-    var opts2 = ['ar', 'en', 'jo'].map(function (k) {
+    var opts2 = ['ar', 'en', 'ur'].map(function (k) {
       return '<option value="' + k + '"' + (k === to ? ' selected' : '') + '>' + names[k] + '</option>';
     }).join('');
     box.innerHTML =
@@ -360,7 +376,7 @@
       '<textarea id="tbTrIn" class="tb-inp tb-area" placeholder="' + (from === 'ar' ? 'اكتب النص…' : 'Type here…') + '">' + esc(src) + '</textarea>' +
       '<button class="tb-btn tb-go" id="tbTrGo">' + esc(L() === 'en' ? 'Translate' : 'ترجمة') + '</button>' +
       '<div class="tb-tr-out" id="tbTrOut">' + (out ? esc(out) : '') + '</div>' +
-      (from === 'jo' || to === 'jo' ? '<div class="tb-muted">' + esc(L() === 'en' ? 'Jordanian dialect' : 'لهجة أردنية') + '</div>' : '');
+      (from === 'ur' || to === 'ur' ? '<div class="tb-muted">' + esc(L() === 'en' ? 'Urdu' : 'الأردية') + '</div>' : '');
   }
   function trGo(box) {
     var src = String(lsGet('tr_in', '')).trim();
@@ -368,11 +384,9 @@
     var from = lsGet('tr_from', 'ar'), to = lsGet('tr_to', 'en');
     var d = trDict(src, from, to);
     if (d) { lsSet('tr_out', d); trRender(box); return; }
-    if (from === 'ar' && to === 'jo') { lsSet('tr_out', src); trRender(box); return; }
     box.querySelector('#tbTrOut').textContent = '…';
     trRemote(src, from, to).then(function (t) {
-      var fin = to === 'jo' ? toJordanian(t) : t;
-      lsSet('tr_out', fin); trRender(box);
+      lsSet('tr_out', t); trRender(box);
     }).catch(function () {
       lsSet('tr_out', ''); trRender(box);
       var o = box.querySelector('#tbTrOut');
@@ -495,7 +509,7 @@
     var tabs = DOCK ? '' : TABS.map(function (t) {
       return '<button class="tb-tab' + (t.id === tab ? ' tb-on' : '') + '" data-tab="' + t.id + '" title="' + esc(T(t.id)) + '">' + t.ic + '</button>';
     }).join('');
-    var langs = ['ar', 'en', 'jo'].map(function (k) {
+    var langs = ['ar', 'en', 'ur'].map(function (k) {
       return '<button class="tb-lang' + (L() === k ? ' tb-on' : '') + '" data-lang="' + k + '">' + esc(LANGS[k].label) + '</button>';
     }).join('');
     return '<div class="tb-panel" id="tbPanel" dir="' + LANGS[L()].dir + '" lang="' + L() + '">' +
@@ -646,7 +660,7 @@
 
   /* نExport الدوال الصافية للاختبار دون واجهة. */
   window.__tb = {
-    calcEval: calcEval, trDict: trDict, toJordanian: toJordanian,
+    calcEval: calcEval, trDict: trDict, toUrdu: toUrdu,
     hijri: hijri, prayerRender: prayerRender, weatherRender: weatherRender,
     calRender: calRender,
     trRemote: trRemote, fetchWeather: fetchWeather, fetchPrayer: fetchPrayer,
