@@ -1881,54 +1881,27 @@ function ensureDataSections(data, prev){
 // لاصق بالمعرّف اليتيم الأصلي (يمنع أي جهاز قديم يعيد إحياءه)، ونعيد توجيه كل مرجعات اليتيم
 // (تيميتابل/فصول/حضور/ملاحظات...) نحو الحقيقي كي لا تضيع جداول الواصلة.
 async function normalizeTeacherDuplicates(school, data) {
+  // السبيل الآمن: لا نحذف حسابات حية من القسم ولا نعيد توجيه ملكية التسجيلات
+  // (ملاحظات/تحويلات/تكليفات) ولا نتحفظ في الأسماء المشتركة إطلاقاً.
+  // النسخة القديمة كانت عند تعارض اسمين (نفس username لرقمَين مختلفَين) تتخذ
+  // واحداً «أساسياً» وتحذف الآخر وتستبدل مرجعات المؤلَّفـة كلّها عبر استبدال نصي
+  // على JSON كامل القاعدة — فتنقل ملكية تسجيلات معلمات حقيقيات إلى معرّف آخر،
+  // وهي التي «تختفي» سفلهن بعد الحفظ. الحذف/الضبط الحقيقي للتكرارات يبقى يدوياً
+  // (diag/teacher-dup) بقرار إداري، لا تلقائياً في كل حفظ لأي جهة.
   if (!data || !Array.isArray(data.users)) return { remapped: 0, dropped: 0 };
-  const tRows = await db.pool.query(`SELECT id FROM users WHERE school=$1`, [school]);
-  const tableIds = new Set(tRows.rows.map(r => r.id));
-  const live = data.users.filter(u => u && u.deleted !== true);
-  const byName = {};
-  for (const u of live) (byName[u.username] = byName[u.username] || []).push(u);
-  // (المعرّف في جدول users) -> أول يتيم ضُمّ إليه
-  const canonToOrphan = {};
-  for (const list of Object.values(byName)) {
-    if (list.length <= 1) continue;
-    const canonical = list.find(u => tableIds.has(u.id)) || list[0];
-    for (const u of list) if (u !== canonical && !canonToOrphan[canonical.id]) canonToOrphan[canonical.id] = u.id;
-  }
-  // إعادة توجيه المرجعات: canonical id هو المصير، واليتيم يُستبدل به في كامل الـ data
-  const remap = {};
-  for (const canonicalId of Object.keys(canonToOrphan)) remap[canonToOrphan[canonicalId]] = canonicalId;
-  // بناء قائمة المستخدمين النهائية من الـ live (قبل الريماب) حتى تحمل التوابة المعرّف اليتيم
-  const out = [];
   const seen = new Set();
-  for (const u of live) {
-    if (!u) continue;
-    const nm = String(u.username || '');
-    const canonical = (byName[nm] || []).find(x => x && tableIds.has(x.id)) || (byName[nm] || [])[0];
-    const isCanon = canonical && canonical.id === u.id;
-    if (!nm || !isCanon || seen.has(nm)) {
-      out.push(Object.assign({}, u, { deleted: true }));
-      continue;
+  const out = [];
+  for (const u of data.users) {
+    if (u && u.id != null && String(u.id) !== '') {
+      const k = String(u.id);
+      if (seen.has(k)) continue;
+      seen.add(k);
     }
-    seen.add(nm);
     out.push(u);
   }
-  const dropped = live.length - out.filter(u => u && u.deleted !== true).length;
+  const dropped = data.users.length - out.length;
   data.users = out;
-  const remapped = Object.keys(remap).length ? remapJsonRefs(data, remap) : 0;
-  return { remapped, dropped };
-}
-// إعادة توجيه معرّفات يتيمة في كل أقسام data ما عدا users (التي سبق بناؤها)
-function remapJsonRefs(data, remap) {
-  const saved = data.users;
-  data.users = [];
-  let json = JSON.stringify(data);
-  for (const [oldId, newId] of Object.entries(remap)) {
-    json = json.replace(new RegExp(String(oldId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), newId);
-  }
-  const patched = JSON.parse(json);
-  for (const k of Object.keys(patched)) data[k] = patched[k];
-  data.users = saved;
-  return Object.keys(remap).length;
+  return { remapped: 0, dropped };
 }
 
 app.put('/api/db/:school', requireAuth, (req, res) => {
@@ -2347,11 +2320,24 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       putAttempts++;
       const cur = await db.getSchoolData(school);
       const curTs = (cur && Number(cur.ts)) || putRes.storedTs || 0;
-      // وصل تغيير بنيوي جديد بعد قراءتنا الأولى (طالب/فصل أُضيف أو حُذف من جهاز آخر):
-      // لا نطمسه. نُرجع 409 فيقرأ العميل من جديد ويدمج ثم يدفع — وهو سلوك __syncPush أصلاً.
-      if (cur && cur.data && prev && prev.data && !jsonEqual(cur.data.students, prev.data.students)) {
-        console.warn('[db-put] تغيير بنيوي متزامن لـ', school, '— 409 ليعيد العميل الدمج');
-        return res.status(409).json({ error: 'write_rejected', reason: 'concurrent_change', storedTs: curTs });
+      // وصل تغيير جديد بعد قراءتنا الأولى من كاتب آخر (أي قسم: طلاب/فصول/ملاحظات/
+      // تحويلات/حضور/تكليفات...): لا نطمسه بكتابة نسختنا القديمة فوقه — نُرجع 409
+      // فيقرأ العميل من جديد ويدمج ثم يدفع (هو سلوك __syncPush أصلاً). كانت المقارنة
+      // سابقاً على الطلاب وحدهم، فكان حفظٌ متزامن لقسمٍ آخر (ملاحظات/تحويلات/تكليفات
+      // — ما يحفظه المعلمون) يُكتب فوقه نسختُنا القديمة برضا 200 فتضيع تسجيلات تُحفظ
+      // في اللحظة ذاتها من جهازٍ آخر.
+      if (cur && cur.data && prev && prev.data) {
+        const anySectionChanged = SECTION_KEYS.some((k) => {
+          const a = prev.data[k];
+          const b = cur.data[k];
+          const na = (a === undefined || a === null) ? [] : a;
+          const nb = (b === undefined || b === null) ? [] : b;
+          return !jsonEqual(na, nb);
+        });
+        if (anySectionChanged) {
+          console.warn('[db-put] تغيير متزامن لـ', school, '(' + curTs + ') — 409 ليعيد العميل الدمج');
+          return res.status(409).json({ error: 'write_rejected', reason: 'concurrent_change', storedTs: curTs });
+        }
       }
       nextTs = Math.max(saneTs, curTs) + 1;
       if (clean && typeof clean === 'object') clean._ts = nextTs;
