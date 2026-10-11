@@ -1,5 +1,5 @@
 ﻿/* نبراس — Service Worker للتثبيت والعمل دون اتصال */
-const CACHE_NAME = 'nibras-v70-dock-all';
+const CACHE_NAME = 'nibras-v71-persist';
 const CORE_ASSETS = [
   './',
   './index.html',

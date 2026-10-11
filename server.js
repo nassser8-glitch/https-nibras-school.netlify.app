@@ -1906,6 +1906,23 @@ async function normalizeTeacherDuplicates(school, data) {
 
 app.put('/api/db/:school', requireAuth, (req, res) => {
   (async () => {
+    // تدقيق الرفض: كل ردٍّ غير ناجح على هذا المسار يُسجَّل بسببه ومَن صاحبه،
+    // فيُعرف من لوحة الإدارة أيّ جهازٍ رُفض حفظه ولماذا (تشخيص «اختفاء الحفظ»).
+    const __origJson = res.json.bind(res);
+    res.json = (body) => {
+      try {
+        if (!(body && body.ok === true)) {
+          db.auditSync({
+            school: String(req.params.school || '').toUpperCase(),
+            ip: req.ip, ua: req.headers['user-agent'] || '',
+            user_id: req.session && req.session.user_id, role: req.session && req.session.role,
+            reason: 'reject:' + String((body && (body.error || body.reason)) || 'unknown'),
+            payload: req.body ? Buffer.byteLength(JSON.stringify(req.body)) : 0,
+          }).catch(() => {});
+        }
+      } catch (_) {}
+      return __origJson(body);
+    };
     if (rateLimit('dbwrite', 180, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
     const school = String(req.params.school).toUpperCase();
     if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
@@ -2633,7 +2650,7 @@ function tcpTest(host, port, ms) {
 }
 app.get('/api/health', (req, res) => {
   res.json({
-    ok: true, ver: 'nibras-server-v21', schools: db.SCHOOLS, db: 'postgres',
+    ok: true, ver: 'nibras-server-v22', schools: db.SCHOOLS, db: 'postgres',
     supervisionRoles: db.supervisionVisibleRoles(),
     /* صحة فحسب: لا نكشف البيانات الداخلية للبريد (المضيف/المستخدم/الطول/المفتاح). */
     mail: { configured: !!(MAIL_HOST && MAIL_USER && (MAIL_PASS || MAIL_API_KEY)) },
@@ -2739,6 +2756,18 @@ app.get('/api/diag/teacher-dup', requireAuth, async (req, res) => {
   try {
     const r = await db.pool.query(`SELECT id, school, username, name, role, active, first_login, granted FROM users WHERE school='GIRLS' AND role IN ('TEACHER','ADMIN','AGENT') ORDER BY username`);
     res.json({ total: r.rows.length, rows: r.rows });
+  } catch (e) { console.error(e); res.status(500).json({ error: String(e) }); }
+});
+
+// تشخيص المزامنة: آخر عمليات الرفع (ناجحة أو مرفوضة) مع السبب ومَن أرسلها —
+// يُعرف منه أي معلمةٍ لم يصل حفظها ولماذا (403 انتظار كلمة مرور / 409 / 429 ...).
+app.get('/api/diag/sync-audit', requireAuth, async (req, res) => {
+  if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+  if (rateLimit('diag-sync-audit', 20, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+  try {
+    const school = req.query.school ? String(req.query.school) : null;
+    const rows = await db.listSyncAudit(req.query.limit, school);
+    res.json({ ok: true, count: rows.length, rows });
   } catch (e) { console.error(e); res.status(500).json({ error: String(e) }); }
 });
 

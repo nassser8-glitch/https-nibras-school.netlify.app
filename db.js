@@ -94,8 +94,10 @@ async function initSchema() {
         n_tomb      INT,
         assign_ids  JSONB,
         data_ts     BIGINT,
-        payload     INT
+        payload     INT,
+        reason      TEXT
       )`);
+    await client.query(`ALTER TABLE sync_audit ADD COLUMN IF NOT EXISTS reason TEXT`);
     await client.query(`CREATE INDEX IF NOT EXISTS sync_audit_school_idx ON sync_audit(school)`);
     await client.query(`CREATE INDEX IF NOT EXISTS sync_audit_time_idx ON sync_audit(created_at)`);
     await client.query(`
@@ -901,16 +903,29 @@ async function getBackup(id) {
 async function auditSync(rec) {
   try {
     await pool.query(
-      `INSERT INTO sync_audit (school, ip, ua, user_id, role, n_assign, n_tomb, assign_ids, data_ts, payload)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      `INSERT INTO sync_audit (school, ip, ua, user_id, role, n_assign, n_tomb, assign_ids, data_ts, payload, reason)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [rec.school, rec.ip || null, rec.ua || null, rec.user_id || null, rec.role || null,
-       rec.n_assign || 0, rec.n_tomb || 0, JSON.stringify(rec.assign_ids || []), rec.data_ts || 0, rec.payload || 0]);
+       rec.n_assign || 0, rec.n_tomb || 0, JSON.stringify(rec.assign_ids || []), rec.data_ts || 0, rec.payload || 0,
+       rec.reason || 'ok']);
     // إبقاء التدقيق محدوداً: آخر 5000 سطر فقط
     await pool.query(`DELETE FROM sync_audit WHERE id NOT IN (SELECT id FROM sync_audit ORDER BY id DESC LIMIT 5000)`);
   } catch (e) {
     // فشل التدقيق لا يجب أن يكسر الحفظ
     console.error('auditSync failed:', e.message);
   }
+}
+/* آخر عمليات المزامنة للتشخيص: من رفع فعلاً/رُفض ولماذا. للأدمن فقط عبر المسار. */
+async function listSyncAudit(limit, school) {
+  const lim = Math.max(1, Math.min(500, Number(limit) || 100));
+  const params = [];
+  let where = '';
+  if (school) { params.push(String(school).toUpperCase()); where = ` WHERE school = $${params.length}`; }
+  params.push(lim);
+  const r = await pool.query(
+    `SELECT id, created_at, school, ip, user_id, role, n_assign, n_tomb, data_ts, payload, reason
+       FROM sync_audit${where} ORDER BY id DESC LIMIT $${params.length}`, params);
+  return r.rows;
 }
 
 /* ===== الأعلام العامة ===== */
@@ -944,5 +959,5 @@ module.exports = {
   getSchoolData, setSchoolData, mutateSchoolData, patchSchoolUserStats, touchUserPresence,
   getSchoolSettings, setSchoolSettings,
   saveBackup, listBackups, getBackup,
-  auditSync,
+  auditSync, listSyncAudit,
 };
