@@ -85,13 +85,23 @@ function loadDocked() {
   return { api: ctx.window.__tb, ctx, dock, body };
 }
 
-test('dock: index.html يضع المرسى فوراً بعد بطاقة المتواجدات', () => {
+test('dock: المرسى حاضرة في كل الحسابات — وبطاقة المتواجدات للإدارة فقط', () => {
   const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
-  assert.ok(html.includes('<div id="presentNowBox"></div><div id="nibrasToolbarDock"></div>'),
-    'نقطة المرسى تحت بطاقة المتواجدات');
+  const a = html.indexOf('class="sidebar-widgets"');
+  const b = html.indexOf('</aside>', a);
+  assert.ok(a >= 0 && b > a, 'كتلة أدوات الشريط الجانبي موجودة');
+  const block = html.slice(a, b);
+  assert.ok(block.includes('<div id="nibrasToolbarDock"></div>'), 'نقطة المرسى تُرسم لكل الأدوار');
+  assert.ok(block.includes("<div id=\"presentNowBox\"></div>' : ''}"),
+    'بطاقة المتواجدات داخل الشرط الإداري فقط');
+  assert.ok(!block.includes("<div id=\"nibrasToolbarDock\"></div>' : ''}"),
+    'المرسى ليست داخل الشرط الإداري');
   const i = html.indexOf("function updatePresentNow(){");
-  assert.ok(i >= 0 && html.slice(i, i + 2000).includes('__tb.redock'),
-    'updatePresentNow يعيد المرسى بعد كل رسم حضور');
+  assert.ok(i >= 0, 'updatePresentNow موجود');
+  const seg = html.slice(i, i + 1200);
+  assert.ok(/__tb\.redock/.test(seg), 'updatePresentNow يعيد المرسى بعد كل رسم حضور');
+  assert.ok(/__tb\.redock/.test(seg.split("role !== 'ADMIN'")[0]),
+    'المرسى يُعاد فوراً قبل حارس الدور — ينطبق على جميع الحسابات');
 });
 
 test('dock: الشريط حقيقي ويعرض صفّ الأيقونات عند المرسى', () => {
