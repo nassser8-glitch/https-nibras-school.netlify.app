@@ -610,13 +610,11 @@ window.__nibrasBootErr = '';
   .layout.theme-girls .notif-item:hover,
   .layout.theme-girls .notif-foot:hover { background:#fdf2f8; }
   .layout.theme-girls .notif-foot { color:#db2777; }
-  /* الشريط الجانبي: من الكحلي الغامق إلى تدرّج وردي أنيق (يبقى النصّ أبيض واضحًا) */
+  /* الشريط الجانبي (الجهة اليمنى): أُعيد كما كان في v56 بالتدرّج الكحلي — بطلب المستخدم */
   .layout.theme-girls .sidebar {
-    background:linear-gradient(180deg,#db2777 0%,#9d174d 100%);
-    border-left:1px solid #be185d;
+    background:linear-gradient(180deg,#123f6c 0%,#0d3154 100%);
+    border-left:none; --blue:#1672c4; --navy:#0f4678;
   }
-  .layout.theme-girls .sidebar .nav-link.active { background:rgba(255,255,255,.24); }
-  .layout.theme-girls .sidebar-widgets .info-card { border-top-color:#ffffff; }
   .layout.theme-girls .app-footer { background:#fff8fb; border-top:1px solid #fce7f3; }
   /* دائرة وردية حول شعار المدرسة (شاشة الدخول/الاختيار + الشريط العلوي) */
   .school-logo {
@@ -2980,7 +2978,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-11c rose+pushfix';
+const __APP_VER = '2026-10-11d rose+pushfix';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3888,7 +3886,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v58</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v59</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -12223,7 +12221,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=52', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=53', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
