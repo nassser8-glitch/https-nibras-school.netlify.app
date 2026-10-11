@@ -582,6 +582,54 @@ window.__nibrasBootErr = '';
   .pw-wrap .pw-toggle { position:absolute; top:50%; inset-inline-end:8px; transform:translateY(-50%); border:none; background:transparent; cursor:pointer; font-size:16px; line-height:1; color:var(--muted); padding:4px; z-index:2; }
   .pw-wrap .pw-toggle:hover { color:var(--text); }
   .pw-wrap input.input { padding-inline-end:38px !important; }
+
+  /* ===== اللمسة الأنثوية الوردية (واجهة البنات) =====
+     كتلة تجاوزات نهائية عالية الخصوصية تُلغي الكحلي/الأزرق الذي تفرضه كتلة .layout
+     أعلاه، فتُصبغ الواجهة كلها ورديًّا هادئًا (العنوان/الشريط الجانبي/الخلفية)،
+     وتضع دائرة وردية حول شعار المدرسة. آمنة: لا نعدّل عشرات القواعد، بل نتجاوزها. */
+  :root {
+    --primary:#be185d; --primary-light:#fdf2f8; --accent:#db2777;
+    --bg-subtle:#fff0f7; --border-color:#fce7f3;
+    --sidebar-bg:#fff8fb; --sidebar-border:#fce7f3;
+  }
+  body { background:linear-gradient(180deg,#fff6fa 0%,#fde8f2 100%); background-attachment:fixed; }
+  .layout.theme-girls {
+    --navy:#9d174d; --blue:#db2777; --light:#fff5f9; --line:#fbcfe8;
+    --text:#4a1d33; --muted:#9d7488;
+    --primary:#be185d; --primary-light:#fdf2f8; --accent:#db2777;
+    --bg-subtle:#fff0f7; --border-color:#fce7f3;
+  }
+  /* الشريط العلوي: من الكحلي إلى تدرّج وردي فاتح */
+  .layout.theme-girls .topbar {
+    background:linear-gradient(180deg,#fdf2f8 0%,#ffffff 75%);
+    border-bottom:1px solid #fbcfe8; box-shadow:0 2px 12px rgba(190,24,93,.08);
+  }
+  .layout.theme-girls .topbar-brand h1 { color:#9d174d; }
+  .topbar-search { background:#fff5f9; border-color:#fbcfe8; }
+  .layout.theme-girls .notif-btn:hover,
+  .layout.theme-girls .notif-item:hover,
+  .layout.theme-girls .notif-foot:hover { background:#fdf2f8; }
+  .layout.theme-girls .notif-foot { color:#db2777; }
+  /* الشريط الجانبي: من الكحلي الغامق إلى تدرّج وردي أنيق (يبقى النصّ أبيض واضحًا) */
+  .layout.theme-girls .sidebar {
+    background:linear-gradient(180deg,#db2777 0%,#9d174d 100%);
+    border-left:1px solid #be185d;
+  }
+  .layout.theme-girls .sidebar .nav-link.active { background:rgba(255,255,255,.24); }
+  .layout.theme-girls .sidebar-widgets .info-card { border-top-color:#ffffff; }
+  .layout.theme-girls .app-footer { background:#fff8fb; border-top:1px solid #fce7f3; }
+  /* دائرة وردية حول شعار المدرسة (شاشة الدخول/الاختيار + الشريط العلوي) */
+  .school-logo {
+    border:3px solid #f472b6; background:#fff;
+    box-shadow:0 0 0 6px #fce7f3, 0 8px 22px rgba(219,39,119,.22);
+  }
+  .layout.theme-girls .topbar-logo {
+    border:2px solid #f472b6; background:#fff;
+    box-shadow:0 0 0 4px #fce7f3, 0 4px 12px rgba(219,39,119,.20);
+  }
+  /* لمسات ورديّة صغيرة للأزرق الصريح المتبقّي */
+  .layout.theme-girls .toggle-btn.active { background:#db2777; border-color:#db2777; }
+  .install-hint { background:linear-gradient(135deg,#be185d,#9d174d); }
 </style>
 </head>
 <body>
@@ -2011,7 +2059,10 @@ async function __refreshSchool(school){
 }
 // غلاف حفظ: كل كتابة لقاعدة بيانات أي قسم تُختم بزمن وتُرفع تلقائياً — وفي وضع الخادم تُحذف بيانات الاعتماد من النسخة المحلية
 localStorage.setItem = function(k, v){
-  const m = /^nibras_GIRLS_db_v1$/.exec(k);
+  // مجموعة الالتقاط إلزامية: نمرّر رمز القسم المستخرج إلى __syncSchedule.
+  // كان النمط بلا أقواس، فـ m[1] = undefined ⇒ __syncPush(undefined) يقرأ مفتاحاً
+  // وهمياً ويعود صامتاً: كل حفظ عبر saveDB لا يُرفع (ناجم عنه «اختفاء التكليف»).
+  const m = /^nibras_([A-Z]+)_db_v1$/.exec(k);
   if(m && __syncEnabled()){
     try{
       const obj = JSON.parse(v);
@@ -2929,7 +2980,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-11a persist';
+const __APP_VER = '2026-10-11c rose+pushfix';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3837,7 +3888,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v56</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v58</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -6601,12 +6652,16 @@ function touchUserPresence(){
   }
 }
 // جلب قائمة الحضور اللحظية من الخادم ثم إعادة رسم البطاقة
+let __presenceDenied = false; // 403 صلاحي: لا نُعيد الطلب المرفوض بلا نهاية
 async function refreshPresence(school){
   if(!__serverEnabled() || !school) return;
+  if(__presenceDenied) return;
   // حارس ضد الحلقة: بعد نجاح حديث (أقل من 5 ثوانٍ) لا نعيد الاستدعاء
   if(__presenceLive && Date.now() - __presenceLive.at < 5000) return;
   try{
     const r = await fetch(AUTH_API + 'presence?school=' + encodeURIComponent(school), { headers: {} });
+    if(r.status === 401){ __handleAuthError(r); return; }
+    if(r.status === 403){ __presenceDenied = true; return; } // بلا صلاحية: نوقف التكرار
     if(!r.ok) return;
     const j = await r.json();
     if(j && j.ok && Array.isArray(j.users)){ __presenceLive = { at: Date.now(), users: j.users }; }
@@ -12168,7 +12223,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=50', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=52', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
