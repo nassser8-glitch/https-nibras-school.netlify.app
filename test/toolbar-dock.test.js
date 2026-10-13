@@ -85,7 +85,7 @@ function loadDocked() {
   return { api: ctx.window.__tb, ctx, dock, body };
 }
 
-test('dock: المرسى حاضرة في كل الحسابات — وبطاقة المتواجدات للإدارة فقط', () => {
+test('dock: المرسى حاضرة في كل الحسابات — وقسم «المتواجدون الآن» أُزيل نهائياً', () => {
   const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
   const a = html.indexOf('class="sidebar-widgets"');
   const b = html.indexOf('</aside>', a);
@@ -94,21 +94,14 @@ test('dock: المرسى حاضرة في كل الحسابات — وبطاقة 
   assert.ok(block.includes('<div id="nibrasToolbarDock"></div>'), 'نقطة المرسى تُرسم لكل الأدوار');
   assert.ok(!block.includes('presentNowBox'),
     'بطاقة المتواجدات ليست في الشريط الجانبي');
-  // قسم «المتواجدون الآن» في أعلى لوحة التحكم، داخل الشرط الإداري فقط
-  assert.ok(/renderPresentSection\(user\)/.test(html), 'لوحة التحكم تستدعي renderPresentSection');
-  const iSec = html.indexOf('function renderPresentSection');
-  assert.ok(iSec > -1, 'دالة قسم المتواجدات موجودة');
-  const sec = html.slice(iSec, iSec + 700);
-  assert.ok(sec.includes('id="presentNowBox"'), 'قسم المتواجدات يحوي نقطة رسم الأعداد');
-  assert.ok(/ADMIN/.test(sec) && /AGENT/.test(sec), 'القسم داخل الشرط الإداري فقط');
+  // قسم «المتواجدون الآن» أُزيل نهائياً من الواجهة بخياراته
+  assert.ok(!/renderPresentSection/.test(html), 'لا استدعاء لقسم المتواجدين');
+  assert.ok(!/function (renderPresentSection|updatePresentNow|presentNowInfo|presentStudentsOnlineInfo|showPresentNow|showPresentStudentsNow)/.test(html),
+    'كل دوال قسم المتواجدات أُزيلت');
+  assert.ok(!/presentNowBox|pn2-|present-section/.test(html), 'بصمات قسم المتواجدات أُزيلت');
+  assert.ok(!html.includes('المتواجدون الآن'), 'نص قسم المتواجدين أُزيل');
   assert.ok(!block.includes("<div id=\"nibrasToolbarDock\"></div>' : ''}"),
     'المرسى ليست داخل الشرط الإداري');
-  const i = html.indexOf("function updatePresentNow(){");
-  assert.ok(i >= 0, 'updatePresentNow موجود');
-  const seg = html.slice(i, i + 1200);
-  assert.ok(/__tb\.redock/.test(seg), 'updatePresentNow يعيد المرسى بعد كل رسم حضور');
-  assert.ok(/__tb\.redock/.test(seg.split("role !== 'ADMIN'")[0]),
-    'المرسى يُعاد فوراً قبل حارس الدور — ينطبق على جميع الحسابات');
 });
 
 test('dock: الشريط حقيقي ويعرض صفّ الأيقونات عند المرسى', () => {

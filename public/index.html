@@ -634,21 +634,8 @@ window.__nibrasBootErr = '';
   .strip-temp { font-weight:800; font-size:16px; color:#0f172a; }
   .strip-main { font-weight:800; font-size:13px; color:#0f172a; }
   .strip-sub { font-size:10.5px; color:#64748b; }
-  /* قسم «المتواجدون الآن»: عنوان واضح + دائرتان متجاورتان (المعلمات أزرق / الطالبات أخضر) */
-  .present-section { background:#fff; border:1px solid var(--border-color,#e6edf5); border-radius:16px; box-shadow:0 4px 14px rgba(15,79,136,.08); margin-bottom:14px; overflow:hidden; }
-  .present-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:11px 16px; border-bottom:1px solid #eef2f7; background:linear-gradient(135deg,#f8fafc,#eff6ff); }
-  .present-title { margin:0; font-weight:800; font-size:14px; color:#0f172a; }
-  .present-note { font-size:11px; color:#64748b; }
-  .present-circles { padding:18px 16px; }
-  .pn2-grid { display:flex; gap:40px; justify-content:center; align-items:flex-start; flex-wrap:wrap; }
-  .pn2-item { display:flex; flex-direction:column; align-items:center; gap:9px; cursor:pointer; }
-  .pn2-ring { width:92px; height:92px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-size:32px; font-weight:900; box-shadow:0 6px 18px rgba(0,0,0,.14); transition:transform .12s, box-shadow .12s; }
-  .pn2-item:hover .pn2-ring { transform:scale(1.05); box-shadow:0 8px 22px rgba(0,0,0,.20); }
-  .pn2-blue { background:linear-gradient(135deg,#60a5fa,#1d4ed8); }
-  .pn2-green { background:linear-gradient(135deg,#4ade80,#16a34a); }
-  .pn2-name { font-size:13px; font-weight:800; color:#334155; }
-  @media (max-width:640px){ .strip-item { padding:6px 10px; } .pn2-ring { width:74px; height:74px; font-size:26px; } .pn2-grid { gap:26px; } }
-  /* بطاقة الترحيب: الصورة أعلى الرئيسية، الشعار والاسم أعلى اليمين، الطقس والتاريخ أعلى اليسار، ومربّع البحث عليها */
+  @media (max-width:640px){ .strip-item { padding:6px 10px; } }
+  /* بطاقة الترحيب: الصورة أعلى الرئيسية، الشعار والاسم أعلى اليمين، الطقس والتاريخ أعلى اليسار */
   .hero-school { position:relative; margin-bottom:14px; border-radius:16px; overflow:hidden; background:#0f172a; box-shadow:0 8px 24px rgba(15,79,136,.18); }
   .hero-school-img { display:block; width:100%; height:auto; min-height:220px; max-height:340px; object-fit:cover; object-position:center; }
   .hero-school-top { position:absolute; top:0; left:0; right:0; display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:14px 16px; background:linear-gradient(180deg,rgba(0,0,0,.46) 0%,rgba(0,0,0,0) 100%); pointer-events:none; }
@@ -658,17 +645,12 @@ window.__nibrasBootErr = '';
   .hero-school-sub { color:rgba(255,255,255,.92); font-size:10.5px; letter-spacing:2px; direction:ltr; text-shadow:0 1px 8px rgba(0,0,0,.7); }
   .hero-school-info { display:flex; align-items:center; gap:8px; flex-wrap:wrap; pointer-events:auto; }
   .hero-school-info .strip-item { background:rgba(255,255,255,.94); border-color:rgba(255,255,255,.55); box-shadow:0 2px 10px rgba(0,0,0,.20); }
-  .hero-school-search { position:absolute; left:50%; bottom:16px; transform:translateX(-50%); width:min(560px,92%); display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.96); border:1px solid rgba(255,255,255,.6); border-radius:999px; padding:10px 18px; box-shadow:0 8px 24px rgba(0,0,0,.25); }
-  .hero-school-search input { border:none; outline:none; background:transparent; font-family:inherit; font-size:14px; color:#111827; width:100%; }
-  .hero-school-search input::placeholder { color:#9fb0c1; }
-  .hero-search-ico { font-size:15px; color:#7b8b9c; }
   @media (max-width:640px){
     .hero-school-img { min-height:200px; max-height:240px; }
     .hero-school-top { flex-direction:column; align-items:stretch; gap:8px; padding:10px 12px; }
     .hero-school-name { font-size:14px; }
     .hero-school-sub { font-size:9px; letter-spacing:1.2px; }
     .hero-school-logo { width:42px; height:42px; }
-    .hero-school-search { bottom:12px; padding:8px 14px; }
   }
 </style>
 </head>
@@ -2955,10 +2937,7 @@ function __renderAppInner(){
   }
   document.body?.classList?.remove('sidebar-locked');
   renderAppStrip();
-  updatePresentNow();
-  touchUserPresence();
   checkMemoReminders();
-  if(!window.__presenceTimer){ window.__presenceTimer = setInterval(() => { touchUserPresence(); updatePresentNow(); }, 60000); }
   if(!window.__memoReminderTimer){ window.__memoReminderTimer = setInterval(checkMemoReminders, 15000); }
 }
 window.addEventListener('hashchange', renderApp);
@@ -3041,7 +3020,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-12d hero-top';
+const __APP_VER = '2026-10-13a remove-present-search';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3942,7 +3921,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v67</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v68</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -3953,24 +3932,6 @@ function toggleSidebar(forceClose){
   sb.classList.toggle('open', open);
   bk.classList.toggle('show', open);
   document.body.classList.toggle('sidebar-locked', open);
-}
-/* البحث السريع من الشريط العلوي */
-function goSearchLive(q){
-  // لا مزامنة حية مع صفحة الطلاب — تُطبَّق فقط عند الضغط على Enter عبر goSearch
-}
-function goSearch(q){
-  q = (q || '').trim();
-  if(!q) return;
-  if(location.hash === '#/students'){
-    const el = document.getElementById('studentSearch');
-    if(el){ el.value = q; filterStudentsTable(); }
-  } else {
-    location.hash = '#/students';
-    setTimeout(() => {
-      const el = document.getElementById('studentSearch');
-      if(el){ el.value = q; filterStudentsTable(); }
-    }, 60);
-  }
 }
 /* تبويبات لوحة الأوائل */
 function switchLeadersTab(tab){
@@ -5452,7 +5413,6 @@ function renderDashboard(){
   ${renderEscapeAlerts()}
   ${renderAdminMsgAlerts()}
   ${renderSchoolHero()}
-  ${renderPresentSection(user)}
   ${hero}
   ${isTeacher ? teacherQuickCards : ''}
   ${attPanel}
@@ -6694,64 +6654,6 @@ function renderAppStrip(){
     .catch(() => { const w = document.getElementById('stripWeather'); if(w) w.innerHTML = '<span class="strip-ico">🌤️</span><div><div class="strip-sub">تعذر تحميل الطقس — تحقق من الاتصال</div></div>'; });
 }
 
-/* ============ المتواجدون الآن من المعلمين/المعلمات (للمدير والوكلاء) ============ */
-// قائمة الحضور اللحظية من الخادم (كل أجهزة القسم) — الاحتياط: نسخة المتصفح المحلية
-let __presenceLive = null; // { at, users: [{id,name,role,active,lastSeenAt}, ...] }
-function presenceUsersFor(school){
-  if(__presenceLive && Date.now() - __presenceLive.at < 70000 && Array.isArray(__presenceLive.users)){
-    const head = JSON.parse(localStorage.getItem('nibras_' + school + '_db_v1') || 'null');
-    if(head && Array.isArray(head.users)){
-      const byId = new Map(head.users.map(u => [u.id, u.active !== false]));
-      return __presenceLive.users.map(su => Object.assign({}, su, { active: byId.has(su.id) ? byId.get(su.id) : su.active !== false }));
-    }
-    return __presenceLive.users;
-  }
-  const db = JSON.parse(localStorage.getItem('nibras_' + school + '_db_v1') || 'null');
-  return (db && Array.isArray(db.users)) ? db.users : [];
-}
-function presentNowInfo(school){
-  const cutoff = Date.now() - 3 * 60 * 1000;
-  const teachers = presenceUsersFor(school).filter(u => u.role === 'TEACHER' && u.active);
-  const present = teachers.filter(u => u.lastSeenAt && new Date(u.lastSeenAt).getTime() >= cutoff);
-  const names = present.map(u => ({ name: u.name, online: true }));
-  const absentNames = teachers.filter(u => !u.lastSeenAt || new Date(u.lastSeenAt).getTime() < cutoff).map(u => u.name);
-  return { n: names.length, names, absentNames };
-}
-function touchUserPresence(){
-  const user = currentUser();
-  if(!user || (user.role !== 'TEACHER' && user.role !== 'STUDENT')) return;
-  const school = getUserSchool();
-  if(!school) return;
-  const key = 'nibras_' + school + '_db_v1';
-  const d = JSON.parse(localStorage.getItem(key) || 'null');
-  if(!d) return;
-  const t = d.users.find(u => u.id === user.id);
-  if(t){
-    t.lastSeenAt = new Date().toISOString();
-    localStorage.setItem(key, JSON.stringify(d));
-  }
-  // إبلاغ الخادم بالتواجد ليراه المدير من كل الأجهزة (كان محلياً فقط فكانت البطاقة صفراً)
-  if(__serverEnabled()){
-    fetch(AUTH_API + 'presence', { method: 'POST', keepalive: true, headers: {} }).catch(() => {});
-  }
-}
-// جلب قائمة الحضور اللحظية من الخادم ثم إعادة رسم البطاقة
-let __presenceDenied = false; // 403 صلاحي: لا نُعيد الطلب المرفوض بلا نهاية
-async function refreshPresence(school){
-  if(!__serverEnabled() || !school) return;
-  if(__presenceDenied) return;
-  // حارس ضد الحلقة: بعد نجاح حديث (أقل من 5 ثوانٍ) لا نعيد الاستدعاء
-  if(__presenceLive && Date.now() - __presenceLive.at < 5000) return;
-  try{
-    const r = await fetch(AUTH_API + 'presence?school=' + encodeURIComponent(school), { headers: {} });
-    if(r.status === 401){ __handleAuthError(r); return; }
-    if(r.status === 403){ __presenceDenied = true; return; } // بلا صلاحية: نوقف التكرار
-    if(!r.ok) return;
-    const j = await r.json();
-    if(j && j.ok && Array.isArray(j.users)){ __presenceLive = { at: Date.now(), users: j.users }; }
-    updatePresentNow();
-  }catch(e){}
-}
 function renderSchoolHero(){
   return `<div class="hero-school">
     <img class="hero-school-img" src="assets/nibras-school-building.png" alt="مبنى المدرسة السعودية في إسلام آباد" loading="lazy" onerror="this.closest('.hero-school').style.display='none'" />
@@ -6765,74 +6667,8 @@ function renderSchoolHero(){
       </div>
       <div id="appStrip" class="hero-school-info"></div>
     </div>
-    <div class="hero-school-search">
-      <span class="hero-search-ico">🔍</span>
-      <input id="topSearch" placeholder="ابحث عن طالب بالاسم أو الرقم..." oninput="goSearchLive(this.value)" onkeydown="if(event.key==='Enter')goSearch(this.value)" />
-    </div>
   </div>`;
 }
-function renderPresentSection(user){
-  if(!user || (user.role !== 'ADMIN' && user.role !== 'AGENT')) return '';
-  return `<div class="present-section">
-    <div class="present-head">
-      <p class="present-title">🟢 المتواجدون الآن</p>
-      <span class="present-note">من فتح التطبيق خلال آخر 3 دقائق</span>
-    </div>
-    <div id="presentNowBox" class="present-circles"></div>
-  </div>`;
-}
-function updatePresentNow(){
-  if(window.__tb && window.__tb.redock) window.__tb.redock();
-  const el = document.getElementById('presentNowBox');
-  const user = currentUser();
-  if(!el || !user || (user.role !== 'ADMIN' && user.role !== 'AGENT')) return;
-  const school = getActiveSchool();
-  const info = presentNowInfo(school);
-  const sinfo = presentStudentsOnlineInfo(school);
-  el.innerHTML = `
-    <div class="pn2-grid">
-      <div class="pn2-item" onclick="showPresentNow()" title="اضغط لعرض أسماء المعلمات المتواجدات الآن">
-        <div class="pn2-ring pn2-blue"><b>${info.n}</b></div>
-        <div class="pn2-name">المعلمات</div>
-      </div>
-      <div class="pn2-item" onclick="showPresentStudentsNow()" title="اضغط لعرض الطالبات المتواجدات في الموقع الآن">
-        <div class="pn2-ring pn2-green"><b>${sinfo.n}</b></div>
-        <div class="pn2-name">الطالبات</div>
-      </div>
-    </div>`;
-  if(window.__tb && window.__tb.redock) window.__tb.redock();
-  refreshPresence(school);
-}
-function showPresentNow(){
-  const school = getActiveSchool();
-  const info = presentNowInfo(school);
-  const schoolLabel = 'البنات';
-  const teacherWord = 'معلمة';
-  const list = info.n
-    ? info.names.map(t => `<li class="dl-item"><span>👤 ${escapeHtml(t.name)}</span><span class="muted" style="margin-inline-start:auto">${t.online ? '🟢 سجل الدخول اليوم' : '—'}</span></li>`).join('')
-    : `<li class="dl-empty">لا يوجد ${teacherWord}s متواجدون بعد</li>`;
-  const absent = info.absentNames.length ? `<p class="muted" style="margin-top:10px">غير متواجدين الآن: ${info.absentNames.map(escapeHtml).join('، ')}</p>` : '';
-  openDetails('🧑‍🏫 المتواجدون الآن — قسم ' + schoolLabel + ' (' + info.n + ' ' + teacherWord + ')', list + absent);
-}
-/* الطالبات المتواجدات في الموقع الآن (من فتحت التطبيق في آخر 3 دقائق) */
-function presentStudentsOnlineInfo(school){
-  const cutoff = Date.now() - 3 * 60 * 1000;
-  const students = presenceUsersFor(school).filter(u => u.role === 'STUDENT' && u.active);
-  const present = students.filter(u => u.lastSeenAt && new Date(u.lastSeenAt).getTime() >= cutoff);
-  return { n: present.length, names: present.map(u => ({ name: u.name, online: true })) };
-}
-function showPresentStudentsNow(){
-  const school = getActiveSchool();
-  const info = presentStudentsOnlineInfo(school);
-  const schoolLabel = 'البنات';
-  const studentWord = 'طالبة';
-  const list = info.n
-    ? info.names.map(t => `<li class="dl-item"><span>👧 ${escapeHtml(t.name)}</span><span class="muted" style="margin-inline-start:auto">🟢 في الموقع</span></li>`).join('')
-    : `<li class="dl-empty">لا توجد ${studentWord} متواجدة في الموقع الآن</li>`;
-  openDetails('👧 الطالبات المتواجدات في الموقع الآن — ' + schoolLabel + ' (' + info.n + ' ' + studentWord + ')', list);
-}
-
-
 /* ============ الرسوم البيانية ============ */
 // بناء عمود اليوم الواحد + الرسم الأسبوعي (الإثنين → الجمعة) من أي نسخة قاعدة بيانات
 function buildWeekChart(db, idsArr){
@@ -12333,7 +12169,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=61', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=62', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

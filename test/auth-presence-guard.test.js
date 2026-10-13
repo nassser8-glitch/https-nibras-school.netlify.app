@@ -7,7 +7,7 @@
  *   • حضور القراءة: ADMIN/AGENT فقط، وغيرهما 403 (لا نوسّع للمعلم/الطالبة).
  *   • تدقيق المزامنة: ADMIN فقط.
  *   • غير المسجَّل: 401 (المصادقة أولاً، لا 403).
- *   • الواجهة لا تكرار بلا نهاية: توقف عند 403، وتتعامل مع 401 بانتهاء الجلسة.
+ *   • الواجهة لم تعد تستخدم مسار الحضور: قسم «المتواجدون الآن» أُزيل نهائياً.
  * هذه اختبارات مصدر ثابتة (نمط بقية الاختبارات) بلا اتصال بقاعدة الإنتاج.
  * ========================================================================== */
 const test = require('node:test');
@@ -46,11 +46,7 @@ test('3) تدقيق المزامنة: ADMIN فقط', () => {
   assert.ok(body.includes("res.status(403).json({ error: 'forbidden' })"), '403 لغير المدير');
 });
 
-test('4) الواجهة: لا تكرار للحضور بعد 403، وتعالج 401 بانتهاء الجلسة', () => {
-  const body = SRC.slice(SRC.indexOf('async function refreshPresence'), SRC.indexOf('async function refreshPresence') + 700);
-  assert.ok(body.includes('if(__presenceDenied) return;'), 'حارس إيقاف التكرار مفقود');
-  assert.ok(body.includes("if(r.status === 403){ __presenceDenied = true; return; }"),
-    'عند 403 يجب إيقاف الطلب المرفوض');
-  assert.ok(body.includes('if(r.status === 401){ __handleAuthError(r); return; }'),
-    'عند 401 تُعالَج الجلسة المنتهية');
+test('4) قسم «المتواجدون الآن» أُزيل من الواجهة (لم يبقَ أي استدعاء للحضور)', () => {
+  assert.ok(!/renderPresentSection|updatePresentNow|refreshPresence|presentNowInfo/.test(SRC),
+    'لم تبقَ أي دالة لقسم المتواجدات في الواجهة');
 });
