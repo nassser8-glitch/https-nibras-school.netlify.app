@@ -634,10 +634,6 @@ window.__nibrasBootErr = '';
   .strip-temp { font-weight:800; font-size:16px; color:#0f172a; }
   .strip-main { font-weight:800; font-size:13px; color:#0f172a; }
   .strip-sub { font-size:10.5px; color:#64748b; }
-  .strip-flags { gap:16px; }
-  .strip-flag { display:flex; align-items:center; gap:6px; }
-  .strip-flag-nm { font-size:11.5px; font-weight:700; color:#334155; }
-  .flag-wrap { display:inline-flex; border-radius:3px; overflow:hidden; box-shadow:0 0 0 1px rgba(0,0,0,.10); line-height:0; }
   /* قسم «المتواجدون الآن»: عنوان واضح + دائرتان متجاورتان (المعلمات أزرق / الطالبات أخضر) */
   .present-section { background:#fff; border:1px solid var(--border-color,#e6edf5); border-radius:16px; box-shadow:0 4px 14px rgba(15,79,136,.08); margin-bottom:14px; overflow:hidden; }
   .present-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:11px 16px; border-bottom:1px solid #eef2f7; background:linear-gradient(135deg,#f8fafc,#eff6ff); }
@@ -651,25 +647,28 @@ window.__nibrasBootErr = '';
   .pn2-blue { background:linear-gradient(135deg,#60a5fa,#1d4ed8); }
   .pn2-green { background:linear-gradient(135deg,#4ade80,#16a34a); }
   .pn2-name { font-size:13px; font-weight:800; color:#334155; }
-  @media (max-width:640px){ .strip-item { padding:6px 10px; } .strip-flag-nm { display:none; } .pn2-ring { width:74px; height:74px; font-size:26px; } .pn2-grid { gap:26px; } }
-  /* بطاقة الترحيب: صورة المدرسة، وعليها الشعار والاسم (يسارًا) والطقس والتاريخ (يمينًا) */
+  @media (max-width:640px){ .strip-item { padding:6px 10px; } .pn2-ring { width:74px; height:74px; font-size:26px; } .pn2-grid { gap:26px; } }
+  /* بطاقة الترحيب: الصورة أعلى الرئيسية، الشعار والاسم أعلى اليمين، الطقس والتاريخ أعلى اليسار، ومربّع البحث عليها */
   .hero-school { position:relative; margin-bottom:14px; border-radius:16px; overflow:hidden; background:#0f172a; box-shadow:0 8px 24px rgba(15,79,136,.18); }
-  .hero-school-img { display:block; width:100%; height:auto; max-height:300px; object-fit:cover; object-position:center; }
-  .hero-school-overlay { position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:space-between; gap:14px; padding:16px 18px; background:linear-gradient(180deg,rgba(0,0,0,0) 38%,rgba(0,0,0,.64) 100%); pointer-events:none; }
+  .hero-school-img { display:block; width:100%; height:auto; min-height:220px; max-height:340px; object-fit:cover; object-position:center; }
+  .hero-school-top { position:absolute; top:0; left:0; right:0; display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:14px 16px; background:linear-gradient(180deg,rgba(0,0,0,.46) 0%,rgba(0,0,0,0) 100%); pointer-events:none; }
   .hero-school-brand { display:flex; align-items:center; gap:11px; min-width:0; pointer-events:auto; }
   .hero-school-logo { width:52px; height:52px; border-radius:50%; object-fit:cover; border:3px solid #f472b6; box-shadow:0 0 0 3px rgba(255,255,255,.35); background:#fff; flex:0 0 auto; }
-  .hero-school-name { color:#fff; font-weight:800; font-size:17px; line-height:1.25; text-shadow:0 1px 8px rgba(0,0,0,.65); }
-  .hero-school-sub { color:rgba(255,255,255,.9); font-size:10.5px; letter-spacing:2px; direction:ltr; text-shadow:0 1px 8px rgba(0,0,0,.65); }
+  .hero-school-name { color:#fff; font-weight:800; font-size:17px; line-height:1.25; text-shadow:0 1px 8px rgba(0,0,0,.7); }
+  .hero-school-sub { color:rgba(255,255,255,.92); font-size:10.5px; letter-spacing:2px; direction:ltr; text-shadow:0 1px 8px rgba(0,0,0,.7); }
   .hero-school-info { display:flex; align-items:center; gap:8px; flex-wrap:wrap; pointer-events:auto; }
   .hero-school-info .strip-item { background:rgba(255,255,255,.94); border-color:rgba(255,255,255,.55); box-shadow:0 2px 10px rgba(0,0,0,.20); }
+  .hero-school-search { position:absolute; left:50%; bottom:16px; transform:translateX(-50%); width:min(560px,92%); display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.96); border:1px solid rgba(255,255,255,.6); border-radius:999px; padding:10px 18px; box-shadow:0 8px 24px rgba(0,0,0,.25); }
+  .hero-school-search input { border:none; outline:none; background:transparent; font-family:inherit; font-size:14px; color:#111827; width:100%; }
+  .hero-school-search input::placeholder { color:#9fb0c1; }
+  .hero-search-ico { font-size:15px; color:#7b8b9c; }
   @media (max-width:640px){
-    .hero-school-img { max-height:190px; }
-    .hero-school-overlay { flex-direction:column; align-items:stretch; gap:8px; padding:12px; }
-    .hero-school-brand { order:1; }
-    .hero-school-info { order:2; }
+    .hero-school-img { min-height:200px; max-height:240px; }
+    .hero-school-top { flex-direction:column; align-items:stretch; gap:8px; padding:10px 12px; }
     .hero-school-name { font-size:14px; }
-    .hero-school-sub { font-size:9.5px; letter-spacing:1.5px; }
-    .hero-school-info .strip-item { padding:6px 10px; }
+    .hero-school-sub { font-size:9px; letter-spacing:1.2px; }
+    .hero-school-logo { width:42px; height:42px; }
+    .hero-school-search { bottom:12px; padding:8px 14px; }
   }
 </style>
 </head>
@@ -2448,6 +2447,11 @@ function tl(text){
   if(getActiveSchool() !== 'GIRLS') return text;
   return feminineLabels[text] || text;
 }
+function displayName(user){
+  const n = (user && user.name) ? String(user.name) : '';
+  if(user && user.role === 'ADMIN' && n === 'مدير النظام') return 'ناصر العتيبي';
+  return n;
+}
 function roleLabel(role){
   const label = roleLabels[role] || role;
   return tl(label);
@@ -2546,7 +2550,7 @@ function dbKey(){ const s = getActiveSchool(); return 'nibras_' + s + '_db_v1'; 
 function seedDBFor(school){ if(DEMO_MODE && DEMO_SEED && DEMO_SEED[school]) return JSON.parse(JSON.stringify(DEMO_SEED[school]));
   // في وضع الخادم: الحسابات تُنشأ في قاعدة البيانات فقط (لا حسابات افتراضية بكلمات مرور معروفة في المتصفح)
   return {
-    users: __serverEnabled() ? [] : [{ id: uid(), name:'مدير النظام', email:'admin@nibras.local', password:null, role:'ADMIN', active:true }],
+    users: __serverEnabled() ? [] : [{ id: uid(), name:'ناصر العتيبي', email:'admin@nibras.local', password:null, role:'ADMIN', active:true }],
     grades: [], classes: [], students: [], attendance: [], notes: [], transfers: [], maintenance: [], adminMsgs: [], announcements: [], suggestions: []
   };
 }
@@ -3037,7 +3041,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-12c hero-overlay';
+const __APP_VER = '2026-10-12d hero-top';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3234,7 +3238,7 @@ function renderFirstLogin(user){
     <div class="card login-card">
       <button class="btn-secondary full" style="margin-bottom:14px" onclick="location.hash='#/'; renderApp();">→ العودة إلى الصفحة الرئيسية</button>
       <img src="logo.jpg" alt="شعار المدرسة" class="school-logo" />
-      <h1>أهلاً بك، ${escapeHtml(user.name)}</h1>
+      <h1>أهلاً بك، ${escapeHtml(displayName(user))}</h1>
       <p class="muted">أول دخول — سجّل بريدك الإلكتروني الحقيقي (يصل إليه رمز الاستعادة عند نسيان الرقم السري). يمكنك اختيارياً تغيير كلمة المرور بنفسك.</p>
       <div class="card" style="margin:0 0 12px;border-color:#bfdbfe;background:#eff6ff;color:#1e40af">
         <p style="margin:0;font-size:13px">اسم المستخدم للدخول: <b dir="ltr" style="font-size:16px">${escapeHtml(user.username || '')}</b></p>
@@ -3330,7 +3334,7 @@ function renderAccount(){
   <div class="card" style="max-width:480px">
     <div id="accMsg" class="error-box" style="display:none"></div>
     <label>اسمك (ثابت — لا يمكن تغييره)</label>
-    <input class="input" value="${escapeHtml(user.name)}" disabled />
+    <input class="input" value="${escapeHtml(displayName(user))}" disabled />
     <label>اسم المستخدم للدخول (ثابت — لا يمكن تغييره)</label>
     <input class="input" style="direction:ltr" value="${escapeHtml(user.username || '')}" disabled />
     <label>البريد الإلكتروني</label>
@@ -3901,7 +3905,6 @@ function renderLayout(user, hash){
 
   const themeClass = 'theme-girls';
   setTimeout(__warnPendingOnOpen, 0);
-  const searchLive = `oninput="goSearchLive(this.value)"`;
   return `
   <div class="layout ${themeClass}">
     <header class="topbar">
@@ -3915,11 +3918,10 @@ function renderLayout(user, hash){
               <p class="muted small">${escapeHtml(schoolName)} <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span></p>
             </div>
           </div>
-          <div class="topbar-search"><span style="color:#7b8b9c;font-size:14px">🔍</span><input id="topSearch" placeholder="ابحث عن طالب بالاسم أو الرقم..." ${searchLive} onkeydown="if(event.key==='Enter')goSearch(this.value)" /></div>
           <div class="topbar-actions">
             ${renderNotifState(user)}
             <div class="topbar-user-block" style="text-align:left">
-              <div class="topbar-user-name">${escapeHtml(user.name)}</div>
+              <div class="topbar-user-name">${escapeHtml(displayName(user))}</div>
               <div class="topbar-user-role">${roleLabel(user.role)}</div>
             </div>
             <button class="btn-secondary" style="padding:7px 12px" onclick="logout()">🚪 خروج</button>
@@ -3940,7 +3942,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v66</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v67</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -6652,12 +6654,6 @@ function isbTimeStr(){
   const n = isbNow();
   return String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0');
 }
-function stripFlagsHTML(){
-  return `<div class="strip-item strip-flags" title="المملكة العربية السعودية — باكستان">
-    <span class="strip-flag"><span class="flag-wrap"><svg viewBox="0 0 60 40" width="30" height="20" aria-label="السعودية"><rect width="60" height="40" fill="#006c35"/><g fill="#fff"><rect x="13" y="10" width="34" height="3" rx="1.5"/><rect x="13" y="16" width="34" height="3" rx="1.5"/><rect x="8" y="27" width="44" height="3" rx="1.5"/><circle cx="9.5" cy="28.5" r="2.6"/></g></svg></span><span class="strip-flag-nm">السعودية</span></span>
-    <span class="strip-flag"><span class="flag-wrap"><svg viewBox="0 0 60 40" width="30" height="20" aria-label="باكستان"><rect width="60" height="40" fill="#01411c"/><rect width="15" height="40" fill="#fff"/><circle cx="39" cy="20" r="9" fill="#fff"/><circle cx="42" cy="19.5" r="9" fill="#01411c"/><path d="M45 11 l1.6 3.2 3.5 .5 -2.5 2.5 .6 3.5 -3.2-1.7 -3.2 1.7 .6-3.5 -2.5-2.5 3.5-.5 z" fill="#fff"/></svg></span><span class="strip-flag-nm">باكستان</span></span>
-  </div>`;
-}
 function __stripTick(){
   const tm = document.getElementById('stripTime');
   if(tm) tm.textContent = isbTimeStr();
@@ -6684,8 +6680,7 @@ function renderAppStrip(){
         <div class="strip-main" id="stripDate">${isbDateStr()}</div>
         <div class="strip-sub"><span id="stripHijri">${hijriIslamabad()}</span> · <span id="stripTime">${isbTimeStr()}</span></div>
       </div>
-    </div>
-    ${stripFlagsHTML()}`;
+    </div>`;
   fetch('https://api.open-meteo.com/v1/forecast?latitude=33.6844&longitude=73.0479&current_weather=true')
     .then(r => r.json())
     .then(d => {
@@ -6760,8 +6755,7 @@ async function refreshPresence(school){
 function renderSchoolHero(){
   return `<div class="hero-school">
     <img class="hero-school-img" src="assets/nibras-school-building.png" alt="مبنى المدرسة السعودية في إسلام آباد" loading="lazy" onerror="this.closest('.hero-school').style.display='none'" />
-    <div class="hero-school-overlay">
-      <div id="appStrip" class="hero-school-info"></div>
+    <div class="hero-school-top">
       <div class="hero-school-brand">
         <img src="logo.jpg" alt="شعار المدرسة" class="hero-school-logo" />
         <div>
@@ -6769,6 +6763,11 @@ function renderSchoolHero(){
           <div class="hero-school-sub">SAUDI SCHOOL IN ISLAMABAD</div>
         </div>
       </div>
+      <div id="appStrip" class="hero-school-info"></div>
+    </div>
+    <div class="hero-school-search">
+      <span class="hero-search-ico">🔍</span>
+      <input id="topSearch" placeholder="ابحث عن طالب بالاسم أو الرقم..." oninput="goSearchLive(this.value)" onkeydown="if(event.key==='Enter')goSearch(this.value)" />
     </div>
   </div>`;
 }
@@ -12334,7 +12333,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=60', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=61', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
