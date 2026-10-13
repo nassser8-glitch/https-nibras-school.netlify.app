@@ -637,7 +637,7 @@ window.__nibrasBootErr = '';
   @media (max-width:640px){ .strip-item { padding:6px 10px; } }
   /* الشريط العلوي: صورة المدرسة كخلفية (علامة مائية) والكتابة والمعلومات فوقها */
   .layout.theme-girls .topbar {
-    background:linear-gradient(rgba(11,42,72,.42),rgba(11,42,72,.42)), url('assets/nibras-school-building.png') center bottom/130% no-repeat;
+    background:linear-gradient(rgba(11,42,72,.30),rgba(11,42,72,.30)), #0d3154 url('assets/nibras-school-building.png') center/contain no-repeat;
     border-bottom:none; box-shadow:0 2px 12px rgba(0,0,0,.25);
   }
   .layout.theme-girls .topbar-brand h1 { color:#fff; text-shadow:0 1px 6px rgba(0,0,0,.55); }
@@ -3018,7 +3018,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-13i no-att-msg';
+const __APP_VER = '2026-10-13j topbar-bg-contain';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3920,7 +3920,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v76</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v77</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -12151,7 +12151,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=70', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=71', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
