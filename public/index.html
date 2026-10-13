@@ -653,6 +653,14 @@ window.__nibrasBootErr = '';
   .pn2-green { background:linear-gradient(135deg,#4ade80,#16a34a); }
   .pn2-name { font-size:13px; font-weight:800; color:#334155; }
   @media (max-width:640px){ .app-strip { gap:8px; } .strip-item { padding:6px 10px; } .strip-flag-nm { display:none; } .pn2-ring { width:74px; height:74px; font-size:26px; } .pn2-grid { gap:26px; } }
+  /* صورة مبنى المدرسة أعلى لوحة التحكم */
+  .school-banner { position:relative; margin-bottom:14px; border-radius:16px 16px 0 0; overflow:hidden; background:#0f172a; box-shadow:0 6px 20px rgba(15,79,136,.12); }
+  .school-banner-img { display:block; width:100%; height:auto; max-height:260px; object-fit:cover; object-position:center; }
+  .school-banner-grad { position:absolute; left:0; right:0; bottom:0; height:58%; background:linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,0,0,.58) 100%); pointer-events:none; }
+  .school-banner-cap { position:absolute; left:0; right:0; bottom:0; padding:12px 18px; pointer-events:none; }
+  .school-banner-ar { color:#fff; font-weight:800; font-size:18px; text-shadow:0 1px 6px rgba(0,0,0,.55); }
+  .school-banner-en { color:rgba(255,255,255,.92); font-size:11px; letter-spacing:2px; direction:ltr; text-align:left; text-shadow:0 1px 6px rgba(0,0,0,.55); }
+  @media (max-width:640px){ .school-banner-img { max-height:165px; } .school-banner-ar { font-size:15px; } .school-banner-en { font-size:9.5px; letter-spacing:1.5px; } }
 </style>
 </head>
 <body>
@@ -3019,7 +3027,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-11h strip-present';
+const __APP_VER = '2026-10-12a school-banner';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3923,7 +3931,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v63</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v64</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -5432,6 +5440,7 @@ function renderDashboard(){
   return `
   ${renderEscapeAlerts()}
   ${renderAdminMsgAlerts()}
+  ${renderSchoolBanner()}
   ${renderPresentSection(user)}
   ${hero}
   ${isTeacher ? teacherQuickCards : ''}
@@ -6738,6 +6747,16 @@ async function refreshPresence(school){
     if(j && j.ok && Array.isArray(j.users)){ __presenceLive = { at: Date.now(), users: j.users }; }
     updatePresentNow();
   }catch(e){}
+}
+function renderSchoolBanner(){
+  return `<div class="school-banner">
+    <img class="school-banner-img" src="assets/nibras-school-building.png" alt="مبنى المدرسة السعودية في إسلام آباد" loading="lazy" onerror="this.closest('.school-banner').style.display='none'" />
+    <div class="school-banner-grad"></div>
+    <div class="school-banner-cap">
+      <div class="school-banner-ar">المدرسة السعودية في إسلام آباد</div>
+      <div class="school-banner-en">SAUDI SCHOOL IN ISLAMABAD</div>
+    </div>
+  </div>`;
 }
 function renderPresentSection(user){
   if(!user || (user.role !== 'ADMIN' && user.role !== 'AGENT')) return '';
@@ -12301,7 +12320,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=57', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=58', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

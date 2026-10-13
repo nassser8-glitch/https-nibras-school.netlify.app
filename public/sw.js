@@ -1,5 +1,5 @@
 ﻿/* نبراس — Service Worker للتثبيت والعمل دون اتصال */
-const CACHE_NAME = 'nibras-v78';
+const CACHE_NAME = 'nibras-v79';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const CORE_ASSETS = [
   './icon-192.png',
   './icon-512.png',
   './logo.jpg',
+  './assets/nibras-school-building.png',
 ];
 
 self.addEventListener('install', (event) => {
