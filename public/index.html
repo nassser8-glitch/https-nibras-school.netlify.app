@@ -638,12 +638,12 @@ window.__nibrasBootErr = '';
   /* بانر المدرسة: صورة بعرض الصفحة كاملاً أعلى الموقع، والقائمة الجانبية أسفلها */
   .hero-school { width:100%; max-width:1320px; margin:0 auto 12px; overflow:hidden; background:#0f172a; box-shadow:0 8px 24px rgba(15,79,136,.18); }
   .hero-school-img { display:block; width:100%; height:auto; min-height:150px; max-height:200px; object-fit:cover; object-position:center; }
-  .hero-school-bar { display:flex; align-items:center; justify-content:center; padding:8px 16px; background:linear-gradient(180deg,#123f6c 0%,#0d3154 100%); }
-  .hero-school-info { display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; }
-  .hero-school-info .strip-item { background:rgba(255,255,255,.94); border-color:rgba(255,255,255,.55); box-shadow:0 2px 10px rgba(0,0,0,.20); }
+  /* شريط الطقس/التاريخ في الركن الأعلى الأيسر من الشريط العلوي، أسفل اسم المستخدم */
+  .topbar-strip { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .topbar-strip .strip-item { padding:5px 11px; }
   @media (max-width:640px){
     .hero-school-img { min-height:130px; max-height:170px; }
-    .hero-school-bar { padding:6px 10px; }
+    .topbar-strip { margin-top:6px; }
   }
 </style>
 </head>
@@ -3013,7 +3013,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-13d banner-strip';
+const __APP_VER = '2026-10-13e topbar-strip';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3900,6 +3900,7 @@ function renderLayout(user, hash){
             <button class="btn-secondary" style="padding:7px 12px" onclick="logout()">🚪 خروج</button>
           </div>
         </div>
+        <div id="appStrip" class="topbar-strip"></div>
       </div>
     </header>
     ${showSchoolBanner ? renderSchoolHero() : ''}
@@ -3916,7 +3917,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v71</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v72</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -6651,9 +6652,6 @@ function renderAppStrip(){
 function renderSchoolHero(){
   return `<div class="hero-school">
     <img class="hero-school-img" src="assets/nibras-school-building.png" alt="مبنى المدرسة السعودية في إسلام آباد" loading="lazy" onerror="this.closest('.hero-school').style.display='none'" />
-    <div class="hero-school-bar">
-      <div id="appStrip" class="hero-school-info"></div>
-    </div>
   </div>`;
 }
 /* ============ الرسوم البيانية ============ */
@@ -12156,7 +12154,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=65', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=66', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
