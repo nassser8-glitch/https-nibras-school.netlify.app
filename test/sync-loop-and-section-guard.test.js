@@ -96,7 +96,8 @@ test('البند 5: saveDB يقارن قبل الكتابة متجاهلاً _ts
   assert.ok(body.includes('__canonNoTs'), 'saveDB يستخدم المقارنة العميقة');
   assert.ok(/if\(cur && __canonNoTs\(cur\) === __canonNoTs\(d\)\) return;/.test(body),
     'يكتب فقط عند وجود فرق حقيقي');
-  assert.ok(body.includes('localStorage.setItem(k, JSON.stringify(d))'), 'الكتابة الحقيقية سليمة');
+  assert.ok(body.includes('JSON.stringify(d)'), 'يُسلسل الكائن قبل الكتابة');
+  assert.ok(/localStorage\.setItem\(k,\s*(JSON\.stringify\(d\)|__s)\)/.test(body), 'الكتابة الحقيقية سليمة');
 });
 
 /* ---------- 6) حصانة: لا تراجع للسلوك القديم ---------- */
