@@ -635,16 +635,21 @@ window.__nibrasBootErr = '';
   .strip-main { font-weight:800; font-size:13px; color:#0f172a; }
   .strip-sub { font-size:10.5px; color:#64748b; }
   @media (max-width:640px){ .strip-item { padding:6px 10px; } }
-  /* بانر المدرسة: صورة بعرض الصفحة كاملاً أعلى الموقع، والقائمة الجانبية أسفلها */
-  .hero-school { width:100%; max-width:1320px; margin:0 auto 12px; overflow:hidden; background:#0f172a; box-shadow:0 8px 24px rgba(15,79,136,.18); }
-  .hero-school-img { display:block; width:100%; height:auto; min-height:150px; max-height:200px; object-fit:cover; object-position:center; }
+  /* الشريط العلوي: صورة المدرسة كخلفية (علامة مائية) والكتابة والمعلومات فوقها */
+  .layout.theme-girls .topbar {
+    background:linear-gradient(rgba(11,42,72,.70),rgba(11,42,72,.70)), url('assets/nibras-school-building.png') center/cover no-repeat;
+    border-bottom:none; box-shadow:0 2px 12px rgba(0,0,0,.25);
+  }
+  .layout.theme-girls .topbar-brand h1 { color:#fff; text-shadow:0 1px 6px rgba(0,0,0,.55); }
+  .layout.theme-girls .topbar-brand p { color:rgba(255,255,255,.88); }
+  .layout.theme-girls .topbar .menu-toggle,
+  .layout.theme-girls .topbar .topbar-user-name { color:#fff; }
+  .layout.theme-girls .topbar .topbar-user-role { color:rgba(255,255,255,.82); }
+  .layout.theme-girls .topbar .notif-btn { background:rgba(255,255,255,.16); border-color:rgba(255,255,255,.38); color:#fff; }
   /* شريط الطقس/التاريخ في الركن الأعلى الأيسر من الشريط العلوي، أسفل اسم المستخدم */
   .topbar-strip { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; margin-top:8px; }
   .topbar-strip .strip-item { padding:5px 11px; }
-  @media (max-width:640px){
-    .hero-school-img { min-height:130px; max-height:170px; }
-    .topbar-strip { margin-top:6px; }
-  }
+  @media (max-width:640px){ .topbar-strip { margin-top:6px; } }
 </style>
 </head>
 <body>
@@ -3013,7 +3018,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-13e topbar-strip';
+const __APP_VER = '2026-10-13f topbar-bg';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3836,8 +3841,7 @@ function renderLayout(user, hash){
     </div>`;
 
   let pageHtml = '';
-  let showSchoolBanner = false;
-  if(page === 'home'){ pageHtml = (user.role === 'STUDENT') ? renderStudentDashboard() : renderDashboard(); showSchoolBanner = (user.role !== 'STUDENT'); }
+  if(page === 'home') pageHtml = (user.role === 'STUDENT') ? renderStudentDashboard() : renderDashboard();
   else if(page === 'students') pageHtml = renderStudents();
   else if(page === 'attendance') pageHtml = renderAttendance();
   else if(page === 'notes'){
@@ -3874,7 +3878,7 @@ function renderLayout(user, hash){
   else if(page === 'supervision' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT')) pageHtml = renderSupervisionAdmin();
   else if(page === 'notebook') pageHtml = renderNotebookPage();
   else if(page === 'about') pageHtml = renderAbout();
-  else { pageHtml = renderDashboard(); showSchoolBanner = true; }
+  else pageHtml = renderDashboard();
 
   const themeClass = 'theme-girls';
   setTimeout(__warnPendingOnOpen, 0);
@@ -3903,7 +3907,6 @@ function renderLayout(user, hash){
         <div id="appStrip" class="topbar-strip"></div>
       </div>
     </header>
-    ${showSchoolBanner ? renderSchoolHero() : ''}
     <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
     <div class="layout-body">
       <aside class="sidebar" id="sidebar">
@@ -3917,7 +3920,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v72</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v73</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -6649,11 +6652,6 @@ function renderAppStrip(){
     .catch(() => { const w = document.getElementById('stripWeather'); if(w) w.innerHTML = '<span class="strip-ico">🌤️</span><div><div class="strip-sub">تعذر تحميل الطقس — تحقق من الاتصال</div></div>'; });
 }
 
-function renderSchoolHero(){
-  return `<div class="hero-school">
-    <img class="hero-school-img" src="assets/nibras-school-building.png" alt="مبنى المدرسة السعودية في إسلام آباد" loading="lazy" onerror="this.closest('.hero-school').style.display='none'" />
-  </div>`;
-}
 /* ============ الرسوم البيانية ============ */
 // بناء عمود اليوم الواحد + الرسم الأسبوعي (الإثنين → الجمعة) من أي نسخة قاعدة بيانات
 function buildWeekChart(db, idsArr){
@@ -12154,7 +12152,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=66', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=67', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
