@@ -628,9 +628,8 @@ window.__nibrasBootErr = '';
   /* لمسات ورديّة صغيرة للأزرق الصريح المتبقّي */
   .layout.theme-girls .toggle-btn.active { background:#db2777; border-color:#db2777; }
   .install-hint { background:linear-gradient(135deg,#be185d,#9d174d); }
-  /* الشريط العلوي: الطقس الحقيقي + التاريخ الميلادي/الهجري + الأعلام */
-  .app-strip { display:flex; gap:10px; align-items:stretch; flex-wrap:wrap; margin-bottom:14px; }
-  .strip-item { display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--border-color,#e6edf5); border-radius:12px; padding:8px 14px; box-shadow:0 2px 8px rgba(15,79,136,.06); }
+  /* شرائح الطقس/التاريخ/الأعلام */
+  .strip-item { display:flex; align-items:center; gap:10px; background:#f8fafc; border:1px solid #eef2f7; border-radius:12px; padding:8px 14px; box-shadow:0 2px 8px rgba(15,79,136,.05); }
   .strip-ico { font-size:22px; line-height:1; }
   .strip-temp { font-weight:800; font-size:16px; color:#0f172a; }
   .strip-main { font-weight:800; font-size:13px; color:#0f172a; }
@@ -652,15 +651,26 @@ window.__nibrasBootErr = '';
   .pn2-blue { background:linear-gradient(135deg,#60a5fa,#1d4ed8); }
   .pn2-green { background:linear-gradient(135deg,#4ade80,#16a34a); }
   .pn2-name { font-size:13px; font-weight:800; color:#334155; }
-  @media (max-width:640px){ .app-strip { gap:8px; } .strip-item { padding:6px 10px; } .strip-flag-nm { display:none; } .pn2-ring { width:74px; height:74px; font-size:26px; } .pn2-grid { gap:26px; } }
-  /* صورة مبنى المدرسة أعلى لوحة التحكم */
-  .school-banner { position:relative; margin-bottom:14px; border-radius:16px 16px 0 0; overflow:hidden; background:#0f172a; box-shadow:0 6px 20px rgba(15,79,136,.12); }
-  .school-banner-img { display:block; width:100%; height:auto; max-height:260px; object-fit:cover; object-position:center; }
-  .school-banner-grad { position:absolute; left:0; right:0; bottom:0; height:58%; background:linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,0,0,.58) 100%); pointer-events:none; }
-  .school-banner-cap { position:absolute; left:0; right:0; bottom:0; padding:12px 18px; pointer-events:none; }
-  .school-banner-ar { color:#fff; font-weight:800; font-size:18px; text-shadow:0 1px 6px rgba(0,0,0,.55); }
-  .school-banner-en { color:rgba(255,255,255,.92); font-size:11px; letter-spacing:2px; direction:ltr; text-align:left; text-shadow:0 1px 6px rgba(0,0,0,.55); }
-  @media (max-width:640px){ .school-banner-img { max-height:165px; } .school-banner-ar { font-size:15px; } .school-banner-en { font-size:9.5px; letter-spacing:1.5px; } }
+  @media (max-width:640px){ .strip-item { padding:6px 10px; } .strip-flag-nm { display:none; } .pn2-ring { width:74px; height:74px; font-size:26px; } .pn2-grid { gap:26px; } }
+  /* بطاقة الترحيب: صورة المدرسة، وعليها الشعار والاسم (يسارًا) والطقس والتاريخ (يمينًا) */
+  .hero-school { position:relative; margin-bottom:14px; border-radius:16px; overflow:hidden; background:#0f172a; box-shadow:0 8px 24px rgba(15,79,136,.18); }
+  .hero-school-img { display:block; width:100%; height:auto; max-height:300px; object-fit:cover; object-position:center; }
+  .hero-school-overlay { position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:space-between; gap:14px; padding:16px 18px; background:linear-gradient(180deg,rgba(0,0,0,0) 38%,rgba(0,0,0,.64) 100%); pointer-events:none; }
+  .hero-school-brand { display:flex; align-items:center; gap:11px; min-width:0; pointer-events:auto; }
+  .hero-school-logo { width:52px; height:52px; border-radius:50%; object-fit:cover; border:3px solid #f472b6; box-shadow:0 0 0 3px rgba(255,255,255,.35); background:#fff; flex:0 0 auto; }
+  .hero-school-name { color:#fff; font-weight:800; font-size:17px; line-height:1.25; text-shadow:0 1px 8px rgba(0,0,0,.65); }
+  .hero-school-sub { color:rgba(255,255,255,.9); font-size:10.5px; letter-spacing:2px; direction:ltr; text-shadow:0 1px 8px rgba(0,0,0,.65); }
+  .hero-school-info { display:flex; align-items:center; gap:8px; flex-wrap:wrap; pointer-events:auto; }
+  .hero-school-info .strip-item { background:rgba(255,255,255,.94); border-color:rgba(255,255,255,.55); box-shadow:0 2px 10px rgba(0,0,0,.20); }
+  @media (max-width:640px){
+    .hero-school-img { max-height:190px; }
+    .hero-school-overlay { flex-direction:column; align-items:stretch; gap:8px; padding:12px; }
+    .hero-school-brand { order:1; }
+    .hero-school-info { order:2; }
+    .hero-school-name { font-size:14px; }
+    .hero-school-sub { font-size:9.5px; letter-spacing:1.5px; }
+    .hero-school-info .strip-item { padding:6px 10px; }
+  }
 </style>
 </head>
 <body>
@@ -3027,7 +3037,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-12b school-photo';
+const __APP_VER = '2026-10-12c hero-overlay';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3927,11 +3937,10 @@ function renderLayout(user, hash){
         </div>
       </aside>
       <main class="main">
-        <div id="appStrip" class="app-strip"></div>
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v65</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v66</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -5440,7 +5449,7 @@ function renderDashboard(){
   return `
   ${renderEscapeAlerts()}
   ${renderAdminMsgAlerts()}
-  ${renderSchoolBanner()}
+  ${renderSchoolHero()}
   ${renderPresentSection(user)}
   ${hero}
   ${isTeacher ? teacherQuickCards : ''}
@@ -6748,13 +6757,18 @@ async function refreshPresence(school){
     updatePresentNow();
   }catch(e){}
 }
-function renderSchoolBanner(){
-  return `<div class="school-banner">
-    <img class="school-banner-img" src="assets/nibras-school-building.png" alt="مبنى المدرسة السعودية في إسلام آباد" loading="lazy" onerror="this.closest('.school-banner').style.display='none'" />
-    <div class="school-banner-grad"></div>
-    <div class="school-banner-cap">
-      <div class="school-banner-ar">المدرسة السعودية في إسلام آباد</div>
-      <div class="school-banner-en">SAUDI SCHOOL IN ISLAMABAD</div>
+function renderSchoolHero(){
+  return `<div class="hero-school">
+    <img class="hero-school-img" src="assets/nibras-school-building.png" alt="مبنى المدرسة السعودية في إسلام آباد" loading="lazy" onerror="this.closest('.hero-school').style.display='none'" />
+    <div class="hero-school-overlay">
+      <div id="appStrip" class="hero-school-info"></div>
+      <div class="hero-school-brand">
+        <img src="logo.jpg" alt="شعار المدرسة" class="hero-school-logo" />
+        <div>
+          <div class="hero-school-name">المدرسة السعودية في إسلام آباد</div>
+          <div class="hero-school-sub">SAUDI SCHOOL IN ISLAMABAD</div>
+        </div>
+      </div>
     </div>
   </div>`;
 }
@@ -12320,7 +12334,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=59', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=60', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
