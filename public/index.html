@@ -635,22 +635,15 @@ window.__nibrasBootErr = '';
   .strip-main { font-weight:800; font-size:13px; color:#0f172a; }
   .strip-sub { font-size:10.5px; color:#64748b; }
   @media (max-width:640px){ .strip-item { padding:6px 10px; } }
-  /* بطاقة الترحيب: الصورة أعلى الرئيسية، الشعار والاسم أعلى اليمين، الطقس والتاريخ أعلى اليسار */
-  .hero-school { position:relative; margin-bottom:14px; border-radius:16px; overflow:hidden; background:#0f172a; box-shadow:0 8px 24px rgba(15,79,136,.18); }
-  .hero-school-img { display:block; width:100%; height:auto; min-height:220px; max-height:340px; object-fit:cover; object-position:center; }
-  .hero-school-top { position:absolute; top:0; left:0; right:0; display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:14px 16px; background:linear-gradient(180deg,rgba(0,0,0,.46) 0%,rgba(0,0,0,0) 100%); pointer-events:none; }
-  .hero-school-brand { display:flex; align-items:center; gap:11px; min-width:0; pointer-events:auto; }
-  .hero-school-logo { width:52px; height:52px; border-radius:50%; object-fit:cover; border:3px solid #f472b6; box-shadow:0 0 0 3px rgba(255,255,255,.35); background:#fff; flex:0 0 auto; }
-  .hero-school-name { color:#fff; font-weight:800; font-size:17px; line-height:1.25; text-shadow:0 1px 8px rgba(0,0,0,.7); }
-  .hero-school-sub { color:rgba(255,255,255,.92); font-size:10.5px; letter-spacing:2px; direction:ltr; text-shadow:0 1px 8px rgba(0,0,0,.7); }
-  .hero-school-info { display:flex; align-items:center; gap:8px; flex-wrap:wrap; pointer-events:auto; }
+  /* بانر المدرسة: صورة بعرض الصفحة كاملاً أعلى الموقع، والقائمة الجانبية أسفلها */
+  .hero-school { width:100%; max-width:1320px; margin:0 auto 12px; overflow:hidden; background:#0f172a; box-shadow:0 8px 24px rgba(15,79,136,.18); }
+  .hero-school-img { display:block; width:100%; height:auto; min-height:150px; max-height:200px; object-fit:cover; object-position:center; }
+  .hero-school-bar { display:flex; align-items:center; justify-content:center; padding:8px 16px; background:linear-gradient(180deg,#123f6c 0%,#0d3154 100%); }
+  .hero-school-info { display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; }
   .hero-school-info .strip-item { background:rgba(255,255,255,.94); border-color:rgba(255,255,255,.55); box-shadow:0 2px 10px rgba(0,0,0,.20); }
   @media (max-width:640px){
-    .hero-school-img { min-height:200px; max-height:240px; }
-    .hero-school-top { flex-direction:column; align-items:stretch; gap:8px; padding:10px 12px; }
-    .hero-school-name { font-size:14px; }
-    .hero-school-sub { font-size:9px; letter-spacing:1.2px; }
-    .hero-school-logo { width:42px; height:42px; }
+    .hero-school-img { min-height:130px; max-height:170px; }
+    .hero-school-bar { padding:6px 10px; }
   }
 </style>
 </head>
@@ -3020,7 +3013,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-13a remove-present-search';
+const __APP_VER = '2026-10-13d banner-strip';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3843,7 +3836,8 @@ function renderLayout(user, hash){
     </div>`;
 
   let pageHtml = '';
-  if(page === 'home') pageHtml = (user.role === 'STUDENT') ? renderStudentDashboard() : renderDashboard();
+  let showSchoolBanner = false;
+  if(page === 'home'){ pageHtml = (user.role === 'STUDENT') ? renderStudentDashboard() : renderDashboard(); showSchoolBanner = (user.role !== 'STUDENT'); }
   else if(page === 'students') pageHtml = renderStudents();
   else if(page === 'attendance') pageHtml = renderAttendance();
   else if(page === 'notes'){
@@ -3880,7 +3874,7 @@ function renderLayout(user, hash){
   else if(page === 'supervision' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT')) pageHtml = renderSupervisionAdmin();
   else if(page === 'notebook') pageHtml = renderNotebookPage();
   else if(page === 'about') pageHtml = renderAbout();
-  else pageHtml = renderDashboard();
+  else { pageHtml = renderDashboard(); showSchoolBanner = true; }
 
   const themeClass = 'theme-girls';
   setTimeout(__warnPendingOnOpen, 0);
@@ -3908,6 +3902,7 @@ function renderLayout(user, hash){
         </div>
       </div>
     </header>
+    ${showSchoolBanner ? renderSchoolHero() : ''}
     <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
     <div class="layout-body">
       <aside class="sidebar" id="sidebar">
@@ -3921,7 +3916,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v68</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v71</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -5412,7 +5407,6 @@ function renderDashboard(){
   return `
   ${renderEscapeAlerts()}
   ${renderAdminMsgAlerts()}
-  ${renderSchoolHero()}
   ${hero}
   ${isTeacher ? teacherQuickCards : ''}
   ${attPanel}
@@ -6657,14 +6651,7 @@ function renderAppStrip(){
 function renderSchoolHero(){
   return `<div class="hero-school">
     <img class="hero-school-img" src="assets/nibras-school-building.png" alt="مبنى المدرسة السعودية في إسلام آباد" loading="lazy" onerror="this.closest('.hero-school').style.display='none'" />
-    <div class="hero-school-top">
-      <div class="hero-school-brand">
-        <img src="logo.jpg" alt="شعار المدرسة" class="hero-school-logo" />
-        <div>
-          <div class="hero-school-name">المدرسة السعودية في إسلام آباد</div>
-          <div class="hero-school-sub">SAUDI SCHOOL IN ISLAMABAD</div>
-        </div>
-      </div>
+    <div class="hero-school-bar">
       <div id="appStrip" class="hero-school-info"></div>
     </div>
   </div>`;
@@ -12169,7 +12156,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=62', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=65', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
