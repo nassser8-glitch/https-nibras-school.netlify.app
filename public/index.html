@@ -3018,7 +3018,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-13l topbar-bg-cover';
+const __APP_VER = '2026-10-13m stage-donut';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3920,7 +3920,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v79</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v80</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -5192,7 +5192,7 @@ function renderDashboard(){
     </a>`).join('') : '<p class="muted small" style="margin:4px 0">لا توجد أنشطة قادمة</p>';
 
   // الحضور اليوم — بطاقة الطلاب والمعلمين (تصميم الكود المرفق)
-  const attGroup = (title, present, absent, late, pct, click, flip, subLate) => {
+  const attGroup = (title, present, absent, late, pct, click, flip, subLate, extra) => {
     // المتأخرون محسوبون ضمن الحاضرين (subLate): لا يضافون فوقهم حتى لا يُضاعف العدد
     const total = subLate ? (present + absent) : (present + absent + late);
     const dispAbsent = Math.max(0, Math.min(absent, total));
@@ -5223,15 +5223,49 @@ function renderDashboard(){
       <div class="att-flex">
         ${flip ? pctBlock + legend + donut : donut + pctBlock + legend}
       </div>
+      ${extra || ''}
     </div>`;
   };
   const tPresent = teachers.length - absentTeachers.length;
   const sPct = fmtRate(rate);
   const tRateAll = teachers.length ? Math.round(tPresent/teachers.length*100*10)/10 : null;
   const tPct = fmtRate(tRateAll);
+  // تصنيف الطلاب حسب المرحلة (ابتدائي/متوسط/ثانوي) — دائرة + ترميز الألوان
+  const stageCounts = (() => {
+    const res = { pri:0, mid:0, sec:0 };
+    const gradeById = new Map((d.grades||[]).map(g => [g.id, g]));
+    const classMap = new Map((d.classes||[]).map(c => [c.id, c]));
+    students.forEach(s => {
+      const c = s.classId ? classMap.get(s.classId) : null;
+      if(!c) return;
+      const g = gradeById.get(c.gradeId);
+      if(!g) return;
+      const o = g.order;
+      if(o <= 5) res.pri++; else if(o <= 8) res.mid++; else res.sec++;
+    });
+    return res;
+  })();
+  const stageTotal = stageCounts.pri + stageCounts.mid + stageCounts.sec;
+  const stP1 = stageTotal ? Math.round(stageCounts.pri/stageTotal*100) : 0;
+  const stP2 = stageTotal ? Math.round(stageCounts.mid/stageTotal*100) : 0;
+  const stageBg = stageTotal
+    ? `conic-gradient(#0ea5e9 0 ${stP1}%, #8b5cf6 ${stP1}% ${stP1+stP2}%, #22c55e ${stP1+stP2}% 100%)`
+    : 'conic-gradient(#e4edf5 0 100%)';
+  const stageBlock = `
+    <div class="att-flex" style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)">
+      <div class="dash-donut" style="width:112px;height:112px;background:${stageBg}">
+        <div class="dash-donut-center"><b>${stageTotal}</b><span>طالبة</span></div>
+      </div>
+      <div class="att-legend">
+        <div class="row" style="font-weight:800;color:var(--text)">تصنيف الطلاب</div>
+        <div class="row"><span class="swatch" style="background:#0ea5e9"></span>ابتدائي <b>${stageCounts.pri}</b></div>
+        <div class="row"><span class="swatch" style="background:#8b5cf6"></span>متوسط <b>${stageCounts.mid}</b></div>
+        <div class="row"><span class="swatch" style="background:#22c55e"></span>ثانوي <b>${stageCounts.sec}</b></div>
+      </div>
+    </div>`;
   const donutHTML = `
     <div class="att-card">
-      ${attGroup('👨‍🎓 حضور الطلاب', present, absent, late, sPct, 'showTodayAttendance()')}
+      ${attGroup('👨‍🎓 حضور الطلاب', present, absent, late, sPct, 'showTodayAttendance()', false, false, stageBlock)}
       ${attGroup('👨‍🏫 حضور المعلمين والإداريين', tPresent, absentTeachers.length, lateTeachers.length, tPct, canMgrT ? 'showTeacherAbsenceList()' : 'showTodayAttendance()', true, true)}
       <button class="att-report-btn colA" onclick="showTodayAttendance()"><span>عرض تقرير الحضور</span><span>←</span></button>
       <button class="att-report-btn colB" onclick="showTeacherTodayAttendance()"><span>عرض تقرير الحضور</span><span>←</span></button>
@@ -12151,7 +12185,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=73', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=74', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
