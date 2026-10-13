@@ -93,12 +93,14 @@ test('dock: المرسى حاضرة في كل الحسابات — وبطاقة 
   const block = html.slice(a, b);
   assert.ok(block.includes('<div id="nibrasToolbarDock"></div>'), 'نقطة المرسى تُرسم لكل الأدوار');
   assert.ok(!block.includes('presentNowBox'),
-    'بطاقة المتواجدات انتقلت من الشريط الجانبي إلى الشريط العلوي');
-  const presentIdx = html.indexOf('id="presentNowBox"');
-  assert.ok(presentIdx > -1, 'بطاقة المتواجدات موجودة في الأعلى');
-  const around = html.slice(presentIdx - 120, presentIdx + 40);
-  assert.ok(/ADMIN/.test(around) && /AGENT/.test(around),
-    'البطاقة داخل الشرط الإداري فقط (بدل مربّع البحث)');
+    'بطاقة المتواجدات ليست في الشريط الجانبي');
+  // قسم «المتواجدون الآن» في أعلى لوحة التحكم، داخل الشرط الإداري فقط
+  assert.ok(/renderPresentSection\(user\)/.test(html), 'لوحة التحكم تستدعي renderPresentSection');
+  const iSec = html.indexOf('function renderPresentSection');
+  assert.ok(iSec > -1, 'دالة قسم المتواجدات موجودة');
+  const sec = html.slice(iSec, iSec + 700);
+  assert.ok(sec.includes('id="presentNowBox"'), 'قسم المتواجدات يحوي نقطة رسم الأعداد');
+  assert.ok(/ADMIN/.test(sec) && /AGENT/.test(sec), 'القسم داخل الشرط الإداري فقط');
   assert.ok(!block.includes("<div id=\"nibrasToolbarDock\"></div>' : ''}"),
     'المرسى ليست داخل الشرط الإداري');
   const i = html.indexOf("function updatePresentNow(){");

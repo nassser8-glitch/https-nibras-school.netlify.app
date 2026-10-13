@@ -628,13 +628,31 @@ window.__nibrasBootErr = '';
   /* لمسات ورديّة صغيرة للأزرق الصريح المتبقّي */
   .layout.theme-girls .toggle-btn.active { background:#db2777; border-color:#db2777; }
   .install-hint { background:linear-gradient(135deg,#be185d,#9d174d); }
-  /* بطاقة «المتواجدون الآن» في الشريط العلوي: خانة واحدة فيها دائرتان — المعلمات والطالبات */
-  .present-now-topbar { display:flex; align-items:center; }
-  .pn-card { display:flex; gap:22px; align-items:flex-start; background:linear-gradient(135deg,#ffffff 0%,#fff5f9 100%); border:1px solid #fbcfe8; border-radius:16px; padding:8px 18px; box-shadow:0 2px 10px rgba(219,39,119,.10); }
-  .pn-item { display:flex; flex-direction:column; align-items:center; gap:5px; cursor:pointer; }
-  .pn-ring { width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:900; color:#be185d; background:#fff; border:3px solid #f472b6; box-shadow:0 0 0 3px #fce7f3; transition:transform .12s, box-shadow .12s; }
-  .pn-item:hover .pn-ring { transform:scale(1.06); box-shadow:0 0 0 4px #fce7f3, 0 6px 16px rgba(219,39,119,.25); }
-  .pn-name { font-size:11px; font-weight:800; color:#9d174d; white-space:nowrap; }
+  /* الشريط العلوي: الطقس الحقيقي + التاريخ الميلادي/الهجري + الأعلام */
+  .app-strip { display:flex; gap:10px; align-items:stretch; flex-wrap:wrap; margin-bottom:14px; }
+  .strip-item { display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--border-color,#e6edf5); border-radius:12px; padding:8px 14px; box-shadow:0 2px 8px rgba(15,79,136,.06); }
+  .strip-ico { font-size:22px; line-height:1; }
+  .strip-temp { font-weight:800; font-size:16px; color:#0f172a; }
+  .strip-main { font-weight:800; font-size:13px; color:#0f172a; }
+  .strip-sub { font-size:10.5px; color:#64748b; }
+  .strip-flags { gap:16px; }
+  .strip-flag { display:flex; align-items:center; gap:6px; }
+  .strip-flag-nm { font-size:11.5px; font-weight:700; color:#334155; }
+  .flag-wrap { display:inline-flex; border-radius:3px; overflow:hidden; box-shadow:0 0 0 1px rgba(0,0,0,.10); line-height:0; }
+  /* قسم «المتواجدون الآن»: عنوان واضح + دائرتان متجاورتان (المعلمات أزرق / الطالبات أخضر) */
+  .present-section { background:#fff; border:1px solid var(--border-color,#e6edf5); border-radius:16px; box-shadow:0 4px 14px rgba(15,79,136,.08); margin-bottom:14px; overflow:hidden; }
+  .present-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:11px 16px; border-bottom:1px solid #eef2f7; background:linear-gradient(135deg,#f8fafc,#eff6ff); }
+  .present-title { margin:0; font-weight:800; font-size:14px; color:#0f172a; }
+  .present-note { font-size:11px; color:#64748b; }
+  .present-circles { padding:18px 16px; }
+  .pn2-grid { display:flex; gap:40px; justify-content:center; align-items:flex-start; flex-wrap:wrap; }
+  .pn2-item { display:flex; flex-direction:column; align-items:center; gap:9px; cursor:pointer; }
+  .pn2-ring { width:92px; height:92px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-size:32px; font-weight:900; box-shadow:0 6px 18px rgba(0,0,0,.14); transition:transform .12s, box-shadow .12s; }
+  .pn2-item:hover .pn2-ring { transform:scale(1.05); box-shadow:0 8px 22px rgba(0,0,0,.20); }
+  .pn2-blue { background:linear-gradient(135deg,#60a5fa,#1d4ed8); }
+  .pn2-green { background:linear-gradient(135deg,#4ade80,#16a34a); }
+  .pn2-name { font-size:13px; font-weight:800; color:#334155; }
+  @media (max-width:640px){ .app-strip { gap:8px; } .strip-item { padding:6px 10px; } .strip-flag-nm { display:none; } .pn2-ring { width:74px; height:74px; font-size:26px; } .pn2-grid { gap:26px; } }
 </style>
 </head>
 <body>
@@ -2914,7 +2932,7 @@ function __renderAppInner(){
     }
   }
   document.body?.classList?.remove('sidebar-locked');
-  renderWeather();
+  renderAppStrip();
   updatePresentNow();
   touchUserPresence();
   checkMemoReminders();
@@ -3001,7 +3019,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-11g present-box';
+const __APP_VER = '2026-10-11h strip-present';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3879,9 +3897,7 @@ function renderLayout(user, hash){
               <p class="muted small">${escapeHtml(schoolName)} <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span></p>
             </div>
           </div>
-          ${(user.role === 'ADMIN' || user.role === 'AGENT')
-            ? '<div id="presentNowBox" class="present-now-topbar"></div>'
-            : '<div class="topbar-search"><span style="color:#7b8b9c;font-size:14px">🔍</span><input id="topSearch" placeholder="ابحث عن طالب بالاسم أو الرقم..." ' + searchLive + ' onkeydown="if(event.key===\'Enter\')goSearch(this.value)" /></div>'}
+          <div class="topbar-search"><span style="color:#7b8b9c;font-size:14px">🔍</span><input id="topSearch" placeholder="ابحث عن طالب بالاسم أو الرقم..." ${searchLive} onkeydown="if(event.key==='Enter')goSearch(this.value)" /></div>
           <div class="topbar-actions">
             ${renderNotifState(user)}
             <div class="topbar-user-block" style="text-align:left">
@@ -3899,15 +3915,15 @@ function renderLayout(user, hash){
         <nav class="menu">${nav}</nav>
         <div class="sidebar-widgets">
           ${user.role !== 'STUDENT' ? msgTodayWidget : ''}
-          <div id="weatherBox"></div>
           <div id="nibrasToolbarDock"></div>
         </div>
       </aside>
       <main class="main">
+        <div id="appStrip" class="app-strip"></div>
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v62</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v63</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -5416,6 +5432,7 @@ function renderDashboard(){
   return `
   ${renderEscapeAlerts()}
   ${renderAdminMsgAlerts()}
+  ${renderPresentSection(user)}
   ${hero}
   ${isTeacher ? teacherQuickCards : ''}
   ${attPanel}
@@ -6589,27 +6606,68 @@ function weatherCodeInfo(code){
   if(code <= 99) return ['⛈️', 'عواصف رعدية'];
   return ['🌤️', 'طقس متغير'];
 }
-function clockTick(){
-  const el = document.getElementById('clockLine');
-  if(!el) return;
-  const now = new Date();
-  const hh = String(now.getHours()).padStart(2,'0');
-  const mm = String(now.getMinutes()).padStart(2,'0');
-  const ss = String(now.getSeconds()).padStart(2,'0');
-  el.innerHTML = `
-    <div style="font-weight:800;color:var(--accent,#1d7fd6);font-size:16px;letter-spacing:1px;direction:ltr">🕐 ${hh}:${mm}:${ss}</div>
-    <div style="font-size:10.5px;margin-top:1px">${AR_DAYS[now.getDay()]} ${now.getDate()} ${AR_MONTHS[now.getMonth()]} ${now.getFullYear()} — ${hijriDateStr()}</div>`;
+/* ============ الشريط العلوي: الطقس الحقيقي + التاريخ الميلادي/الهجري + الأعلام ============ */
+const STRIP_TZ = 'Asia/Karachi'; // توقيت إسلام آباد
+function isbNow(){
+  // تاريخ "جداري" بتوقيت إسلام آباد (بلا DST) لإعادة استخدام AR_DAYS/AR_MONTHS
+  return new Date(new Date().toLocaleString('en-US', { timeZone: STRIP_TZ }));
 }
-function renderWeather(){
-  const el = document.getElementById('weatherBox');
+function hijriIslamabad(){
+  try{
+    for(const cal of ['islamic-umalqura', 'islamic', 'islamic-civil']){
+      try{
+        const fmt = new Intl.DateTimeFormat('en-u-ca-' + cal, { timeZone: STRIP_TZ, year:'numeric', month:'numeric', day:'numeric' });
+        const parts = fmt.formatToParts(new Date());
+        let y = 0, m = 0, d = 0;
+        parts.forEach(p => { if(p.type === 'year') y = +p.value; else if(p.type === 'month') m = +p.value; else if(p.type === 'day') d = +p.value; });
+        if(y && m >= 1 && m <= 12 && d) return `${d} ${HIJRI_MONTHS[m - 1]} ${y} هـ`;
+      }catch(e){}
+    }
+  }catch(e){}
+  return '';
+}
+function isbDateStr(){
+  const n = isbNow();
+  return AR_DAYS[n.getDay()] + ' ' + n.getDate() + ' ' + AR_MONTHS[n.getMonth()] + ' ' + n.getFullYear();
+}
+function isbTimeStr(){
+  const n = isbNow();
+  return String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0');
+}
+function stripFlagsHTML(){
+  return `<div class="strip-item strip-flags" title="المملكة العربية السعودية — باكستان">
+    <span class="strip-flag"><span class="flag-wrap"><svg viewBox="0 0 60 40" width="30" height="20" aria-label="السعودية"><rect width="60" height="40" fill="#006c35"/><g fill="#fff"><rect x="13" y="10" width="34" height="3" rx="1.5"/><rect x="13" y="16" width="34" height="3" rx="1.5"/><rect x="8" y="27" width="44" height="3" rx="1.5"/><circle cx="9.5" cy="28.5" r="2.6"/></g></svg></span><span class="strip-flag-nm">السعودية</span></span>
+    <span class="strip-flag"><span class="flag-wrap"><svg viewBox="0 0 60 40" width="30" height="20" aria-label="باكستان"><rect width="60" height="40" fill="#01411c"/><rect width="15" height="40" fill="#fff"/><circle cx="39" cy="20" r="9" fill="#fff"/><circle cx="42" cy="19.5" r="9" fill="#01411c"/><path d="M45 11 l1.6 3.2 3.5 .5 -2.5 2.5 .6 3.5 -3.2-1.7 -3.2 1.7 .6-3.5 -2.5-2.5 3.5-.5 z" fill="#fff"/></svg></span><span class="strip-flag-nm">باكستان</span></span>
+  </div>`;
+}
+function __stripTick(){
+  const tm = document.getElementById('stripTime');
+  if(tm) tm.textContent = isbTimeStr();
+  const day = isbDateStr();
+  if(window.__stripDay !== day){
+    window.__stripDay = day;
+    const dt = document.getElementById('stripDate'); if(dt) dt.textContent = day;
+    const hj = document.getElementById('stripHijri'); if(hj) hj.textContent = hijriIslamabad();
+  }
+}
+function renderAppStrip(){
+  const el = document.getElementById('appStrip');
   if(!el) return;
-  if(!window.__weatherClock){ window.__weatherClock = setInterval(clockTick, 1000); }
-  const frame = inner => `
-    <div class="info-card">
-      <div class="muted small" id="clockLine" style="font-size:10.5px;line-height:1.4"></div>
-      <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:2px;flex-wrap:wrap">${inner}</div>
-    </div>`;
-  clockTick();
+  if(!window.__appStripClock){ window.__appStripClock = setInterval(__stripTick, 1000); }
+  window.__stripDay = isbDateStr();
+  el.innerHTML = `
+    <div class="strip-item strip-weather" id="stripWeather">
+      <span class="strip-ico">🌤️</span>
+      <div><div class="strip-temp">—</div><div class="strip-sub">جاري تحميل طقس إسلام آباد…</div></div>
+    </div>
+    <div class="strip-item strip-date">
+      <span class="strip-ico">📅</span>
+      <div>
+        <div class="strip-main" id="stripDate">${isbDateStr()}</div>
+        <div class="strip-sub"><span id="stripHijri">${hijriIslamabad()}</span> · <span id="stripTime">${isbTimeStr()}</span></div>
+      </div>
+    </div>
+    ${stripFlagsHTML()}`;
   fetch('https://api.open-meteo.com/v1/forecast?latitude=33.6844&longitude=73.0479&current_weather=true')
     .then(r => r.json())
     .then(d => {
@@ -6617,16 +6675,10 @@ function renderWeather(){
       if(!cw) throw new Error('no data');
       const [icon, label] = weatherCodeInfo(cw.weathercode);
       const t = Math.round(cw.temperature);
-      el.innerHTML = frame(`
-        <span style="font-size:26px">${icon}</span>
-        <div>
-          <div style="font-weight:800;font-size:19px;color:#eaf2fb">${t}°C</div>
-          <div style="font-size:11px;color:rgba(255,255,255,.80)">${label} — إسلام آباد</div>
-        </div>
-        <span style="font-size:10.5px;color:rgba(255,255,255,.80)">💨 ${Math.round(cw.windspeed)} كم/س</span>`);
-      clockTick();
+      const w = document.getElementById('stripWeather');
+      if(w) w.innerHTML = `<span class="strip-ico">${icon}</span><div><div class="strip-temp">${t}°C</div><div class="strip-sub">${label} — إسلام آباد · 💨 ${Math.round(cw.windspeed)} كم/س</div></div>`;
     })
-    .catch(() => { el.innerHTML = frame('<p class="muted small" style="margin:0">🌤 تعذر تحميل الطقس — تحقق من الاتصال بالإنترنت</p>'); });
+    .catch(() => { const w = document.getElementById('stripWeather'); if(w) w.innerHTML = '<span class="strip-ico">🌤️</span><div><div class="strip-sub">تعذر تحميل الطقس — تحقق من الاتصال</div></div>'; });
 }
 
 /* ============ المتواجدون الآن من المعلمين/المعلمات (للمدير والوكلاء) ============ */
@@ -6687,6 +6739,16 @@ async function refreshPresence(school){
     updatePresentNow();
   }catch(e){}
 }
+function renderPresentSection(user){
+  if(!user || (user.role !== 'ADMIN' && user.role !== 'AGENT')) return '';
+  return `<div class="present-section">
+    <div class="present-head">
+      <p class="present-title">🟢 المتواجدون الآن</p>
+      <span class="present-note">من فتح التطبيق خلال آخر 3 دقائق</span>
+    </div>
+    <div id="presentNowBox" class="present-circles"></div>
+  </div>`;
+}
 function updatePresentNow(){
   if(window.__tb && window.__tb.redock) window.__tb.redock();
   const el = document.getElementById('presentNowBox');
@@ -6694,19 +6756,16 @@ function updatePresentNow(){
   if(!el || !user || (user.role !== 'ADMIN' && user.role !== 'AGENT')) return;
   const school = getActiveSchool();
   const info = presentNowInfo(school);
-  const schoolLabel = 'البنات';
-  const teacherWord = 'معلمة';
   const sinfo = presentStudentsOnlineInfo(school);
-  const studentWord = school === 'GIRLS' ? 'طالبة' : 'طالب';
   el.innerHTML = `
-    <div class="pn-card" title="المتواجدون الآن من المعلمات والطالبات">
-      <div class="pn-item" onclick="showPresentNow()" title="اضغط لعرض أسماء المعلمات المتواجدات الآن">
-        <div class="pn-ring">${info.n}</div>
-        <div class="pn-name">معلمة</div>
+    <div class="pn2-grid">
+      <div class="pn2-item" onclick="showPresentNow()" title="اضغط لعرض أسماء المعلمات المتواجدات الآن">
+        <div class="pn2-ring pn2-blue"><b>${info.n}</b></div>
+        <div class="pn2-name">المعلمات</div>
       </div>
-      <div class="pn-item" onclick="showPresentStudentsNow()" title="اضغط لعرض الطالبات المتواجدات في الموقع الآن">
-        <div class="pn-ring">${sinfo.n}</div>
-        <div class="pn-name">طالبة</div>
+      <div class="pn2-item" onclick="showPresentStudentsNow()" title="اضغط لعرض الطالبات المتواجدات في الموقع الآن">
+        <div class="pn2-ring pn2-green"><b>${sinfo.n}</b></div>
+        <div class="pn2-name">الطالبات</div>
       </div>
     </div>`;
   if(window.__tb && window.__tb.redock) window.__tb.redock();
@@ -12242,7 +12301,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=56', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=57', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
