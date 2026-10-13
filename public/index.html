@@ -628,6 +628,15 @@ window.__nibrasBootErr = '';
   /* لمسات ورديّة صغيرة للأزرق الصريح المتبقّي */
   .layout.theme-girls .toggle-btn.active { background:#db2777; border-color:#db2777; }
   .install-hint { background:linear-gradient(135deg,#be185d,#9d174d); }
+  /* بطاقة «المتواجدون الآن / المتواجدات في الموقع» في الشريط العلوي (بدل مربّع البحث) */
+  .present-now-topbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; flex:0 1 auto; }
+  .pn-chip { display:flex; align-items:center; gap:9px; cursor:pointer; background:linear-gradient(135deg,#ffffff 0%,#fff5f9 100%); border:1px solid #fbcfe8; border-radius:16px; padding:5px 12px 5px 7px; box-shadow:0 2px 10px rgba(219,39,119,.10); transition:transform .12s, box-shadow .12s; }
+  .pn-chip:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(219,39,119,.20); }
+  .pn-ring { width:42px; height:42px; flex:0 0 42px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:17px; font-weight:900; color:#be185d; background:#fff; border:3px solid #f472b6; box-shadow:0 0 0 3px #fce7f3; }
+  .pn-txt { line-height:1.25; }
+  .pn-lbl { font-size:11.5px; font-weight:800; color:#9d174d; white-space:nowrap; }
+  .pn-sub { font-size:10.5px; color:#b0708a; font-weight:600; white-space:nowrap; }
+  @media (max-width:900px){ .present-now-topbar .pn-txt { display:none; } .pn-chip { padding:5px; border-radius:50%; } }
 </style>
 </head>
 <body>
@@ -2994,7 +3003,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-11e notes-fast';
+const __APP_VER = '2026-10-11f present-topbar';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3872,10 +3881,9 @@ function renderLayout(user, hash){
               <p class="muted small">${escapeHtml(schoolName)} <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span></p>
             </div>
           </div>
-          <div class="topbar-search">
-            <span style="color:#7b8b9c;font-size:14px">🔍</span>
-            <input id="topSearch" placeholder="ابحث عن طالب بالاسم أو الرقم..." ${searchLive} onkeydown="if(event.key==='Enter')goSearch(this.value)" />
-          </div>
+          ${(user.role === 'ADMIN' || user.role === 'AGENT')
+            ? '<div id="presentNowBox" class="present-now-topbar"></div>'
+            : '<div class="topbar-search"><span style="color:#7b8b9c;font-size:14px">🔍</span><input id="topSearch" placeholder="ابحث عن طالب بالاسم أو الرقم..." ' + searchLive + ' onkeydown="if(event.key===\'Enter\')goSearch(this.value)" /></div>'}
           <div class="topbar-actions">
             ${renderNotifState(user)}
             <div class="topbar-user-block" style="text-align:left">
@@ -3894,7 +3902,6 @@ function renderLayout(user, hash){
         <div class="sidebar-widgets">
           ${user.role !== 'STUDENT' ? msgTodayWidget : ''}
           <div id="weatherBox"></div>
-          ${(user.role === 'ADMIN' || user.role === 'AGENT') ? '<div id="presentNowBox"></div>' : ''}
           <div id="nibrasToolbarDock"></div>
         </div>
       </aside>
@@ -3902,7 +3909,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v60</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v61</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -6694,15 +6701,19 @@ function updatePresentNow(){
   const sinfo = presentStudentsOnlineInfo(school);
   const studentWord = school === 'GIRLS' ? 'طالبة' : 'طالب';
   el.innerHTML = `
-    <div class="info-card" onclick="showPresentNow()" style="cursor:pointer" title="اضغط لعرض أسماء المتواجدين الآن">
-      <div class="muted small" style="font-size:10.5px">🧑‍🏫 المتواجدون الآن — ${schoolLabel}</div>
-      <div style="font-size:22px;font-weight:900;color:#4ade80;line-height:1.1">${info.n}</div>
-      <div style="font-size:11px;color:#86efac">${teacherWord}</div>
+    <div class="pn-chip" onclick="showPresentNow()" title="اضغط لعرض أسماء المتواجدين الآن">
+      <div class="pn-ring">${info.n}</div>
+      <div class="pn-txt">
+        <div class="pn-lbl">🧑‍🏫 المتواجدون الآن</div>
+        <div class="pn-sub">${teacherWord} — ${schoolLabel}</div>
+      </div>
     </div>
-    <div class="info-card" onclick="showPresentStudentsNow()" style="cursor:pointer" title="اضغط لعرض الطالبات المتواجدات في الموقع الآن (من فتحت التطبيق)">
-      <div class="muted small" style="font-size:10.5px">👧 المتواجدات في الموقع — ${schoolLabel}</div>
-      <div style="font-size:22px;font-weight:900;color:#4ade80;line-height:1.1">${sinfo.n}</div>
-      <div style="font-size:11px;color:#86efac">${studentWord}${sinfo.n ? ` <span style="color:#fca5a5">— الآن</span>` : ''}</div>
+    <div class="pn-chip" onclick="showPresentStudentsNow()" title="اضغط لعرض الطالبات المتواجدات في الموقع الآن (من فتحت التطبيق)">
+      <div class="pn-ring">${sinfo.n}</div>
+      <div class="pn-txt">
+        <div class="pn-lbl">👧 المتواجدات في الموقع</div>
+        <div class="pn-sub">${studentWord}${sinfo.n ? ' — الآن' : ''} — ${schoolLabel}</div>
+      </div>
     </div>`;
   if(window.__tb && window.__tb.redock) window.__tb.redock();
   refreshPresence(school);
@@ -12237,7 +12248,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=54', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=55', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

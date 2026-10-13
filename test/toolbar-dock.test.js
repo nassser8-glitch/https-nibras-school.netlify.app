@@ -92,8 +92,13 @@ test('dock: المرسى حاضرة في كل الحسابات — وبطاقة 
   assert.ok(a >= 0 && b > a, 'كتلة أدوات الشريط الجانبي موجودة');
   const block = html.slice(a, b);
   assert.ok(block.includes('<div id="nibrasToolbarDock"></div>'), 'نقطة المرسى تُرسم لكل الأدوار');
-  assert.ok(block.includes("<div id=\"presentNowBox\"></div>' : ''}"),
-    'بطاقة المتواجدات داخل الشرط الإداري فقط');
+  assert.ok(!block.includes('presentNowBox'),
+    'بطاقة المتواجدات انتقلت من الشريط الجانبي إلى الشريط العلوي');
+  const presentIdx = html.indexOf('id="presentNowBox"');
+  assert.ok(presentIdx > -1, 'بطاقة المتواجدات موجودة في الأعلى');
+  const around = html.slice(presentIdx - 120, presentIdx + 40);
+  assert.ok(/ADMIN/.test(around) && /AGENT/.test(around),
+    'البطاقة داخل الشرط الإداري فقط (بدل مربّع البحث)');
   assert.ok(!block.includes("<div id=\"nibrasToolbarDock\"></div>' : ''}"),
     'المرسى ليست داخل الشرط الإداري');
   const i = html.indexOf("function updatePresentNow(){");
