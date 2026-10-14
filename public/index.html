@@ -678,7 +678,12 @@ window.__nibrasBootErr = '';
     .student-dash .sd-grid { gap:10px !important; }
     .student-dash .sd-hero { padding:16px 14px !important; }
     .student-dash .sd-hero .sd-name { font-size:20px !important; }
-    .student-dash .sd-hero .sd-herostat { padding:8px 10px !important; min-width:82px !important; }
+    .student-dash .sd-hero > div:first-child { width:120px !important; height:120px !important; top:-42px !important; right:-42px !important; }
+    .student-dash .sd-hero > div:nth-child(2) { width:150px !important; height:150px !important; bottom:-64px !important; left:2px !important; }
+    .student-dash .sd-hero-row { flex-direction:column !important; align-items:stretch !important; gap:10px !important; }
+    .student-dash .sd-hero-info { min-width:0 !important; }
+    .student-dash .sd-hero-stats { width:100% !important; gap:8px !important; }
+    .student-dash .sd-hero-stats .sd-herostat { flex:1 !important; min-width:0 !important; padding:8px 10px !important; }
     .student-dash .sd-card > div:first-child { padding:10px 14px !important; }
   }
 </style>
@@ -3052,7 +3057,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-14g mobile-ui';
+const __APP_VER = '2026-10-14h hero-mobile-fix';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3954,7 +3959,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v100</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v101</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -4697,14 +4702,14 @@ function renderStudentDashboard(){
   <div class="sd-hero" style="background:linear-gradient(135deg,#0f766e,#1d4ed8);border-radius:18px;padding:24px 22px;margin-bottom:16px;color:#fff;position:relative;overflow:hidden;box-shadow:0 10px 26px rgba(13,118,110,.22)">
     <div style="position:absolute;top:-46px;right:-46px;width:190px;height:190px;border-radius:50%;background:rgba(255,255,255,.09)"></div>
     <div style="position:absolute;bottom:-70px;left:10px;width:210px;height:210px;border-radius:50%;background:rgba(255,255,255,.07)"></div>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;position:relative">
-      <div>
+    <div class="sd-hero-row" style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;position:relative">
+      <div class="sd-hero-info">
         <div style="font-size:13px;font-weight:600;opacity:.9">مرحباً بك 👋</div>
         <div class="sd-name" style="font-size:25px;font-weight:800;margin:2px 0;letter-spacing:.5px">${escapeHtml(user.name || 'طالب')}</div>
         <div style="font-size:13px;opacity:.95">🏫 ${escapeHtml(classLabel)}</div>
         ${schoolWeekHTML(user)}
       </div>
-      <div style="display:flex;gap:10px;align-items:center">
+      <div class="sd-hero-stats" style="display:flex;gap:10px;align-items:center">
         <div class="sd-herostat" style="background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:14px;padding:10px 16px;text-align:center;min-width:96px">
           <div style="font-size:22px;font-weight:800">${pts > 0 ? '+' : ''}${pts}</div>
           <div style="font-size:11px;opacity:.92">نقاطي</div>
@@ -12260,7 +12265,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=94', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=95', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
