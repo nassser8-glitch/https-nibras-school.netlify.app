@@ -3022,7 +3022,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-13u header-line';
+const __APP_VER = '2026-10-13v semester-4months';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3924,7 +3924,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v88</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v89</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -6773,17 +6773,19 @@ function buildMonthChart(db, idsArr){
   const sig = weeks.map(w => w.label+':'+w.rate+':'+w.total).join('|');
   return { html, sig };
 }
-// رسم فصلي (مقارنة أشهر الفصل الدراسي) من أي نسخة قاعدة بيانات
+// رسم فصلي (مقارنة أشهر الفصل الدراسي — ٤ أشهر، والعام الدراسي يبدأ من سبتمبر) من أي نسخة قاعدة بيانات
 function buildQuarterChart(db, idsArr){
   const now = new Date();
   const fmt = dt => dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
   const ids = Array.from(idsArr || []);
-  const year = now.getFullYear(), month = now.getMonth();
-  const quarter = Math.floor(month / 3);
+  const year = now.getFullYear();
   const mNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  // الفصل الدراسي = ٤ أشهر متتالية، والعام الدراسي يبدأ من سبتمبر (سبتمبر..ديسمبر = الفصل الأول)
+  const fromSep = (now.getMonth() - 8 + 12) % 12;
+  const semStart = (8 + Math.floor(fromSep / 4) * 4) % 12;
   const qMonths = [];
-  for(let i=0; i<3; i++){
-    const m = quarter*3 + i;
+  for(let i=0; i<4; i++){
+    const m = (semStart + i) % 12;
     const mStart = new Date(year, m, 1);
     const mEnd = new Date(year, m+1, 0);
     let presentSum = 0, daysWithRecs = 0;
@@ -12193,7 +12195,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=82', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=83', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
