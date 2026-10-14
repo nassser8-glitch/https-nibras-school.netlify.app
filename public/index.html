@@ -548,6 +548,10 @@ window.__nibrasBootErr = '';
   .att-group { padding:11px 12px; min-width:0; }
   .att-group + .att-group { border-inline-start:1px solid var(--line); }
   .att-group-title { font-weight:800; font-size:13px; color:var(--text); margin:0 0 8px; display:flex; align-items:center; gap:6px; }
+  .att-head { display:grid; grid-template-columns:1fr 1fr 1fr; align-items:center; gap:8px; margin-bottom:8px; padding:0 12px; }
+  .att-head .att-group-title { margin:0; grid-column:1 / 2; }
+  .att-today-title { grid-column:2 / 4; text-align:center; font-weight:800; font-size:14px; color:var(--text); margin:0; }
+  .att-head .dash-panel-more { grid-column:3 / 4; grid-row:1; justify-self:end; position:relative; z-index:2; }
   .att-flex { display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .att-donut-col { display:flex; flex-direction:column; align-items:center; gap:6px; flex-shrink:0; }
   .att-report-inline { border:none; background:transparent; color:#2563eb; font-size:11.5px; font-weight:700; cursor:pointer; font-family:inherit; padding:2px 4px; white-space:nowrap; }
@@ -575,7 +579,7 @@ window.__nibrasBootErr = '';
   @media (max-width:900px){ .topbar-search { display:none; } }
   @media (max-width:820px){ .dash-hero { grid-template-columns:1fr; } .dash-grid2 { grid-template-columns:1fr; } .dash-bottom { grid-template-columns:1fr; } .dash-mid { grid-template-columns:1fr; } }
   @media (max-width:700px){ .layout .main { padding:12px; } .dash-greet { flex-wrap:wrap; } .dash-status { flex-wrap:wrap; } .topbar-actions { gap:8px; } .topbar-brand p { display:none; } }
-  @media (max-width:560px){ .dash-stats { grid-template-columns:repeat(2,1fr); } .att-card { grid-template-columns:1fr; } .att-group + .att-group { border-inline-start:none; border-top:1px solid var(--line); } .topbar-brand h1 { font-size:13px; } .topbar-logo { width:36px; height:36px; } .topbar-actions .btn-secondary { padding:6px 9px; font-size:12px; } .topbar-user-name { font-size:12px; } .topbar-user-role { font-size:10.5px; } .act-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+  @media (max-width:560px){ .dash-stats { grid-template-columns:repeat(2,1fr); } .att-card { grid-template-columns:1fr; } .att-head { grid-template-columns:1fr; text-align:center; } .att-head .att-group-title { grid-column:auto; justify-content:center; } .att-today-title { grid-column:auto; } .att-head .dash-panel-more { grid-column:auto; justify-self:center; } .att-group + .att-group { border-inline-start:none; border-top:1px solid var(--line); } .topbar-brand h1 { font-size:13px; } .topbar-logo { width:36px; height:36px; } .topbar-actions .btn-secondary { padding:6px 9px; font-size:12px; } .topbar-user-name { font-size:12px; } .topbar-user-role { font-size:10.5px; } .act-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
   @media (max-width:380px){ .topbar-brand h1 { font-size:12px; } .topbar-actions .topbar-user-block { display:none; } }
   .pw-wrap { position:relative; display:block; }
   .pw-wrap .pw-toggle { position:absolute; top:50%; inset-inline-end:8px; transform:translateY(-50%); border:none; background:transparent; cursor:pointer; font-size:16px; line-height:1; color:var(--muted); padding:4px; z-index:2; }
@@ -3017,7 +3021,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-13r pioneers-9';
+const __APP_VER = '2026-10-13s att-title-row';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3919,7 +3923,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v85</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v86</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -5254,7 +5258,7 @@ function renderDashboard(){
     : 'conic-gradient(#e4edf5 0 100%)';
   const stageGroup = `
     <div class="att-group att-stage">
-      <p class="att-group-title">📊 تصنيف الطلاب</p>
+      <p class="att-group-title" aria-hidden="true">&nbsp;</p>
       <div class="att-flex">
         <div class="dash-donut" style="background:${stageBg}">
           <div class="dash-donut-center"><b>${stageTotal}</b><span>طالبة</span></div>
@@ -5274,8 +5278,9 @@ function renderDashboard(){
     </div>`;
   const attPanel = `
     <div class="dash-panel">
-      <div class="dash-panel-head">
-        <p class="dash-panel-title">✅ الحضور اليوم</p>
+      <div class="att-head">
+        <p class="att-group-title">📊 تصنيف الطلاب</p>
+        <p class="att-today-title">✅ الحضور اليوم</p>
         <span class="dash-panel-more" onclick="showTodayAttendance()" style="cursor:pointer">التفاصيل</span>
       </div>
       ${donutHTML}
@@ -12187,7 +12192,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=79', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=80', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
