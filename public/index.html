@@ -3026,7 +3026,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-14e leaders-2';
+const __APP_VER = '2026-10-14f notes-date-inline';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3928,7 +3928,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v98</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v99</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -5636,10 +5636,10 @@ function renderTeacherRecent(d, user){
     return `<a href="#/notes" style="text-decoration:none;color:inherit;display:block" title="فتح الملاحظات">
       <div style="display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px dashed #e8eef5">
         <span style="font-size:15px;flex-shrink:0">${n.type==='POSITIVE'?'🟢':'🔴'}</span>
+        <span class="muted" style="font-size:11px;white-space:nowrap">${dateStr(n.createdAt)}</span>
         <span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(byName || n.category || 'ملاحظة')}</span>
         <span style="font-size:12px;font-weight:800;color:${pts>=0?'#16a34a':'#dc2626'};white-space:nowrap">${pts>0?'+':''}${pts}</span>
-      </div>
-      <div class="muted" style="font-size:11px;padding:0 2px 6px;margin-top:-2px">${dateStr(n.createdAt)}</div></a>`;
+      </div></a>`;
   }).join('') : ghost;
   const col = (ico, title, href, body) => `
     <div style="background:#f8fafc;border:1px solid #e6edf5;border-radius:14px;padding:10px 12px">
@@ -12233,7 +12233,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=92', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=93', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
