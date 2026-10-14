@@ -529,6 +529,9 @@ window.__nibrasBootErr = '';
   .dash-activity-ico { width:38px; height:38px; border-radius:12px; background:var(--light); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
   .dash-activity-name { font-size:13px; font-weight:700; color:var(--text); }
   .dash-activity-meta { font-size:11px; color:var(--muted); margin-top:1px; }
+  .acts-panel { overflow:hidden; }
+  .acts-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+  .acts-body { overflow:hidden; }
   .dash-bottom { display:grid; grid-template-columns:1fr 1.6fr; gap:8px; margin-bottom:10px; }
   .dash-mid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .dash-donut-wrap { display:flex; align-items:center; gap:16px; }
@@ -2939,10 +2942,13 @@ function __renderAppInner(){
   }
   document.body?.classList?.remove('sidebar-locked');
   renderAppStrip();
+  __fitActivities();
   checkMemoReminders();
   if(!window.__memoReminderTimer){ window.__memoReminderTimer = setInterval(checkMemoReminders, 15000); }
 }
 window.addEventListener('hashchange', renderApp);
+window.addEventListener('resize', __fitActivities);
+window.addEventListener('load', __fitActivities);
 let __syncInterval = null;
 function __togglePw(btn){
   const wrap = btn.closest('.pw-wrap');
@@ -3022,7 +3028,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-13v semester-4months';
+const __APP_VER = '2026-10-13w activities-fit';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3924,7 +3930,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v89</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v90</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -3940,6 +3946,44 @@ function toggleSidebar(forceClose){
 function switchLeadersTab(tab){
   document.querySelectorAll('.dash-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.dash-leader-pane').forEach(p => { p.style.display = p.dataset.tab === tab ? 'block' : 'none'; });
+  __fitActivities();
+}
+/* يُظهر من قائمة «الأنشطة» ما يتناسب مع ارتفاع العمود المجاور (الأوائل/المتابعة)، ويخفي ما لا يدخل كاملاً.
+   على الشاشات الضيقة (عمود واحد) تُعرض كل الأنشطة بلا قصّ. */
+function __fitActivities(){
+  const panel = document.querySelector('.acts-panel');
+  if(!panel) return;
+  const head = panel.querySelector('.acts-head');
+  const body = panel.querySelector('.acts-body');
+  if(!head || !body) return;
+  const items = Array.from(body.querySelectorAll('.dash-activity-item'));
+  // إعادة الضبط أولاً
+  items.forEach(it => { it.style.display = ''; });
+  body.style.maxHeight = '';
+  const bottom = panel.parentElement;
+  const mid = bottom ? Array.from(bottom.children).find(c => c.classList.contains('dash-mid')) : null;
+  if(!bottom || !mid || !items.length) return;
+  const cols = getComputedStyle(bottom).gridTemplateColumns.split(/\s+/).filter(Boolean).length;
+  if(window.matchMedia('(max-width:1180px)').matches || cols < 2) return; // عمود واحد: بلا قصّ
+  // نُصفّر ارتفاع القائمة لقياس الارتفاع الطبيعي للعمود المجاور
+  body.style.maxHeight = '0px';
+  void body.offsetHeight;
+  const H = Math.round(mid.getBoundingClientRect().height);
+  const cs = getComputedStyle(panel);
+  const padT = parseFloat(cs.paddingTop) || 0;
+  const padB = parseFloat(cs.paddingBottom) || 0;
+  const borderY = (panel.offsetHeight || 0) - (panel.clientHeight || 0);
+  const headB = head.offsetHeight + (parseFloat(getComputedStyle(head).marginBottom) || 0);
+  const avail = Math.floor(H - padT - padB - borderY - headB);
+  if(avail <= 0){ items.forEach(it => { it.style.display = 'none'; }); return; }
+  body.style.maxHeight = avail + 'px';
+  // إخفاء العناصر التي لا تدخل كاملة داخل الفراغ المتاح
+  const clipBottom = body.getBoundingClientRect().top + avail;
+  let cut = false;
+  items.forEach(it => {
+    if(cut){ it.style.display = 'none'; return; }
+    if(it.getBoundingClientRect().bottom > clipBottom + 0.5){ it.style.display = 'none'; cut = true; }
+  });
 }
 /* تبويبات نسبة تفعيل الحسابات في لوحة المدير */
 function switchActTab(key){
@@ -5185,7 +5229,7 @@ function renderDashboard(){
 
   // الأنشطة القادمة
   const typeIcon = t => { const x = activityTypes.find(v => v.value === t); return x ? x.icon : '🎉'; };
-  const upcoming = (d.activities||[]).filter(a => String(a.date||'') >= today).sort((a,b) => String(a.date).localeCompare(String(b.date))).slice(0,4);
+  const upcoming = (d.activities||[]).filter(a => String(a.date||'') >= today).sort((a,b) => String(a.date).localeCompare(String(b.date)));
   const upcomingHTML = upcoming.length ? upcoming.map(a => `
     <a class="dash-activity-item" href="#/activity/${a.id}" style="text-decoration:none">
       <div class="dash-activity-ico">${typeIcon(a.type)}</div>
@@ -5193,7 +5237,7 @@ function renderDashboard(){
         <div class="dash-activity-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(a.name)}</div>
         <div class="dash-activity-meta">${fmtDateOnly(a.date)} · 👥 ${(a.participants||[]).length} مشارك</div>
       </div>
-    </a>`).join('') : '<p class="muted small" style="margin:4px 0">لا توجد أنشطة قادمة</p>';
+    </a>`).join('') : '<p class="muted small" style="margin:4px 0">لا توجد أنشطة</p>';
 
   // الحضور اليوم — بطاقة الطلاب والمعلمين (تصميم الكود المرفق)
   const attGroup = (label, cls, present, absent, late, pct, click, flip, subLate) => {
@@ -5430,12 +5474,12 @@ function renderDashboard(){
   const bottom = `
   ${insightsHTML}
   <div class="dash-bottom">
-    <div class="dash-panel">
-      <div class="dash-panel-head">
-        <p class="dash-panel-title">🎉 الأنشطة القادمة</p>
+    <div class="dash-panel acts-panel">
+      <div class="acts-head">
+        <p class="dash-panel-title" style="margin:0">🎉 الأنشطة</p>
         <span class="dash-panel-more" onclick="location.hash='#/activities'" style="cursor:pointer">عرض الكل</span>
       </div>
-      ${upcomingHTML}
+      <div class="acts-body">${upcomingHTML}</div>
     </div>
     <div class="dash-mid">
       ${leadersHTML}
@@ -12195,7 +12239,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=83', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=84', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
