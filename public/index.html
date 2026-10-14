@@ -3026,7 +3026,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-14c nbr-frames';
+const __APP_VER = '2026-10-14d nbr-blue';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3928,7 +3928,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v96</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v97</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -5154,12 +5154,12 @@ function renderDashboard(){
     // البطاقة: أيقونة بلون pastel (نفس علب «يحتاج إلى متابعتك») + الرقم بلون درجته
     // من متغيّرات الثيم، فلا يُستحدث لون خاص anywhere.
     const card = (o) => `
-      <div class="nbr-card" onclick="${o.click}" role="button" tabindex="0" style="border-color:${o.fg}"
+      <div class="nbr-card" onclick="${o.click}" role="button" tabindex="0" style="border-color:${o.tc || o.fg}"
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${o.click}}">
         <div class="nbr-ico" style="background:${o.bg}">${o.icon}</div>
         <div class="nbr-body">
           <div class="nbr-top">
-            <div class="nbr-name" style="color:${o.fg}">${escapeHtml(o.name)}</div>
+            <div class="nbr-name" style="color:${o.tc || o.fg}">${escapeHtml(o.name)}</div>
             <span class="nbr-num" style="color:${o.fg};background:${o.bg}">${o.num}</span>
           </div>
           <div class="nbr-meta">${escapeHtml(o.meta)}</div>
@@ -5173,7 +5173,7 @@ function renderDashboard(){
         if(r.run >= A.runThreshold) why.push(r.run + ' يوم متتالٍ');
         return `${r.name}${cls(r)} — ${why.join(' و')}`;
       }).join(' · ');
-      items.push(card({ icon:'🔁', bg:'#fef2f2', fg:'var(--red,#ef4444)',
+      items.push(card({ icon:'🔁', bg:'#fef2f2', fg:'var(--red,#ef4444)', tc:'#1e40af',
         name:'غياب متكرر', meta, num:repeatedAbs.length, click:'showRepeatedAbsenceStudents()' }));
     }
     const absentTeachers = __insightTeacherAbsence();
@@ -5181,24 +5181,24 @@ function renderDashboard(){
       // لون الغياب نفسه كلون غياب الطالبات، والأيقونة والعنوان هما اللذان
       // يفرّقان بين المؤشّرين — لا لونٌ مستحدث لمشكلة من نوع واحد.
       const meta = absentTeachers.slice(0,3).map(t => `${t.name} — ${t.n} يوم غياب`).join(' · ');
-      items.push(card({ icon:'⚠️', bg:'#fef2f2', fg:'var(--red,#ef4444)',
+      items.push(card({ icon:'⚠️', bg:'#fef2f2', fg:'var(--red,#ef4444)', tc:'#1d4ed8',
         name:'غياب المعلمات', meta, num:absentTeachers.length, click:'showTeacherAbsence()' }));
     }
     if(frequentTransfers.length){
       const meta = frequentTransfers.slice(0,3).map(t => `${t.name}${cls(t)} — ${t.n} تحويلات`).join(' · ');
-      items.push(card({ icon:'🔄', bg:'#f5f3ff', fg:'var(--purple,#8b5cf6)',
+      items.push(card({ icon:'🔄', bg:'#f5f3ff', fg:'var(--purple,#8b5cf6)', tc:'#2563eb',
         name:'تحويلات متكررة', meta, num:frequentTransfers.length, click:'showFrequentTransfers()' }));
     }
     if(lateTeachers.length){
       const meta = lateTeachers.slice(0,3).map(t => `${t.name} — ${t.n} مرة`).join(' · ');
-      items.push(card({ icon:'⏰', bg:'#fffbeb', fg:'var(--orange,#f59e0b)',
+      items.push(card({ icon:'⏰', bg:'#fffbeb', fg:'var(--orange,#f59e0b)', tc:'#3b82f6',
         name:'تأخّر المعلمات', meta, num:lateTeachers.length, click:'showLateTeachers()' }));
     }
     if(lateStudents.length){
       const meta = lateStudents.slice(0,3).map(t => `${t.name}${cls(t)} — ${t.n} مرة`).join(' · ');
       // صندوق بنفسجي للتأخّر مثل صندوق المعلمة: مشكلة من نوع واحد = لون واحد،
       // ويفرّق بينهما الأيقونة والعنوان لا لونًا مستحدثًا.
-      items.push(card({ icon:'⌛', bg:'#fffbeb', fg:'var(--orange,#f59e0b)',
+      items.push(card({ icon:'⌛', bg:'#fffbeb', fg:'var(--orange,#f59e0b)', tc:'#0ea5e9',
         name:'تأخّر الطالبات', meta, num:lateStudents.length, click:'showLateStudents()' }));
     }
     // شريط ملخّص: كم مؤشرًا تتراكم اليوم (5 كحد أقصى)، فيرى القارئ صورة واحدة لا أرقامًا متفرقة
@@ -12233,7 +12233,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=90', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=91', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
