@@ -501,19 +501,21 @@ window.__nibrasBootErr = '';
   .nbr-title { margin:0; font-size:13.5px; font-weight:800; color:#5b21b6;
     display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; min-width:0; }
   .nbr-sub { font-size:11px; font-weight:600; color:var(--muted); }
-  .nbr-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
-  .nbr-card { display:flex; align-items:center; gap:9px; min-width:0; cursor:pointer; text-align:right;
-    padding:8px 10px; border-radius:11px; background:#fff;
-    border:1px solid #eceaf6; transition:background .12s, border-color .12s, box-shadow .12s; }
+  .nbr-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:9px; }
+  .nbr-card { display:flex; align-items:flex-start; gap:10px; min-width:0; cursor:pointer; text-align:right;
+    padding:10px 11px; border-radius:13px; background:#fff;
+    border:1px solid #eceaf6; box-shadow:0 1px 2px rgba(16,24,40,.03);
+    transition:background .12s, border-color .12s, box-shadow .12s, transform .12s; }
   .nbr-card:hover { background:var(--primary-light,#fdf2f8); border-color:#ddd6fe;
-    box-shadow:0 6px 16px -12px rgba(124,58,237,.5); }
-  .nbr-ico { width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center;
-    font-size:15px; flex-shrink:0; }
+    box-shadow:0 10px 22px -16px rgba(124,58,237,.6); transform:translateY(-1px); }
+  .nbr-ico { width:34px; height:34px; border-radius:11px; display:flex; align-items:center; justify-content:center;
+    font-size:16px; flex-shrink:0; }
   .nbr-body { flex:1; min-width:0; }
-  .nbr-name { font-size:12px; font-weight:700; color:var(--text); }
-  .nbr-meta { font-size:10px; color:var(--muted); margin-top:1px; line-height:1.4;
+  .nbr-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .nbr-name { font-size:12.5px; font-weight:800; color:var(--text); }
+  .nbr-meta { font-size:10.5px; color:var(--muted); margin-top:3px; line-height:1.45;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-  .nbr-num { font-size:17px; font-weight:800; line-height:1; flex-shrink:0; }
+  .nbr-num { font-size:12.5px; font-weight:800; line-height:1; padding:3px 9px; border-radius:999px; flex-shrink:0; }
   .nbr-bar { margin-top:8px; height:3px; border-radius:999px; background:#eceaf6; overflow:hidden; }
   .nbr-bar span { display:block; height:100%; border-radius:999px;
     background:linear-gradient(90deg,#6366f1,#a855f7); }
@@ -3024,7 +3026,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-14a activities-count';
+const __APP_VER = '2026-10-14b nbr-cards';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3926,7 +3928,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v94</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v95</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -5156,10 +5158,12 @@ function renderDashboard(){
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${o.click}}">
         <div class="nbr-ico" style="background:${o.bg}">${o.icon}</div>
         <div class="nbr-body">
-          <div class="nbr-name">${escapeHtml(o.name)}</div>
+          <div class="nbr-top">
+            <div class="nbr-name">${escapeHtml(o.name)}</div>
+            <span class="nbr-num" style="color:${o.fg};background:${o.bg}">${o.num}</span>
+          </div>
           <div class="nbr-meta">${escapeHtml(o.meta)}</div>
         </div>
-        <div class="nbr-num" style="color:${o.fg}">${o.num}</div>
       </div>`;
     const items = [];
     if(repeatedAbs.length){
@@ -12229,7 +12233,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=88', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=89', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
