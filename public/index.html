@@ -3026,7 +3026,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-14d nbr-blue';
+const __APP_VER = '2026-10-14e leaders-2';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3928,7 +3928,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v97</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v98</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -5440,7 +5440,7 @@ function renderDashboard(){
     // فلا تبقى مرحلة «فارغة» لدى المعلم ما دام يدرّس طلاباً فيها.
     const withPts = studs.map(s => ({ s, pts: ptsMap[s.id] || 0 })).sort((a,b) => b.pts - a.pts || String(a.s.fullName).localeCompare(String(b.s.fullName),'ar'));
     if(withPts.length === 0) return '<p class="muted small" style="margin:4px 0">لا توجد طلاب مسندون إليك في هذه المرحلة</p>';
-    return withPts.slice(0,3).map((x,i) => `
+    return withPts.slice(0,2).map((x,i) => `
     <div class="dash-leader-row">
       <span class="dash-leader-medal">${medals[i] || '•'}</span>
       <div style="min-width:0">
@@ -12233,7 +12233,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=91', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=92', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
