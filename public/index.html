@@ -72,6 +72,7 @@ window.__nibrasBootErr = '';
 <script src="toolbar.js?v=7"></script>
 <style>
   * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   body { margin:0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background:linear-gradient(180deg,#f7f9fc 0%,#edf3fa 100%); background-attachment:fixed; color:#1f2937; direction: rtl; padding-bottom:env(safe-area-inset-bottom); }
   a { text-decoration:none; color:inherit; }
   .muted { color:#6b7280; }
@@ -655,6 +656,18 @@ window.__nibrasBootErr = '';
   .topbar-strip { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; margin-top:8px; }
   .topbar-strip .strip-item { padding:5px 11px; }
   @media (max-width:640px){ .topbar-strip { margin-top:6px; } }
+  /* ===== ترويسة الطالبة: تراص آمن على الشاشات الضيقة (لا تداخل) ===== */
+  .student-dash .sd-hero-info { min-width:0; }
+  .student-dash .sd-hero-stats { flex-wrap:wrap; }
+  @media (max-width:700px){
+    .student-dash .sd-hero { padding:16px 14px !important; }
+    .student-dash .sd-hero .sd-name { font-size:20px !important; word-break:break-word; }
+    .student-dash .sd-hero > div:first-child { width:120px !important; height:120px !important; top:-42px !important; right:-42px !important; }
+    .student-dash .sd-hero > div:nth-child(2) { width:150px !important; height:150px !important; bottom:-64px !important; left:2px !important; }
+    .student-dash .sd-hero-row { flex-direction:column !important; align-items:stretch !important; gap:10px !important; }
+    .student-dash .sd-hero-stats { width:100% !important; gap:8px !important; }
+    .student-dash .sd-hero-stats .sd-herostat { flex:1 1 40% !important; min-width:0 !important; padding:8px 10px !important; }
+  }
   /* ===== تحسين العرض على الجوال لجميع الحسابات: تصغير الخطوط والمسافات ===== */
   @media (max-width:560px){
     .layout .main { padding:10px; }
@@ -676,14 +689,6 @@ window.__nibrasBootErr = '';
     /* لوحة الطالبة (تستخدم أنماطاً داخلية): تصغير الحشو والخطوط */
     .student-dash .dash-panel { padding:10px 12px !important; border-radius:14px; }
     .student-dash .sd-grid { gap:10px !important; }
-    .student-dash .sd-hero { padding:16px 14px !important; }
-    .student-dash .sd-hero .sd-name { font-size:20px !important; }
-    .student-dash .sd-hero > div:first-child { width:120px !important; height:120px !important; top:-42px !important; right:-42px !important; }
-    .student-dash .sd-hero > div:nth-child(2) { width:150px !important; height:150px !important; bottom:-64px !important; left:2px !important; }
-    .student-dash .sd-hero-row { flex-direction:column !important; align-items:stretch !important; gap:10px !important; }
-    .student-dash .sd-hero-info { min-width:0 !important; }
-    .student-dash .sd-hero-stats { width:100% !important; gap:8px !important; }
-    .student-dash .sd-hero-stats .sd-herostat { flex:1 !important; min-width:0 !important; padding:8px 10px !important; }
     .student-dash .sd-card > div:first-child { padding:10px 14px !important; }
   }
 </style>
@@ -3057,7 +3062,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-14h hero-mobile-fix';
+const __APP_VER = '2026-10-14i hero-edge-fix';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3959,7 +3964,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v101</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v102</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -12265,7 +12270,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=95', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=96', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
