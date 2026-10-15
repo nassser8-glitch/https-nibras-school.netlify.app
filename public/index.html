@@ -177,6 +177,7 @@ window.__nibrasBootErr = '';
   table.data-table tbody tr:hover td { background:var(--bg-subtle,#f0f7ff); }
   table.data-table tbody tr:last-child td { border-bottom:none; }
   .table-card { padding:0; overflow:hidden; overflow-x:auto; border:1px solid var(--border-color,#e0edf7); border-radius:12px; }
+  .tbl-scroll { max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
   /* بطاقات مفكرتي الشخصية */
   .nb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
   .nb-card { background:linear-gradient(180deg,#fffdf5,#fff9e6); border:1px solid #fde68a; border-radius:12px; padding:12px 14px; box-shadow:0 2px 6px rgba(0,0,0,.04); }
@@ -690,6 +691,13 @@ window.__nibrasBootErr = '';
     .student-dash .dash-panel { padding:10px 12px !important; border-radius:14px; }
     .student-dash .sd-grid { gap:10px !important; }
     .student-dash .sd-card > div:first-child { padding:10px 14px !important; }
+    /* منع تجاوز العرض على الجوال: عناصر min-width داخلية */
+    select.input, input.input, textarea.input { min-width:0 !important; max-width:100%; }
+    .card.stat { min-width:0 !important; }
+    .dash-panel { min-width:0 !important; }
+    img, video { max-width:100%; height:auto; }
+    svg, canvas { max-width:100%; }
+    .notif-drop { right:auto; left:0; width:min(300px, calc(100vw - 24px)); }
   }
 </style>
 </head>
@@ -2977,12 +2985,31 @@ function __renderAppInner(){
   document.body?.classList?.remove('sidebar-locked');
   renderAppStrip();
   __fitActivities();
+  __fitTables();
   checkMemoReminders();
   if(!window.__memoReminderTimer){ window.__memoReminderTimer = setInterval(checkMemoReminders, 15000); }
 }
 window.addEventListener('hashchange', renderApp);
 window.addEventListener('resize', __fitActivities);
+window.addEventListener('resize', __fitTables);
 window.addEventListener('load', __fitActivities);
+window.addEventListener('load', __fitTables);
+/* يلفّ الجداول العريضة بحاوية تمرير أفقية حتى لا تُقصّ على الجوال */
+function __fitTables(){
+  const app = document.getElementById('app');
+  if(!app) return;
+  app.querySelectorAll('table.data-table').forEach(function(t){
+    const p = t.parentElement;
+    if(!p) return;
+    if(p.classList.contains('tbl-scroll')) return;
+    if(p.classList.contains('table-card') || p.classList.contains('table-wrap')) return;
+    if(p.style && p.style.overflowX === 'auto') return;
+    const wrap = document.createElement('div');
+    wrap.className = 'tbl-scroll';
+    p.insertBefore(wrap, t);
+    wrap.appendChild(t);
+  });
+}
 let __syncInterval = null;
 function __togglePw(btn){
   const wrap = btn.closest('.pw-wrap');
@@ -3062,7 +3089,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-14i hero-edge-fix';
+const __APP_VER = '2026-10-14k late-as-present';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3964,7 +3991,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v102</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v104</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -4979,8 +5006,8 @@ function renderDashboard(){
       <div style="padding:12px 14px">
         <p class="muted" style="font-size:11px;margin:0 0 6px">${tl('عدد الطلاب')}</p>
         <div class="small" style="display:flex;flex-direction:column;gap:5px;font-size:12px">
-          <span>✅ ${tl('الحضور')}: <b>${cp}</b></span>
-          <span>❌ ${tl('الغياب')}: <b class="red">${ca}</b> &nbsp; ⏰ ${tl('التأخر')}: <b class="amber">${cl}</b></span>
+          <span>✅ ${tl('الحضور')}: <b>${cp + cl}</b></span>
+          <span>❌ ${tl('الغياب')}: <b class="red">${ca}</b> &nbsp; ⏰ ${tl('التأخر')}: <b class="amber">${cl}</b> <span class="muted" style="font-size:10.5px">(المتأخر حاضر)</span></span>
           <span class="muted">${tl('نسبة الحضور')}: <b style="color:${crate==null?'#6b7280':(crate>=75?'#16a34a':(crate>=50?'#d97706':'#dc2626'))}">${fmtRate(crate)}</b></span>
           ${crate !== null ? `<div style="height:8px;border-radius:999px;background:#eef2f7;margin-top:5px;overflow:hidden"><div style="height:100%;width:${crate}%;background:${crate>=75?'#22c55e':(crate>=50?'#f59e0b':'#ef4444')};border-radius:999px;transition:width .3s"></div></div>` : ''}
         </div>
@@ -5272,15 +5299,13 @@ function renderDashboard(){
 
   // الحضور اليوم — بطاقة الطلاب والمعلمين (تصميم الكود المرفق)
   const attGroup = (label, cls, present, absent, late, pct, click, flip, subLate) => {
-    // المتأخرون محسوبون ضمن الحاضرين (subLate): لا يضافون فوقهم حتى لا يُضاعف العدد
-    const total = subLate ? (present + absent) : (present + absent + late);
-    const dispAbsent = Math.max(0, Math.min(absent, total));
-    const dispLate = Math.max(0, Math.min(late, total - dispAbsent));
-    const dispPresent = Math.max(0, total - dispAbsent - dispLate);
-    const pPct = total ? Math.round(dispPresent/total*100) : 0;
-    const aPct = total ? Math.round(dispAbsent/total*100) : 0;
-    const donutBg = total ? `conic-gradient(#22c55e 0 ${pPct}%, #ef4444 ${pPct}% ${pPct+aPct}%, #f59e0b ${pPct+aPct}% 100%)` : 'conic-gradient(#e4edf5 0 100%)';
-    const donutLabelColor = (absent > present && absent >= late) ? '#dc2626' : (present >= absent && present >= late ? '#16a34a' : '#d97706');
+    // المتأخر يُحتسب حاضرًا: العدد الوارد في `present` يشمله فعلاً، ونعرض `late` للتوضيح
+    // فقط — بلا خصمٍ من الحضور وبلا شريحة منفصلة في الدائرة.
+    const total = present + absent;
+    const pPct = total ? Math.round(present/total*100) : 0;
+    const aPct = total ? Math.round(absent/total*100) : 0;
+    const donutBg = total ? `conic-gradient(#22c55e 0 ${pPct}%, #ef4444 ${pPct}% 100%)` : 'conic-gradient(#e4edf5 0 100%)';
+    const donutLabelColor = absent > present ? '#dc2626' : '#16a34a';
     const donut = `<div class="att-donut-col">
         <div class="dash-donut" style="background:${donutBg}">
           <div class="dash-donut-center"><b style="color:${donutLabelColor}">${total}</b><span>${label}</span></div>
@@ -5297,7 +5322,7 @@ function renderDashboard(){
     const legend = `<div class="att-legend">
           <div class="row"><span class="swatch" style="background:#22c55e"></span>حضور ${attNum(present, '#16a34a')}</div>
           <div class="row"><span class="swatch" style="background:#ef4444"></span>غياب ${attNum(absent, '#dc2626')}</div>
-          <div class="row"><span class="swatch" style="background:#f59e0b"></span>تأخر ${attNum(late, '#d97706')}</div>
+          <div class="row" title="المتأخر يُحتسب حاضرًا ضمن إجمالي الحضور"><span class="swatch" style="background:#f59e0b"></span>تأخر ${attNum(late, '#d97706')}</div>
         </div>`;
     return `
     <div class="att-group ${cls}">
@@ -5350,7 +5375,7 @@ function renderDashboard(){
   const donutHTML = `
     <div class="att-card">
       ${stageGroup}
-      ${attGroup('حضور الطلاب', 'att-students', present, absent, late, sPct, 'showTodayAttendance()', false, false)}
+      ${attGroup('حضور الطلاب', 'att-students', present + late, absent, late, sPct, 'showTodayAttendance()', false, false)}
       ${attGroup('حضور المعلمات والإداريات', 'att-teachers', tPresent, absentTeachers.length, lateTeachers.length, tPct, canMgrT ? 'showTeacherAbsenceList()' : 'showTodayAttendance()', true, true)}
     </div>`;
   const attPanel = `
@@ -12270,7 +12295,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=96', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=98', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
