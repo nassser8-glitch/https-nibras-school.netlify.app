@@ -1293,8 +1293,9 @@ async function __syncPush(school){
   const key = 'nibras_'+school+'_db_v1';
   const pendKey = 'nibras_'+school+'_pending_v1';
   const st = __pushState(school);
-  if(st.running) return;
+  if(st.running){ st.dirty = true; return; }
   st.running = true;
+  st.dirty = false;
   try{
 let raw = null;
   try{ raw = localStorage.getItem(key); }catch(e){}
@@ -1616,11 +1617,14 @@ let attempt = 0;
       st.lastOkTs = __syncTS(obj);
       try{ localStorage.removeItem(pendKey); }catch(e){}
       try{ __clearUnpushed(school); }catch(e){}
+      try{ __clearAssignUnpushed(school); }catch(e){}
       const recovered = st.attempts > 0;
       st.attempts = 0;
       st.lastFail = 0;
       __syncLogAdd({ ev:'push-ok', school, notes:(obj && Array.isArray(obj.notes))?obj.notes.length:0, att:(obj && Array.isArray(obj.attendance))?obj.attendance.length:0, ts:__syncTS(obj), err:(recovered?'recovered':'') });
       if(recovered) __uiToast('✅ عاد الاتصال — حُفظ ما لم يكن قد رُفع.');
+      try{ __saveGuardNotify(school, { ok:true }); }catch(e){}
+      try{ setTimeout(__refreshSaveStatus, 0); }catch(e){}
       return;
     }
     // فشل الرفع نهائياً: نحتفظ بالتعديلات في نسخة احتياطية محلية ونعيد المحاولة لاحقاً
@@ -1638,9 +1642,16 @@ let attempt = 0;
       __syncLogAdd({ ev:'push-gave-up', school, attempts: st.attempts, ts:__syncTS(obj) });
       __uiToast('⚠️ تعذّر رفع حفظك للخادم (' + st.attempts + ' محاولات) — بياناتك محفوظة على هذا الجهاز، وسيُعاد المحاولة عند عودة الاتصال أو أي تعديل جديد.', true);
     }
-    try{ __noteSaveBanner(true); }catch(e){}
+    // أوصل للمعلمة سبب الفشل عبر حراسة الحفظ (رسالة صريحة + إعادة محاولة)،
+    // بدل banner عام سابق كان يطبع القيمة «true» بلا معنى.
+    try{ __saveGuardNotify(school, { ok:false, err:lastErr, attempts:st.attempts }); }catch(e){}
+    try{ if(__unpushedIds(school).length) __notePushFailBanner(); }catch(e){}
+    try{ setTimeout(__refreshSaveStatus, 0); }catch(e){}
   }catch(e){} finally {
     st.running = false;
+    // إعادة جدولة الرفع إن وصل تعديل أثناء الرفع الجاري (كان __syncPush يعود
+    // مبكراً وتضيع الدفعة المجدولة، فيبقى التعديل محلياً بلا رفع).
+    if(st.dirty){ st.dirty = false; try{ __syncSchedule(school, 0); }catch(e){} }
   }
 }
 /* استئناف الرفع بعد توقّفه بسقف المحاولات: تصفير العدّ ثم جدولة فورية.
@@ -3089,7 +3100,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-14k late-as-present';
+const __APP_VER = '2026-10-15a save-reliability';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3991,7 +4002,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v104</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v105</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -8159,7 +8170,7 @@ function renderNotes(){
   </div>` : '';
 
   return `
-  <div class="header-row"><h1 class="page-title">${isStudent ? 'ملاحظاتي' : 'الملاحظات'}</h1>${isStudent ? '' : '<button class="btn-primary" onclick="toggleEl(\'noteForm\')">+ إضافة ملاحظة</button>'}</div>
+  <div class="header-row"><h1 class="page-title">${isStudent ? 'ملاحظاتي' : 'الملاحظات'}</h1><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${isStudent ? '' : (typeof __saveStatusHtml==='function'?__saveStatusHtml():'')}${isStudent ? '' : '<button class="btn-primary" onclick="toggleEl(\'noteForm\')">+ إضافة ملاحظة</button>'}</div></div>
   ${isStudent ? '' : `<div id="unpushedBar" class="card mb" style="display:none;background:#fef3c7;border:1px solid #fcd34d;padding:10px 14px">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <span id="unpushedText" style="font-weight:700;flex:1;min-width:220px"></span>
@@ -8263,6 +8274,7 @@ async function NRC_claimLegacy(btn, noteId){
 }
 let noteType = 'POSITIVE';
 let savingNote = false;
+let savingAssignment = false;
 function setNoteType(t){
   noteType = t;
   document.getElementById('nTypePos').classList.toggle('active', t==='POSITIVE');
@@ -8311,6 +8323,190 @@ function __notePushFailBanner(){
   __noteSaveBanner('⚠️ لم يصل خادم المدرسة الآن — لكن نقاطك محفوظة على هذا الجهاز ولن تختفي، وسأعيد الرفع تلقائياً كلما عاد الاتصال.', true);
 }
 
+/* ============ حراسة الحفظ: حالة موثوقة مبنية على تأكيد الخادم ============
+   العلة الجذرية: كانت الواجهة تُعلن النجاح فور الكتابة في localStorage قبل أي
+   تأكيد من الخادم (alert «تم حفظ التكليف» و‌banner «حُفظت»)، بينما الرفع مجدول
+   ومحاولاتُه قد تفشل بلا وضوح — فيتوهّم المستخدم الحفظ وربما لم يصل الخادم.
+   هذه الطبقة تربط رسالة النجاح/الفشل بنتيجة الرفع الفعلية، تحفظ مسودة محلية،
+   وتتيح إعادة المحاولة دون إنشاء سجلات مكررة (إعادة المحاولة = رفع الدفعة نفسها). */
+const __saveGuards = {};                 // school -> [{ kind, cb }]
+let __saveGuardPanelEl = null;
+const __SAVE_REASON = {
+  network:   'تعذّر الاتصال بالخادم (تحقّقي من الإنترنت).',
+  forbidden: 'لا تملك صلاحية الحفظ (403).',
+  session:   'انتهت الجلسة — يلزم إعادة تسجيل الدخول (401).',
+  bad:       'طلب الحفظ غير صالح (400).',
+  wipe:      'رفض الخادم الكتابة لحماية البيانات (409).',
+  rate:      'ضغط كبير على الخادم — أعيدي المحاولة بعد لحظات (429).',
+  server:    'خطأ في الخادم (500) — أعيدي المحاولة.',
+  unknown:   'سبب غير معروف.'
+};
+function __saveReasonText(err){
+  const e = String(err || '');
+  if(!e) return '';
+  if(e.indexOf('network:') === 0) return __SAVE_REASON.network;
+  if(e.indexOf('403') === 0 || e.indexOf('forbidden') !== -1) return __SAVE_REASON.forbidden;
+  if(e.indexOf('401') === 0) return __SAVE_REASON.session;
+  if(e.indexOf('409') === 0 || e.indexOf('wipe') !== -1) return __SAVE_REASON.wipe;
+  if(e.indexOf('429') === 0) return __SAVE_REASON.rate;
+  if(e.indexOf('400') === 0) return __SAVE_REASON.bad;
+  if(/^5\d\d/.test(e)) return __SAVE_REASON.server;
+  return __SAVE_REASON.unknown;
+}
+const __SAVE_LABEL = {
+  'note':            { ok:'✅ تم حفظ الملاحظة على الخادم بنجاح.',   mid:'🔵 جارٍ حفظ الملاحظة على الخادم...',   noun:'ملاحظتك' },
+  'note-del':        { ok:'✅ تم حذف النقطة على الخادم بنجاح.',     mid:'🔵 جارٍ حذف النقطة على الخادم...',     noun:'الحذف' },
+  'assignment':      { ok:'✅ تم حفظ التكليف على الخادم بنجاح.',    mid:'🔵 جارٍ حفظ التكليف على الخادم...',    noun:'التكليف' },
+  'assignment-del':  { ok:'✅ تم حذف التكليف على الخادم بنجاح.',    mid:'🔵 جارٍ حذف التكليف على الخادم...',    noun:'الحذف' }
+};
+function __saveGuardWatch(school, kind, cb){
+  if(!school) return;
+  (__saveGuards[school] = __saveGuards[school] || []).push({ kind, cb });
+}
+/* عند نتيجة الرفع: النجاح يفرّغ المراقبين، والفشل يُبقي المراقب ليعلم عند نجاح
+   إعادة المحاولة التلقائية لاحقاً (فلا تبقى المعلمة بلا تأكيد). */
+function __saveGuardNotify(school, res){
+  const list = __saveGuards[school] || [];
+  if(res && res.ok) __saveGuards[school] = [];
+  list.forEach(w => { try{ w.cb(res, w.kind); }catch(e){} });
+}
+/* لوحة الفشل الثابتة: رسالة صريحة + سبب + «إعادة المحاولة» + «نسخ النص» */
+function __saveGuardPanel(opts){
+  try{
+    if(!__saveGuardPanelEl){
+      __saveGuardPanelEl = document.createElement('div');
+      __saveGuardPanelEl.id = 'saveGuardPanel';
+      __saveGuardPanelEl.dir = 'rtl';
+      __saveGuardPanelEl.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:100000;max-width:94%;width:min(560px,94%);background:#fff;color:#111;border:2px solid #dc2626;border-radius:14px;padding:14px 16px;box-shadow:0 16px 40px rgba(0,0,0,.3);font-family:inherit;display:none';
+      document.body.appendChild(__saveGuardPanelEl);
+    }
+    if(!opts || opts.show === false){ __saveGuardPanelEl.style.display = 'none'; return; }
+    const reason = opts.reason ? '<div style="margin:6px 0;font-size:12.5px;color:#b91c1c;font-weight:700">سبب الفشل: ' + escapeHtml(opts.reason) + '</div>' : '';
+    __saveGuardPanelEl._text = opts.text || '';
+    __saveGuardPanelEl.innerHTML =
+      '<div style="font-size:14.5px;font-weight:800;color:#b91c1c;line-height:1.85">' + escapeHtml(opts.message || '⚠️ لم يتم حفظ البيانات على الخادم.') + '</div>' +
+      reason +
+      '<div style="font-size:12px;color:#6b7280;margin-top:6px">ما كتبته محفوظ على هذا الجهاز ولم يضع.</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+        '<button class="btn-primary" onclick="__saveGuardRetry(\'' + escapeHtml(opts.kind || '') + '\')">🔄 إعادة المحاولة</button>' +
+        (opts.text ? '<button class="btn-secondary" onclick="__saveGuardCopy()">📋 نسخ النص</button>' : '') +
+        '<button class="btn-secondary" onclick="__saveGuardDismiss()">إغلاق</button>' +
+      '</div>';
+    __saveGuardPanelEl.style.display = 'block';
+  }catch(e){}
+}
+function __saveGuardDismiss(){ try{ if(__saveGuardPanelEl) __saveGuardPanelEl.style.display = 'none'; }catch(e){} }
+function __saveGuardCopy(){
+  try{
+    const t = (__saveGuardPanelEl && __saveGuardPanelEl._text) || '';
+    if(!t) return;
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t); }
+    else {
+      const ta = document.createElement('textarea');
+      ta.value = t; ta.setAttribute('readonly',''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); }catch(e){}
+      ta.remove();
+    }
+    __noteSaveBanner('📋 نُسخ النص إلى الحافظة.', false);
+  }catch(e){}
+}
+function __saveGuardRetry(kind){
+  try{ __saveGuardDismiss(); }catch(e){}
+  const school = getActiveSchool();
+  if(!school || !__serverEnabled() || !__syncEnabled()) return;
+  __noteSaveBanner((__SAVE_LABEL[kind] || {}).mid || '🔵 جارٍ إعادة الحفظ على الخادم...', false);
+  __saveGuardWatch(school, kind, __saveGuardOutcome);
+  __refreshSaveStatus();
+  try{ __syncPush(school); }catch(e){}
+}
+/* نداء النتيجة: لا نجاح قبل تأكيد الخادم، ولا نجاح كاذب. */
+function __saveGuardOutcome(res, kind){
+  const school = getActiveSchool();
+  const lbl = __SAVE_LABEL[kind] || {};
+  if(res && res.ok){
+    try{ __draftClear(kind); }catch(e){}
+    __noteSaveBanner(lbl.ok || '✅ تم حفظ البيانات بنجاح على الخادم.', false);
+    __saveGuardPanel({ show:false });
+    try{ if(kind === 'note') noteType = 'POSITIVE'; }catch(e){}
+    try{ renderApp(); }catch(e){}
+    try{ setTimeout(__refreshSaveStatus, 0); }catch(e){}
+  } else {
+    const reason = __saveReasonText(res && res.err);
+    const dr = __draftGet(kind) || {};
+    const text = (kind === 'note')
+      ? (dr.description || '')
+      : ((dr.title || '') + (dr.desc ? ('\n' + dr.desc) : ''));
+    __saveGuardPanel({
+      message: '⚠️ لم يتم حفظ البيانات على الخادم. احتفظنا بالبيانات محليًا إن أمكن. يرجى إعادة المحاولة والتأكد من نجاح الحفظ.',
+      reason, kind, text
+    });
+    __refreshSaveStatus();
+  }
+}
+/* المسودات المحلية: تمنع فقدان نص المعلمة عند فشل الحفظ أو إغلاق التنبيه */
+function __draftKey(kind){ return 'nibras_draft_' + kind + '_v1'; }
+function __draftSet(kind, obj){ try{ localStorage.setItem(__draftKey(kind), JSON.stringify(obj || {})); }catch(e){} }
+function __draftGet(kind){ try{ return JSON.parse(localStorage.getItem(__draftKey(kind)) || 'null'); }catch(e){ return null; } }
+function __draftClear(kind){ try{ localStorage.removeItem(__draftKey(kind)); }catch(e){} }
+/* سجل التكليفات التي لم تُرفع بعد (محلي فقط — لا يُرسل للخادم) */
+function __assignUnpushedKey(school){ return 'nibras_' + school + '_assign_unpushed_v1'; }
+function __assignUnpushedIds(school){
+  try{ const a = JSON.parse(localStorage.getItem(__assignUnpushedKey(school)) || 'null'); return Array.isArray(a) ? a : []; }catch(e){ return []; }
+}
+function __markAssignUnpushed(school, ids){
+  try{
+    const s = new Set(__assignUnpushedIds(school));
+    (Array.isArray(ids) ? ids : []).forEach(id => { if(id != null) s.add(String(id)); });
+    localStorage.setItem(__assignUnpushedKey(school), JSON.stringify(Array.from(s)));
+  }catch(e){}
+}
+function __clearAssignUnpushed(school){ try{ localStorage.removeItem(__assignUnpushedKey(school)); }catch(e){} }
+/* مؤشر حالة الحفظ — يعكس النتيجة الفعلية لا مجرد حالة الواجهة */
+function __saveStatus(){
+  const school = getActiveSchool();
+  if(!school || !__serverEnabled() || !__syncEnabled()) return { icon:'🔴', label:'فشل الحفظ — يتطلب إجراءً', code:'fail' };
+  const st = __pushState(school);
+  const pend = (()=>{ try{ return !!localStorage.getItem('nibras_'+school+'_pending_v1'); }catch(e){ return false; } })();
+  let unpushed = 0;
+  try{ unpushed = __unpushedIds(school).length + __assignUnpushedIds(school).length; }catch(e){}
+  if(st && st.running) return { icon:'🔵', label:'جارٍ الحفظ', code:'saving' };
+  if(st && st.attempts >= __PUSH_MAX_ATTEMPTS) return { icon:'🔴', label:'فشل الحفظ — يتطلب إجراءً', code:'fail' };
+  if(pend || unpushed > 0) return { icon:'🟠', label:'بانتظار المزامنة', code:'pending' };
+  return { icon:'🟢', label:'محفوظ على الخادم', code:'ok' };
+}
+function __saveStatusHtml(){
+  const s = __saveStatus();
+  const colors = { ok:'#065f46', saving:'#1d4ed8', pending:'#b45309', fail:'#b91c1c' };
+  const bgs = { ok:'#ecfdf5', saving:'#eff6ff', pending:'#fffbeb', fail:'#fef2f2' };
+  return '<div id="saveStatusBadge" style="display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:12px;color:' + colors[s.code] + ';background:' + bgs[s.code] + ';border-radius:999px;padding:4px 12px">' + s.icon + ' ' + s.label + '</div>';
+}
+function __refreshSaveStatus(){
+  try{
+    const el = document.getElementById('saveStatusBadge');
+    if(el) el.outerHTML = __saveStatusHtml();
+  }catch(e){}
+}
+/* تحذير المغادرة + محاولة رفع عند إخفاء الصفحة */
+try{
+  if(!window.__saveGuardUnloadHook){
+    window.__saveGuardUnloadHook = true;
+    window.addEventListener('beforeunload', (e)=>{
+      try{
+        const school = getActiveSchool();
+        if(!school) return;
+        const st = __pushState(school);
+        const pend = !!localStorage.getItem('nibras_'+school+'_pending_v1');
+        const unpushed = __unpushedIds(school).length + __assignUnpushedIds(school).length;
+        if((st && st.running) || pend || unpushed > 0){ e.preventDefault(); e.returnValue = ''; return ''; }
+      }catch(_){}
+    });
+    document.addEventListener('visibilitychange', ()=>{
+      try{ if(document.visibilityState === 'hidden'){ const s = getActiveSchool(); if(s && __serverEnabled() && __syncEnabled()) __syncPush(s); } }catch(e){}
+    });
+  }
+}catch(e){}
+
 function addNote(){
   const ids = getCheckedStudentIds('n');
   let category = document.getElementById('nCategory').value;
@@ -8334,50 +8530,52 @@ function addNote(){
       else if(noteCategoriesNegative.includes(category)) effType = 'NEGATIVE';
     }
     const points = notePoints(effType, category);
-    const batchId = uid();
+    // منع تكرار السجل عند إعادة الإرسال بعد فشل: معرّف دفعة ثابت في مسودة محلية،
+    // فإن أعادت المعلمة الإرسال بعد فشل الرفع نُحدّث نفس السجل لا نُضيف نسخة.
+    const priorDraft = __draftGet('note') || {};
+    const batchId = priorDraft.cid || uid();
     // ===== ملكية الملاحظة: معرّف المستخدم الثابت من الجلسة، بلا مطابقة بالاسم =====
-    // كان السطر القديم يجرّب مطابقة الاسم والدور إن كان المعرّف يتيماً — وهو
-    // بالضبط ما لا يجوز: الأسماء تتكرر وتتغير، ونسبة الملاحظة بالاسم تسرّب
-    // ملكيتها. الآن المالك يأتي من الجلسة فقط، والخادم يفرضه عند PUT أياً كان
-    // ما يرسله العميل (notes-privacy.enforceNoteOwners).
+    // المالك يأتي من الجلسة فقط، والخادم يفرضه عند PUT أياً كان ما يرسله العميل
+    // (notes-privacy.enforceNoteOwners).
     const me0 = currentUser();
     const createdById = (me0 && me0.id) ? String(me0.id) : null;
     const savedIds = [];
+    const newSids = [];
     ids.forEach(sid => {
       const stRec = (d.students || []).find(s => s && s.id === sid);
       const me = currentUser();
-      const ntId = uid();
-      savedIds.push(ntId);
-      d.notes.push({ id:ntId, studentId:sid, studentNo: stRec && stRec.studentNo != null ? String(stRec.studentNo) : '', studentName: stRec ? (stRec.fullName || stRec.name || '') : '', type:effType, category, description, points, createdBy: createdById, createdByName: me ? me.name : '', createdByRole: me ? me.role : '', createdAt: new Date().toISOString(), batchId });
+      let nt = (d.notes || []).find(n => n && n.batchId === batchId && n.studentId === sid && !n.deleted);
+      if(nt){
+        nt.category = category; nt.description = description; nt.type = effType; nt.points = points;
+        nt.createdBy = createdById; nt.createdByName = me ? me.name : ''; nt.createdByRole = me ? me.role : '';
+      } else {
+        nt = { id:uid(), studentId:sid, studentNo: stRec && stRec.studentNo != null ? String(stRec.studentNo) : '', studentName: stRec ? (stRec.fullName || stRec.name || '') : '', type:effType, category, description, points, createdBy: createdById, createdByName: me ? me.name : '', createdByRole: me ? me.role : '', createdAt: new Date().toISOString(), batchId };
+        d.notes.push(nt);
+        newSids.push(sid);
+      }
+      savedIds.push(nt.id);
     });
     saveDB(d);
+    // مسودة محلية تحفظ نصّ المعلمة حتى تأكيد الخادم (لا تُمسح إلا عند النجاح)
+    __draftSet('note', { cid: batchId, category, description });
     try{
       if(__serverEnabled() && __syncEnabled()){
         __markNotesUnpushed(getActiveSchool(), savedIds);
         setTimeout(__refreshUnpushedBar, 0);
       }
     }catch(e){}
-    // الرصيد على الشاشة محدَّث فوراً: أرصددة الخادم لم تصل بعد، فنضيف الفرق
-    // محلياً حتى لا تقرأ المعلمة رقماً قديماً لثوانٍ بعد حفظها.
-    ids.forEach(sid => __adjustLocalPoints(sid, points));
+    // الرصيد على الشاشة محدَّث فوراً للطالبات الجديدات فقط (لا نضيف مرتين عند
+    // إعادة الإرسال)، لأن أرصدة الخادم لم تصل بعد.
+    newSids.forEach(sid => __adjustLocalPoints(sid, points));
     __syncLogAdd({ ev:'note-saved', school:getActiveSchool(), batch:batchId, count:ids.length, type:effType, cat:category, by:createdById, byName:(currentUser()||{}).name || '?' });
-    try{
-      const bn = ids.slice(0,3).map(sid => {(d.students||[]).find(s=>s.id===sid)?.name || ''}).filter(Boolean);
-      const more = ids.length > 3 ? '…' : '';
-      const dbgSchool = getActiveSchool();
-      const dbgMe = currentUser();
-      const dbgSid = ids[0] || '';
-      const dbgStud = (d.students||[]).find(s => s.id === dbgSid);
-      const dbgNotes = (d.notes||[]).filter(n => n.studentId === dbgSid);
-      const dbgTotal = dbgNotes.reduce((a,n) => a + (n.points ?? notePoints(n.type, n.category)), 0);
-      const dbgExists = dbgStud ? 'موجودة في قاعدة هذا الجهاز' : '⚠️ غير موجودة في قاعدة هذا الجهاز';
-      __noteSaveBanner('✅ حُفظت نقاط ' + ids.length + ' طالبة (' + (effType==='EXCELLENCE'?'تميّز/تفوق':effType==='ATTENDANCE'?'انضباط/حضور':'إنجاز/سلوك') + '): ' + bn.join('، ') + more + ' — رصيد أول طالبة بعد الحفظ: ' + dbgTotal + ' (' + dbgNotes.length + ' ملاحظة) — ' + dbgExists + ' | القسم: ' + dbgSchool + ' | المعلمة: ' + (dbgMe?.name || '—') + ' (المرسل: ' + (dbgMe?.id || '—') + ')', false);
-    }catch(e){}
+    // لا نجاح قبل تأكيد الخادم: نعلّق المراقب ونطلب الرفع الفوري، والمؤشر يعكس الحالة.
+    __saveGuardWatch(getActiveSchool(), 'note', __saveGuardOutcome);
+    __noteSaveBanner('🔵 جارٍ حفظ الملاحظة على الخادم...', false);
+    __refreshSaveStatus();
+    __syncSchedule(getActiveSchool(), 0);
   } finally {
     savingNote = false;
   }
-  noteType = 'POSITIVE';
-  renderApp();
 }
 
 /* حذف نقطة/ملاحظة عند الخطأ — لكل المعلمات (من أضافت النقطة) وللمدير.
@@ -8400,6 +8598,11 @@ function deleteNote(id){
   saveDB(d);
   __adjustLocalPoints(n.studentId, -pts);
   __syncLogAdd({ ev:'note-deleted', school:getActiveSchool(), id, studentId:n.studentId, pts, by:me.id, byName:me.name || '?' });
+  try{ __markNotesUnpushed(getActiveSchool(), [id]); }catch(e){}
+  // لا نجاح قبل تأكيد الخادم: مراقب الرفع يُظهر «تم الحذف» أو الفشل مع إعادة المحاولة.
+  __saveGuardWatch(getActiveSchool(), 'note-del', __saveGuardOutcome);
+  __noteSaveBanner('🔵 جارٍ حفظ الحذف على الخادم...', false);
+  __refreshSaveStatus();
   try{ if(typeof __syncSchedule === 'function') __syncSchedule(getActiveSchool(), 0); }catch(e){}
   renderApp();
 }
@@ -10126,7 +10329,7 @@ function renderAssignments(){
         </div>
       </div>`;
     }).join('');
-    return `<div class="page-title">📝 التكليفات</div><p class="muted" style="margin-bottom:14px">اختر فصلاً</p>${cards}`;
+    return `<div class="page-title">📝 التكليفات</div><div style="margin:6px 0">${(typeof __saveStatusHtml==='function')?__saveStatusHtml():''}</div><p class="muted" style="margin-bottom:14px">اختر فصلاً</p>${cards}`;
   }
 
   if(step === 'subject'){
@@ -10197,6 +10400,7 @@ function renderAssignments(){
     }).join('');
     return `<div class="page-title">📝 التكليفات — ${cls ? escapeHtml(classLabel(cls)) : ''}</div>
     <a href="#/assignments" style="font-size:13px">← الرجوع للفصول</a>
+    <div style="margin:6px 0">${(typeof __saveStatusHtml==='function')?__saveStatusHtml():''}</div>
     <div style="margin:14px 0;display:flex;gap:8px;flex-wrap:wrap">
       ${clsStudents.map(s => `<div style="display:flex;align-items:center;gap:4px;font-size:12px;padding:4px 10px;background:#f3f4f6;border-radius:8px">
         <span style="font-weight:600">${escapeHtml(s.name||'')}</span>
@@ -10258,6 +10462,7 @@ function renderAssignments(){
     const assignmentType = decodeURIComponent(params.get('type') || 'واجب');
     const cls = d.classes.find(c => c.id === classId);
     return `<div class="page-title">📝 تسجيل تكليف</div>
+    <div style="margin:6px 0">${(typeof __saveStatusHtml==='function')?__saveStatusHtml():''}</div>
     <a href="#/assignments?step=type&cid=${classId}&sub=${encodeURIComponent(subject)}" style="font-size:13px">← الرجوع لأنواع التكليف</a>
     <div class="card" style="padding:24px;margin-top:14px">
       <div style="display:grid;gap:14px">
@@ -10304,12 +10509,17 @@ function deleteAssignment(aid){
   a.deletedAt = Date.now();
   a._v = (typeof a._v === 'number' ? a._v : 0) + 1;
   saveDB(d);
+  // تتبّع التكليف المحذوف حتى تأكيد الخادم (مؤشر «بانتظار المزامنة»)
+  try{ __markAssignUnpushed(getActiveSchool(), [a.id]); }catch(e){}
   const params = new URLSearchParams((location.hash.split('?')[1]||''));
   const step = params.get('step') || 'list';
   const classId = params.get('cid') || '';
   if(step === 'detail') location.hash = '#/assignments?step=list&cid=' + classId;
+  __saveGuardWatch(getActiveSchool(), 'assignment-del', __saveGuardOutcome);
+  __noteSaveBanner('🔵 جارٍ حفظ حذف التكليف على الخادم...', false);
+  __refreshSaveStatus();
+  try{ __syncSchedule(getActiveSchool(), 0); }catch(e){}
   renderApp();
-  alert('🗑 تم حذف التكليف');
 }
 
 function saveAssignment(){
@@ -10324,12 +10534,41 @@ function saveAssignment(){
   const classId = params.get('cid')||'';
   const type = decodeURIComponent(params.get('type')||'واجب');
   if(!title){ alert('اكتب عنوان التكليف'); return; }
-  d.assignments = d.assignments || [];
-  const clsStudents = (d.students||[]).filter(s => s.active && s.classId === classId).map(s => s.id);
-  d.assignments.push({ id: uid(), teacherId: user.id, classId, subject, type, title, desc, date, created: Date.now(), _v: 1, completedBy: clsStudents.slice() });
-  saveDB(d);
-  alert('✅ تم حفظ التكليف');
-  location.hash = '#/assignments?step=type&cid=' + classId + '&sub=' + encodeURIComponent(subject);
+  const nav = () => { location.hash = '#/assignments?step=type&cid=' + classId + '&sub=' + encodeURIComponent(subject); };
+  if(savingAssignment) return;
+  savingAssignment = true;
+  try {
+    d.assignments = d.assignments || [];
+    const clsStudents = (d.students||[]).filter(s => s.active && s.classId === classId).map(s => s.id);
+    // منع التكرار عند إعادة الإرسال بعد فشل: نفس معرّف التكليف من المسودة المحلية
+    const priorDraft = __draftGet('assignment') || {};
+    const aid = priorDraft.aid || uid();
+    let a = (d.assignments||[]).find(x => x && x.id === aid);
+    if(a){
+      a.teacherId = user.id; a.classId = classId; a.subject = subject; a.type = type;
+      a.title = title; a.desc = desc; a.date = date;
+      a._v = (typeof a._v === 'number' ? a._v : 0) + 1;
+      a.deleted = false;
+    } else {
+      a = { id: aid, teacherId: user.id, classId, subject, type, title, desc, date, created: Date.now(), _v: 1, completedBy: clsStudents.slice() };
+      d.assignments.push(a);
+    }
+    saveDB(d);
+    __draftSet('assignment', { aid, title, desc });
+    try{ __markAssignUnpushed(getActiveSchool(), [aid]); }catch(e){}
+    // بلا خادم: نحفظ محلياً وننتقل (لا يوجد تأكيد ممكن)
+    if(!__serverEnabled() || !__syncEnabled()){ __draftClear('assignment'); nav(); return; }
+    // لا انتقال ولا نجاح قبل تأكيد الخادم: المراقب ينقل عند النجاح، ويُبقي النموذج عند الفشل.
+    __saveGuardWatch(getActiveSchool(), 'assignment', (res, kind)=>{
+      __saveGuardOutcome(res, kind);
+      if(res && res.ok){ try{ __draftClear('assignment'); }catch(e){} nav(); }
+    });
+    __noteSaveBanner('🔵 جارٍ حفظ التكليف على الخادم...', false);
+    __refreshSaveStatus();
+    __syncSchedule(getActiveSchool(), 0);
+  } finally {
+    savingAssignment = false;
+  }
 }
 
 function renderActivities(){
@@ -12295,7 +12534,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=98', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=99', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
