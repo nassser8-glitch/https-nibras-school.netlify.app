@@ -7671,11 +7671,24 @@ function importStudents(evt){
       const waRaw    = String(row[waCol]   ??row['رقم ولي الأمر']??'').trim();
       const wa       = waRaw.replace(/\D/g,'');
       if(!name || !wa){ skipped++; errors.push(`السطر ${i+2}: اسم أو رقم ناقص`); return; }
+      const norm = v => String(v||'').trim().replace(/\s+/g,' ').replace(/[\u064B-\u065F\u0670]/g,'');
+      const nName = norm(name), nCls = norm(clsLabel);
       let found=null;
       for(const s of (d.students||[])){
-        const sameName  = String(s.fullName||'').trim()===name;
-        const sameClass = !clsLabel || String(s.className||'')===clsLabel || String(s.gradeName||'')===clsLabel;
-        if(sameName && sameClass){ found=s; break; }
+        const sameName = norm(s.fullName)===nName;
+        if(!sameName) continue;
+        if(!nCls){
+          found=s; break;
+        }
+        const c2=norm(s.className), c3=norm(s.gradeName);
+        const sameClass = c2===nCls || c3===nCls || c2.includes(nCls) || nCls.includes(c2) || c3.includes(nCls) || nCls.includes(c3);
+        if(sameClass){ found=s; break; }
+      }
+      if(!found){
+        // fallback: match by name only
+        for(const s of (d.students||[])){
+          if(norm(s.fullName)===nName){ found=s; break; }
+        }
       }
       if(!found){ skipped++; errors.push(`السطر ${i+2}: لم يتم العثور على ${name}${clsLabel?' في '+clsLabel:''}`); return; }
       found.whatsapp = wa;
