@@ -7643,10 +7643,10 @@ function importTeachers(evt){
   reader.readAsArrayBuffer(file);
 }
 function downloadStudentTemplate(){
-  const ws = XLSX.utils.json_to_sheet([{ 'الاسم':'أحمد محمد', 'الصف':'الأول الابتدائي' }]);
+  const ws = XLSX.utils.json_to_sheet([{ 'الصف':'الأول الابتدائي', 'الاسم':'أحمد محمد', 'رقم ولي الأمر':'9665XXXXXXXX' }]);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'الطلاب');
-  XLSX.writeFile(wb, 'قالب_استيراد_الطلاب.xlsx');
+  XLSX.utils.book_append_sheet(wb, ws, 'أرقام أولياء الأمور');
+  XLSX.writeFile(wb, 'قالب_استيراد_ارقام_اولياء_الامور.xlsx');
 }
 function importStudents(evt){
   const file = evt.target.files[0];
@@ -7655,52 +7655,39 @@ function importStudents(evt){
   reader.onload = (e) => {
     const data = new Uint8Array(e.target.result);
     const wb = XLSX.read(data, { type:'array' });
-    const sheet = wb.Sheets[wb.SheetNames[0]];
+    let sheet = wb.Sheets['أرقام أولياء الأمور'] || wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet);
-    if(rows.length === 0){ alert('الملف فارغ'); return; }
+    if(rows.length === 0){ alert('الملف فارغ'); evt.target.value=''; return; }
     const d = loadDB();
-    // كشف أسماء الأعمدة الفعلية
     const cols = Object.keys(rows[0]);
-    // دالة مساعدة للبحث عن عمود بأحد الأسماء المرشحة
-    const col = (candidates) => { const c = cols.find(k => candidates.some(can => k.includes(can))); return c||''; };
-    const nameCol = col(['الاسم','اسم','Name','name']);
-    const gradeCol = col(['الصف','صف','Grade','grade']);
-    if(!nameCol){ alert(`لم أجد عمود "الاسم" في الملف.\nالأعمدة الموجودة:\n${cols.join('، ')}`); return; }
-    if(!gradeCol){ alert(`لم أجد عمود "الصف" في الملف.\nالأعمدة الموجودة:\n${cols.join('، ')}`); return; }
-    let created = 0, skipped = 0; const errors = [];
-
-    rows.forEach((row, i) => {
-      const fullName = String(row[nameCol] ?? '').trim();
-      const gradeName = String(row[gradeCol] ?? '').trim();
-      if(!fullName || !gradeName){ skipped++; errors.push(`السطر ${i+2}: الاسم أو الصف فارغ`); return; }
-
-      let grade = d.grades.find(g => g.name === gradeName);
-      if(!grade){ grade = { id:__stageId(gradeName), name:gradeName, order: __stageOrder(gradeName, d.grades.length) }; d.grades.push(grade); }
-      const campus = getActiveSchool();
-      let cls = d.classes.find(c => c.gradeId===grade.id && c.name==='أ');
-      if(!cls){ cls = { id:uid(), gradeId:grade.id, name:'أ', campus, capacity:null, teacherIds:[] }; d.classes.push(cls); }
-
-      const seq = (d.students.filter(s => s.classId === cls.id && s.active).length) + 1;
-      const studentNo = String(seq).padStart(4,'0');
-
-      const existing = d.students.find(s => s.studentNo === studentNo && s.classId === cls.id);
-      if(existing){
-        existing.fullName = fullName; existing.active = true;
-      } else {
-        d.students.push({ id:uid(), fullName, studentNo, classId:cls.id, guardianName:'', guardianPhone:'', active:true, joinedAt: Date.now() });
+    const findCol = (cands)=> cols.find(k => cands.some(can => k.includes(can))) || '';
+    const gradeCol = findCol(['الصف','صف','Grade']);
+    const nameCol  = findCol(['الاسم','اسم','اسم الطالبة','Name']);
+    const waCol    = findCol(['رقم ولي الأمر','رقم ولي أمر','رقم الوالد','جوال ولي الأمر','واتساب ولي الأمر','رقم ولي أمر الطالبة','phone']);
+    let updated=0, skipped=0, errors=[];
+    rows.forEach((row,i)=>{
+      const clsLabel = String(row[gradeCol]??row['الصف']??'').trim();
+      const name     = String(row[nameCol] ??row['الاسم']??'').trim();
+      const waRaw    = String(row[waCol]   ??row['رقم ولي الأمر']??'').trim();
+      const wa       = waRaw.replace(/\D/g,'');
+      if(!name || !wa){ skipped++; errors.push(`السطر ${i+2}: اسم أو رقم ناقص`); return; }
+      let found=null;
+      for(const s of (d.students||[])){
+        const sameName  = String(s.fullName||'').trim()===name;
+        const sameClass = !clsLabel || String(s.className||'')===clsLabel || String(s.gradeName||'')===clsLabel;
+        if(sameName && sameClass){ found=s; break; }
       }
-      created++;
+      if(!found){ skipped++; errors.push(`السطر ${i+2}: لم يتم العثور على ${name}${clsLabel?' في '+clsLabel:''}`); return; }
+      found.whatsapp = wa;
+      updated++;
     });
-
     saveDB(d);
-    evt.target.value = '';
+    evt.target.value='';
     renderApp();
-    setTimeout(() => {
-      const box = document.getElementById('importResult');
-      if(box){
-        box.innerHTML = `<div class="card mb"><p style="font-weight:600">تم استيراد ${created} طالب${skipped>0?` — تم تجاوز ${skipped} سطر`:''}</p>${errors.length?`<ul class="small" style="color:#dc2626;margin:8px 0 0;padding-inline-start:18px">${errors.slice(0,20).map(e=>`<li>${escapeHtml(e)}</li>`).join('')}</ul>`:''}</div>`;
-      }
-    }, 0);
+    setTimeout(()=>{
+      const box=document.getElementById('importStudentResult');
+      if(box) box.innerHTML = `<div class="card mb"><p style="font-weight:600">تم تحديث أرقام أولياء الأمور: ${updated} طالبة${skipped>0?` — تم تجاوز ${skipped} سطر`:''}</p>${errors.length?`<ul class="small" style="color:#dc2626;margin:8px 0 0;padding-inline-start:18px">${errors.slice(0,20).map(e=>`<li>${escapeHtml(e)}</li>`).join('')}</ul>`:''}</div>`;
+    },0);
   };
   reader.readAsArrayBuffer(file);
 }
