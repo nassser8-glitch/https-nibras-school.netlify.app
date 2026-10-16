@@ -3100,7 +3100,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-15b wa-trial';
+const __APP_VER = '2026-10-16 wa-guardian';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -6446,7 +6446,10 @@ function studentPhoneHTML(s){
   if(!isManager(currentUser())) return ''; // رقم ولي أمر حساس: لا يظهر للمعلمة ولا للطالبة
   const p = studentPhone(s);
   if(!p) return '';
-  return `<div style="font-size:11.5px;color:#64748b;direction:ltr;text-align:right;margin-top:2px" title="رقم موبايل ولي الأمر">📱 ${escapeHtml(p)}</div>`;
+  return `<div style="display:flex;align-items:center;gap:5px;margin-top:2px" title="رقم موبايل ولي الأمر">
+    <span style="font-size:11.5px;color:#64748b;direction:ltr">📱 ${escapeHtml(p)}</span>
+    <button class="btn-secondary" style="padding:0 6px;font-size:11px;line-height:1.6" onclick="event.stopPropagation();__waGuardianOpen('${escapeHtml(s.id)}')" title="فتح محادثة واتساب لولي الأمر">💬</button>
+  </div>`;
 }
 /* تعديل رقم موبايل ولي الأمر من بطاقة الطالبة (للمسؤول/الوكيل/الإرشاد فقط).
    الحفظ يمرّ عبر saveDB فترفعه المزامنة نفسها المعتادة — لا مسار كتابة جديد. */
@@ -6469,30 +6472,27 @@ function editStudentPhone(studentId){
   if(el) el.innerHTML = p ? escapeHtml(p) : '<span style="color:#94a3b8;font-weight:400">غير مُدخل بعد</span>';
   renderApp();
 }
-/* ============ تجربة رسالة واتساب لولي أمر طالبة واحدة فقط ============
-   التجربة مقصورة على هذه الطالبة بالاسم — لا زر لبقية الطلاب، ولا أي
-   إرسال جماعي ولا تفعيل رسائل لبقية الطلاب.
-   الأمان: الرقم لا يُعرض كنصّ في الصفحة ولا يُمرَّر إلى أي وظيفة تتصرّف
-   عليه خارج نافذة الدردشة، ولا يُسجَّل في console أو رسائل الأخطاء —
-   يُبنى داخل دالة الفتح نفسها فقط. والإرسال يدويّ من واتساب نفسه:
-   الرابط يفتح محادثةً مسوّدةً قابلة للتعديل، فلا إرسال تلقائي من التطبيق. */
-const __WA_TRIAL_STUDENT = 'ترف ناصر';
-function __waTrialEnabled(s){
+/* ============ إرسال واتساب لولي أمر الطالبة ============
+   يعمل لكل طالبة لها رقم محفوظ (guardianPhone)، ويستخدم رقمها هي نفسها.
+   مقصور على الإدارة/الوكيل/الإرشاد — لا زر للمعلمة ولا للطالبة.
+   الإرسال يدويّ من واتساب نفسه: الرابط يفتح محادثةً مسوّدةً قابلة للتعديل،
+   فلا إرسال تلقائي ولا إرسال جماعي من التطبيق. */
+function __waGuardianEnabled(s){
   if(!s) return false;
-  const nm = String(s.fullName || s.name || '').trim();
-  return nm === __WA_TRIAL_STUDENT;
+  if(!isManager(currentUser())) return false;      // بوابة صلاحية: الإدارة فقط
+  return !!studentPhone(s);                          // ولا زر بلا رقم محفوظ
 }
-function __waTrialOpen(studentId){
+function __waGuardianOpen(studentId){
   try{
     const s = studentById(studentId);
-    if(!__waTrialEnabled(s)) return; // بوابة السلامة: أي محاولة لغير «ترف ناصر» تُهمَل
-    const who = String(s.fullName || __WA_TRIAL_STUDENT);
-    const text = 'السلام عليكم ورحمة الله وبركاته، معكم من مدرسة نبراس. نُرسل رسالة تجريبية بخصوص الطالبة ' + who + ' — الرسالة مسوّدة قابلة للتعديل قبل الإرسال.';
-    const url = 'https://wa.me/' + '966568133414' + '?text=' + encodeURIComponent(text);
+    if(!__waGuardianEnabled(s)) return;              // بوابة سلامة ثانية داخل الفتح
+    const phone = studentPhone(s);
+    const who = String(s.fullName || '');
+    const text = 'السلام عليكم ورحمة الله وبركاته، معكم من مدرسة نبراس بخصوص الطالبة ' + who + '. ';
+    const url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(text);
     window.open(url, '_blank', 'noopener');
   }catch(err){
-    // لا نطبع رقمًا ولا محتوى حساس في رسالة الخطأ
-    alert('تعذّر فتح محادثة واتساب — تحققي من الاتصال ثم أعيدي المحاولة.');
+    alert('تعذّر فتح محادثة واتساب — تحقّق من الاتصال ثم أعد المحاولة.');
   }
 }
 /* زر «تحديث الآن» في نافذة النقاط: يسحب أحدث نسخة من الخادم ثم يعيد فتح
@@ -6581,7 +6581,7 @@ function showStudentPoints(studentId){
       <div class="header-row">
         <h3 style="margin:0">${escapeHtml(s.fullName)} <span class="muted small">${cls ? escapeHtml(classLabel(cls)) : ''}${s.studentNo ? ' · ر. '+escapeHtml(s.studentNo) : ''}</span></h3>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        ${__waTrialEnabled(s) ? `<button class="btn-secondary" onclick="__waTrialOpen('${escapeHtml(s.id)}')" title="فتح محادثة واتساب لولي الأمر — رسالة مسوّدة قابلة للتعديل، والإرسال يدوي من واتساب">💬 واتساب ولي الأمر</button>` : ''}
+        ${__waGuardianEnabled(s) ? `<button class="btn-secondary" onclick="__waGuardianOpen('${escapeHtml(s.id)}')" title="فتح محادثة واتساب لولي الأمر — رسالة مسوّدة قابلة للتعديل، والإرسال يدوي من واتساب">💬 واتساب ولي الأمر</button>` : ''}
         <button class="btn-secondary" onclick="this.closest('.card').parentElement.remove()">✕ إغلاق</button>
         </div>
       </div>
@@ -12613,7 +12613,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=100', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=101', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

@@ -70,12 +70,13 @@ test('3) العرض والتعديل مقصوران على الإدارة/الو
   assert.ok(edit.includes('saveDB('), 'التعديل لا يحفظ في قاعدة البيانات المعتادة');
 });
 
-// ------------------------------------------------ 4) لا بوابة رقم في الواتساب
-test('4) بوابة زر الواتساب ما زالت اسمية — رقم الهاتف لا يفتح الباب', () => {
-  const gate = extractFns('__waTrialEnabled');
-  assert.ok(!/guardianPhone|studentPhone|whatsapp/.test(gate),
-    'بوابة الواتساب اعتمدت على رقم الهاتف');
-  assert.ok(gate.includes('__WA_TRIAL_STUDENT'), 'البوابة فقدت ثابت الاسم');
+// ------------------------------------------------ 4) بوابة الواتساب تعتمد
+test('4) بوابة زر الواتساب مقصورة على الإدارة ولا ترسل جماعياً', () => {
+  const gate = extractFns('__waGuardianEnabled');
+  assert.ok(gate.includes('isManager('), 'البوابة لا تتحقق من صلاحية الإدارة');
+  assert.ok(gate.includes('studentPhone('), 'البوابة لا تتحقق من وجود رقم');
+  const open = extractFns('__waGuardianOpen');
+  assert.ok(!/fetch\(|XMLHttpRequest/.test(open), 'مسار إرسال تلقائي محتمل');
 });
 
 // ------------------------------------------------ 5) القالب يحمل العمود الصحيح
