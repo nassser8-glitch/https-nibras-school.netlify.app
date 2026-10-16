@@ -3100,7 +3100,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-15a save-reliability';
+const __APP_VER = '2026-10-15b wa-trial';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -4002,7 +4002,7 @@ function renderLayout(user, hash){
         <div id="page">${pageHtml}</div>
       </main>
     </div>
-    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v105</span></footer>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v106</span></footer>
   </div>`;
 }
 function toggleSidebar(forceClose){
@@ -6435,6 +6435,32 @@ function studentNameLink(s, pts){
   }
   return `<a href="javascript:void(0)" onclick="showStudentPoints('${s.id}')" style="color:inherit;text-decoration:none;border-bottom:1px dashed #cbd5e1;cursor:pointer" title="عرض تفاصيل النقاط">${escapeHtml(s.fullName)}</a>${badge}${nibrasBadgeHTML(s.id)}`;
 }
+/* ============ تجربة رسالة واتساب لولي أمر طالبة واحدة فقط ============
+   التجربة مقصورة على هذه الطالبة بالاسم — لا زر لبقية الطلاب، ولا أي
+   إرسال جماعي ولا تفعيل رسائل لبقية الطلاب.
+   الأمان: الرقم لا يُعرض كنصّ في الصفحة ولا يُمرَّر إلى أي وظيفة تتصرّف
+   عليه خارج نافذة الدردشة، ولا يُسجَّل في console أو رسائل الأخطاء —
+   يُبنى داخل دالة الفتح نفسها فقط. والإرسال يدويّ من واتساب نفسه:
+   الرابط يفتح محادثةً مسوّدةً قابلة للتعديل، فلا إرسال تلقائي من التطبيق. */
+const __WA_TRIAL_STUDENT = 'ترف ناصر';
+function __waTrialEnabled(s){
+  if(!s) return false;
+  const nm = String(s.fullName || s.name || '').trim();
+  return nm === __WA_TRIAL_STUDENT;
+}
+function __waTrialOpen(studentId){
+  try{
+    const s = studentById(studentId);
+    if(!__waTrialEnabled(s)) return; // بوابة السلامة: أي محاولة لغير «ترف ناصر» تُهمَل
+    const who = String(s.fullName || __WA_TRIAL_STUDENT);
+    const text = 'السلام عليكم ورحمة الله وبركاته، معكم من مدرسة نبراس. نُرسل رسالة تجريبية بخصوص الطالبة ' + who + ' — الرسالة مسوّدة قابلة للتعديل قبل الإرسال.';
+    const url = 'https://wa.me/' + '966568133414' + '?text=' + encodeURIComponent(text);
+    window.open(url, '_blank', 'noopener');
+  }catch(err){
+    // لا نطبع رقمًا ولا محتوى حساس في رسالة الخطأ
+    alert('تعذّر فتح محادثة واتساب — تحققي من الاتصال ثم أعيدي المحاولة.');
+  }
+}
 /* زر «تحديث الآن» في نافذة النقاط: يسحب أحدث نسخة من الخادم ثم يعيد فتح
    النافذة نفسها بالبيانات الحقيقية — فيتبدّد صفُّ «سجلات خاصة» الوهمي أمام
    المدير/الوكيل، وتظهر السطور الفعلية بعد أن تصل إلى جهازه. */
@@ -6520,7 +6546,10 @@ function showStudentPoints(studentId){
     <div class="card" style="width:min(720px,100%);max-height:86vh;overflow:auto;padding:20px">
       <div class="header-row">
         <h3 style="margin:0">${escapeHtml(s.fullName)} <span class="muted small">${cls ? escapeHtml(classLabel(cls)) : ''}${s.studentNo ? ' · ر. '+escapeHtml(s.studentNo) : ''}</span></h3>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        ${__waTrialEnabled(s) ? `<button class="btn-secondary" onclick="__waTrialOpen('${escapeHtml(s.id)}')" title="فتح محادثة واتساب لولي الأمر — رسالة مسوّدة قابلة للتعديل، والإرسال يدوي من واتساب">💬 واتساب ولي الأمر</button>` : ''}
         <button class="btn-secondary" onclick="this.closest('.card').parentElement.remove()">✕ إغلاق</button>
+        </div>
       </div>
       <div class="grid grid-3" style="margin-top:12px">
         <div class="card" style="padding:10px;text-align:center"><p class="muted small">النقاط الإيجابية</p><p class="stat-value green" style="font-size:20px">+${pos}</p></div>
@@ -12534,7 +12563,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-    navigator.serviceWorker.register('sw.js?v=99', { updateViaCache: 'none' }).catch(function(){});
+    navigator.serviceWorker.register('sw.js?v=100', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
