@@ -6435,6 +6435,40 @@ function studentNameLink(s, pts){
   }
   return `<a href="javascript:void(0)" onclick="showStudentPoints('${s.id}')" style="color:inherit;text-decoration:none;border-bottom:1px dashed #cbd5e1;cursor:pointer" title="عرض تفاصيل النقاط">${escapeHtml(s.fullName)}</a>${badge}${nibrasBadgeHTML(s.id)}`;
 }
+/* رقم موبايل ولي الأمر: حقل موحّد guardianPhone (من الإضافة اليدوية أو
+   استيراد Excel)، مع قراءة whatsapp القديم حتى لا تضيع أرقام محفوظة سابقاً. */
+function studentPhone(s){
+  if(!s) return '';
+  const v = String(s.guardianPhone ?? s.whatsapp ?? '').replace(/\D/g,'');
+  return v;
+}
+function studentPhoneHTML(s){
+  if(!isManager(currentUser())) return ''; // رقم ولي أمر حساس: لا يظهر للمعلمة ولا للطالبة
+  const p = studentPhone(s);
+  if(!p) return '';
+  return `<div style="font-size:11.5px;color:#64748b;direction:ltr;text-align:right;margin-top:2px" title="رقم موبايل ولي الأمر">📱 ${escapeHtml(p)}</div>`;
+}
+/* تعديل رقم موبايل ولي الأمر من بطاقة الطالبة (للمسؤول/الوكيل/الإرشاد فقط).
+   الحفظ يمرّ عبر saveDB فترفعه المزامنة نفسها المعتادة — لا مسار كتابة جديد. */
+function editStudentPhone(studentId){
+  if(!isManager(currentUser())) return; // بوابة صلاحية: غير الإداري لا يعدّل الأرقام
+  const s = studentById(studentId);
+  if(!s) return;
+  const cur = studentPhone(s);
+  const raw = prompt('أدخل رقم موبايل ولي الأمر (أرقام فقط، مع رمز الدولة مثل 966...) :', cur);
+  if(raw === null) return; // إلغاء
+  const p = String(raw).replace(/\D/g,'');
+  if(p && p.length < 8){ alert('الرقم قصير جدًا — أدخل رقمًا صحيحًا (8 أرقام فأكثر).'); return; }
+  const d = loadDB();
+  const st = (d.students||[]).find(x => x.id === studentId);
+  if(!st) return;
+  st.guardianPhone = p;
+  if(st.whatsapp !== undefined) delete st.whatsapp; // إزالة الحقل القديم المكرّر
+  saveDB(d);
+  const el = document.getElementById('gPhone-' + studentId);
+  if(el) el.innerHTML = p ? escapeHtml(p) : '<span style="color:#94a3b8;font-weight:400">غير مُدخل بعد</span>';
+  renderApp();
+}
 /* ============ تجربة رسالة واتساب لولي أمر طالبة واحدة فقط ============
    التجربة مقصورة على هذه الطالبة بالاسم — لا زر لبقية الطلاب، ولا أي
    إرسال جماعي ولا تفعيل رسائل لبقية الطلاب.
@@ -6551,6 +6585,12 @@ function showStudentPoints(studentId){
         <button class="btn-secondary" onclick="this.closest('.card').parentElement.remove()">✕ إغلاق</button>
         </div>
       </div>
+      ${isManager(currentUser()) ? `
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px">
+        <span class="muted small" style="font-weight:700">📱 رقم موبايل ولي الأمر:</span>
+        <span id="gPhone-${s.id}" style="font-weight:700;direction:ltr">${studentPhone(s) ? escapeHtml(studentPhone(s)) : '<span style="color:#94a3b8;font-weight:400">غير مُدخل بعد</span>'}</span>
+        <button class="btn-secondary" style="padding:2px 9px;font-size:11.5px;margin-inline-start:auto" onclick="editStudentPhone('${escapeHtml(s.id)}')">✏️ تعديل الرقم</button>
+      </div>` : ''}
       <div class="grid grid-3" style="margin-top:12px">
         <div class="card" style="padding:10px;text-align:center"><p class="muted small">النقاط الإيجابية</p><p class="stat-value green" style="font-size:20px">+${pos}</p></div>
         <div class="card" style="padding:10px;text-align:center"><p class="muted small">النقاط السلبية</p><p class="stat-value red" style="font-size:20px">${neg}</p></div>
@@ -7314,7 +7354,7 @@ function renderStudentBody(students){
     const doneCount = myAss.filter(a => (a.completedBy||[]).includes(s.id)).length;
     const totalAss = myAss.length;
     return `<tr data-name="${escapeHtml(s.fullName.toLowerCase())}" data-no="${escapeHtml(String(s.studentNo).toLowerCase())}">
-      <td style="font-weight:600;color:#1f2937">${studentNameLink(s)}</td>
+      <td style="font-weight:600;color:#1f2937">${studentNameLink(s)}${studentPhoneHTML(s)}</td>
       <td>${escapeHtml(s.studentNo)}</td>
       <td>${grade ? escapeHtml(grade.name) : '—'}</td>
       <td>${cls ? escapeHtml(cls.name) : '—'}</td>
@@ -7694,7 +7734,10 @@ function importStudents(evt){
         }
       }
       if(!found){ skipped++; errors.push(`السطر ${i+2}: لم يتم العثور على ${name}${clsLabel?' في '+clsLabel:''}`); return; }
-      found.whatsapp = wa;
+      /* حقل موحّد: الإضافة اليدوية والاستيراد يكتبان في guardianPhone،
+         ونحذف whatsapp القديم إن وُجد حتى لا تتفرّع الأرقام في حقلين. */
+      found.guardianPhone = wa;
+      if(found.whatsapp !== undefined) delete found.whatsapp;
       updated++;
     });
     saveDB(d);

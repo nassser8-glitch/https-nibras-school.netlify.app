@@ -106,9 +106,13 @@ test('5) لا واجهة إرسال جماعي ولا أي مسار إرسال �
   assert.ok(!SRC.includes('wa.me') || SRC.split('wa.me').length - 1 === 1,
     'لا أكثر من رابط واتساب واحد');
   assert.ok(!SRC.includes('function __waTrialAll'), 'لا تفعيل رسائل لبقية الطلاب');
-  // البوابة تعتمد على الاسم لا على حقل جاهز في بيانات الطالبة (لا تعديل للبنية)
-  assert.ok(!/\.fatherPhone|\.parentPhone|\.guardianPhone/.test(SRC),
-    'لا حقل رقم ولي أمر أُضيف لبيانات الطلاب');
+  // وجود حقل guardianPhone للعرض/التحرير مسموح به، لكنه لا يفتح الباب:
+  // بوابة الزر ما زالت اسمية بالكامل ولا تعتمد على وجود رقم.
+  const gate = extractFns('__waTrialEnabled');
+  assert.ok(!/guardianPhone|studentPhone/.test(gate),
+    'بوابة الزر اعتمدت على رقم الهاتف — يجب أن تبقى اسمية فقط');
+  assert.ok(SRC.includes("return nm === __WA_TRIAL_STUDENT;"),
+    'بوابة الاسم لم تعد هي الحاسمة');
 });
 
 // ------------------------------------------------- 6) صحة البناء (لا يكسر بقية الشاشات)
