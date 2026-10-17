@@ -862,6 +862,7 @@ app.post('/api/auth/admin/create-student', requireAuth, (req, res) => {
     const username = String(req.body && req.body.username || '').trim();
     const password = String(req.body && req.body.password || '');
     const classId = String(req.body && req.body.classId || '').trim() || null;
+    const guardianPhone = String(req.body && req.body.guardianPhone || '').trim().replace(/\D/g,'');
     if (!id || !name || !studentNo || !username || !PASSWORD_RE.test(password))
       return res.status(400).json({ error: 'invalid', min: PASSWORD_MIN });
     const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
@@ -869,7 +870,8 @@ app.post('/api/auth/admin/create-student', requireAuth, (req, res) => {
       id, school, name, username, password, passwordHash: hash,
       email: username + '@nibras.school',
       student: {
-        fullName: name, studentNo, classId, guardianName: '', guardianPhone: '',
+        fullName: name, studentNo, classId, guardianName: '', guardianPhone: guardianPhone || '',
+        guardianPhoneAt: guardianPhone ? Date.now() : undefined,
         active: true, joinedAt: Date.now(),
       },
     });
@@ -1252,6 +1254,30 @@ function usersSectionAllowedFor(role, selfId, prevUsers, nextUsers) {
   return jsonEqual(srt(prevUsers), srt(nextUsers));
 }
 
+// ===== حماية رقم ولي الأمر بالختم الزمني =====
+// السجل يحمل guardianPhoneAt. نسخة أقدم (أو جهاز لم يُحدّث هذا الحقل قط) لا تستطيع
+// كتابة رقمٍ أقدم من المخزّن — وإلا لعاد رقمٌ فارغٌ أو مسحوب بعد إصلاحه بمجرد أن
+// يدفع جهازٌ قديم نسخته الكاملة. الأحدث يفوز، وبلا أختام يبقى الأقدم كما هو.
+function mergeStudentGuardian(prevStudents, inStudents) {
+  if (!Array.isArray(inStudents)) return inStudents;
+  if (!Array.isArray(prevStudents) || !prevStudents.length) return inStudents;
+  const prevById = new Map();
+  for (const s of prevStudents) if (s && s.id != null) prevById.set(String(s.id), s);
+  return inStudents.map(s => {
+    if (!s || s.id == null) return s;
+    const p = prevById.get(String(s.id));
+    if (!p) return s;
+    const tS = Number(p.guardianPhoneAt) || 0;
+    const tI = Number(s.guardianPhoneAt) || 0;
+    if (!tS || tS <= tI) return s;          // الخادم بلا ختم، أو الواصل أحدث: يفوز الواصل
+    const r = Object.assign({}, s);
+    r.guardianPhone = p.guardianPhone !== undefined ? p.guardianPhone : s.guardianPhone;
+    if (r.whatsapp !== undefined && r.guardianPhone !== undefined) delete r.whatsapp;
+    r.guardianPhoneAt = tS;
+    if (p.guardianName !== undefined && !s.guardianName) r.guardianName = p.guardianName;
+    return r;
+  });
+}
 // ===== دمج الأقسام عند وصول نسخة "قديمة" (stale) لئلا تُفقد تعديلات المعلمين =====
 // المشكلة: النظام يختم القسم كاملاً بزمن واحد (_ts)، لذا إذا سجّل معلم آخر (أو كان ساعة
 // الجهاز متأخرة) يُرفض الحفظ كاملاً ويضيع. هنا ندمج بدل رفضه: لكل قسم نمزج السجلات
@@ -2050,6 +2076,13 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         // التحويلات: شاهد الحذف لاصق والحل لا يُمحى (mergeTransfers)،
         // بخلاف mergeSection العام الذي يترك الواصل يكفي فتفقد الحلول.
         if (key === 'transfers') { merged[key] = mergeTransfers(a, b); continue; }
+        // الطلاب: دمج عام مع حماية رقم ولي الأمر بختم زمني — فأي دور يحق له كتابة
+        // القسم لا يمحو رقماً أحدث سجّله جهازٌ آخر، سواء أكان الإدارة أو الإرشاد.
+        if (key === 'students' &&
+            (canEditU || (SECTION_RULES[key] || []).includes(role))) {
+          merged[key] = mergeStudentGuardian(Array.isArray(a) ? a : [], mergeSection(a, b));
+          continue;
+        }
         if (canEditU) { merged[key] = mergeSection(a, b); continue; }
         // غير المدير: يكتب الأقسام المصرَّح بها فقط، والباقي يبقى نسخة الخادم سليمة
         if (SECTION_RULES[key] && SECTION_RULES[key].includes(role)) merged[key] = mergeSection(a, b);
@@ -2095,6 +2128,12 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
             cf.transfers = mergeTransfers(prev.data.transfers, cf.transfers);
           }
           if (Array.isArray(prev.data.users) && !jsonEqual(prev.data.users, cf.users)) cf.users = mergeUsersAttendanceNewer(prevUsers, cf.users);
+          // الاستبدال الكامل يشمل قسم الطلاب: نحمي رقم ولي الأمر من الكتابة فوقه
+          // بنسخة أقدم قدمها جهازٌ لم يُحدّث الرقم بعد.
+          if (Array.isArray(prev.data.students) && Array.isArray(cf.students) &&
+              !jsonEqual(prev.data.students, cf.students)) {
+            cf.students = mergeStudentGuardian(prev.data.students, cf.students);
+          }
           data = cf;
         }
       }

@@ -49,12 +49,18 @@ test('2) studentPhone تقرأ guardianPhone وتتراجع إلى whatsapp ال
   assert.ok(fn.includes('guardianPhone'), 'لا تقرأ guardianPhone');
   assert.ok(fn.includes('whatsapp'), 'لا تتراجع إلى whatsapp القديم');
   assert.ok(fn.includes('replace(/\\D/g'), 'لا تنظّف الرقم من الرموز');
-  // محاكاة حقيقية لسلوك الدالة
-  const sandbox = { studentPhone: null };
-  new (require('vm').Script)(fn + '\nstudentPhone = studentPhone;').runInNewContext(sandbox);
+  // محاكاة حقيقية لسلوك الدالة (مع __waIntl لأن studentPhone تستدعيها)
+  const sandbox = { studentPhone: null, __waIntl: null };
+  new (require('vm').Script)(extractFns('__waIntl') + '\n' + fn + '\n').runInNewContext(sandbox);
   assert.equal(sandbox.studentPhone({ guardianPhone: '966-56 8133414' }), '966568133414');
   assert.equal(sandbox.studentPhone({ whatsapp: '966500000000' }), '966500000000');
   assert.equal(sandbox.studentPhone({}), '');
+  // الصيغة المحلية تُوحَّد إلى دولية عند القراءة — فواتساب لا يقبل 05...
+  assert.equal(sandbox.studentPhone({ guardianPhone: '0568133414' }), '966568133414', 'الصيغة المحلية لم تُوحَّد');
+  assert.equal(sandbox.studentPhone({ guardianPhone: '568133414' }), '966568133414', 'الصيغة بلا صفر لم تُوحَّد');
+  assert.equal(sandbox.studentPhone({ guardianPhone: '00966568133414' }), '966568133414', 'بادئ 00 لم تُزح');
+  assert.equal(sandbox.studentPhone({ guardianPhone: '971501234567' }), '971501234567', 'رقم أجنبي برمز دولة آخر لا يُلمس');
+  assert.equal(sandbox.studentPhone({ guardianPhone: '0912345678' }), '0912345678', 'رقم غير سعودي (09) لا يُحوَّل');
   assert.equal(sandbox.studentPhone(null), '');
 });
 

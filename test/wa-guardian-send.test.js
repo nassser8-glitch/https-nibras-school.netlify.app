@@ -36,6 +36,7 @@ function buildContext(user) {
   const code = [
     'function isManager(u){ return u && (u.role === "ADMIN" || u.role === "AGENT" || u.role === "COUNSELOR"); }',
     "function currentUser(){ return __U; }",
+    extractFns('__waIntl'),
     extractFns('studentPhone'),
     extractFns('__waGuardianEnabled'),
   ].join('\n');

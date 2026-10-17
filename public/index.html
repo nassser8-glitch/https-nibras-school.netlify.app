@@ -1799,6 +1799,36 @@ async function __forceSyncNow(){
     __refreshUnpushedBar();
   }
 }
+/* دمج ميداني لقسم الطلاب بين نسختين: الخادم أساس، والسجلات المحلية تُلحق،
+   ثم تُحمى حقول رقم ولي الأمر بختم زمني — الأحدث يفوز دائماً، والفراغ بختم
+   أحدث ينشر (مسح الرقم)، بينما جهاز قديم بلا ختم لا يستطيع محو رقم أحدث.
+   تستعملها الوظيفتان: __syncPull و__refreshSchool — فكانت الثانية تستبدل قسم
+   الطلاب كاملاً بنسخة الخادم فيمحو الرقم الذي لم يصل بعد. */
+function __mergeStudentsLocal(localArr, srvArr){
+  const m = new Map();
+  for(const x of (Array.isArray(srvArr) ? srvArr : [])) if(x && x.id != null) m.set(x.id, JSON.parse(JSON.stringify(x)));
+  const normP = v => String(v ?? '').replace(/\D/g,'');
+  for(const x of (Array.isArray(localArr) ? localArr : [])){
+    if(!x || x.id == null) continue;
+    const ex = m.get(x.id);
+    if(!ex){ m.set(x.id, JSON.parse(JSON.stringify(x))); continue; }
+    const t = JSON.parse(JSON.stringify(ex));
+    const tL = Number(x.guardianPhoneAt) || 0, tS = Number(ex.guardianPhoneAt) || 0;
+    const pL = normP(x.guardianPhone ?? x.whatsapp), pS = normP(ex.guardianPhone ?? ex.whatsapp);
+    let useLocal;
+    if(tL !== tS) useLocal = tL > tS;      // ختمان: الأحدث يفوز دائماً
+    else useLocal = !!pL;                   // بلا ختم: المحلي غير الفارغ يفوز، والفراغ لا يمحو رقماً
+    if(useLocal){
+      t.guardianPhone = pL;
+      if(t.whatsapp !== undefined) delete t.whatsapp;
+      if(x.guardianName !== undefined) t.guardianName = x.guardianName;
+    }
+    const stamp = Math.max(tL, tS);
+    if(stamp) t.guardianPhoneAt = stamp;
+    m.set(x.id, t);
+  }
+  return Array.from(m.values());
+}
 async function __syncPull(school){
   const __PULL_PAUSE_KEY = 'nibras_pull_pause_until_'+school;
   if(__syncPullPaused()) return; // قد يوقف المدير السحب مؤقتاً كي لا تهبط نسخةُ الخادم فوق عمل معلمٍ
@@ -2002,7 +2032,9 @@ async function __syncPull(school){
           ? mergeClassesLocal(local[sec], merged[sec])
           : (sec === 'transfers')
           ? __mergeTransfersPull(local[sec], merged[sec])
-          : locallyOnlyP(local[sec], merged[sec]);
+          : sec === 'students'
+            ? __mergeStudentsLocal(local[sec], merged[sec])
+            : locallyOnlyP(local[sec], merged[sec]);
       });
       // تنقية الفصول على العميل: تمنع عودة الفصول الزائدة (مكررة/بدون مرحلة/بمرحلة وهمية بلا طلاب)
       // التي تحملها النسخة المحلية لكن الخادم كرّسها (deleted). دون هذا يظهر العدد 24 بدل 12.
@@ -2130,6 +2162,11 @@ async function __refreshSchool(school){
           out.notes = NRC_mergeNotes(Array.isArray(out.notes) ? out.notes : [], Array.isArray(local.notes) ? local.notes : []);
         }
         out._ts = Math.max((j.data && j.data._ts) || 0, (local && local._ts) || 0, Date.now());
+        // قسم الطلاب لا يُستبدل بنسخة الخادم: كان يستبدل كاملاً فيمحو رقم ولي الأمر
+        // الذي دُفع للتو ولم يصل الخادم بعد — فتختفي الأرقام فور إضافتها.
+        if(Array.isArray(local.students) && Array.isArray(out.students)){
+          out.students = __mergeStudentsLocal(local.students, out.students);
+        }
         __origSetItem(key, JSON.stringify(out));
       } else {
         __origSetItem(key, JSON.stringify(j.data));
@@ -3100,7 +3137,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-16 wa-guardian';
+const __APP_VER = '2026-10-16b wa-guardian';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -6437,10 +6474,20 @@ function studentNameLink(s, pts){
 }
 /* رقم موبايل ولي الأمر: حقل موحّد guardianPhone (من الإضافة اليدوية أو
    استيراد Excel)، مع قراءة whatsapp القديم حتى لا تضيع أرقام محفوظة سابقاً. */
+/* توحيد الصيغة عند القراءة: واتساب يقبل الرقم الدولي فقط (بلا + وبلا صفر
+   بادئ). من يكتب الصيغة المحلية يُصحَّح هنا تلقائياً — 05XXXXXXXX و01XXXXXXXX
+   و5XXXXXXXX إلى 966... — وأي رمز دولة آخر يبقى كما هو بلا لمس. */
+function __waIntl(d){
+  if(!d) return '';
+  if(/^00\d{6,}$/.test(d)) return d.slice(2);            // 00966... → 966...
+  if(/^0[15]\d{8}$/.test(d)) return '966' + d.slice(1);  // 05/01 XXXXXXXX → 966...
+  if(/^[15]\d{8}$/.test(d)) return '966' + d;            // 5/1 XXXXXXXX → 966...
+  return d;
+}
 function studentPhone(s){
   if(!s) return '';
   const v = String(s.guardianPhone ?? s.whatsapp ?? '').replace(/\D/g,'');
-  return v;
+  return __waIntl(v);
 }
 function studentPhoneHTML(s){
   if(!isManager(currentUser())) return ''; // رقم ولي أمر حساس: لا يظهر للمعلمة ولا للطالبة
@@ -6466,8 +6513,10 @@ function editStudentPhone(studentId){
   const st = (d.students||[]).find(x => x.id === studentId);
   if(!st) return;
   st.guardianPhone = p;
+  st.guardianPhoneAt = Date.now(); // ختم زمني: يرجّح الأحدث عند دمج السحب
   if(st.whatsapp !== undefined) delete st.whatsapp; // إزالة الحقل القديم المكرّر
   saveDB(d);
+  if(__serverEnabled()) __syncSchedule(getActiveSchool(), 0); // دفع فوري للحفظ على الخادم
   const el = document.getElementById('gPhone-' + studentId);
   if(el) el.innerHTML = p ? escapeHtml(p) : '<span style="color:#94a3b8;font-weight:400">غير مُدخل بعد</span>';
   renderApp();
@@ -6487,6 +6536,11 @@ function __waGuardianOpen(studentId){
     const s = studentById(studentId);
     if(!__waGuardianEnabled(s)) return;              // بوابة سلامة ثانية داخل الفتح
     const phone = studentPhone(s);
+    if(phone.length < 8 || phone.length > 15){
+      // رقم قصير/طويل: واتساب سيرفضه — نشرح بدل فتح صفحة خطأ صامتة
+      alert('رقم ولي أمر غير صالح — أعيدي إدخاله من ملف الطالبة بصيغة دولية مثل 9665XXXXXXXX.');
+      return;
+    }
     const who = String(s.fullName || '');
     const text = 'السلام عليكم ورحمة الله وبركاته، معكم من مدرسة نبراس بخصوص الطالبة ' + who + '. ';
     const url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(text);
@@ -7567,6 +7621,7 @@ async function addStudent(){
     const r = await __api('POST', 'admin/create-student', {
       name: fullName, studentNo, classId, username, password: inputPassword,
       studentId: newId, school: getActiveSchool(),
+      guardianPhone: guardianPhone,
     });
     if(!r || r.status !== 201 || !r.j || !r.j.ok){
       alert(r?.j?.error === 'username_exists' ? 'اسم المستخدم مستخدم مسبقًا' : 'تعذر إنشاء حساب الطالب');
@@ -7576,8 +7631,13 @@ async function addStudent(){
       id: r.j.id, fullName: r.j.name, studentNo, classId,
       guardianName: '', guardianPhone: guardianPhone, active: true, joinedAt: Date.now(),
     };
+    // لا تكتب فوق رقم ولي الأمر المدخل محلياً إن كان الخادم أرجع قيم فارغة
+    if(guardianPhone && (!createdStudent.guardianPhone || !String(createdStudent.guardianPhone).replace(/\D/g,''))){
+      createdStudent.guardianPhone = guardianPhone;
+    }
+    if(guardianPhone) createdStudent.guardianPhoneAt = Date.now();
   }
-  d.students.push(createdStudent || { id:newId, fullName, studentNo, classId, guardianName:'', guardianPhone: guardianPhone, active:true, joinedAt: Date.now() });
+  d.students.push(createdStudent || { id:newId, fullName, studentNo, classId, guardianName:'', guardianPhone: guardianPhone, guardianPhoneAt: Date.now(), active:true, joinedAt: Date.now() });
   if(__serverEnabled()){
     if(!Array.isArray(d.users)) d.users = [];
     d.users.push({ id:newId, school:getActiveSchool(), name:fullName, username, role:'STUDENT', active:true, firstLogin:false, granted:true });
@@ -7585,6 +7645,7 @@ async function addStudent(){
   saveDB(d);
   renderApp();
   if(__serverEnabled()) await __refreshSchool(getActiveSchool());
+  if(__serverEnabled()) __syncSchedule(getActiveSchool(), 0); // دفع فوري لضمان انتشار رقم ولي الأمر
 }
 async function deleteStudent(id){
   const s = studentById(id);
@@ -7737,12 +7798,14 @@ function importStudents(evt){
       /* حقل موحّد: الإضافة اليدوية والاستيراد يكتبان في guardianPhone،
          ونحذف whatsapp القديم إن وُجد حتى لا تتفرّع الأرقام في حقلين. */
       found.guardianPhone = wa;
+      found.guardianPhoneAt = Date.now(); // ختم زمني: يرجّح الأحدث عند دمج السحب
       if(found.whatsapp !== undefined) delete found.whatsapp;
       updated++;
     });
     saveDB(d);
     evt.target.value='';
     renderApp();
+    if(__serverEnabled()) __syncSchedule(getActiveSchool(), 0); // دفع فوري لانتشار الأرقام
     setTimeout(()=>{
       const box=document.getElementById('importStudentResult');
       if(!box){
@@ -12613,7 +12676,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=101', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=102', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
