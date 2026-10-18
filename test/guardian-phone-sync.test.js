@@ -168,3 +168,23 @@ test('12) مسار الحفظ يستدعي الحماية في الاستبدا�
   assert.ok(/cf\.students = mergeStudentGuardian\(/.test(push), 'الاستبدال الكامل لا يستدعي الحماية');
   assert.ok((push.match(/mergeStudentGuardian\(/g) || []).length >= 2, 'المساران غير مغطّيان');
 });
+
+// ------------------------------------------------ 8) الرفع لا يُسقط تعديل الرقم
+test('13) دمج الرفع يستعمل حماية الرقم للطلاب (لا locallyOnly)', () => {
+  const push = SRC.slice(SRC.indexOf('async function __syncPush('), SRC.indexOf('async function __syncPull('));
+  assert.ok(push.includes("__mergeStudentsLocal(obj[sec], sd[sec])"),
+    'الرفع لا يستعمل __mergeStudentsLocal للطلاب — تعديل البطاقة يضيع');
+  // نفس مسار الطلاب في الرفع يجب ألّا يقع في locallyOnly (يُلحق الجديد فقط ويسقط التعديل)
+  const line = push.split('\n').find(l => l.includes("sec === 'students'"));
+  assert.ok(line && line.includes('__mergeStudentsLocal'), 'فرع الطلاب في الرفع لا يحمي الرقم');
+});
+
+test('14) سجل سبق رفعه: تعديل الرقم محلياً يتقدّم على نسخة الخادم الفارغة عند الرفع', () => {
+  const M = loadMerge();
+  // obj المحلي (كما يبنيه __syncPush) يقابل الخادم sd في __mergeStudentsLocal(obj, sd)
+  const srv = [{ id: 's1', fullName: 'ترف ناصر', guardianPhone: '', active: true }];
+  const loc = [{ id: 's1', fullName: 'ترف ناصر', guardianPhone: '966568133414', guardianPhoneAt: 1700000000000, active: true }];
+  const out = M(loc, srv);
+  assert.equal(norm(out[0].guardianPhone), '966568133414', 'رقم البطاقة ضاع عند الرفع');
+  assert.equal(out[0].guardianPhoneAt, 1700000000000, 'الختم لم ينتقل إلى الحمولة المرفوعة');
+});
