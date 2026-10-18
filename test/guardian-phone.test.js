@@ -7,7 +7,8 @@
  * نفسه guardianPhone حتى لا تتفرّع الأرقام في حقلين مختلفين، وتُحذف النسخة
  * القديمة whatsapp بعد التوحيد.
  * الخصوصية: الرقم لا يظهر للمعلمة ولا للطالبة — عرضه وتعديله مقصوران على
- * الإدارة/الوكيل/الإرشاد فقط، والتعديل بوابة صلاحية داخل الدالة نفسها.
+ * الكادر الإداري (المدير/الوكيل/الموجهة الطلابية/المساعدة الإدارية/وكيلة الشؤون
+ * المدرسية)، والتعديل بوابة صلاحية داخل الدالة نفسها.
  * ========================================================================== */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -64,22 +65,38 @@ test('2) studentPhone تقرأ guardianPhone وتتراجع إلى whatsapp ال
   assert.equal(sandbox.studentPhone(null), '');
 });
 
-// ------------------------------------------------ 3) الخصوصية: الإدارة فقط
-test('3) العرض والتعديل مقصوران على الإدارة/الوكيل/الإرشاد', () => {
+// ------------------------------------------------ 3) الخصوصية: الكادر الإداري فقط
+test('3) العرض والتعديل مقصوران على الكادر الإداري (لا المعلمة ولا الطالبة)', () => {
   const html = extractFns('studentPhoneHTML');
-  assert.ok(html.includes('isManager('), 'العرض غير مقيّد بصلاحية isManager');
+  assert.ok(html.includes('isAdminCadre('), 'العرض غير مقيّد بصلاحية الكادر الإداري');
   assert.ok(html.includes('return \'\''), 'لا تُرجع نصاً فارغاً لغير الإدارة');
 
   const edit = extractFns('editStudentPhone');
-  assert.ok(edit.includes('isManager('), 'التعديل غير مقيّد بصلاحية isManager');
+  assert.ok(edit.includes('isAdminCadre('), 'التعديل غير مقيّد بصلاحية الكادر الإداري');
   assert.ok(edit.includes('currentUser()'), 'لا تتحقق من المستخدم الحالي');
   assert.ok(edit.includes('saveDB('), 'التعديل لا يحفظ في قاعدة البيانات المعتادة');
 });
 
+// ------------------------------------------------ 3ب) مصفوفة أدوار الكادر الإداري
+test('3ب) الكادر الإداري كله يمرّ والمعلمة والطالبة تُرفضان', () => {
+  const vm = require('vm');
+  const box = {};
+  new vm.Script(extractFns('isAdminRole') + '\n' + extractFns('isAdminCadre') + '\n')
+    .runInNewContext(box);
+  for(const role of ['ADMIN', 'AGENT', 'COUNSELOR', 'ADMINISTRATIVE', 'SCHOOL_AGENT']){
+    assert.equal(box.isAdminCadre({ role }), true, role + ' من الكادر الإداري فيجب أن يمرّ');
+  }
+  for(const role of ['TEACHER', 'STUDENT']){
+    assert.equal(box.isAdminCadre({ role }), false, role + ' ليس من الكادر الإداري فيُرفض');
+  }
+  assert.equal(box.isAdminCadre(null), false, 'زائر مرفوض');
+  assert.equal(box.isAdminCadre({}), false, 'بلا دور مرفوض');
+});
+
 // ------------------------------------------------ 4) بوابة الواتساب تعتمد
-test('4) بوابة زر الواتساب مقصورة على الإدارة ولا ترسل جماعياً', () => {
+test('4) بوابة زر الواتساب مقصورة على الكادر الإداري ولا ترسل جماعياً', () => {
   const gate = extractFns('__waGuardianEnabled');
-  assert.ok(gate.includes('isManager('), 'البوابة لا تتحقق من صلاحية الإدارة');
+  assert.ok(gate.includes('isAdminCadre('), 'البوابة لا تتحقق من صلاحية الكادر الإداري');
   assert.ok(gate.includes('studentPhone('), 'البوابة لا تتحقق من وجود رقم');
   const open = extractFns('__waGuardianOpen');
   assert.ok(!/fetch\(|XMLHttpRequest/.test(open), 'مسار إرسال تلقائي محتمل');

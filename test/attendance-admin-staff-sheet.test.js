@@ -26,7 +26,8 @@ function count(hay, needle){ return hay.split(needle).length - 1; }
 function ctx(users){
   const SRC = [
     'const getActiveSchool = () => "GIRLS";',
-    'const isAdminRole = (r) => (r === "AGENT" || r === "COUNSELOR" || r === "ADMINISTRATIVE" || r === "SCHOOL_AGENT");',
+    sliceBetween(HTML, 'function isAdminRole(', 'function isAdminCadre('),
+    sliceBetween(HTML, 'function isAdminCadre(', 'function canManageActivities('),
     'const isManager = (u) => !!(u && (u.role === "ADMIN" || u.role === "AGENT" || u.role === "COUNSELOR"));',
     'const canManageTeachers = (u) => !!(u && (u.role === "ADMIN" || u.role === "AGENT" || u.role === "SCHOOL_AGENT"));',
     sliceBetween(HTML, 'const feminineLabels = {', 'function tl(text)'),

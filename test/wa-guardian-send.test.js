@@ -31,10 +31,12 @@ function extractFns(name) {
   throw new Error('لم يُغلق جسم ' + name);
 }
 
-// يبني سياقاً يحاكي studentPhone/isManager/currentUser الحقيقية
+// يبني سياقاً حقيقياً: دوالّ الصلاحيات من التطبيق نفسه (لا نسخة مبسّطة)
 function buildContext(user) {
   const code = [
-    'function isManager(u){ return u && (u.role === "ADMIN" || u.role === "AGENT" || u.role === "COUNSELOR"); }',
+    extractFns('isManager'),
+    extractFns('isAdminRole'),
+    extractFns('isAdminCadre'),
     "function currentUser(){ return __U; }",
     extractFns('__waIntl'),
     extractFns('studentPhone'),
@@ -49,6 +51,8 @@ function buildContext(user) {
 const ADMIN = { role: 'ADMIN' };
 const AGENT = { role: 'AGENT' };
 const COUNSELOR = { role: 'COUNSELOR' };
+const ADMINISTRATIVE = { role: 'ADMINISTRATIVE' };
+const SCHOOL_AGENT = { role: 'SCHOOL_AGENT' };
 const TEACHER = { role: 'TEACHER' };
 const STUDENT = { role: 'STUDENT' };
 
@@ -63,8 +67,10 @@ test('1) الزر يظهر فقط لجزء إداري عندما يكون للط
 
   assert.equal(buildContext(AGENT).E({ guardianPhone: '966500000000' }), true, 'الوكيل يُقبل');
   assert.equal(buildContext(COUNSELOR).E({ guardianPhone: '966500000000' }), true, 'الإرشاد يُقبل');
+  assert.equal(buildContext(ADMINISTRATIVE).E({ guardianPhone: '966500000000' }), true, 'المساعدة الإدارية تُقبل');
+  assert.equal(buildContext(SCHOOL_AGENT).E({ guardianPhone: '966500000000' }), true, 'وكيلة الشؤون المدرسية تُقبل');
 
-  // الأهم: غير الإداريين لا يرون الزر أبداً حتى لو وُجد رقم
+  // الأهم: المعلمة والطالبة لا ترى الزر أبداً حتى لو وُجد رقم
   assert.equal(buildContext(TEACHER).E({ guardianPhone: '966500000000' }), false, 'المعلمة مرفوضة');
   assert.equal(buildContext(STUDENT).E({ guardianPhone: '966500000000' }), false, 'الطالبة مرفوضة');
   assert.equal(buildContext(null).E({ guardianPhone: '966500000000' }), false, 'زائر مرفوض');
@@ -101,7 +107,7 @@ test('4) الزر يُرسم في بطاقة الطالبة وفي قائمة ا
 
   const ph = extractFns('studentPhoneHTML');
   assert.ok(ph.includes('__waGuardianOpen('), 'لا زر واتساب في قائمة الطلاب');
-  assert.ok(ph.includes('isManager('), 'زر القائمة غير مقيّد بالإدارة');
+  assert.ok(ph.includes('isAdminCadre('), 'زر القائمة غير مقيّد بالكادر الإداري');
 });
 
 // ------------------------------------------------ 5) لا إرسال جماعي

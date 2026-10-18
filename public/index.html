@@ -2546,6 +2546,11 @@ function canManageTeachers(u){ return u && (u.role === 'ADMIN' || u.role === 'AG
 // والإداري «عبدالله فيصل» (ADMINISTRATIVE — بنين)، ووكيل الشؤون المدرسية (SCHOOL_AGENT)
 function canRecordPastAttendance(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'SCHOOL_AGENT' || u.id === 'id_6ef8036cc7f4c692'); }
 function isAdminRole(role){ return (role === 'AGENT' || role === 'COUNSELOR' || role === 'ADMINISTRATIVE' || role === 'SCHOOL_AGENT'); }
+// «الكادر الإداري»: كل دور غير المعلمة والطالبة — المدير (ADMIN) والوكيل (AGENT)
+// والموجهة الطلابية (COUNSELOR) والمساعدة الإدارية (ADMINISTRATIVE) ووكيلة الشؤون
+// المدرسية (SCHOOL_AGENT). تعريفٌ واحد يخدم كشف الحضور وتقارير الغياب وبوابة رقم
+// ولي الأمر — بدل خلط الإداريات بالمعلمات.
+function isAdminCadre(u){ return !!u && (u.role === 'ADMIN' || isAdminRole(u.role)); }
 function canManageActivities(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
 function canManageVideos(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
 function ensureDefaultAccounts(){
@@ -3138,7 +3143,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-18 cadre-sheets';
+const __APP_VER = '2026-10-18 cadre-wa';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -6491,7 +6496,7 @@ function studentPhone(s){
   return __waIntl(v);
 }
 function studentPhoneHTML(s){
-  if(!isManager(currentUser())) return ''; // رقم ولي أمر حساس: لا يظهر للمعلمة ولا للطالبة
+  if(!isAdminCadre(currentUser())) return ''; // رقم ولي أمر حساس: لا يظهر للمعلمة ولا للطالبة
   const p = studentPhone(s);
   if(!p) return '';
   return `<div style="display:flex;align-items:center;gap:5px;margin-top:2px" title="رقم موبايل ولي الأمر">
@@ -6499,10 +6504,11 @@ function studentPhoneHTML(s){
     <button class="btn-secondary" style="padding:0 6px;font-size:11px;line-height:1.6" onclick="event.stopPropagation();__waGuardianOpen('${escapeHtml(s.id)}')" title="فتح محادثة واتساب لولي الأمر">💬</button>
   </div>`;
 }
-/* تعديل رقم موبايل ولي الأمر من بطاقة الطالبة (للمسؤول/الوكيل/الإرشاد فقط).
+/* تعديل رقم موبايل ولي الأمر من بطاقة الطالبة (للكادر الإداري: المدير/الوكيل/الموجهة
+   الطلابية/المساعدة الإدارية/وكيلة الشؤون — لا للمعلمة ولا للطالبة).
    الحفظ يمرّ عبر saveDB فترفعه المزامنة نفسها المعتادة — لا مسار كتابة جديد. */
 function editStudentPhone(studentId){
-  if(!isManager(currentUser())) return; // بوابة صلاحية: غير الإداري لا يعدّل الأرقام
+  if(!isAdminCadre(currentUser())) return; // بوابة صلاحية: غير الكادر الإداري لا يعدّل الأرقام
   const s = studentById(studentId);
   if(!s) return;
   const cur = studentPhone(s);
@@ -6524,12 +6530,13 @@ function editStudentPhone(studentId){
 }
 /* ============ إرسال واتساب لولي أمر الطالبة ============
    يعمل لكل طالبة لها رقم محفوظ (guardianPhone)، ويستخدم رقمها هي نفسها.
-   مقصور على الإدارة/الوكيل/الإرشاد — لا زر للمعلمة ولا للطالبة.
+   مقصور على الكادر الإداري (المدير/الوكيل/الموجهة الطلابية/المساعدة الإدارية/
+   وكيلة الشؤون) — لا زر للمعلمة ولا للطالبة.
    الإرسال يدويّ من واتساب نفسه: الرابط يفتح محادثةً مسوّدةً قابلة للتعديل،
    فلا إرسال تلقائي ولا إرسال جماعي من التطبيق. */
 function __waGuardianEnabled(s){
   if(!s) return false;
-  if(!isManager(currentUser())) return false;      // بوابة صلاحية: الإدارة فقط
+  if(!isAdminCadre(currentUser())) return false;   // بوابة صلاحية: الكادر الإداري فقط
   return !!studentPhone(s);                          // ولا زر بلا رقم محفوظ
 }
 function __waGuardianOpen(studentId){
@@ -7844,9 +7851,7 @@ let attendanceState = { classId:null, date: todayStr(), draft:{}, absenceType:{}
 function isStaffSheet(sheetId){ return sheetId === 'TEACHERS' || sheetId === 'ADMIN_STAFF'; }
 function staffSheetMembers(d, sheetId){
   if(!isStaffSheet(sheetId)) return [];
-  const inSheet = sheetId === 'TEACHERS'
-    ? u => u.role === 'TEACHER'
-    : u => u.role === 'ADMIN' || isAdminRole(u.role);
+  const inSheet = sheetId === 'TEACHERS' ? (u => u.role === 'TEACHER') : isAdminCadre;
   return d.users.filter(u => u.active && inSheet(u)).sort((a,b)=>a.name.localeCompare(b.name,'ar'));
 }
 function staffSheetEmptyMsg(sheetId){ return sheetId === 'ADMIN_STAFF' ? 'لا يوجد كادر إداري بعد' : tl('لا يوجد معلمون بعد'); }
@@ -12718,7 +12723,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=107', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=108', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
