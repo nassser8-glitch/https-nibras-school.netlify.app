@@ -3138,7 +3138,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-18 guardian-msg';
+const __APP_VER = '2026-10-18 cadre-split';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -11909,6 +11909,12 @@ function renderReports(){
   <div id="reportResults">${reportState.rows ? renderReportResult(reportState.rows) : ''}</div>
   `;
 }
+// تسمية الكادر في تقريري الغياب والتأخر: المعلمات (TEACHER) عن بقية الأدوار الإدارية
+// (المدير/الوكيل/الموجه الطلابي/المساعد الإداري/وكيل الشؤون المدرسية) — لا تُخلط المعلمة بإداري
+// في عمود «الصف» ولا في الرسم البياني الذي يُجمَّع على العمود نفسه.
+function cadreGroupLabel(u){
+  return u && u.role === 'TEACHER' ? tl('المعلمون') : tl('الكادر الإداري');
+}
 function computeReportRows(){
   const d = loadDB();
   const { type, classId, from, to } = reportState;
@@ -11926,23 +11932,28 @@ function computeReportRows(){
 
   if(type === 'absence' || type === 'late'){
     const statusFilter = type==='absence' ? 'ABSENT' : 'LATE';
-    // خانة «المعلمون والإداريون»: تُظهر سجلات غياب/تأخر الكادر (محفوظة على صفة المستخدم
+    // خانة الكادر: تُظهر سجلات غياب/تأخر الكادر (محفوظة على صفة المستخدم
     // لا في d.attendance) بدل الطالبات — تعمل للتقريرين (الغياب يعرض الغياب، والتأخر ظهر التأخر).
+    // الكادر لا يُخلط في سطر واحد: عمود «الصف» يحمل اسم المجموعة
+    // («المعلمات» أو «الكادر الإداري») بدل اسم الخانة، فيتفرّق الكادران في الرسم أيضًا.
     if(classId === 'STAFF'){
       const tTypeLbl = { MORNING:'تأخر صباحي', CLASS:'تأخر عن الحصة', EARLY_LEAVE:'خروج مبكر' };
       const showAbs = statusFilter !== 'LATE';
       const showLate = statusFilter !== 'ABSENT';
+      // المعلمات قبل الكادر الإداري عند تساوي التاريخ، مع بقاء التاريخ ترتيبًا رئيسيًا
+      const cadreRank = r => (r['الصف'] === tl('المعلمون') ? 0 : 1);
       d.users.filter(u => (u.role === 'TEACHER' || isAdminRole(u.role) || u.role === 'ADMIN') && u.active).forEach(t => {
+        const grp = cadreGroupLabel(t);
         if(showAbs) (t.absences || []).filter(inRange).sort().reverse().forEach(date => {
-          rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': 'المعلمون والإداريون', 'الفصل': '—', 'الحالة': 'غائب' });
+          rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': grp, 'الفصل': '—', 'الحالة': 'غائب' });
         });
         if(showLate) (t.markedLate || []).filter(inRange).sort().reverse().forEach(date => {
           const mins = t.lateMinutes ? t.lateMinutes[date] : null;
           const typeLbl = t.lateType && t.lateType[date] ? (tTypeLbl[t.lateType[date]] || '') : '';
-          rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': 'المعلمون والإداريون', 'الفصل': '—', 'الحالة': 'متأخر' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : '') });
+          rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': grp, 'الفصل': '—', 'الحالة': 'متأخر' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : '') });
         });
       });
-      rows.sort((a,b) => String(b['التاريخ']||'').localeCompare(String(a['التاريخ']||'')));
+      rows.sort((a,b) => String(b['التاريخ']||'').localeCompare(String(a['التاريخ']||'')) || cadreRank(a) - cadreRank(b));
     } else {
       rows = d.attendance
         .filter(a => canSeeClass(a.classId) && (!classId || a.classId===classId) && (!statusFilter || __attEffStatus(a)===statusFilter) && inRange(a.date))
@@ -11950,7 +11961,8 @@ function computeReportRows(){
         .map(a => { const s = studentById(a.studentId); const c = classById(a.classId); const g = c?gradeById(c.gradeId):null;
           return { 'التاريخ':a.date, 'الطالب':s?.fullName||'—', 'الرقم':s?.studentNo||'—', 'الصف':g?.name||'—', 'الفصل':c?.name||'—', 'الحالة':statusLabels[__attEffStatus(a)] }; });
       // غياب/تأخر المعلمات والإداريات: في تقريري الغياب والتأخر يُضاف سجلُّ الكادر
-      // (محفوظ على صفة المستخدم لا في d.attendance) — يظهر ضمن «كل الفصول» لأنهم لا يتبعون فصلًا.
+      // (محفوظ على صفة المستخدم لا في d.attendance) — يظهر ضمن «كل الفصول» لأنهم لا يتبعون فصلًا،
+      // ويحمل عمود «الصف» اسم المجموعة («المعلمات»/«الكادر الإداري») بدل اسم الخانة.
       if(statusFilter === 'ABSENT' || statusFilter === 'LATE'){
         const tTypeLbl = { MORNING:'تأخر صباحي', CLASS:'تأخر عن الحصة', EARLY_LEAVE:'خروج مبكر' };
         d.users.filter(u => (u.role === 'TEACHER' || isAdminRole(u.role) || u.role === 'ADMIN') && u.active).forEach(t => {
@@ -11958,7 +11970,7 @@ function computeReportRows(){
           dates.sort().reverse().forEach(date => {
             const mins = statusFilter === 'LATE' && t.lateMinutes ? t.lateMinutes[date] : null;
             const typeLbl = statusFilter === 'LATE' && t.lateType && t.lateType[date] ? (tTypeLbl[t.lateType[date]] || '') : '';
-            rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': tl('المعلمون'), 'الفصل': '—', 'الحالة': statusFilter === 'ABSENT' ? 'غائب' : ('متأخر' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : '')) });
+            rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': cadreGroupLabel(t), 'الفصل': '—', 'الحالة': statusFilter === 'ABSENT' ? 'غائب' : ('متأخر' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : '')) });
           });
         });
         rows.sort((a,b) => String(b['التاريخ']||'').localeCompare(String(a['التاريخ']||'')));
@@ -12694,7 +12706,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=105', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=106', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
