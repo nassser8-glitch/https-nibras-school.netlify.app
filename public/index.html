@@ -3138,7 +3138,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-18 cadre-split';
+const __APP_VER = '2026-10-18 cadre-sheets';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -7838,6 +7838,18 @@ function importStudents(evt){
 
 /* ============ الحضور ============ */
 let attendanceState = { classId:null, date: todayStr(), draft:{}, absenceType:{}, sLateType:{}, sLateMin:{}, tDraft:{}, tLateType:{}, tLateMin:{}, absencePrompted:false };
+/* كشف الكادر: «المعلمون» و«الكادر الإداري» كشفان منفصلان لا خيار واحد مختلط.
+   المعلمة (TEACHER) وحدها في كشف المعلمات، وبقية الأدوار (المدير/الوكيل/الموجهة
+   الطلابية/المساعدة الإدارية/وكيلة الشؤون المدرسية) في كشف الكادر الإداري. */
+function isStaffSheet(sheetId){ return sheetId === 'TEACHERS' || sheetId === 'ADMIN_STAFF'; }
+function staffSheetMembers(d, sheetId){
+  if(!isStaffSheet(sheetId)) return [];
+  const inSheet = sheetId === 'TEACHERS'
+    ? u => u.role === 'TEACHER'
+    : u => u.role === 'ADMIN' || isAdminRole(u.role);
+  return d.users.filter(u => u.active && inSheet(u)).sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+}
+function staffSheetEmptyMsg(sheetId){ return sheetId === 'ADMIN_STAFF' ? 'لا يوجد كادر إداري بعد' : tl('لا يوجد معلمون بعد'); }
 function renderAttendance(){
   const d = loadDB();
   const classes = getClassesSorted();
@@ -7845,15 +7857,17 @@ function renderAttendance(){
   if(!attendanceState.date) attendanceState.date = todayStr();
   const allowPastDates = canRecordPastAttendance(currentUser());
   if(!allowPastDates && attendanceState.date < todayStr()) attendanceState.date = todayStr();
-  const isTeachers0 = canManageTeachers(currentUser()) && attendanceState.classId === 'TEACHERS';
-  if(classes.length === 0 && !isTeachers0) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : null;
-  else if(!attendanceState.classId || (!isTeachers0 && !classes.some(c => c.id === attendanceState.classId))) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : (classes[0] ? classes[0].id : null);
-  // بعد ضبط classId الافتراضي يجب إعادة حساب isTeachers حتى تظهر المعلمات فورًا عند أول فتح للصفحة
+  const isStaff0 = canManageTeachers(currentUser()) && isStaffSheet(attendanceState.classId);
+  if(classes.length === 0 && !isStaff0) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : null;
+  else if(!attendanceState.classId || (!isStaff0 && !classes.some(c => c.id === attendanceState.classId))) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : (classes[0] ? classes[0].id : null);
+  // بعد ضبط classId الافتراضي نعيد حساب كشف الكادر حتى تظهر قائمته فورًا عند أول فتح للصفحة
   const isTeachers = canManageTeachers(currentUser()) && attendanceState.classId === 'TEACHERS';
+  const isAdminStaff = canManageTeachers(currentUser()) && attendanceState.classId === 'ADMIN_STAFF';
+  const isStaff = isTeachers || isAdminStaff;
   const currentClass = classes.find(c => c.id === attendanceState.classId) || null;
-  const teacherList = isTeachers ? d.users.filter(u => (u.role === 'TEACHER' || isAdminRole(u.role)) && u.active).sort((a,b)=>a.name.localeCompare(b.name,'ar')) : [];
+  const teacherList = isStaff ? staffSheetMembers(d, attendanceState.classId) : [];
 
-  const students = !isTeachers && attendanceState.classId
+  const students = !isStaff && attendanceState.classId
     ? d.students.filter(s => s.active && s.classId === attendanceState.classId).sort((a,b)=>a.fullName.localeCompare(b.fullName,'ar'))
     : [];
 
@@ -7881,7 +7895,7 @@ function renderAttendance(){
     if(attendanceState.tLateType[t.id] == null) attendanceState.tLateType[t.id] = (t.lateType && t.lateType[attendanceState.date]) || 'MORNING';
   });
   /* إذا كان الكشف يحتوي غيابًا سجّله معلم سابق (في حصة سابقة) نعرض رسالة تثبيت نفس الغياب أو إضافة غياب جديد */
-  if(!isTeachers && attendanceState.classId && !attendanceState.absencePrompted){
+  if(!isStaff && attendanceState.classId && !attendanceState.absencePrompted){
     const me = currentUser();
     const savedAbsent = students.filter(s => {
       const rec = d.attendance.find(a => a.studentId === s.id && a.date === attendanceState.date);
@@ -7895,13 +7909,13 @@ function renderAttendance(){
   }
 
   const ptsMapAtt = studentPointsMap();
-  const emptyMsg = isTeachers ? tl('لا يوجد معلمون بعد') : 'لا يوجد طلاب في هذا الفصل';
+  const emptyMsg = isStaff ? staffSheetEmptyMsg(attendanceState.classId) : 'لا يوجد طلاب في هذا الفصل';
   const typeOpts = [
     ['MORNING','تأخر صباحي'],
     ['CLASS','تأخر عن الحصة'],
     ['EARLY_LEAVE','خروج مبكر']
   ];
-  const rows = (!isTeachers && students.length === 0) ? `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">${tl('لا يوجد طلاب في هذا الفصل')}</td></tr>` :
+  const rows = (!isStaff && students.length === 0) ? `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">${tl('لا يوجد طلاب في هذا الفصل')}</td></tr>` :
     students.map(s => {
       const isLateRow = attendanceState.draft[s.id] === 'LATE';
       const savedMins = (s.lateMinutes && s.lateMinutes[attendanceState.date] != null) ? s.lateMinutes[attendanceState.date] : '';
@@ -7941,15 +7955,15 @@ function renderAttendance(){
         <input type="number" id="latMin-${t.id}" min="0" max="600" step="1" placeholder="دقائق" value="${typedMins}" style="width:58px;padding:3px 4px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;${hide}" title="دقائق التأخر/الخروج المبكر" />
       </td>
     </tr>`;
-  }).join('') : (isTeachers ? `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">${tl('لا يوجد معلمون بعد')}</td></tr>` : '');
+  }).join('') : (isStaff ? `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">${staffSheetEmptyMsg(attendanceState.classId)}</td></tr>` : '');
 
   return `
   <h1 class="page-title">تسجيل الحضور</h1>
   <div class="card mb form-inline">
     <div>
       <label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفصل</label>
-      <select id="attClassId" class="input" style="min-width:240px" onchange="attendanceState.classId=this.value; attendanceState.draft={}; attendanceState.absenceType={}; attendanceState.sLateType={}; attendanceState.sLateMin={}; attendanceState.tDraft={}; attendanceState.tLateType={}; attendanceState.tLateMin={}; attendanceState.absencePrompted=false; rerenderAttendance();" data-tip="اختر من تريد تسجيل حضوره: (المعلمون) جميعهم مرة واحدة، أو فصل دراسي محدد من الطلاب">
-        ${canManageTeachers(currentUser()) ? `<option value="TEACHERS" ${attendanceState.classId==='TEACHERS'?'selected':''}>${teacherEmoji()} ${tl('المعلمون')}</option>` : ''}
+      <select id="attClassId" class="input" style="min-width:240px" onchange="attendanceState.classId=this.value; attendanceState.draft={}; attendanceState.absenceType={}; attendanceState.sLateType={}; attendanceState.sLateMin={}; attendanceState.tDraft={}; attendanceState.tLateType={}; attendanceState.tLateMin={}; attendanceState.absencePrompted=false; rerenderAttendance();" data-tip="اختر من تريد تسجيل حضوره: (المعلمون) جميعهم مرة واحدة، أو (الكادر الإداري) المدير/الوكيل/الموجهة/المساعدة الإدارية/وكيلة الشؤون، أو فصل دراسي محدد من الطلاب">
+        ${canManageTeachers(currentUser()) ? `<option value="TEACHERS" ${attendanceState.classId==='TEACHERS'?'selected':''}>${teacherEmoji()} ${tl('المعلمون')}</option><option value="ADMIN_STAFF" ${attendanceState.classId==='ADMIN_STAFF'?'selected':''}>🗂 الكادر الإداري</option>` : ''}
         ${classes.map(c => `<option value="${c.id}" ${c.id===attendanceState.classId?'selected':''}>${escapeHtml(classLabel(c))}</option>`).join('')}
       </select>
     </div>
@@ -7961,10 +7975,10 @@ function renderAttendance(){
     <div style="flex:1"></div>
     <div class="small" id="attStats" style="display:flex;gap:14px">${attendanceStatsHtml(students, teacherList)}</div>
   </div>
-  ${attendanceState.classId ? `<div class="small muted" style="margin-bottom:8px">📋 كشف الحضور${isTeachers ? ' — ' + tl('المعلمون') : currentClass ? ' — ' + escapeHtml(classLabel(currentClass)) : ''} (${attendanceState.date})</div>` : ''}
+  ${attendanceState.classId ? `<div class="small muted" style="margin-bottom:8px">📋 كشف الحضور${isTeachers ? ' — ' + tl('المعلمون') : isAdminStaff ? ' — الكادر الإداري' : currentClass ? ' — ' + escapeHtml(classLabel(currentClass)) : ''} (${attendanceState.date})</div>` : ''}
   <div class="card table-card">
     <table class="data-table">
-      <thead><tr><th data-tip="اسم المعلم أو الطالب في الكشف — اضغط على الاسم للانتقال إلى صفحة المتابعة">${isTeachers ? tl('المعلم') : tl('الطالب')}</th><th>الرقم</th><th data-tip="الطالب/المعلم حاضر ولم يغب في هذا اليوم">حاضر</th><th data-tip="سجّل غيابًا في هذا اليوم">غائب</th><th data-tip="حضر لكنه تأخر — اخترها ثم حدد نوع التأخر والدقائق في عمود تفاصيل التأخر">متأخر</th><th data-tip="تظهر عند اختيار متأخر: اختر نوع التأخر (تأخر صباحي، تأخر عن الحصة، خروج مبكر) ثم أدخل عدد الدقائق">تفاصيل التأخر</th></tr></thead>
+      <thead><tr><th data-tip="اسم المعلمة أو الإداري أو الطالبة في الكشف — اضغط على الاسم للانتقال إلى صفحة المتابعة">${isTeachers ? tl('المعلم') : (isAdminStaff ? 'الإداري' : tl('الطالب'))}</th><th>الرقم</th><th data-tip="الطالب/المعلم حاضر ولم يغب في هذا اليوم">حاضر</th><th data-tip="سجّل غيابًا في هذا اليوم">غائب</th><th data-tip="حضر لكنه تأخر — اخترها ثم حدد نوع التأخر والدقائق في عمود تفاصيل التأخر">متأخر</th><th data-tip="تظهر عند اختيار متأخر: اختر نوع التأخر (تأخر صباحي، تأخر عن الحصة، خروج مبكر) ثم أدخل عدد الدقائق">تفاصيل التأخر</th></tr></thead>
       <tbody id="attTableBody">${rows}${teacherRows}</tbody>
     </table>
   </div>
@@ -8016,25 +8030,23 @@ function attendanceStatsHtml(students, teacherList){
 }
 function showAbsentInSheet(){
   const d = loadDB();
-  const isTeachers = canManageTeachers(currentUser()) && attendanceState.classId === 'TEACHERS';
-  let items = [];
-  if(isTeachers){
-    const list = d.users.filter(u => u.role === 'TEACHER' && u.active);
-    items = list.filter(t => ((attendanceState.tDraft && attendanceState.tDraft[t.id]) || 'PRESENT') === 'ABSENT');
+  if(isStaffSheet(attendanceState.classId)){
+    const list = staffSheetMembers(d, attendanceState.classId);
+    const items = list.filter(t => ((attendanceState.tDraft && attendanceState.tDraft[t.id]) || 'PRESENT') === 'ABSENT');
     const names = items.map(t => t.name);
     openDetails('❌ الغائبون اليوم (' + names.length + ')', names.length ? names.map(n => `<li class="dl-item"><span>👤 ${escapeHtml(n)}</span></li>`).join('') : `<li class="dl-empty">لا يوجد غائبون</li>`);
   } else {
     const list = d.students.filter(s => s.active && s.classId === attendanceState.classId);
-    items = list.filter(s => ((attendanceState.draft && attendanceState.draft[s.id]) || 'PRESENT') === 'ABSENT');
+    const items = list.filter(s => ((attendanceState.draft && attendanceState.draft[s.id]) || 'PRESENT') === 'ABSENT');
     const names = items.map(s => s.fullName || s.name);
     openDetails('❌ الغائبون اليوم (' + names.length + ')', names.length ? names.map(n => `<li class="dl-item"><span>👤 ${escapeHtml(n)}</span></li>`).join('') : `<li class="dl-empty">لا يوجد غائبون</li>`);
   }
 }
 function refreshAttendanceSummary(){
   const d = loadDB();
-  const isTeachers = canManageTeachers(currentUser()) && attendanceState.classId === 'TEACHERS';
-  const students = !isTeachers ? d.students.filter(s => s.active && s.classId === attendanceState.classId) : [];
-  const teacherList = isTeachers && isManager(currentUser()) ? d.users.filter(u => u.role === 'TEACHER' && u.active) : [];
+  const isStaff = canManageTeachers(currentUser()) && isStaffSheet(attendanceState.classId);
+  const students = !isStaff ? d.students.filter(s => s.active && s.classId === attendanceState.classId) : [];
+  const teacherList = isStaff ? staffSheetMembers(d, attendanceState.classId) : [];
   const statsEl = document.getElementById('attStats');
   if(statsEl) statsEl.innerHTML = attendanceStatsHtml(students, teacherList);
 }
@@ -12706,7 +12718,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=106', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=107', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
