@@ -122,6 +122,69 @@ test('بعد بلوغ الخادم: تبقى نسخته المرجع؛ وإن ت
   assert.equal(serverPT.S1.total, 5, 'نسخة الخادم (باحتساب الزميلة) هي المرجع');
 });
 
+/* =============================================================================
+ * بلاغ «نقاط الطالبة لا تنحفظ»: طالبة بلا خانة في لقطة الأرصدة
+ * -----------------------------------------------------------------------------
+ * __adjustLocalPoints كانت تعود بصمت حين لا تجد خانة للطالبة في pointsTotals،
+ * فتبقى النقطة في الجدول ولا يتحرّك رصيدها ويَعود صفراً بعد الحفظ: لقطة
+ * الخادم تحلّ محلّ الأرصدة بلا بصمة adjustedAt، فيسقطها الناقل. تُبنى هنا
+ * أثر الإصلاح: خانة جديدة من ملاحظات الجهاز تحمل بصمة التصحيح فتمرّ.
+ * ========================================================================== */
+const CLIENT_ADJ = [
+  'var __DB = null, __PI = [], __SAVED = null;',
+  'function loadDB(){ return __DB; }',
+  'function pointItems(d){ return __PI; }',
+  'function saveDB(d){ __SAVED = d; }',
+  extractFn(HTML, '__adjustLocalPoints'),
+  ';return {',
+  '  __adjustLocalPoints,',
+  '  setDb(d){ __DB = d; },',
+  '  setPi(p){ __PI = p; },',
+  '};',
+].join('\n');
+const ADJ = new Function(CLIENT_ADJ)();
+
+test('طالبة بلا خانة في الأرصدة: تُبنى الخانة من ملاحظات الجهاز وتُختم adjustedAt', () => {
+  const d = {
+    notes: [note(), note({ id: 'n2', type: 'POSITIVE', category: 'تفوق دراسي', points: 10, createdAt: '2026-10-06T08:00:00.000Z' })],
+    attendance: [], assignments: [], pointsTotals: {},
+  };
+  ADJ.setDb(d);
+  // ملاحظة +10 هي التي كُتبت للتو، وسابقتها -7: حساب الجهاز لـ S1 = +3
+  ADJ.setPi([{ studentId: 'S1', points: -7 }, { studentId: 'S1', points: 10 }]);
+  ADJ.__adjustLocalPoints('S1', 10);
+  const r = d.pointsTotals.S1;
+  assert.ok(r, 'تُنشأ خانة للطالبة بدل إعادتها بصمت');
+  assert.equal(r.total, 3, 'الرصيد = حساب الجهاز (-7 + 10) بلا إضافة مرتين');
+  assert.equal(r.pos, 10);
+  assert.equal(r.neg, -7);
+  assert.equal(typeof r.adjustedAt, 'number', 'تحمل بصمة التصحيح');
+});
+
+test('الخانة الجديدة تمرّ عبر ناقل الأرصدة فلا يرتدّ الرصيد بعد الحفظ', () => {
+  const d = { notes: [note()], attendance: [], assignments: [], pointsTotals: {} };
+  ADJ.setDb(d);
+  ADJ.setPi([{ studentId: 'S1', points: 10 }]);
+  ADJ.__adjustLocalPoints('S1', 10);
+  const localPT = d.pointsTotals;
+  const serverPT = { S2: { total: 5, pos: 5, neg: 0 } }; // لقطة الخادم بلا خانة لـ S1
+  const unsync = __pointsUnsyncedStudents([], [note({ id: 'n9', studentId: 'S1' })]);
+  assert.deepEqual(Array.from(unsync), ['S1'], 'ملاحظتها لم تبلغ الخادم بعد');
+  __carryLocalAdjustedPoints(serverPT, localPT, unsync);
+  assert.equal(serverPT.S1.total, 10, 'يمرّ الرصيد المحلي المصحَّح مكان لقطة الخادم');
+});
+
+test('طالبة لها خانة أصلاً: يُضاف الفرق كما كان (لا يُعاد بناؤها)', () => {
+  const d = { notes: [], attendance: [], assignments: [], pointsTotals: { S1: { total: -7, pos: 0, neg: -7 } } };
+  ADJ.setDb(d);
+  ADJ.setPi([]);
+  ADJ.__adjustLocalPoints('S1', 10);
+  assert.equal(d.pointsTotals.S1.total, 3, 'الفارق يُضاف على الخانة القائمة');
+  assert.equal(d.pointsTotals.S1.pos, 10);
+  assert.equal(d.pointsTotals.S1.neg, -7);
+  assert.equal(typeof d.pointsTotals.S1.adjustedAt, 'number');
+});
+
 test('الملف سليم من حروف خارج العربية', () => {
   const added = [];
   const lines = HTML.split('\n');
@@ -132,7 +195,7 @@ test('الملف سليم من حروف خارج العربية', () => {
   const codeTokens = new Set([
     'adjustedAt', 'unsync', 'unsyncP', 'unsynced', 'locNotesCarry', 'locPTCarry', 'srvNotes', 'localNotes',
     'targetPT', 'localPT', 'pointsTotals', 'pointsUnsyncedStudents', 'carryLocalAdjustedPoints', 'NRC', 'sd', 'mj', 'obj', 'sid', 'lr', 'sr',
-    'total', 'pos', 'neg', 'Date', 'now', 'server', 'local', 'merged', 'Array', 'isArray',
+    'total', 'pos', 'neg', 'Date', 'now', 'server', 'local', 'merged', 'Array', 'isArray', 'sid',
     'object', 'number', 'const', 'function', 'typeof', 'continue', 'return', 'if', 'for',
     'new', 'Set', 'JSON', 'parse', 'stringify', 'Object', 'keys', 'true', 'false', 'in',
     'data', 'notes', 'has', 'get', 'some', 'map', 'filter', 'push', 'length', 'slice',
