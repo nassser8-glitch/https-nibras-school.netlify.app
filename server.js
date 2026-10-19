@@ -193,6 +193,31 @@ const GUARDIAN_PHONE_EDITOR_IDS = ['id_61e90132bc11ff7b'];
 function isGuardianPhoneEditor(userId) {
   return GUARDIAN_PHONE_EDITOR_IDS.indexOf(userId) !== -1;
 }
+// تصحيح أخطاء إملائية مثبّتة في أسماء العائلة (أُبلغ عنها إدارياً). تُطبَّق على اسم
+// المستخدم في كل قراءة وكتابة لقسم users، فيصحّح الخادم نفسه بلا حاجة لتعديل يدوي
+// من أي جهاز — وأي نسخة قديمة تحمل الاسم الخطأ تُصحَّح فور مرورها. المطابقة بالبديل
+// الحرفي للقب الخطأ (لقب نادر، فالتصحيح آمن وغير عرضي).
+const NAME_CORRECTIONS = [
+  { from: 'جرياري', to: 'حرباوي' },   // شيماء — لقب العائلة
+  { from: 'فتجي',   to: 'فتحي' },     // نهلة  — لقب العائلة
+];
+function fixPersonName(name){
+  if (typeof name !== 'string' || !name) return name;
+  let out = name;
+  for (const c of NAME_CORRECTIONS) { if (out.indexOf(c.from) !== -1) out = out.split(c.from).join(c.to); }
+  return out;
+}
+function fixUsersNames(users){
+  if (!Array.isArray(users)) return false;
+  let changed = false;
+  for (const u of users) {
+    if (u && typeof u.name === 'string') {
+      const nn = fixPersonName(u.name);
+      if (nn !== u.name) { u.name = nn; changed = true; }
+    }
+  }
+  return changed;
+}
 // حقول سرية لا تُخزن/تُعاد أبدًا
 const STRIP_FIELDS = ['password','password_hash','secret','initialSecret','resetCode','resetExpires','token_hash'];
 
@@ -361,7 +386,7 @@ function requireAuth(req, res, next) {
   }).catch(fail(res));
 }
 function sendUser(u, sessionRow, viewerRole) {
-  const user = { id: u.id, school: u.school, name: u.name, username: u.username, email: u.email, role: u.role, active: u.active, firstLogin: u.first_login, granted: u.granted !== false, ...(u.data || {}) };
+  const user = { id: u.id, school: u.school, name: fixPersonName(u.name), username: u.username, email: u.email, role: u.role, active: u.active, firstLogin: u.first_login, granted: u.granted !== false, ...(u.data || {}) };
   if (viewerRole === 'ADMIN' && u.plain_password) user.plain_password = u.plain_password;
   STRIP_FIELDS.forEach(f => delete user[f]);
   if (sessionRow) user.session = { created: sessionRow.created_at, expires: sessionRow.expires_at };
@@ -1828,6 +1853,9 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
     if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
     const rec = await db.getSchoolData(school);
     if (!rec.data) return res.json({ ts: 0, data: null });
+    // تصحيح أسماء العائلة المثبّتة عند القراءة أيضاً: تظهر صحيحة فوراً في الواجهة
+    // حتى قبل أي حفظ جديد من أي جهاز.
+    try { fixUsersNames(rec.data.users); } catch (_) {}
     // احقن إحصاءات الدخول الموثوقة من جدول الحسابات (مصدر الحقيقة) في نسخة القسم،
     // حتى لو اختلفت معرّفات/إحصاءات local storage لدى المتصفحات. المطابقة بالمعرّف ثم باسم المستخدم.
     if (Array.isArray(rec.data.users) && rec.data.users.length) {
@@ -2247,6 +2275,8 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
 
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
     const clean = JSON.parse(JSON.stringify(data));
+    // تصحيح أسماء العائلة المثبّتة قبل التخزين (فيصحّح جدول الحسابات عبر reconcileUserTable)
+    fixUsersNames(clean.users);
     // تطبيع ثانٍ بعد الدمج: الدمج (mergeSection/mergeClasses...) قد يعيد مرجعات يتيمة
     // لمعلمات مكررة من نسخة جهاز قديم، فننظف النتيجة النهائية التي ستُخزن.
     try { await normalizeTeacherDuplicates(school, clean); } catch (e) { console.warn('[normalize#2]', e.message); }

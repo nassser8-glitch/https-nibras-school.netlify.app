@@ -2680,6 +2680,18 @@ function targetLabel(target){
 }
 
 function uid(){ return 'id_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+/* تصحيح أخطاء إملائية مثبّتة في أسماء العائلة (مطابق لتصحيح الخادم) حتى تظهر صحيحة
+   في الواجهة فوراً حتى على جهاز ما زال يحمل نسخة محلية قديمة بالاسم الخطأ. */
+const __NAME_CORRECTIONS = [
+  { from: 'جرياري', to: 'حرباوي' },   // شيماء — لقب العائلة
+  { from: 'فتجي',   to: 'فتحي' },     // نهلة  — لقب العائلة
+];
+function __fixPersonName(name){
+  if(typeof name !== 'string' || !name) return name;
+  let out = name;
+  for(const c of __NAME_CORRECTIONS){ if(out.indexOf(c.from) !== -1) out = out.split(c.from).join(c.to); }
+  return out;
+}
 function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function escapeHtml(str){ return String(str??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -2752,6 +2764,8 @@ function loadDB(){
       if(u.lateType && typeof u.lateType === 'object'){
         Object.keys(u.lateType).forEach(k => { if(!isSchoolDay(k)) delete u.lateType[k]; });
       }
+      // تصحيح اسم العائلة المثبّت عند القراءة (يظهر صحيحاً في قوائم المعلمات/المستخدمين)
+      if(typeof u.name === 'string'){ const __fn = __fixPersonName(u.name); if(__fn !== u.name) u.name = __fn; }
     });
   }
   if(Array.isArray(d.students)){
@@ -3203,7 +3217,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-19 guardian-editor save-reliable';
+const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -13240,7 +13254,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=113', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=114', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
