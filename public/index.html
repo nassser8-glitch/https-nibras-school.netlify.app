@@ -750,6 +750,9 @@ window.__nibrasBootErr = '';
     .edu-admin-url { display:none; }
   }
   @media (max-width:400px){ .edu-grid { grid-template-columns:1fr; } }
+  .att-week-nav { border:1px solid #e5e7eb; background:#f9fafb; color:#374151; border-radius:8px; padding:3px 8px; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; white-space:nowrap; }
+  .att-week-nav:hover:not(:disabled) { background:#eef2f7; }
+  .att-week-nav:disabled { opacity:.45; cursor:not-allowed; }
 </style>
 </head>
 <body>
@@ -3194,7 +3197,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-18 edu-links';
+const __APP_VER = '2026-10-19 week-biz-days';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -7327,17 +7330,12 @@ async function __eduCancelAdmin(){
 
 /* ============ الرسوم البيانية ============ */
 // بناء عمود اليوم الواحد + الرسم الأسبوعي (الإثنين → الجمعة) من أي نسخة قاعدة بيانات
-function buildWeekChart(db, idsArr){
-  const now = new Date();
-  const fmt = dt => dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+function buildWeekChart(db, idsArr, offset){
   const dayNames = {0:'الأحد',1:'الإثنين',2:'الثلاثاء',3:'الأربعاء',4:'الخميس',5:'الجمعة',6:'السبت'};
-  const todayDow = now.getDay();
-  const lastMon = new Date(now); lastMon.setDate(now.getDate() - ((todayDow + 6) % 7));
   const ids = Array.from(idsArr || []);
-  const weekDays = [];
-  for(let i=0; i<5; i++){
-    const dt = new Date(lastMon); dt.setDate(lastMon.getDate() + i);
-    const ds = fmt(dt);
+  const days = __weekDays(offset || 0, todayStr());
+  const weekDays = days.map(ds => {
+    const dt = __bizDsToDate(ds);
     const cc = attCountsByDate(db, ds, ids);
     // الأصل الحضور: من لم يُسجَّل له غياب يُعتبر حاضرًا افتراضيًا
     const a = cc.absent;
@@ -7345,15 +7343,15 @@ function buildWeekChart(db, idsArr){
     const p = cc.present;
     const total = p + a + l;
     const rate = total>0 ? Math.round((p + l) / total * 100) : 0;
-    weekDays.push({ label:dayNames[dt.getDay()], present:p, absent:a, late:l, total, rate });
-  }
+    return { ds, label:dayNames[dt.getDay()], present:p, absent:a, late:l, total, rate };
+  });
   const maxDay = Math.max(...weekDays.map(w=>w.total||1));
   const html = weekDays.map(w => {
     const pw = w.total>0 ? w.present/w.total : 0;
     const aw = w.total>0 ? w.absent/w.total : 0;
     const lw = w.total>0 ? w.late/w.total : 0;
     const barH = Math.max(18, w.total/maxDay*60);
-    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px" title="${w.ds}">
       <div style="width:100%;max-width:26px;height:68px;display:flex;flex-direction:column;justify-content:flex-end;background:#f3f4f6;border-radius:4px 4px 0 0;overflow:hidden">
         <div style="height:${pw*barH}px;background:#16a34a;transition:height .3s"></div>
         <div style="height:${aw*barH}px;background:#dc2626;transition:height .3s"></div>
@@ -7364,9 +7362,73 @@ function buildWeekChart(db, idsArr){
       <div style="font-size:9px;color:#374151" title="حاضر/غائب/متأخر">${w.present}/${w.absent}/${w.late}</div>
     </div>`;
   }).join('');
-  const sig = weekDays.map(w => w.label+':'+w.present+':'+w.absent+':'+w.late+':'+w.rate).join('|');
-  return { html, sig };
+  const sig = days.join(',') + '|' + weekDays.map(w => w.label+':'+w.present+':'+w.absent+':'+w.late+':'+w.rate).join('|');
+  return { html, sig, label: __weekRangeLabel({ from: days[0], to: days[days.length - 1] }) };
 }
+/* ===== أيام العمل للرسم الأسبوعي (الإثنين → الجمعة) =====
+   تُستثنى السبت والأحد نهائيًا، وتنتهي النافذة بالجمعة الأقرب الماضية.
+   كل الحساب بتوقيت المدرسة المحلي (Date محلي) — بلا أي احتساب UTC. */
+function __bizDsToDate(ds){
+  const s = String(ds == null ? '' : ds).slice(0, 10);
+  const p = s.split('-');
+  if(p.length !== 3) return null;
+  const y = Number(p[0]), m = Number(p[1]), d = Number(p[2]);
+  if(!y || !m || !d) return null;
+  const dt = new Date(y, m - 1, d);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+function __bizDateToDs(dt){
+  return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+}
+/* آخر جمعة ≤ اليوم */
+function __bizLastFriday(today){
+  const dt = __bizDsToDate(today || todayStr()) || new Date();
+  let guard = 0;
+  while(dt.getDay() !== 5 && guard < 7){ dt.setDate(dt.getDate() - 1); guard++; }
+  return dt;
+}
+/* نافذة الأسبوع: الإثنين→الجمعة؛ offset=0 الأحدث، وكل +1 = أسبوع أقدم */
+function __weekRange(offset, today){
+  const fri = __bizLastFriday(today);
+  const end = new Date(fri.getFullYear(), fri.getMonth(), fri.getDate());
+  end.setDate(end.getDate() - 7 * (offset || 0));
+  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  start.setDate(start.getDate() - 4);
+  return { from: __bizDateToDs(start), to: __bizDateToDs(end) };
+}
+/* خمسة أيام عمل (تصاعديًا: الإثنين→الجمعة) */
+function __weekDays(offset, today){
+  const r = __weekRange(offset, today);
+  const out = [];
+  const dt = __bizDsToDate(r.from);
+  for(let i = 0; i < 5; i++){ out.push(__bizDateToDs(dt)); dt.setDate(dt.getDate() + 1); }
+  return out;
+}
+function __weekRangeLabel(range){
+  if(!range || !range.from || !range.to) return '';
+  const f = range.from.slice(5).split('-').reverse().join('/');
+  const t = range.to.slice(5).split('-').reverse().join('/');
+  return f + ' \u2013 ' + t;
+}
+function __analyticsIds(d){
+  return (Array.isArray(d && d.students) ? d.students : []).filter(s => s && s.active).map(s => s.id);
+}
+/* تنقّل الأسبوع: السابقة = أسبوع أقدم، التالية = أسبوع أحدث (لا تتجاوز الأحدث) */
+function __weekRerender(){
+  const d = window.__chartsData;
+  const box = document.getElementById('weekChartBox');
+  if(!box || !d) return;
+  const ids = window.__weekIds || __analyticsIds(d);
+  const res = buildWeekChart(d, ids, window.__weekOffset || 0);
+  box.innerHTML = res.html || '';
+  const lab = document.getElementById('weekChartRange');
+  if(lab) lab.textContent = res.label || '';
+  const nx = document.getElementById('attWeekNext');
+  if(nx) nx.disabled = (window.__weekOffset || 0) <= 0;
+  window.__weekChartSig = res.sig;
+}
+function __weekPrev(){ window.__weekOffset = (window.__weekOffset || 0) + 1; __weekRerender(); }
+function __weekNext(){ const n = (window.__weekOffset || 0) - 1; window.__weekOffset = n < 0 ? 0 : n; __weekRerender(); }
 // رسم شهري (مقارنة أسابيع الشهر) من أي نسخة قاعدة بيانات
 function buildMonthChart(db, idsArr){
   const now = new Date();
@@ -7463,11 +7525,17 @@ async function __refreshAnalyticsCharts(){
     if(!j || !j.data) return;
     const d = j.data;
     const ids = (Array.isArray(d.students) ? d.students : []).filter(s => s && s.active).map(s => s.id);
-    const wRes = buildWeekChart(d, ids);
+    window.__chartsData = d;
+    window.__weekIds = ids;
+    const wRes = buildWeekChart(d, ids, window.__weekOffset || 0);
     if(boxW && wRes.sig !== (window.__weekChartSig || '')){
       window.__weekChartSig = wRes.sig;
       boxW.innerHTML = wRes.html || '';
     }
+    const wLab = document.getElementById('weekChartRange');
+    if(wLab) wLab.textContent = wRes.label || '';
+    const wNext = document.getElementById('attWeekNext');
+    if(wNext) wNext.disabled = (window.__weekOffset || 0) <= 0;
     const mRes = buildMonthChart(d, ids);
     if(boxM && mRes.sig !== (window.__monthChartSig || '')){
       window.__monthChartSig = mRes.sig;
@@ -7493,8 +7561,13 @@ function renderCharts(d){
   }
 
   // 1) رسم بياني أسبوعي (الإثنين → الجمعة)
-  const weekRes = buildWeekChart(d, Array.from(visibleIds));
+  const weekIds = Array.from(visibleIds);
+  window.__chartsData = d;
+  window.__weekIds = weekIds;
+  const weekRes = buildWeekChart(d, weekIds, window.__weekOffset || 0);
   const weekChart = weekRes.html;
+  const weekLabel = weekRes.label || '';
+  const nextDisabled = (window.__weekOffset || 0) <= 0 ? ' disabled' : '';
 
   // 2) رسم بياني شهري (مقارنة أسابيع الشهر)
   const monthRes = buildMonthChart(d, Array.from(visibleIds));
@@ -7510,7 +7583,12 @@ function renderCharts(d){
     <div class="grid grid-3" style="gap:12px">
       <div style="min-width:0">
         <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:4px">📅 أسبوعي — آخر 5 أيام</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin:2px 0 4px">
+          <button type="button" class="att-week-nav" onclick="__weekPrev()" title="الأيام الخمسة السابقة">◀ السابقة</button>
+          <button type="button" class="att-week-nav" id="attWeekNext" onclick="__weekNext()" title="الأيام الخمسة التالية"${nextDisabled}>التالية ▶</button>
+        </div>
         <div id="weekChartBox" style="display:flex;gap:3px;align-items:stretch;padding-top:6px">${weekChart}</div>
+        <div id="weekChartRange" style="font-size:10px;color:#9ca3af;text-align:center;margin-top:4px">${weekLabel}</div>
       </div>
       <div style="min-width:0">
         <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:4px">📆 شهري — مقارنة الأسابيع</div>
@@ -13113,7 +13191,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=109', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=110', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
