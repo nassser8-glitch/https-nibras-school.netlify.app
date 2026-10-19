@@ -186,6 +186,13 @@ const SECTION_KEYS = ['users','grades','classes','students','attendance','notes'
 const ALWAYS_TEACHER_IDS = {
   GIRLS: ['id_61e90132bc11ff7b'],                                            // تهاني «تهاني أحمد» — إدارية بنات
 };
+// حسابات مُصرَّح لها بإضافة/تعديل أرقام جوال أولياء الأمور وحدها، مع أن دورها
+// (إدارية) لا يملك قسم الطلاب. الصلاحية بالمعرّف فقط (تهاني — إدارية بنات)،
+// وتُطبَّق بدمج يمسّ حقلي الرقم (والتأخر) دون بقية بيانات الطالبة — فلا تُفقد بيانات.
+const GUARDIAN_PHONE_EDITOR_IDS = ['id_61e90132bc11ff7b'];
+function isGuardianPhoneEditor(userId) {
+  return GUARDIAN_PHONE_EDITOR_IDS.indexOf(userId) !== -1;
+}
 // حقول سرية لا تُخزن/تُعاد أبدًا
 const STRIP_FIELDS = ['password','password_hash','secret','initialSecret','resetCode','resetExpires','token_hash'];
 
@@ -1679,9 +1686,12 @@ function mergeTimetable(prev, inb) {
 // (lateMinutes/lateType) على طلابه عند تسجيل الحضور، دون أن يُرفض حفظه كاملاً
 // (كان `saveAttendance` يعدّل students فترفض الواجهة/الخادم الحفظ ب403)،
 // ودون أن يمسح أي حقول أخرى يملكها المدير/المرشد لبقية الطلاب. =====
-function mergeStudentsLateOnly(prevStudents, inStudents) {
+function mergeStudentsLateOnly(prevStudents, inStudents, opts) {
   if (!Array.isArray(prevStudents)) prevStudents = [];
   if (!Array.isArray(inStudents)) inStudents = [];
+  // opts.guardianPhone: يمنح الحسابات المُصرَّح لها (تهاني) كتابة رقم ولي الأمر أيضاً،
+  // بنفس حماية الختم الزمني — دون المساس ببقية حقول الطالبة.
+  const withPhone = !!(opts && opts.guardianPhone);
   const map = new Map((prevStudents || []).map(s => [s && s.id, s]));
   for (const s of inStudents) {
     if (!s || !s.id) continue;
@@ -1690,6 +1700,18 @@ function mergeStudentsLateOnly(prevStudents, inStudents) {
     // دمج حقول التأخر فقط
     if (s.lateMinutes && typeof s.lateMinutes === 'object') p.lateMinutes = s.lateMinutes;
     if (s.lateType && typeof s.lateType === 'object') p.lateType = s.lateType;
+    if (withPhone && s.guardianPhone !== undefined) {
+      const tS = Number(p.guardianPhoneAt) || 0;
+      const tI = Number(s.guardianPhoneAt) || 0;
+      // نسخة بلا ختم أو أحدث تكتب الرقم؛ ونسخة أقدم بختمٍ أقدم لا تمحو رقماً أحدث.
+      if (!tS || tI >= tS) {
+        p.guardianPhone = s.guardianPhone;
+        if (p.whatsapp !== undefined) delete p.whatsapp;
+        if (tI) p.guardianPhoneAt = tI;
+      }
+    } else if (withPhone && s.guardianName !== undefined && s.guardianName && !p.guardianName) {
+      p.guardianName = s.guardianName;
+    }
     map.set(s.id, p);
   }
   return Array.from(map.values());
@@ -2144,7 +2166,9 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     }
     if (!canEditUsers && (role === 'TEACHER' || role === 'ADMINISTRATIVE' || role === 'SCHOOL_AGENT') && incomingStudents) {
       // المعلم والإداري ووكيل الشؤون المدرسية: يُسمح لهم بتعديل حقول التأخر للطلاب (lateMinutes/lateType) فقط
-      data.students = mergeStudentsLateOnly(prev.data ? prev.data.students : [], incomingStudents);
+      // (وللحسابات المُصرَّح لها بالمعرّف — تهاني — يُسمح أيضاً برقم ولي الأمر بحماية الختم.)
+      data.students = mergeStudentsLateOnly(prev.data ? prev.data.students : [], incomingStudents,
+        { guardianPhone: isGuardianPhoneEditor(req.session.user_id) });
     }
 
     // ===== فرض مالك الملاحظة من الجلسة قبل أي دمج =====

@@ -2607,6 +2607,8 @@ function isAdminRole(role){ return (role === 'AGENT' || role === 'COUNSELOR' || 
 function isAdminCadre(u){ return !!u && (u.role === 'ADMIN' || isAdminRole(u.role)); }
 function canManageActivities(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
 function canManageVideos(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
+const GUARDIAN_PHONE_EDITOR_IDS = ['id_61e90132bc11ff7b'];
+function canEditGuardianPhone(u){ return isManager(u) || !!(u && GUARDIAN_PHONE_EDITOR_IDS.includes(u.id)); }
 function ensureDefaultAccounts(){
   if(__serverEnabled()) return; // في وضع الخادم: الحسابات في قاعدة البيانات، لا زرع محلي
   if(DEMO_MODE){
@@ -3197,7 +3199,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-19 week-current';
+const __APP_VER = '2026-10-19 guardian-editor';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -6701,7 +6703,7 @@ function showStudentPoints(studentId){
         <button class="btn-secondary" onclick="this.closest('.card').parentElement.remove()">✕ إغلاق</button>
         </div>
       </div>
-      ${isManager(currentUser()) ? `
+      ${canEditGuardianPhone(currentUser()) ? `
       <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px">
         <span class="muted small" style="font-weight:700">📱 رقم موبايل ولي الأمر:</span>
         <span id="gPhone-${s.id}" style="font-weight:700;direction:ltr">${studentPhone(s) ? escapeHtml(studentPhone(s)) : '<span style="color:#94a3b8;font-weight:400">غير مُدخل بعد</span>'}</span>
@@ -7930,9 +7932,9 @@ function renderStudents(){
   <div class="header-row">
     <h1 class="page-title">${tl('الطلاب')}</h1>
     <div class="btn-group">
-      ${canManage ? `<button class="btn-secondary" onclick="downloadStudentTemplate()">⬇ تنزيل القالب</button>
-      <label class="btn-secondary file-btn">📥 استيراد Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importStudents(event)"/></label>
-      <button class="btn-primary" onclick="toggleEl('studentForm')">+ إضافة طالب</button>` : ''}
+      ${(canManage || canEditGuardianPhone(user)) ? `<button class="btn-secondary" onclick="downloadStudentTemplate()">⬇ تنزيل القالب</button>
+      <label class="btn-secondary file-btn">📥 استيراد Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importStudents(event)"/></label>` : ''}
+      ${canManage ? `<button class="btn-primary" onclick="toggleEl('studentForm')">+ إضافة طالب</button>` : ''}
       ${isAdmin ? `<button class="btn-secondary danger" onclick="deleteAllStudents()">🗑 حذف الكل</button>` : ''}
     </div>
   </div>
@@ -13191,7 +13193,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=111', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=112', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
