@@ -27,7 +27,7 @@ function extractFn(src, name){
   throw new Error('unbalanced fn: ' + name);
 }
 
-const FN_NAMES = ['__bizDsToDate', '__bizDateToDs', '__bizLastFriday', '__weekRange', '__weekDays', '__weekRangeLabel', '__analyticsIds', 'buildWeekChart', '__weekRerender', '__weekPrev', '__weekNext'];
+const FN_NAMES = ['__bizDsToDate', '__bizDateToDs', '__bizWeekMonday', '__weekRange', '__weekDays', '__weekRangeLabel', '__analyticsIds', 'buildWeekChart', '__weekRerender', '__weekPrev', '__weekNext'];
 const CODE = [
   sliceBetween(SRC, 'function attCountsByDate(', '/* تاريخ طالب واحد'),
   FN_NAMES.map(n => extractFn(SRC, n)).join('\n'),
@@ -56,20 +56,20 @@ function db(){
   return {
     students: [{ id: 's1', active: true }, { id: 's2', active: true }, { id: 's3', active: true }, { id: 'sx', active: false }],
     attendance: [
-      { studentId: 's1', date: '2026-10-16', status: 'ABSENT' },
-      { studentId: 's2', date: '2026-10-16', status: 'LATE' },
-      { studentId: 's3', date: '2026-10-15', status: 'ABSENT' },
-      { studentId: 's1', date: '2026-10-17', status: 'ABSENT' },
-      { studentId: 's2', date: '2026-10-18', status: 'ABSENT' },
+      { studentId: 's1', date: '2026-10-23', status: 'ABSENT' },
+      { studentId: 's2', date: '2026-10-23', status: 'LATE' },
+      { studentId: 's3', date: '2026-10-22', status: 'ABSENT' },
+      { studentId: 's1', date: '2026-10-24', status: 'ABSENT' },
+      { studentId: 's2', date: '2026-10-25', status: 'ABSENT' },
     ],
   };
 }
 
-test('1) خمسة أيام عمل إثنين→جمعة، بلا سبت/أحد، وتنتهي بجمعة', () => {
+test('1) الافتراضي = الأسبوع الحالي إثنين→جمعة، بلا سبت/أحد', () => {
   const A = api();
   const days = [...A.__weekDays(0, '2026-10-19')];
   assert.strictEqual(days.length, 5);
-  assert.deepStrictEqual(days, ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16']);
+  assert.deepStrictEqual(days, ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23']);
   days.forEach(ds => {
     const g = A.__bizDsToDate(ds).getDay();
     assert.ok(g !== 0 && g !== 6, 'ظهر سبت/أحد: ' + ds);
@@ -78,17 +78,15 @@ test('1) خمسة أيام عمل إثنين→جمعة، بلا سبت/أحد،
   assert.strictEqual(A.__bizDsToDate(days[4]).getDay(), 5, 'النهاية ليست جمعة');
 });
 
-test('2) النافذة تنتهي بالجمعة الأقرب ماضية مهما كان يوم الأسبوع', () => {
+test('2) النافذة = أسبوع اليوم الحالي (إثنين→الجمعة القادمة)، والسبت/الأحد يتبعان نفس الأسبوع', () => {
   const A = api();
-  const win = ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16'];
-  // كل هذه الأيام تقع بين الجمعة 16/10 والخميس 22/10 => نفس النافذة
-  ['2026-10-16', '2026-10-17', '2026-10-18', '2026-10-19', '2026-10-21'].forEach(t => {
+  const win = ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23'];
+  ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25'].forEach(t => {
     assert.deepStrictEqual([...A.__weekDays(0, t)], win, 'اختلفت النافذة ليوم ' + t);
   });
-  // خميس 15/10 => الجمعة الأقرب ماضية 09/10
-  assert.deepStrictEqual([...A.__weekDays(0, '2026-10-15')], ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09']);
-  // جمعة 23/10 => نافذة جديدة 19/10..23/10
-  assert.deepStrictEqual([...A.__weekDays(0, '2026-10-23')], ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23']);
+  // أسبوع سابق
+  assert.deepStrictEqual([...A.__weekDays(0, '2026-10-15')], ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16']);
+  assert.deepStrictEqual([...A.__weekDays(0, '2026-10-11')], ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09']);
 });
 
 test('3) التنقّل للخلف: كل خطوة ٧ أيام بلا تكرار أو تجاوز', () => {
@@ -96,23 +94,21 @@ test('3) التنقّل للخلف: كل خطوة ٧ أيام بلا تكرار 
   const w0 = [...A.__weekDays(0, '2026-10-19')];
   const w1 = [...A.__weekDays(1, '2026-10-19')];
   const w2 = [...A.__weekDays(2, '2026-10-19')];
-  assert.deepStrictEqual(w1, ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09']);
-  assert.deepStrictEqual(w2, ['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02']);
+  assert.deepStrictEqual(w0, ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23']);
+  assert.deepStrictEqual(w1, ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16']);
+  assert.deepStrictEqual(w2, ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09']);
   assert.strictEqual(w1.some(d => w0.includes(d)), false, 'تداخل بين نافذتين');
   assert.strictEqual(w2.some(d => w1.includes(d)), false, 'تداخل بين نافذتين');
-  assert.strictEqual(w0[4], '2026-10-16');
-  assert.strictEqual(w1[4], '2026-10-09');
-  assert.strictEqual(w2[4], '2026-10-02');
 });
 
 test('4) تسمية الفترة', () => {
   const A = api();
-  assert.strictEqual(A.__weekRangeLabel({ from: '2026-10-12', to: '2026-10-16' }), '12/10 – 16/10');
+  assert.strictEqual(A.__weekRangeLabel({ from: '2026-10-19', to: '2026-10-23' }), '19/10 – 23/10');
   assert.strictEqual(A.__weekRangeLabel({ from: '2026-10-05', to: '2026-10-09' }), '05/10 – 09/10');
   assert.strictEqual(A.__weekRangeLabel(null), '');
 });
 
-test('5) الرسم: ٥ أعمدة بأسماء أيام العمل، والأعداد مطابقة للسجلات الفعلية', () => {
+test('5) الرسم: ٥ أعمدة بأيام العمل، والأعداد مطابقة للسجلات الفعلية', () => {
   const A = api('2026-10-19');
   const d = db();
   const ids = ['s1', 's2', 's3'];
@@ -123,28 +119,27 @@ test('5) الرسم: ٥ أعمدة بأسماء أيام العمل، والأع
   assert.ok(res.html.includes('الإثنين') && res.html.includes('الجمعة'), 'أسماء الأيام ناقصة');
 
   const dates = (res.html.match(/title="(\d{4}-\d{2}-\d{2})"/g) || []).map(s => s.slice(7, 17));
-  assert.strictEqual(dates.length, 5);
-  assert.deepStrictEqual(dates, ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16']);
+  assert.deepStrictEqual(dates, ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23']);
   dates.forEach(ds => { const g = A.__bizDsToDate(ds).getDay(); assert.ok(g >= 1 && g <= 5, 'تاريخ نهاية أسبوع: ' + ds); });
 
-  const cc16 = A.attCountsByDate(d, '2026-10-16', ids);
-  assert.deepStrictEqual([cc16.present, cc16.absent, cc16.late], [1, 1, 1]);
-  assert.ok(res.html.includes('1/1/1'), 'أعداد 16/10 غير مطابقة');
-  const cc15 = A.attCountsByDate(d, '2026-10-15', ids);
-  assert.deepStrictEqual([cc15.present, cc15.absent, cc15.late], [2, 1, 0]);
-  assert.ok(res.html.includes('2/1/0'), 'أعداد 15/10 غير مطابقة');
-  assert.strictEqual(res.label, '12/10 – 16/10');
+  const cc23 = A.attCountsByDate(db(), '2026-10-23', ['s1', 's2', 's3']);
+  assert.deepStrictEqual([cc23.present, cc23.absent, cc23.late], [1, 1, 1]);
+  assert.ok(res.html.includes('1/1/1'), 'أعداد 23/10 غير مطابقة');
+  const cc22 = A.attCountsByDate(db(), '2026-10-22', ['s1', 's2', 's3']);
+  assert.deepStrictEqual([cc22.present, cc22.absent, cc22.late], [2, 1, 0]);
+  assert.ok(res.html.includes('2/1/0'), 'أعداد 22/10 غير مطابقة');
+  assert.strictEqual(res.label, '19/10 – 23/10');
 });
 
 test('6) المتأخر حاضر لا غائب، وسجلات نهاية الأسبوع مهمَلة تمامًا', () => {
   const A = api('2026-10-19');
-  const d = db();
   const ids = ['s1', 's2', 's3'];
-  const cc = A.attCountsByDate(d, '2026-10-16', ids);
+  const cc = A.attCountsByDate(db(), '2026-10-23', ids);
   assert.strictEqual(cc.absent, 1, 'المتأخر حُسب غائبًا');
   assert.strictEqual(cc.late, 1);
+  const d = db();
   const withWeekend = A.buildWeekChart(d, ids, 0);
-  const withoutWeekend = A.buildWeekChart({ students: d.students, attendance: d.attendance.filter(a => ['2026-10-17', '2026-10-18'].indexOf(a.date) < 0) }, ids, 0);
+  const withoutWeekend = A.buildWeekChart({ students: d.students, attendance: d.attendance.filter(a => ['2026-10-24', '2026-10-25'].indexOf(a.date) < 0) }, ids, 0);
   assert.strictEqual(withoutWeekend.sig, withWeekend.sig, 'سجلات نهاية الأسبوع أثّرت على الرسم');
 });
 
@@ -153,7 +148,7 @@ test('7) __analyticsIds يقتصر على الطلاب النشطين', () => {
   assert.deepStrictEqual([...A.__analyticsIds(db())], ['s1', 's2', 's3']);
 });
 
-test('8) الأزرار: السابقة تُزيح أسبوعًا والتالية تعود ولا تتجاوز الأحدث', () => {
+test('8) الأزرار: السابقة تُزيح أسبوعًا والتالية تعود ولا تتجاوز الأسبوع الحالي', () => {
   const els = makeEls();
   const A = api('2026-10-19', els);
   A.__win.__chartsData = db();
@@ -161,22 +156,22 @@ test('8) الأزرار: السابقة تُزيح أسبوعًا والتالي
   A.__win.__weekOffset = 0;
 
   A.__weekRerender();
-  assert.strictEqual(els.attWeekNext.disabled, true, 'زر التالية يجب أن يُعطّل عند الأحدث');
-  assert.ok(els.weekChartRange.textContent.includes('12/10'), 'التسمية الأولية غير صحيحة');
-  assert.ok((els.weekChartBox.innerHTML.match(/max-width:26px/g) || []).length === 5, 'لم يُرسم ٥ أعمدة');
+  assert.strictEqual(els.attWeekNext.disabled, true, 'زر التالية يجب أن يُعطّل عند الأسبوع الحالي');
+  assert.ok(els.weekChartRange.textContent.includes('19/10'), 'التسمية الأولية غير صحيحة');
+  assert.strictEqual((els.weekChartBox.innerHTML.match(/max-width:26px/g) || []).length, 5, 'لم يُرسم ٥ أعمدة');
 
   A.__weekPrev();
   assert.strictEqual(A.__win.__weekOffset, 1);
-  assert.ok(els.weekChartRange.textContent.includes('05/10'), 'لم تنتقل السابقة أسبوعًا');
+  assert.ok(els.weekChartRange.textContent.includes('12/10'), 'لم تنتقل السابقة أسبوعًا');
   assert.strictEqual(els.attWeekNext.disabled, false, 'زر التالية معطّل خطأً');
 
   A.__weekNext();
   assert.strictEqual(A.__win.__weekOffset, 0);
-  assert.ok(els.weekChartRange.textContent.includes('12/10'), 'لم تعد التالية للنافذة الأحدث');
+  assert.ok(els.weekChartRange.textContent.includes('19/10'), 'لم تعد التالية للأسبوع الحالي');
   assert.strictEqual(els.attWeekNext.disabled, true);
 
   A.__weekNext();
-  assert.strictEqual(A.__win.__weekOffset, 0, 'تجاوزت التالية النافذة الأحدث');
+  assert.strictEqual(A.__win.__weekOffset, 0, 'تجاوزت التالية الأسبوع الحالي');
 });
 
 test('9) بنية الواجهة: أزرار التنقّل والمعرّفات باقية مع الأعمدة الأصلية', () => {

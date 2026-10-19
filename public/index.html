@@ -3197,7 +3197,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-19 week-biz-days';
+const __APP_VER = '2026-10-19 week-current';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -7380,20 +7380,20 @@ function __bizDsToDate(ds){
 function __bizDateToDs(dt){
   return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
 }
-/* آخر جمعة ≤ اليوم */
-function __bizLastFriday(today){
+/* إثنين الأسبوع الحالي */
+function __bizWeekMonday(today){
   const dt = __bizDsToDate(today || todayStr()) || new Date();
-  let guard = 0;
-  while(dt.getDay() !== 5 && guard < 7){ dt.setDate(dt.getDate() - 1); guard++; }
+  const shift = (dt.getDay() + 6) % 7;
+  dt.setDate(dt.getDate() - shift);
   return dt;
 }
-/* نافذة الأسبوع: الإثنين→الجمعة؛ offset=0 الأحدث، وكل +1 = أسبوع أقدم */
+/* نافذة الأسبوع: الإثنين→الجمعة للأسبوع الحالي؛ offset=0 الأحدث، وكل +1 = أسبوع أقدم */
 function __weekRange(offset, today){
-  const fri = __bizLastFriday(today);
-  const end = new Date(fri.getFullYear(), fri.getMonth(), fri.getDate());
-  end.setDate(end.getDate() - 7 * (offset || 0));
-  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-  start.setDate(start.getDate() - 4);
+  const mon = __bizWeekMonday(today);
+  const start = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate());
+  start.setDate(start.getDate() - 7 * (offset || 0));
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  end.setDate(end.getDate() + 4);
   return { from: __bizDateToDs(start), to: __bizDateToDs(end) };
 }
 /* خمسة أيام عمل (تصاعديًا: الإثنين→الجمعة) */
@@ -13191,7 +13191,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=110', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=111', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
