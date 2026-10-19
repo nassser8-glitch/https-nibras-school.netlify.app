@@ -3217,7 +3217,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix';
+const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3987,6 +3987,7 @@ function renderLayout(user, hash){
     { title:'المدرسة', items:[
       { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉' },
       { href:'#/memo', key:'memo', label:'المفكرة والتذكير', icon:'📒' },
+      { href:'#/broadcast', key:'broadcast', label:'رسائل واتساب جماعية', icon:'📲' },
     ]},
     { title:'النظام', items:[
       { href:'#/settings', key:'settings', label:'الإعدادات', icon:'⚙️' },
@@ -4010,6 +4011,7 @@ function renderLayout(user, hash){
     { title:'المدرسة', items:[
       (user.role !== 'STUDENT') ? { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉', badge: user.role === 'AGENT' ? pendingPartRequests() : 0 } : null,
       { href:'#/memo', key:'memo', label:'المفكرة والتذكير', icon:'📒' },
+      (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR') ? { href:'#/broadcast', key:'broadcast', label:'رسائل واتساب جماعية', icon:'📲' } : null,
       { href:'#/daily-msg', key:'daily-msg', label:'رسالة اليوم', icon:'📢' },
       { href:'#/maintenance', key:'maintenance', label:'الصيانة', icon:'🔧' },
       (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR') ? { href:'#/guide-msgs', key:'guide-msgs', label:'رسائل المعلمين', icon:'💬', badge: msgMonitorBadge(user) } : null,
@@ -4043,6 +4045,7 @@ function renderLayout(user, hash){
   if(page === 'home') pageHtml = (user.role === 'STUDENT') ? renderStudentDashboard() : renderDashboard();
   else if(page === 'students') pageHtml = renderStudents();
   else if(page === 'attendance') pageHtml = renderAttendance();
+  else if(page === 'broadcast' && canBroadcastWa(user)) pageHtml = renderBroadcast();
   else if(page === 'notes'){
     pageHtml = renderNotes();
     // طابور مطالبات إعادة الملكية: يظهر للإدارة فقط، ويُجلب بعد الرسم
@@ -6638,6 +6641,445 @@ function __waGuardianOpen(studentId){
     alert('تعذّر فتح محادثة واتساب — تحقّق من الاتصال ثم أعد المحاولة.');
   }
 }
+
+/* ============================================================
+   خدمة الرسائل الجماعية عبر واتساب (الإدارة الكاملة)
+   - الصلاحية تُفرض هنا في الواجهة، وتُفرض ثانيةً على الخادم.
+   - الموافقة موثّقة لكل طالبة (waConsent) — لا تُفترض من مجرّد وجود الرقم.
+   - الإرسال الرسمي عبر الخادم (WhatsApp Cloud API)، أو يدوياً عبر wa.me.
+   ============================================================ */
+function canBroadcastWa(u){ return !!u && ['ADMIN','AGENT','SCHOOL_AGENT','COUNSELOR'].includes(u.role); }
+function studentWaConsent(s){ return !!(s && s.waConsent === true); }
+const WA_BC = { target:'all', classId:'', date:'', ids:[], message:'', mode:'manual',
+  campaignId:null, recipients:null, counts:null, warn:'', busy:false, config:null, lastResult:null };
+
+function waDefaultTemplate(){
+  return 'السلام عليكم ورحمة الله وبركاته،\nمعكم من المدرسة السعودية في اسلام آباد.\nنفيدكم بخصوص الطالبة {studentName} — صف {className}:\n\n';
+}
+function waTemplatesKey(){ return 'nibras_wa_templates_' + ((currentUser() && currentUser().id) || 'guest') + '_v1'; }
+function waLoadTemplates(){ try{ const a = JSON.parse(localStorage.getItem(waTemplatesKey()) || '[]'); return Array.isArray(a) ? a : []; }catch(e){ return []; } }
+function waSaveTemplates(a){ try{ localStorage.setItem(waTemplatesKey(), JSON.stringify(a)); }catch(e){} }
+
+/* توثيق/سحب موافقة ولي الأمر — تُحفظ ضمن بيانات الطالبة وتُزامَن كبقية الحقول */
+function setStudentWaConsent(studentId, val, opts){
+  if(!isAdminCadre(currentUser())) return;
+  const o = opts || {};
+  const d = loadDB();
+  const st = (d.students||[]).find(x => x.id === studentId);
+  if(!st) return;
+  const me = currentUser();
+  st.waConsent = !!val;
+  st.waConsentAt = Date.now();
+  st.waConsentBy = me ? me.id : null;
+  saveDB(d);
+  const schoolNow = getActiveSchool();
+  if(__serverEnabled() && schoolNow){
+    __saveGuardWatch(schoolNow, 'consent', __saveGuardOutcome);
+    __syncSchedule(schoolNow, 0);
+  }
+  if(!o.silent) renderApp();
+}
+function waToggleStudentConsent(studentId){
+  const s = studentById(studentId);
+  if(!s) return;
+  if(!studentWaConsent(s)){
+    if(!confirm('توثيق موافقة ولي أمر الطالبة «' + (s.fullName||'') + '» على استقبال رسائل واتساب من المدرسة؟')) return;
+    setStudentWaConsent(studentId, true, { silent:false });
+  } else {
+    if(!confirm('سحب موافقة ولي أمر الطالبة «' + (s.fullName||'') + '»؟')) return;
+    setStudentWaConsent(studentId, false, { silent:false });
+  }
+}
+
+/* منطق تحديد المستلمات (نسخة الواجهة للمعاينة الفورية قبل الإنشاء) */
+function __waEmptyCounts(){ return { totalInScope:0, withValidPhone:0, invalidOrMissing:0, noConsent:0, duplicates:0, finalCount:0 }; }
+function __waNormalizePhone(raw){
+  let d = String(raw==null?'':raw).replace(/\D/g,'');
+  if(!d) return '';
+  if(d.indexOf('00')===0) d = d.slice(2);
+  if(/^0[15]\d{8}$/.test(d)) d = '966' + d.slice(1);
+  else if(/^[15]\d{8}$/.test(d)) d = '966' + d;
+  return d;
+}
+function __waValidPhone(p){ return /^\d{8,15}$/.test(String(p||'')); }
+function __waMask(p){ const s=String(p||''); if(s.length<5) return '•••'; return s.slice(0,3) + '•'.repeat(Math.max(0,s.length-6)) + s.slice(-3); }
+function __waStudentPhone(s){ if(!s) return ''; const v=String(s.guardianPhone ?? s.whatsapp ?? '').replace(/\D/g,''); return __waNormalizePhone(v); }
+function __waNameOfClassLocal(classId){ if(!classId) return ''; const c = classById(classId); if(!c) return ''; try{ return classLabel(c); }catch(e){ return c.name || ''; } }
+function __waResolve(opts){
+  const o = opts || {};
+  const students = Array.isArray(o.students) ? o.students : [];
+  const attendance = Array.isArray(o.attendance) ? o.attendance : [];
+  const target = String(o.target || 'all');
+  const active = students.filter(s => s && s.active !== false);
+  let scope, warn = '';
+  if(target === 'class'){
+    if(!o.classId) return { list:[], counts:__waEmptyCounts(), warn:'لم يُحدَّد الفصل.' };
+    scope = active.filter(s => s.classId === o.classId);
+  } else if(target === 'absent'){
+    if(!o.date) return { list:[], counts:__waEmptyCounts(), warn:'لم يُحدَّد التاريخ.' };
+    const dayRecs = attendance.filter(r => r && !r.deleted && r.date === o.date);
+    if(!dayRecs.length) return { list:[], counts:__waEmptyCounts(), warn:'لا توجد بيانات حضور مسجّلة لهذا التاريخ — لا يمكن تحديد الغائبات. اختر تاريخاً آخر أو حدّد المستلمات يدوياً.' };
+    const absentIds = {};
+    dayRecs.forEach(r => { if(r.status === 'ABSENT') absentIds[r.studentId] = true; });
+    scope = active.filter(s => absentIds[s.id]);
+  } else if(target === 'manual'){
+    const ids = Array.isArray(o.ids) ? o.ids : [];
+    if(!ids.length) return { list:[], counts:__waEmptyCounts(), warn:'لم تُحدَّد أي طالبة.' };
+    const idSet = {}; ids.forEach(x => { if(x) idSet[x] = true; });
+    scope = active.filter(s => idSet[s.id]);
+  } else scope = active;
+  const seen = {}; let duplicates = 0;
+  const list = scope.map(s => {
+    const phone = __waStudentPhone(s);
+    const valid = __waValidPhone(phone);
+    const consent = studentWaConsent(s);
+    let reason = '';
+    if(!valid) reason = 'no_phone';
+    else if(!consent) reason = 'no_consent';
+    else if(seen[phone]){ reason = 'duplicate'; duplicates++; }
+    const included = !reason;
+    if(included) seen[phone] = true;
+    return { id:s.id, name:String(s.fullName||''), classId:s.classId||null, className:__waNameOfClassLocal(s.classId),
+      phone: included ? phone : '', phoneMasked: valid ? __waMask(phone) : '', valid, consent, included, reason };
+  });
+  const counts = {
+    totalInScope: scope.length,
+    withValidPhone: list.filter(r => r.valid).length,
+    invalidOrMissing: list.filter(r => !r.valid).length,
+    noConsent: list.filter(r => r.valid && !r.consent).length,
+    duplicates,
+    finalCount: list.filter(r => r.included).length,
+  };
+  return { list, counts, warn };
+}
+function __waLocalResolve(){ const d = loadDB(); return __waResolve({ students:d.students||[], attendance:d.attendance||[], target:WA_BC.target, classId:WA_BC.classId, date:WA_BC.date, ids:WA_BC.ids }); }
+function __waRenderTemplate(tpl, s, date){
+  return String(tpl||'')
+    .replace(/\{studentName\}/g, (s && s.fullName) || '')
+    .replace(/\{className\}/g, (s && s.classId) ? __waNameOfClassLocal(s.classId) : '')
+    .replace(/\{date\}/g, date || '');
+}
+
+/* ===== نداء الخادم الخاص بخدمة واتساب ===== */
+async function __waApi(method, path, body){
+  const opt = { method, headers:{} };
+  if(body){ opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+  const resp = await fetch('/api/wa' + path, opt);
+  let j = null; try{ j = await resp.json(); }catch(e){}
+  return { status: resp.status, ok: resp.ok, j };
+}
+async function __waLoadConfig(){
+  if(WA_BC.config) return;
+  try{ const r = await __waApi('GET','/config'); if(r.j && r.j.ok){ WA_BC.config = r.j.config; __waRepaint(); } }catch(e){}
+}
+function __waTargetPayload(){ return { type:WA_BC.target, classId:WA_BC.classId||undefined, date:WA_BC.date||undefined, ids:WA_BC.ids.slice() }; }
+
+/* ===== أحداث الواجهة ===== */
+function waSetTarget(t){ WA_BC.target = t; __waRepaint(); }
+function waSetClass(id){ WA_BC.classId = id; __waRepaint(); }
+function waSetDate(v){ WA_BC.date = v; __waRepaint(); }
+function waSetMode(m){ WA_BC.mode = m; __waRepaint(); }
+function waOnMessage(v){ WA_BC.message = v; }
+function waToggleId(id){
+  const i = WA_BC.ids.indexOf(id);
+  if(i === -1) WA_BC.ids.push(id); else WA_BC.ids.splice(i,1);
+  __waRepaint();
+}
+function waInsertVar(v){
+  const el = document.getElementById('wa-msg');
+  const cur = el ? el.value : WA_BC.message;
+  const pos = el && typeof el.selectionStart === 'number' ? el.selectionStart : cur.length;
+  const next = cur.slice(0,pos) + v + cur.slice(pos);
+  WA_BC.message = next;
+  if(el){ el.value = next; el.focus(); el.selectionStart = el.selectionEnd = pos + v.length; }
+}
+function waSaveTemplate(){
+  const t = String(WA_BC.message||'').trim();
+  if(!t){ alert('اكتب نص الرسالة أولاً.'); return; }
+  const name = prompt('اسم القالب:', 'قالب ' + (waLoadTemplates().length + 1));
+  if(name === null) return;
+  const arr = waLoadTemplates();
+  arr.push({ name: String(name||'').trim() || ('قالب ' + (arr.length+1)), text: WA_BC.message, at: Date.now() });
+  waSaveTemplates(arr);
+  __waRepaint();
+}
+function waApplyTemplate(i){
+  const arr = waLoadTemplates();
+  if(!arr[i]) return;
+  WA_BC.message = String(arr[i].text || '');
+  const el = document.getElementById('wa-msg'); if(el) el.value = WA_BC.message;
+  __waRepaint();
+}
+function waDeleteTemplate(i){
+  const arr = waLoadTemplates();
+  if(!arr[i]) return;
+  if(!confirm('حذف القالب «' + arr[i].name + '»؟')) return;
+  arr.splice(i,1); waSaveTemplates(arr); __waRepaint();
+}
+function waBulkConsent(){
+  const res = __waLocalResolve();
+  const targets = res.list.filter(r => r.valid && !r.consent);
+  if(!targets.length){ alert('لا توجد صالحة للتوثيق ضمن النطاق الحالي (كلهن موثّقات أو بلا رقم صالح).'); return; }
+  if(!confirm('توثيق موافقة ولي الأمر لـ ' + targets.length + ' طالبة ضمن النطاق الحالي؟')) return;
+  const d = loadDB(); const me = currentUser();
+  let n = 0;
+  (d.students||[]).forEach(s => {
+    if(!targets.some(t => t.id === s.id)) return;
+    if(s.waConsent === true) return;
+    s.waConsent = true; s.waConsentAt = Date.now(); s.waConsentBy = me ? me.id : null; n++;
+  });
+  saveDB(d);
+  const schoolNow = getActiveSchool();
+  if(__serverEnabled() && schoolNow){ __saveGuardWatch(schoolNow, 'consent', __saveGuardOutcome); __syncSchedule(schoolNow, 0); }
+  alert('تم توثيق ' + n + ' موافقة.');
+  __waRepaint();
+}
+
+/* ===== إنشاء الحملة والإرسال ===== */
+async function waCreateCampaign(){
+  if(WA_BC.busy) return;
+  const res = __waLocalResolve();
+  if(!res.counts.finalCount){ alert(res.warn || 'لا توجد مستلمات مؤهلات (رقم صالح + موافقة).'); return; }
+  if(!String(WA_BC.message||'').trim()){ alert('اكتب نص الرسالة أولاً.'); return; }
+  if(!confirm('تأكيد إنشاء الحملة لـ ' + res.counts.finalCount + ' مستلمة؟ (لن يُرسَل شيء بعد)')) return;
+  WA_BC.busy = true; __waRepaint();
+  try{
+    const r = await __waApi('POST','/campaign',{ mode:WA_BC.mode, message:WA_BC.message, target:__waTargetPayload() });
+    if(r.j && r.j.ok){
+      WA_BC.campaignId = r.j.campaignId;
+      WA_BC.recipients = r.j.recipients || [];
+      WA_BC.counts = r.j.counts || res.counts;
+      WA_BC.warn = r.j.warn || '';
+      WA_BC.lastResult = null;
+    } else {
+      alert('تعذّر إنشاء الحملة: ' + ((r.j && (r.j.warn || r.j.error)) || 'خطأ غير متوقع'));
+    }
+  }catch(e){ alert('تعذّر الاتصال بالخادم — تحقّق من الشبكة ثم أعد المحاولة.'); }
+  WA_BC.busy = false; __waRepaint();
+}
+async function waSendCloud(){
+  if(!WA_BC.campaignId || WA_BC.busy) return;
+  if(!confirm('تأكيد الإرسال الفعلي عبر واتساب الآن؟ لا يمكن التراجع بعد القبول.')) return;
+  WA_BC.busy = true; __waRepaint();
+  try{
+    const r = await __waApi('POST','/send',{ campaignId:WA_BC.campaignId });
+    WA_BC.lastResult = (r.j || { ok:false, error:'network' });
+  }catch(e){ WA_BC.lastResult = { ok:false, error:'network' }; }
+  WA_BC.busy = false;
+  await waRefreshReport();
+  __waRepaint();
+}
+async function __waPostStatus(messageId, status){
+  if(!WA_BC.campaignId || !messageId) return;
+  try{ await __waApi('POST','/status',{ campaignId:WA_BC.campaignId, messageId, status }); }catch(e){}
+  await waRefreshReport();
+  __waRepaint();
+}
+function waManualOpen(messageId, studentId){
+  const s = studentById(studentId);
+  if(!s) return;
+  const phone = __waStudentPhone(s);
+  if(!__waValidPhone(phone)){ alert('رقم ولي الأمر غير صالح لهذه الطالبة.'); return; }
+  const text = __waRenderTemplate(WA_BC.message, s, WA_BC.date);
+  window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(text), '_blank', 'noopener');
+  __waPostStatus(messageId, 'opened');
+}
+function waManualConfirm(messageId){ __waPostStatus(messageId, 'confirmed_sent'); }
+function waManualFail(messageId){ __waPostStatus(messageId, 'failed'); }
+async function waCancelCampaign(){
+  if(!WA_BC.campaignId || WA_BC.busy) return;
+  if(!confirm('إلغاء الرسائل المعلّقة لهذه الحملة؟ (لا يمسّ ما أُرسل فعلاً)')) return;
+  WA_BC.busy = true; __waRepaint();
+  try{ await __waApi('POST','/cancel',{ campaignId:WA_BC.campaignId }); }catch(e){}
+  WA_BC.busy = false;
+  await waRefreshReport(); __waRepaint();
+}
+async function waRefreshReport(){
+  if(!WA_BC.campaignId) return;
+  try{
+    const r = await __waApi('GET','/campaign/' + WA_BC.campaignId);
+    if(r.j && r.j.ok){
+      WA_BC.report = r.j.campaign;
+      WA_BC.recipients = (r.j.campaign.messages||[]).map(m => ({ messageId:m.id, id:m.studentId, name:m.name, className:m.className, phoneMasked:m.phoneMasked, status:m.status, reason:m.reason, valid:true, consent:true, included:true }));
+    }
+  }catch(e){}
+}
+function waNewCampaign(){
+  WA_BC.campaignId = null; WA_BC.recipients = null; WA_BC.lastResult = null; WA_BC.report = null;
+  __waRepaint();
+}
+function __waRepaint(){ const el = document.getElementById('wa-app'); if(el) el.innerHTML = __waShell(); }
+
+/* ===== واجهة الصفحة ===== */
+function renderBroadcast(){
+  if(!__serverEnabled()){
+    return `<div class="card" style="padding:18px"><h3 style="margin-top:0">📲 الرسائل الجماعية عبر واتساب</h3>
+      <p class="muted">هذه الخدمة تحتاج الاتصال بخادم نبراس (بيانات القسم والحملات). افتح النظام من نفس الموقع المتصل بالخادم.</p></div>`;
+  }
+  if(!canBroadcastWa(currentUser())){
+    return `<div class="card" style="padding:18px"><h3 style="margin-top:0">📲 الرسائل الجماعية عبر واتساب</h3>
+      <p class="muted">لا تملك صلاحية الوصول إلى هذه الخدمة.</p></div>`;
+  }
+  if(!WA_BC.date) WA_BC.date = todayStr();
+  if(!WA_BC.message) WA_BC.message = waDefaultTemplate();
+  setTimeout(__waLoadConfig, 0);
+  return `<div id="wa-app">${__waShell()}</div>`;
+}
+function __waCountsHtml(c){
+  c = c || __waEmptyCounts();
+  const box = (label, val, color) => `<div style="flex:1;min-width:120px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px">
+    <div class="muted small">${label}</div><div style="font-weight:800;font-size:20px;color:${color||'#0f172a'}">${val}</div></div>`;
+  return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+    ${box('إجمالي النطاق', c.totalInScope)}
+    ${box('أرقام صالحة', c.withValidPhone, '#16a34a')}
+    ${box('بلا رقم/غير صالح', c.invalidOrMissing, '#dc2626')}
+    ${box('بلا موافقة', c.noConsent, '#d97706')}
+    ${box('مكرّرة', c.duplicates, '#7c3aed')}
+    ${box('العدد النهائي للإرسال', c.finalCount, '#2563eb')}
+  </div>`;
+}
+function __waReasonLabel(r){
+  if(r.included) return '<span style="color:#16a34a">✅ مؤهّلة</span>';
+  if(r.reason === 'no_phone') return '<span style="color:#dc2626">بلا رقم صالح</span>';
+  if(r.reason === 'no_consent') return '<span style="color:#d97706">بلا موافقة</span>';
+  if(r.reason === 'duplicate') return '<span style="color:#7c3aed">مكرّرة</span>';
+  return '<span class="muted">—</span>';
+}
+function __waStatusLabel(st){
+  const map = { pending:'⏳ معلّقة', opened:'💬 فُتحت المحادثة', confirmed_sent:'✅ أُرسلت يدوياً', accepted:'☁️ مقبولة من واتساب', sent:'☁️ أُرسلت', delivered:'📬 تم التسليم', read:'👁 قُرئت', failed:'❌ فشلت', skipped:'— مستبعدة', cancelled:'⛔ ملغاة' };
+  return map[st] || (st || '—');
+}
+function __waShell(){
+  const d = loadDB();
+  const res = __waLocalResolve();
+  const cfg = WA_BC.config;
+  const classes = (typeof getClassesSorted === 'function' ? getClassesSorted() : (d.classes||[]));
+  const activeStudents = (d.students||[]).filter(s => s.active !== false);
+
+  const targetRadio = (val, label) => `<label style="display:inline-flex;align-items:center;gap:6px;margin-inline-end:14px;cursor:pointer">
+    <input type="radio" name="wa-target" ${WA_BC.target===val?'checked':''} onchange="waSetTarget('${val}')"> ${label}</label>`;
+
+  let scopeControls = '';
+  if(WA_BC.target === 'class'){
+    scopeControls = `<div style="margin-top:10px"><span class="muted small">الفصل:</span>
+      <select onchange="waSetClass(this.value)" class="input" style="max-width:320px;margin-inline-start:8px">
+        <option value="">— اختر الفصل —</option>
+        ${classes.map(c => `<option value="${escapeHtml(c.id)}" ${WA_BC.classId===c.id?'selected':''}>${escapeHtml(__waNameOfClassLocal(c.id))}</option>`).join('')}
+      </select></div>`;
+  } else if(WA_BC.target === 'absent'){
+    scopeControls = `<div style="margin-top:10px"><span class="muted small">تاريخ الغياب:</span>
+      <input type="date" value="${escapeHtml(WA_BC.date)}" onchange="waSetDate(this.value)" class="input" style="max-width:200px;margin-inline-start:8px"></div>`;
+  } else if(WA_BC.target === 'manual'){
+    scopeControls = `<div style="margin-top:10px;max-height:240px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;padding:8px">
+      ${activeStudents.map(s => `<label style="display:flex;align-items:center;gap:8px;padding:4px 6px;border-bottom:1px solid #f1f5f9;cursor:pointer">
+        <input type="checkbox" ${WA_BC.ids.includes(s.id)?'checked':''} onchange="waToggleId('${escapeHtml(s.id)}')">
+        <span>${escapeHtml(s.fullName||'')}</span><span class="muted small">${escapeHtml(__waNameOfClassLocal(s.classId))}</span>
+      </label>`).join('') || '<p class="muted small">لا توجد طالبات.</p>'}
+    </div><div class="muted small" style="margin-top:4px">المحدَّدات: ${WA_BC.ids.length}</div>`;
+  }
+
+  const cloudReady = !!(cfg && cfg.configured);
+  const modeControls = `<div style="margin-top:10px">
+    <label style="display:inline-flex;align-items:center;gap:6px;margin-inline-end:14px;cursor:pointer">
+      <input type="radio" name="wa-mode" ${WA_BC.mode==='manual'?'checked':''} onchange="waSetMode('manual')"> 💬 إرسال يدوي (wa.me) — محادثة واحدة تلو الأخرى</label>
+    <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;${cloudReady?'':'opacity:.5'}">
+      <input type="radio" name="wa-mode" ${WA_BC.mode==='cloud'?'checked':''} ${cloudReady?'':'disabled'} onchange="waSetMode('cloud')"> ☁️ إرسال رسمي عبر WhatsApp Cloud API</label>
+    ${cloudReady
+      ? `<div class="muted small" style="margin-top:4px">مُهيّأ على الخادم · إصدار ${escapeHtml((cfg&&cfg.apiVersion)||'')}${cfg&&cfg.templateName?(' · قالب: '+escapeHtml(cfg.templateName)):''}</div>`
+      : `<div class="muted small" style="margin-top:4px;color:#b45309">غير مهيّأ على الخادم. يتطلب ضبط متغيّرات البيئة المطلوبة على الخادم${(cfg&&cfg.requirements&&cfg.requirements.length)?(' — '+escapeHtml(cfg.requirements.join(' , '))):''} — استخدم الإرسال اليدوي حالياً.</div>`}
+  </div>`;
+
+  const templates = waLoadTemplates();
+  const editor = `<div style="margin-top:8px">
+    <div class="muted small" style="margin-bottom:4px">المتغيرات (تُستبدل لكل مستلمة):</div>
+    ${['{studentName}','{className}','{date}'].map(v => `<button class="btn-secondary" style="margin-inline-end:6px;margin-bottom:6px" onclick="waInsertVar('${v}')">${v}</button>`).join('')}
+    <textarea id="wa-msg" class="input" style="width:100%;min-height:130px;margin-top:6px;direction:rtl" oninput="waOnMessage(this.value)" placeholder="اكتب نص الرسالة...">${escapeHtml(WA_BC.message)}</textarea>
+    <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn-secondary" onclick="waSaveTemplate()">💾 حفظ كقالب</button>
+      ${templates.length ? `<select class="input" style="max-width:240px" onchange="if(this.value!==''){waApplyTemplate(Number(this.value));this.value='';}">
+        <option value="">— استرجاع قالب —</option>
+        ${templates.map((t,i) => `<option value="${i}">${escapeHtml(t.name||('قالب '+(i+1)))}</option>`).join('')}
+      </select>` : ''}
+      ${templates.length ? `<button class="btn-secondary" onclick="waDeleteTemplate(${templates.length-1})">🗑 حذف الأخير</button>` : ''}
+    </div>
+  </div>`;
+
+  const previewRows = res.list.map(r => `<tr>
+    <td>${escapeHtml(r.name)}</td>
+    <td class="muted small">${escapeHtml(r.className||'')}</td>
+    <td style="direction:ltr">${escapeHtml(r.phoneMasked||'—')}</td>
+    <td>${r.consent?'<span style="color:#16a34a">موافقة</span>':'<span style="color:#d97706">لا موافقة</span>'}</td>
+    <td>${__waReasonLabel(r)}</td>
+  </tr>`).join('');
+
+  let sendPanel = '';
+  if(WA_BC.campaignId){
+    const recs = WA_BC.recipients || [];
+    const rows = recs.filter(r => r.included).map(r => `<tr>
+      <td>${escapeHtml(r.name||'')}</td>
+      <td class="muted small">${escapeHtml(r.className||'')}</td>
+      <td style="direction:ltr">${escapeHtml(r.phoneMasked||'')}</td>
+      <td>${__waStatusLabel(r.status)}</td>
+      <td style="white-space:nowrap">
+        ${(WA_BC.mode==='manual' && r.messageId) ? `
+          <button class="btn-secondary" style="padding:2px 8px;font-size:11.5px" onclick="waManualOpen(${r.messageId},'${escapeHtml(r.id)}')">💬 فتح</button>
+          <button class="btn-secondary" style="padding:2px 8px;font-size:11.5px" onclick="waManualConfirm(${r.messageId})">✅ تم</button>
+          <button class="btn-secondary" style="padding:2px 8px;font-size:11.5px" onclick="waManualFail(${r.messageId})">❌ فشل</button>` : ''}
+      </td></tr>`).join('');
+    const lr = WA_BC.lastResult;
+    sendPanel = `<div class="card" style="padding:16px;margin-top:14px">
+      <div class="header-row"><h3 style="margin:0">🚀 الحملة #${WA_BC.campaignId} (${WA_BC.mode==='cloud'?'رسمية':'يدوية'})</h3>
+        <button class="btn-secondary" onclick="waNewCampaign()">حملة جديدة</button></div>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        ${WA_BC.mode==='cloud' ? `<button class="btn-primary" onclick="waSendCloud()" ${WA_BC.busy?'disabled':''}>☁️ إرسال الآن</button>` : ''}
+        <button class="btn-secondary" onclick="waCancelCampaign()" ${WA_BC.busy?'disabled':''}>⛔ إلغاء المعلّق</button>
+        <button class="btn-secondary" onclick="waRefreshReport().then(__waRepaint)">🔄 تحديث التقرير</button>
+      </div>
+      ${lr ? `<div style="margin-top:10px;padding:10px;border-radius:9px;background:${lr.ok?'#f0fdf4':'#fef2f2'};color:${lr.ok?'#166534':'#991b1b'}">
+        ${lr.ok ? `تم إرسال ${lr.sent} · فشل ${lr.failed} · مُعالَج سابقاً ${lr.alreadyHandled}` : `⚠ ${(lr.message||lr.error||'تعذّر الإرسال')}`}
+      </div>` : ''}
+      <table class="data-table" style="margin-top:10px"><thead><tr><th>الطالبة</th><th>الفصل</th><th>الرقم</th><th>الحالة</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5" class="muted" style="text-align:center;padding:14px">لا مستلمات مؤهلات</td></tr>'}</tbody></table>
+    </div>`;
+  }
+
+  return `
+  <div class="header-row"><h2 style="margin:0">📲 الرسائل الجماعية عبر واتساب</h2></div>
+  <p class="muted small">اختر الفئة، اكتب الرسالة بمتغيّراتها، راجع الأعداد والمستلمات، ثم أكّد. لا يُرسَل شيء قبل التأكيد، والإرسال يقتصر على من وُثّقت موافقتها ورقمها صالح.</p>
+
+  <div class="card" style="padding:16px;margin-top:12px">
+    <h3 style="margin-top:0;font-size:15px">1) الفئة المستهدفة</h3>
+    <div>
+      ${targetRadio('all','كل الطالبات')}
+      ${targetRadio('class','فصل محدّد')}
+      ${targetRadio('absent','الغائبات في تاريخ')}
+      ${targetRadio('manual','اختيار يدوي')}
+    </div>
+    ${scopeControls}
+    ${res.warn ? `<div style="margin-top:10px;padding:9px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;color:#92400e">⚠ ${escapeHtml(res.warn)}</div>` : ''}
+  </div>
+
+  <div class="card" style="padding:16px;margin-top:12px">
+    <h3 style="margin-top:0;font-size:15px">2) الرسالة</h3>
+    ${editor}
+    <h3 style="margin:16px 0 4px;font-size:15px">3) طريقة الإرسال</h3>
+    ${modeControls}
+  </div>
+
+  <div class="card" style="padding:16px;margin-top:12px">
+    <h3 style="margin-top:0;font-size:15px">4) المعاينة والأعداد</h3>
+    ${__waCountsHtml(res.counts)}
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-primary" onclick="waCreateCampaign()" ${WA_BC.busy?'disabled':''}>✔️ إنشاء الحملة وتأكيد</button>
+      <button class="btn-secondary" onclick="waBulkConsent()">✅ توثيق موافقة المؤهّلات (بلا موافقة)</button>
+    </div>
+    <div style="margin-top:12px;max-height:300px;overflow:auto">
+      <table class="data-table"><thead><tr><th>الطالبة</th><th>الفصل</th><th>الرقم</th><th>الموافقة</th><th>الحالة</th></tr></thead>
+        <tbody>${previewRows || '<tr><td colspan="5" class="muted" style="text-align:center;padding:14px">لا نتائج في النطاق الحالي</td></tr>'}</tbody></table>
+    </div>
+  </div>
+  ${sendPanel}`;
+}
 /* زر «تحديث الآن» في نافذة النقاط: يسحب أحدث نسخة من الخادم ثم يعيد فتح
    النافذة نفسها بالبيانات الحقيقية — فيتبدّد صفُّ «سجلات خاصة» الوهمي أمام
    المدير/الوكيل، وتظهر السطور الفعلية بعد أن تصل إلى جهازه. */
@@ -6732,7 +7174,10 @@ function showStudentPoints(studentId){
       <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px">
         <span class="muted small" style="font-weight:700">📱 رقم موبايل ولي الأمر:</span>
         <span id="gPhone-${s.id}" style="font-weight:700;direction:ltr">${studentPhone(s) ? escapeHtml(studentPhone(s)) : '<span style="color:#94a3b8;font-weight:400">غير مُدخل بعد</span>'}</span>
-        <button class="btn-secondary" style="padding:2px 9px;font-size:11.5px;margin-inline-start:auto" onclick="editStudentPhone('${escapeHtml(s.id)}')">✏️ تعديل الرقم</button>
+        <button class="btn-secondary" style="padding:2px 9px;font-size:11.5px" onclick="editStudentPhone('${escapeHtml(s.id)}')">✏️ تعديل الرقم</button>
+        ${isAdminCadre(currentUser()) ? `
+        <span style="margin-inline-start:auto;font-size:11.5px;font-weight:700;color:${studentWaConsent(s)?'#16a34a':'#d97706'}">${studentWaConsent(s)?'✅ موافقة واتساب موثّقة':'⛔ لا موافقة واتساب'}</span>
+        <button class="btn-secondary" style="padding:2px 9px;font-size:11.5px" onclick="waToggleStudentConsent('${escapeHtml(s.id)}')">${studentWaConsent(s)?'سحب الموافقة':'توثيق الموافقة'}</button>` : ''}
       </div>` : ''}
       <div class="grid grid-3" style="margin-top:12px">
         <div class="card" style="padding:10px;text-align:center"><p class="muted small">النقاط الإيجابية</p><p class="stat-value green" style="font-size:20px">+${pos}</p></div>
@@ -9037,7 +9482,8 @@ const __SAVE_LABEL = {
   'assignment':      { ok:'✅ تم حفظ التكليف على الخادم بنجاح.',    mid:'🔵 جارٍ حفظ التكليف على الخادم...',    noun:'التكليف' },
   'assignment-del':  { ok:'✅ تم حذف التكليف على الخادم بنجاح.',    mid:'🔵 جارٍ حذف التكليف على الخادم...',    noun:'الحذف' },
   'attendance':      { ok:'✅ تم حفظ الحضور على الخادم بنجاح.',      mid:'🔵 جارٍ حفظ الحضور على الخادم...',      noun:'الحضور' },
-  'phone':           { ok:'✅ تم حفظ رقم ولي الأمر على الخادم بنجاح.', mid:'🔵 جارٍ حفظ رقم ولي الأمر على الخادم...', noun:'الرقم' }
+  'phone':           { ok:'✅ تم حفظ رقم ولي الأمر على الخادم بنجاح.', mid:'🔵 جارٍ حفظ رقم ولي الأمر على الخادم...', noun:'الرقم' },
+  'consent':         { ok:'✅ تم حفظ موافقة واتساب على الخادم بنجاح.', mid:'🔵 جارٍ حفظ موافقة واتساب...', noun:'الموافقة' }
 };
 function __saveGuardWatch(school, kind, cb){
   if(!school) return;
@@ -13254,7 +13700,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=114', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=115', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

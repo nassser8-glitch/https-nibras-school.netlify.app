@@ -13,6 +13,8 @@ const db = require('./db');
 // خصوصية الملاحظات + حساب أرصدة النقاط على الخادم (مصدر الحقيقة بعد إخفاء النصوص)
 const notePrivacy = require('./notes-privacy');
 const transferPrivacy = require('./transfers-privacy');
+// خدمة الرسائل الجماعية عبر واتساب (منطق خالص بلا وصول لقاعدة البيانات)
+const wa = require('./whatsapp');
 
 // قراءة متغير: من Environment أولاً، ثم من ملف سري في /etc/secrets (بديل Render)
 function envOrSecret(name, fallback) {
@@ -3012,6 +3014,220 @@ app.post('/api/ops/clean-girls', requireAuth, async (req, res) => {
     if (!out.written) return res.json({ ok: false, error: 'no data', reason: out.reason });
     res.json({ ok: true, ...out.value });
   } catch (e) { console.error('[clean-girls]', e); res.status(500).json({ error: String(e && e.message || e) }); }
+});
+
+/* ============================================================
+   الرسائل الجماعية عبر واتساب (خدمة الإدارة)
+   - الإعداد والمفتاح من متغيرات البيئة فقط (لا أسرار في الواجهة).
+   - الصلاحية تُفرض هنا على الخادم، والعزل بقسم المستخدم.
+   - تحديد المستلمات يتم على الخادم من بيانات القسم الرسمية.
+   - لا يُرسَل أي شيء فعلياً إن لم يكن Cloud API مهيأً.
+   ============================================================ */
+function waConfig() { return wa.configFromEnv(n => envOrSecret(n, '')); }
+function waNameOfClass(data, classId) {
+  if (!classId || !data) return '';
+  const c = (data.classes || []).find(x => x.id === classId);
+  if (!c) return '';
+  const g = (data.grades || []).find(x => x.id === c.gradeId);
+  return (g ? g.name + ' - ' : '') + c.name;
+}
+
+// إعداد الخدمة المتاح للواجهة (بلا أسرار)
+app.get('/api/wa/config', requireAuth, (req, res) => {
+  res.json({ ok: true, config: wa.publicConfig(waConfig()) });
+});
+
+// إنشاء حملة (تسجيل المستلمات والرسائل) بلا إرسال — تُستخدم في الوضعين
+app.post('/api/wa/campaign', requireAuth, async (req, res) => {
+  try {
+    const school = db.SCHOOLS[0];
+    if (!wa.canBroadcast(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const body = req.body || {};
+    const target = body.target || {};
+    const rec = await db.getSchoolData(school);
+    const data = (rec && rec.data) || {};
+    const resolved = wa.resolveRecipients({
+      students: data.students || [],
+      attendance: data.attendance || [],
+      target: target.type,
+      classId: target.classId,
+      date: target.date,
+      ids: target.ids,
+      classNameOf: (id) => waNameOfClass(data, id),
+    });
+    if (!resolved.list.length) return res.status(400).json({ ok: false, error: 'no_recipients', warn: resolved.warn, counts: resolved.counts });
+    const msgErr = wa.validateMessage(body.message);
+    if (msgErr) return res.status(400).json({ ok: false, error: msgErr, counts: resolved.counts });
+    const message = String(body.message || '');
+    const mode = (body.mode === 'cloud') ? 'cloud' : 'manual';
+    const dateLabel = String(target.date || '');
+    const messages = resolved.list.map(r => ({
+      studentId: r.id,
+      name: r.name,
+      className: r.className,
+      phone: r.included ? r.phone : null,
+      message: wa.renderTemplate(message, { studentName: r.name, className: r.className, date: dateLabel }),
+      status: r.included ? 'pending' : 'skipped',
+      reason: r.included ? '' : r.reason,
+    }));
+    const created = await db.createWaCampaign({
+      school, createdBy: req.session.id, createdByName: req.session.name,
+      mode, targetType: target.type || 'all', targetMeta: target, message, counts: resolved.counts, status: 'draft',
+    }, messages);
+    const full = await db.getWaCampaign(created.id);
+    const byStudent = {};
+    (full.messages || []).forEach(m => { byStudent[m.student_id] = m.id; });
+    res.json({
+      ok: true, campaignId: created.id, mode, counts: resolved.counts, warn: resolved.warn,
+      recipients: resolved.list.map(r => ({
+        messageId: byStudent[r.id] || null,
+        id: r.id, name: r.name, className: r.className,
+        phoneMasked: r.phoneMasked, valid: r.valid, consent: r.consent, included: r.included, reason: r.reason,
+      })),
+    });
+  } catch (e) { fail(res)(e); }
+});
+
+// الإرسال الرسمي عبر Cloud API (خادم فقط) — يتخطى ما أُرسل/قُبل سابقاً
+app.post('/api/wa/send', requireAuth, async (req, res) => {
+  try {
+    const school = db.SCHOOLS[0];
+    if (!wa.canBroadcast(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const campaignId = Number(req.body && req.body.campaignId);
+    if (!campaignId) return res.status(400).json({ error: 'invalid' });
+    const camp = await db.getWaCampaign(campaignId);
+    if (!camp || camp.school !== school) return res.status(404).json({ error: 'not_found' });
+    const cfg = waConfig();
+    if (!cfg.configured) {
+      return res.json({
+        ok: false, error: 'not_configured',
+        requirements: wa.publicConfig(cfg).requirements,
+        message: 'الإرسال الرسمي عبر واتساب غير مهيأ على الخادم. اضبط متغيرات البيئة المطلوبة، أو استخدم الإرسال اليدوي (فتح المحادثة).',
+      });
+    }
+    const all = camp.messages || [];
+    const pending = all.filter(m => m.status === 'pending' && m.phone);
+    let sent = 0, failed = 0;
+    const results = [];
+    for (const m of pending) {
+      const r = await wa.sendCloudMessage(m.phone, m.message || camp.message, cfg);
+      if (r.ok) {
+        let status = 'accepted';
+        // منع التكرار: لو عاد نفس معرّف المزوّد لرسالة أخرى فلا نكرّره
+        if (r.providerId) {
+          const dup = await db.findWaMessageByProvider(r.providerId);
+          if (dup && dup.id !== m.id) status = dup.status || 'accepted';
+        }
+        await db.updateWaMessage(m.id, { status, provider_id: r.providerId || null, error: null });
+        sent++;
+        results.push({ messageId: m.id, ok: true, status });
+      } else {
+        await db.updateWaMessage(m.id, { status: 'failed', error: String(r.error || '').slice(0, 300) });
+        failed++;
+        results.push({ messageId: m.id, ok: false, error: r.error });
+      }
+    }
+    await db.updateWaCampaignStatus(campaignId, failed && !sent ? 'failed' : 'sent');
+    res.json({
+      ok: true, campaignId, mode: 'cloud', sent, failed,
+      alreadyHandled: all.length - pending.length,
+      results,
+    });
+  } catch (e) { fail(res)(e); }
+});
+
+// تحديث حالة رسالة في الوضع اليدوي (فتح المحادثة / تأكيد الإرسال اليدوي / فشل)
+app.post('/api/wa/status', requireAuth, async (req, res) => {
+  try {
+    const school = db.SCHOOLS[0];
+    if (!wa.canBroadcast(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const body = req.body || {};
+    const campaignId = Number(body.campaignId);
+    const messageId = Number(body.messageId);
+    const status = String(body.status || '');
+    if (!campaignId || !messageId) return res.status(400).json({ error: 'invalid' });
+    if (wa.MANUAL_STATUSES.indexOf(status) === -1) return res.status(400).json({ error: 'invalid_status' });
+    const camp = await db.getWaCampaign(campaignId);
+    if (!camp || camp.school !== school) return res.status(404).json({ error: 'not_found' });
+    const msg = (camp.messages || []).find(m => m.id === messageId);
+    if (!msg) return res.status(404).json({ error: 'not_found' });
+    const merged = wa.mergeStatus(msg.status, status);
+    await db.updateWaMessage(messageId, { status: merged });
+    res.json({ ok: true, status: merged });
+  } catch (e) { fail(res)(e); }
+});
+
+// إلغاء الرسائل المعلّقة لحملة (لا يمسّ ما أُرسل فعلاً)
+app.post('/api/wa/cancel', requireAuth, async (req, res) => {
+  try {
+    const school = db.SCHOOLS[0];
+    if (!wa.canBroadcast(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const campaignId = Number(req.body && req.body.campaignId);
+    if (!campaignId) return res.status(400).json({ error: 'invalid' });
+    const camp = await db.getWaCampaign(campaignId);
+    if (!camp || camp.school !== school) return res.status(404).json({ error: 'not_found' });
+    const n = await db.cancelWaCampaign(campaignId);
+    res.json({ ok: true, cancelled: n });
+  } catch (e) { fail(res)(e); }
+});
+
+// تقرير حملة واحدة (أرقام مقنّعة فقط)
+app.get('/api/wa/campaign/:id', requireAuth, async (req, res) => {
+  try {
+    const school = db.SCHOOLS[0];
+    if (!wa.canBroadcast(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const camp = await db.getWaCampaign(Number(req.params.id));
+    if (!camp || camp.school !== school) return res.status(404).json({ error: 'not_found' });
+    res.json({ ok: true, campaign: {
+      id: camp.id, createdAt: camp.created_at, mode: camp.mode, targetType: camp.target_type,
+      targetMeta: camp.target_meta, message: camp.message, counts: camp.counts, status: camp.status,
+      createdByName: camp.created_by_name,
+      messages: (camp.messages || []).map(m => ({
+        id: m.id, studentId: m.student_id, name: m.student_name, className: m.class_name,
+        phoneMasked: wa.maskPhone(m.phone), status: m.status, reason: m.reason, error: m.error,
+      })),
+    } });
+  } catch (e) { fail(res)(e); }
+});
+
+// قائمة الحملات (بلا رسائلها)
+app.get('/api/wa/campaigns', requireAuth, async (req, res) => {
+  try {
+    const school = db.SCHOOLS[0];
+    if (!wa.canBroadcast(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const rows = await db.listWaCampaigns(school, req.query.limit);
+    res.json({ ok: true, campaigns: rows.map(c => ({
+      id: c.id, createdAt: c.created_at, mode: c.mode, targetType: c.target_type,
+      message: String(c.message || '').slice(0, 120), counts: c.counts, status: c.status, createdByName: c.created_by_name,
+    })) });
+  } catch (e) { fail(res)(e); }
+});
+
+// Webhook واتساب: التحقق ثم تحديث الحالات (مفتوح، لا يكشف بيانات)
+app.get('/api/wa/webhook', (req, res) => {
+  const cfg = waConfig();
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  if (mode === 'subscribe' && cfg.verifyToken && token === cfg.verifyToken) return res.status(200).send(String(req.query['hub.challenge'] || ''));
+  return res.sendStatus(403);
+});
+app.post('/api/wa/webhook', async (req, res) => {
+  try {
+    const body = req.body || {};
+    for (const en of (Array.isArray(body.entry) ? body.entry : [])) {
+      for (const ch of (Array.isArray(en.changes) ? en.changes : [])) {
+        const v = ch.value || {};
+        for (const st of (Array.isArray(v.statuses) ? v.statuses : [])) {
+          const providerId = st.id, status = st.status;
+          if (!providerId || !status) continue;
+          const m = await db.findWaMessageByProvider(providerId);
+          if (!m) continue;
+          await db.updateWaMessage(m.id, { status: wa.mergeStatus(m.status, status) });
+        }
+      }
+    }
+    res.sendStatus(200);
+  } catch (e) { console.error('[wa-webhook]', e && e.message); res.sendStatus(200); }
 });
 
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));
