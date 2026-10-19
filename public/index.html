@@ -699,6 +699,57 @@ window.__nibrasBootErr = '';
     svg, canvas { max-width:100%; }
     .notif-drop { right:auto; left:0; width:min(300px, calc(100vw - 24px)); }
   }
+  /* ===== بوابة الروابط التعليمية ===== */
+  .strip-edu { cursor:pointer; }
+  .strip-edu:hover { box-shadow:0 6px 16px rgba(219,39,119,.18); }
+  .edu-box { max-width:900px; max-height:92vh; overflow:auto; }
+  .edu-sub { font-size:12px; color:#64748b; margin-top:4px; line-height:1.6; }
+  .edu-tools { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:4px 0 14px; }
+  .edu-tools .edu-search { flex:1; min-width:200px; }
+  .edu-body { min-height:80px; }
+  .edu-sec { margin-bottom:16px; }
+  .edu-sec-title { display:flex; align-items:center; gap:7px; font-size:13.5px; font-weight:800;
+    color:#334155; margin:0 0 9px; padding-bottom:7px; border-bottom:1px dashed #e2e8f0; }
+  .edu-sec-n { font-size:11px; font-weight:700; color:#94a3b8; background:#f1f5f9; border-radius:999px; padding:1px 8px; }
+  .edu-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:10px; }
+  .edu-card { display:flex; gap:10px; align-items:flex-start; padding:11px 12px; border:1px solid #e6edf5;
+    border-radius:14px; background:#fff; text-decoration:none; color:#111827;
+    box-shadow:0 2px 10px rgba(15,79,136,.05); transition:transform .12s, box-shadow .12s, border-color .12s; }
+  .edu-card:hover, .edu-card:focus { transform:translateY(-2px); box-shadow:0 8px 22px rgba(15,79,136,.14); border-color:#c7ddf0; outline:none; }
+  .edu-card-ico { flex:0 0 40px; width:40px; height:40px; display:flex; align-items:center; justify-content:center;
+    border-radius:12px; font-size:19px; background:#eef4fb; }
+  .edu-card-body { min-width:0; flex:1; }
+  .edu-card-name { font-weight:800; font-size:13.5px; display:flex; align-items:center; gap:6px; line-height:1.4; }
+  .edu-card-ext { font-size:11px; opacity:.45; font-weight:700; }
+  .edu-card-desc { display:block; font-size:11.5px; color:#64748b; margin-top:3px; line-height:1.55; }
+  .edu-empty { text-align:center; color:#6b7280; padding:30px 12px; font-size:13.5px; }
+  .edu-info { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; border-radius:10px; padding:9px 12px; font-size:12.5px; }
+  .edu-admin-row { display:flex; gap:8px; align-items:center; padding:8px 10px; border:1px solid #e6edf5;
+    border-radius:12px; margin-bottom:6px; background:#fff; }
+  .edu-admin-row.off { opacity:.5; }
+  .edu-admin-row .edu-card-ico { flex:0 0 34px; width:34px; height:34px; font-size:16px; }
+  .edu-admin-main { flex:1; min-width:0; }
+  .edu-admin-name { font-size:13px; font-weight:700; }
+  .edu-admin-url { font-size:11px; color:#64748b; word-break:break-all; direction:ltr; text-align:left; }
+  .edu-admin-cat { font-size:10.5px; color:#94a3b8; }
+  .edu-mini { border:none; background:#f3f4f6; border-radius:8px; padding:5px 8px; cursor:pointer; font-size:12px; line-height:1; }
+  .edu-mini:hover { background:#e5e7eb; }
+  .edu-mini.danger:hover { background:#fee2e2; }
+  .edu-form { background:#f8fafc; border:1px solid #e6edf5; border-radius:14px; padding:12px; margin:6px 0 10px; }
+  .edu-form label { display:block; font-size:12px; font-weight:700; color:#475569; margin:8px 0 4px; }
+  .edu-form label:first-child { margin-top:0; }
+  .edu-form .input { width:100%; }
+  .edu-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  @media (max-width:640px){
+    .edu-box { max-width:100%; padding:16px 14px; }
+    .edu-grid { grid-template-columns:1fr 1fr; gap:8px; }
+    .edu-card { padding:9px 10px; }
+    .edu-card-ico { flex:0 0 34px; width:34px; height:34px; font-size:16px; }
+    .edu-card-name { font-size:12.5px; }
+    .edu-card-desc { font-size:11px; }
+    .edu-admin-url { display:none; }
+  }
+  @media (max-width:400px){ .edu-grid { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -3143,7 +3194,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-18 cadre-wa';
+const __APP_VER = '2026-10-18 edu-links';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -6910,10 +6961,12 @@ function renderAppStrip(){
   if(!el) return;
   if(!window.__appStripClock){ window.__appStripClock = setInterval(__stripTick, 1000); }
   window.__stripDay = isbDateStr();
+  // خانة الطقس المكررة (الطقس الأصلي في شريط الأدوات) صارت بوابة الروابط التعليمية.
   el.innerHTML = `
-    <div class="strip-item strip-weather" id="stripWeather">
-      <span class="strip-ico">🌤️</span>
-      <div><div class="strip-temp">—</div><div class="strip-sub">جاري تحميل طقس إسلام آباد…</div></div>
+    <div class="strip-item strip-edu" role="button" tabindex="0" title="بوابة الروابط التعليمية"
+         onclick="openEduLinks()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEduLinks();}">
+      <span class="strip-ico">🎓</span>
+      <div><div class="strip-main">الروابط التعليمية</div><div class="strip-sub">وصول سريع للأنظمة والمنصات</div></div>
     </div>
     <div class="strip-item strip-date">
       <span class="strip-ico">📅</span>
@@ -6922,17 +6975,354 @@ function renderAppStrip(){
         <div class="strip-sub"><span id="stripHijri">${hijriIslamabad()}</span> · <span id="stripTime">${isbTimeStr()}</span></div>
       </div>
     </div>`;
-  fetch('https://api.open-meteo.com/v1/forecast?latitude=33.6844&longitude=73.0479&current_weather=true')
-    .then(r => r.json())
-    .then(d => {
-      const cw = d && d.current_weather;
-      if(!cw) throw new Error('no data');
-      const [icon, label] = weatherCodeInfo(cw.weathercode);
-      const t = Math.round(cw.temperature);
-      const w = document.getElementById('stripWeather');
-      if(w) w.innerHTML = `<span class="strip-ico">${icon}</span><div><div class="strip-temp">${t}°C</div><div class="strip-sub">${label} — إسلام آباد · 💨 ${Math.round(cw.windspeed)} كم/س</div></div>`;
-    })
-    .catch(() => { const w = document.getElementById('stripWeather'); if(w) w.innerHTML = '<span class="strip-ico">🌤️</span><div><div class="strip-sub">تعذر تحميل الطقس — تحقق من الاتصال</div></div>'; });
+}
+
+/* ============ بوابة الروابط التعليمية ============
+   • التخزين: إعدادات القسم المشتركة (جدول app_settings) تحت المفتاح `eduLinks`
+     عبر نفس الواجهة البرمجية القائمة GET/PUT /api/settings/:school — بلا جدول
+     جديد وبلا مسار جديد. الحفظ للمدير (ADMIN) فقط، والخادم يفرض ذلك أيضًا.
+   • الافتراضي لا يُكتب تلقائيًا: يُستعمل من الذاكرة عند التهيئة الأولى أو عند
+     «استعادة الافتراضي» صراحةً، فلا يدهس ما عدّله المدير.
+   • الإتاحة المشتركة: تُكتب القائمة نفسها لقسمَي البنين والبنات (أفضل جهد)،
+     فمن عدّل من قسم يراه الآخر. المرآة المحلية للعرض دون اتصال فقط، وليست مصدر الحقيقة. */
+const EDU_LINKS_KEY = 'eduLinks';
+const EDU_LINK_CAMPUSES = ['GIRLS', 'BOYS'];
+const EDU_CATS = [
+  { id:'systems', icon:'🏛️', name:'الأنظمة التعليمية' },
+  { id:'staff',   icon:'🧑‍🏫', name:'خدمات المعلمين والإدارة' },
+  { id:'family',  icon:'👨‍👩‍👧', name:'خدمات الطلاب وأولياء الأمور' }
+];
+const EDU_LINKS_DEFAULT = [
+  { id:'noor',      cat:'systems', icon:'🌟', name:'نظام نور',                     url:'https://noor.moe.gov.sa/',                                                         desc:'نظام إدارة التعليم: النتائج والغياب والخدمات الأكاديمية.' },
+  { id:'madrasati', cat:'systems', icon:'🏫', name:'منصة مدرستي',                 url:'https://madrasati.sa/',                                                            desc:'منصة التعليم الإلكتروني والحصص الافتراضية.' },
+  { id:'ain',       cat:'systems', icon:'👁️', name:'بوابة عين',                   url:'https://ien.edu.sa/',                                                              desc:'المحتوى التعليمي الرقمي والمناهج والاختبارات.' },
+  { id:'qiyas',     cat:'systems', icon:'📊', name:'المركز الوطني للقياس',         url:'https://etec.gov.sa/',                                                             desc:'اختبارات القياس والقدرات والتحصيلي.' },
+  { id:'moe',       cat:'systems', icon:'🧭', name:'وزارة التعليم',               url:'https://www.moe.gov.sa/',                                                          desc:'الموقع الرسمي للوزارة والخدمات الإلكترونية.' },
+  { id:'edugate',   cat:'systems', icon:'🔗', name:'بوابة التعليم الموحدة',       url:'https://edugate.moe.gov.sa/',                                                      desc:'الخدمات التعليمية الموحدة وخدمات المستفيدين.' },
+  { id:'fares',     cat:'staff',   icon:'🗂️', name:'نظام فارس',                   url:'https://sshr.moe.gov.sa/OA_HTML/AppsLocalLogin.jsp',                               desc:'الخدمات الإدارية والمالية لمنسوبي التعليم.' },
+  { id:'etimad',    cat:'staff',   icon:'💳', name:'منصة اعتماد',                 url:'https://login.etimad.sa/',                                                         desc:'المنافسات والمشتريات والخدمات المالية الحكومية.' },
+  { id:'abroad',    cat:'staff',   icon:'🌍', name:'المدارس السعودية في الخارج',  url:'https://www.moe.gov.sa/ar/education/ResidentsAndvisitors/pages/schoolsabroad.aspx', desc:'معلومات وخدمات المدارس السعودية في الخارج.' },
+  { id:'parents',   cat:'family',  icon:'👨‍👩‍👧', name:'بوابة خدمات الطلاب وأولياء الأمور', url:'https://edugate.moe.gov.sa/', desc:'استعلام الطلاب وأولياء الأمور عن الخدمات والمتابعة.' }
+];
+let __eduLinksCache = null;   // آخر قائمة معروفة (خادم أو مرآة)
+let __eduDraft = null;        // نسخة المدير قيد التحرير (غير محفوظة)
+let __eduEditId = null;       // معرّف الخدمة التي تُعدّل الآن (null = إضافة)
+let __eduSearchTerm = '';
+
+function __eduMirrorKey(school){ return 'nibras_edulinks_' + (school || getActiveSchool()) + '_v1'; }
+function __eduClone(list){ return (Array.isArray(list) ? list : []).map(x => ({ ...x })); }
+function __eduIsAdmin(){ const u = currentUser(); return !!(u && u.role === 'ADMIN'); }
+function __eduAccent(){ return getActiveSchool() === 'GIRLS' ? '#db2777' : '#2563eb'; }
+function __eduDefaultList(){ return __eduNormalize(EDU_LINKS_DEFAULT); }
+
+/* تحقق صارم: بروتوكول http/https فقط، ومنع javascript:/data:/vbscript:
+   ومنع بيانات دخول مضمّنة في الرابط. */
+function __eduValidUrl(u){
+  const s = String(u == null ? '' : u).trim();
+  if(!s || s.length > 500) return false;
+  let url;
+  try { url = new URL(s); } catch(e){ return false; }
+  if(url.protocol !== 'https:' && url.protocol !== 'http:') return false;
+  if(!url.hostname || url.hostname.indexOf('.') < 0) return false;
+  if(/\s/.test(s)) return false;
+  if(url.username || url.password) return false;
+  return true;
+}
+
+/* تطبيع أي قائمة قادمة من الخادم أو الحقول: نُسقط ما لا يصلح ونُثبّت الأنواع */
+function __eduNormalize(list){
+  const cats = EDU_CATS.map(c => c.id);
+  const out = [];
+  (Array.isArray(list) ? list : []).forEach((raw, i) => {
+    if(!raw || typeof raw !== 'object') return;
+    const name = String(raw.name == null ? '' : raw.name).trim().slice(0, 80);
+    const url = String(raw.url == null ? '' : raw.url).trim().slice(0, 500);
+    if(!name || !__eduValidUrl(url)) return;
+    out.push({
+      id: String(raw.id || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 40) || ('lnk' + i + Date.now().toString(36).slice(-4)),
+      cat: EDU_CATS.some(c => c.id === raw.cat) ? raw.cat : 'systems',
+      icon: String(raw.icon == null ? '' : raw.icon).slice(0, 8) || '🔗',
+      name: name,
+      url: url,
+      desc: String(raw.desc == null ? '' : raw.desc).slice(0, 200),
+      on: raw.on === false ? false : true,
+      ord: Number.isFinite(+raw.ord) ? +raw.ord : (i + 1)
+    });
+  });
+  out.sort((a, b) => a.ord - b.ord);
+  return out;
+}
+/* بحث بالاسم أو الوصف (دالة نقية) */
+function __eduFilter(links, q){
+  const term = String(q == null ? '' : q).trim().toLowerCase();
+  if(!term) return links.slice();
+  return links.filter(l => String(l.name || '').toLowerCase().indexOf(term) >= 0 ||
+                           String(l.desc || '').toLowerCase().indexOf(term) >= 0);
+}
+/* تجميع حسب الأقسام بترتيبها الثابت (دالة نقية) */
+function __eduGroup(links){
+  return EDU_CATS
+    .map(c => ({ cat: c, items: (links || []).filter(l => l.cat === c.id) }))
+    .filter(g => g.items.length);
+}
+
+async function __eduLoad(force){
+  if(__eduLinksCache && !force) return __eduLinksCache;
+  try{
+    const raw = localStorage.getItem(__eduMirrorKey());
+    if(raw && !__eduLinksCache){ const m = __eduNormalize(JSON.parse(raw)); if(m.length) __eduLinksCache = m; }
+  }catch(e){}
+  if(!__serverEnabled()) return (__eduLinksCache || (__eduLinksCache = __eduDefaultList()));
+  try{
+    const school = getActiveSchool();
+    const data = await __getSchoolSettings(school);
+    let serverList = (data && Array.isArray(data.eduLinks) && data.eduLinks.length) ? __eduNormalize(data.eduLinks) : null;
+    if((!serverList || !serverList.length) && __eduIsAdmin()){
+      for(const other of EDU_LINK_CAMPUSES){
+        if(other === school) continue;
+        try{
+          const od = await __getSchoolSettings(other);
+          if(od && Array.isArray(od.eduLinks) && od.eduLinks.length){ serverList = __eduNormalize(od.eduLinks); break; }
+        }catch(e){}
+      }
+    }
+    if(serverList && serverList.length){
+      __eduLinksCache = serverList;
+      try{ localStorage.setItem(__eduMirrorKey(school), JSON.stringify(serverList)); }catch(e){}
+    } else if(!__eduLinksCache) __eduLinksCache = __eduDefaultList();
+  }catch(e){ if(!__eduLinksCache) __eduLinksCache = __eduDefaultList(); }
+  return __eduLinksCache;
+}
+
+async function __eduSave(list){
+  const clean = __eduNormalize(list);
+  if(!clean.length) return { ok:false, reason:'empty' };
+  const school = getActiveSchool();
+  if(!__serverEnabled()){
+    __eduLinksCache = clean;
+    try{ localStorage.setItem(__eduMirrorKey(school), JSON.stringify(clean)); }catch(e){}
+    return { ok:true, offline:true };
+  }
+  const cur = __schoolSettingsCache[school] || await __getSchoolSettings(school);
+  const next = Object.assign({}, cur || {}, { [EDU_LINKS_KEY]: clean });
+  const ok = await __putSchoolSettings(school, next);
+  if(!ok) return { ok:false, reason:'save_failed' };           // لا نعلن النجاح إلا بعد تأكيد الخادم
+  if(__eduIsAdmin()){
+    for(const other of EDU_LINK_CAMPUSES){                      // إتاحة مشتركة — أفضل جهد
+      if(other === school) continue;
+      try{
+        const od = await __getSchoolSettings(other);
+        await __putSchoolSettings(other, Object.assign({}, od || {}, { [EDU_LINKS_KEY]: clean }));
+      }catch(e){}
+    }
+  }
+  __eduLinksCache = clean;
+  try{ localStorage.setItem(__eduMirrorKey(school), JSON.stringify(clean)); }catch(e){}
+  return { ok:true };
+}
+
+/* ---------------------------------------------------------- العرض العام */
+function __eduCardHtml(l){
+  return '<a class="edu-card" href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener noreferrer nofollow">' +
+    '<span class="edu-card-ico">' + escapeHtml(l.icon || '🔗') + '</span>' +
+    '<span class="edu-card-body"><span class="edu-card-name">' + escapeHtml(l.name) +
+      '<span class="edu-card-ext" title="فتح الرابط الخارجي">↗</span></span>' +
+    (l.desc ? `<span class="edu-card-desc">${escapeHtml(l.desc)}</span>` : '') +
+    '</span></a>';
+}
+function __eduBodyHtml(links){
+  if(!links || !links.length) return '<div class="edu-empty">لا نتائج مطابقة للبحث.</div>';
+  return __eduGroup(links).map(g =>
+    `<div class="edu-sec"><div class="edu-sec-title">${g.cat.icon} ${escapeHtml(g.cat.name)}<span class="edu-sec-n">${g.items.length}</span></div>` +
+    `<div class="edu-grid">${g.items.map(__eduCardHtml).join('')}</div></div>`
+  ).join('');
+}
+function __eduActive(){ return __eduNormalize(__eduLinksCache || []).filter(l => l.on !== false); }
+function __eduPaintBody(){
+  const body = document.getElementById('eduBody');
+  if(body) body.innerHTML = __eduBodyHtml(__eduFilter(__eduActive(), __eduSearchTerm));
+}
+function __eduSearchInput(v){ __eduSearchTerm = v || ''; __eduPaintBody(); }
+function closeEduLinks(){ const ov = document.getElementById('eduOverlay'); if(ov) ov.remove(); }
+
+async function openEduLinks(){
+  closeEduLinks();
+  const accent = __eduAccent();
+  const ov = document.createElement('div');
+  ov.className = 'modal-overlay';
+  ov.id = 'eduOverlay';
+  ov.innerHTML = `
+    <div class="modal-box edu-box" style="border-top:6px solid ${accent}">
+      <div class="modal-head">
+        <div>
+          <h3>🎓 بوابة الروابط التعليمية</h3>
+          <div class="edu-sub">وصول سريع إلى الأنظمة والمنصات التعليمية.</div>
+        </div>
+        <button class="modal-close" onclick="closeEduLinks()" title="إغلاق" aria-label="إغلاق">✕</button>
+      </div>
+      <div class="edu-tools">
+        <input id="eduSearch" class="input edu-search" type="search" placeholder="🔎 ابحث باسم المنصة أو الوصف…" oninput="__eduSearchInput(this.value)" />
+        ${__eduIsAdmin() ? '<button class="btn-secondary" onclick="__eduOpenAdmin()">⚙️ إدارة الروابط</button>' : ''}
+      </div>
+      <div id="eduBody" class="edu-body"><div class="edu-empty">… جاري التحميل</div></div>
+    </div>`;
+  ov.onclick = e => { if(e.target === ov) closeEduLinks(); };
+  document.body.appendChild(ov);
+  __eduSearchTerm = '';
+  const inp = document.getElementById('eduSearch'); if(inp) inp.value = '';
+  await __eduLoad();
+  __eduPaintBody();
+}
+
+/* -------- لوحة الإدارة (ADMIN فقط — يفرضها الخادم أيضًا) -------- */
+function __eduCatName(id){ const c = EDU_CATS.filter(x => x.id === id)[0]; return c ? c.name : 'الأنظمة التعليمية'; }
+function __eduAdminListHtml(){
+  const list = __eduDraft || [];
+  if(!list.length) return '<div class="edu-empty">لا توجد خدمات — أضف خدمة جديدة.</div>';
+  return list.map((l, i) => `
+    <div class="edu-admin-row${l.on === false ? ' off' : ''}">
+      <span class="edu-card-ico">${escapeHtml(l.icon || '🔗')}</span>
+      <div class="edu-admin-main">
+        <div class="edu-admin-name">${escapeHtml(l.name)} ${l.on === false ? '<span class="edu-admin-cat">(معطّل)</span>' : ''}</div>
+        <div class="edu-admin-url">${escapeHtml(l.url)}</div>
+        <div class="edu-admin-cat">${escapeHtml(__eduCatName(l.cat))}</div>
+      </div>
+      <button class="edu-mini" title="أعلى" onclick="__eduMove(${i},-1)">▲</button>
+      <button class="edu-mini" title="أسفل" onclick="__eduMove(${i},1)">▼</button>
+      <button class="edu-mini" title="${l.on === false ? 'تفعيل' : 'تعطيل'}" onclick="__eduToggle(${i})">${l.on === false ? '🔌' : '🚫'}</button>
+      <button class="edu-mini" title="تعديل" onclick="__eduFormOpen(${i})">✏️</button>
+      <button class="edu-mini danger" title="حذف" onclick="__eduDelete(${i})">🗑️</button>
+    </div>`).join('');
+}
+function __eduFormHtml(l){
+  const cats = EDU_CATS.map(c => `<option value="${c.id}"${l && l.cat === c.id ? ' selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+  const v = l || {};
+  return `<div class="edu-form">
+    <label>اسم الخدمة</label>
+    <input id="eduFName" class="input" maxlength="80" value="${escapeHtml(v.name || '')}" placeholder="مثال: نظام نور" />
+    <label>الرابط (https://)</label>
+    <input id="eduFUrl" class="input" dir="ltr" maxlength="500" value="${escapeHtml(v.url || '')}" placeholder="https://example.edu.sa/" />
+    <label>الوصف</label>
+    <input id="eduFDesc" class="input" maxlength="200" value="${escapeHtml(v.desc || '')}" />
+    <label>القسم</label>
+    <select id="eduFCat" class="input">${cats}</select>
+    <label>الأيقونة (رمز تعبيري أو حرف)</label>
+    <input id="eduFIco" class="input" maxlength="8" value="${escapeHtml(v.icon || '🔗')}" />
+    <div id="eduFErr" class="error-box" style="display:none"></div>
+    <div class="edu-actions">
+      <button class="btn-primary" onclick="__eduFormSave()">حفظ التعديل</button>
+      <button class="btn-secondary" onclick="__eduFormClose()">إلغاء</button>
+    </div>
+  </div>`;
+}
+function __eduPaintAdmin(){
+  const ov = document.getElementById('eduOverlay');
+  if(!ov) return;
+  const accent = __eduAccent();
+  ov.innerHTML = `
+    <div class="modal-box edu-box" style="border-top:6px solid ${accent}">
+      <div class="modal-head">
+        <div>
+          <h3>⚙️ إدارة الروابط</h3>
+          <div class="edu-sub">أضف أو عدّل أو رتّب الخدمات، ثم احفظ — يظهر التغيير لكل المستخدمين في القسمين بعد تأكيد الخادم.</div>
+        </div>
+        <button class="modal-close" onclick="closeEduLinks()" title="إغلاق" aria-label="إغلاق">✕</button>
+      </div>
+      <div id="eduAdminMsg"></div>
+      <div id="eduAdminList">${__eduAdminListHtml()}</div>
+      <div id="eduAdminForm"></div>
+      <div class="edu-actions">
+        <button class="btn-secondary" onclick="__eduFormOpen(null)">➕ إضافة رابط جديد</button>
+        <button class="btn-primary" onclick="__eduSaveAll()">💾 حفظ التغييرات</button>
+        <button class="btn-secondary" onclick="__eduResetDefaults()">♻ استعادة الروابط الافتراضية</button>
+        <button class="btn-secondary" onclick="__eduCancelAdmin()">↩ رجوع للبوابة</button>
+      </div>
+    </div>`;
+}
+function __eduOpenAdmin(){
+  if(!__eduIsAdmin()) return;
+  const base = (__eduLinksCache && __eduLinksCache.length) ? __eduLinksCache : __eduDefaultList();
+  __eduDraft = __eduClone(base);
+  __eduEditId = null;
+  __eduPaintAdmin();
+}
+function __eduFormOpen(i){
+  if(!__eduIsAdmin()) return;
+  __eduEditId = (i === null || i === undefined) ? null : __eduDraft[i].id;
+  const l = (__eduEditId == null) ? null : __eduDraft[i];
+  const holder = document.getElementById('eduAdminForm');
+  if(holder) holder.innerHTML = __eduFormHtml(l);
+  const inp = document.getElementById('eduFName'); if(inp) inp.focus();
+}
+function __eduFormClose(){
+  __eduEditId = null;
+  const holder = document.getElementById('eduAdminForm'); if(holder) holder.innerHTML = '';
+}
+function __eduFormSave(){
+  if(!__eduIsAdmin()) return;
+  const name = (document.getElementById('eduFName')?.value || '').trim();
+  const url = (document.getElementById('eduFUrl')?.value || '').trim();
+  const desc = (document.getElementById('eduFDesc')?.value || '').trim();
+  const cat = document.getElementById('eduFCat')?.value || 'systems';
+  const icon = (document.getElementById('eduFIco')?.value || '').trim() || '🔗';
+  const err = document.getElementById('eduFErr');
+  const showErr = m => { if(err){ err.style.display = 'block'; err.textContent = m; } };
+  if(err) err.style.display = 'none';
+  if(!name) return showErr('اكتب اسم الخدمة.');
+  if(!__eduValidUrl(url)) return showErr('الرابط غير صالح — يجب أن يبدأ بـ https:// ويكون عنوانًا صحيحًا (لا javascript: ولا data:).');
+  const existingIdx = __eduDraft.findIndex(x => x.id === __eduEditId);
+  const item = { id: __eduEditId || ('lnk_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)), cat, icon, name, url, desc, on: true,
+                 ord: existingIdx >= 0 ? __eduDraft[existingIdx].ord : (__eduDraft.reduce((m, x) => Math.max(m, +x.ord || 0), 0) + 1) };
+  if(existingIdx >= 0) __eduDraft[existingIdx] = Object.assign({}, __eduDraft[existingIdx], item);
+  else __eduDraft.push(item);
+  __eduEditId = null;
+  __eduPaintAdmin();
+}
+function __eduMove(i, dir){
+  if(!__eduIsAdmin()) return;
+  const j = i + dir;
+  if(i < 0 || j < 0 || i >= __eduDraft.length || j >= __eduDraft.length) return;
+  const a = __eduDraft[i], b = __eduDraft[j];
+  const oa = a.ord, ob = b.ord;
+  a.ord = ob; b.ord = oa;
+  __eduDraft[i] = b; __eduDraft[j] = a;
+  const holder = document.getElementById('eduAdminList'); if(holder) holder.innerHTML = __eduAdminListHtml();
+}
+function __eduToggle(i){
+  if(!__eduIsAdmin() || !__eduDraft[i]) return;
+  __eduDraft[i].on = __eduDraft[i].on === false;
+  const holder = document.getElementById('eduAdminList'); if(holder) holder.innerHTML = __eduAdminListHtml();
+}
+function __eduDelete(i){
+  if(!__eduIsAdmin()) return;
+  const l = __eduDraft[i]; if(!l) return;
+  if(!confirm('حذف «' + l.name + '» من الروابط؟')) return;
+  __eduDraft.splice(i, 1);
+  __eduPaintAdmin();
+}
+function __eduResetDefaults(){
+  if(!__eduIsAdmin()) return;
+  if(!confirm('استعادة الروابط الافتراضية؟ سيُستبدل ما عدّلته بالقائمة الأصلية ثم يُحفظ.')) return;
+  __eduDraft = __eduDefaultList();
+  __eduEditId = null;
+  __eduPaintAdmin();
+  __eduSaveAll();
+}
+async function __eduSaveAll(){
+  if(!__eduIsAdmin()) return;
+  const msg = document.getElementById('eduAdminMsg');
+  if(msg) msg.innerHTML = '<div class="edu-info">⏳ جاري الحفظ…</div>';
+  const res = await __eduSave(__eduDraft);
+  if(res && res.ok){
+    if(msg) msg.innerHTML = '<div class="success-box" style="display:block">✅ تم حفظ الروابط على الخادم — ظاهرة الآن لكل المستخدمين' + (res.offline ? ' (نسخة محلية)' : '') + '.</div>';
+    setTimeout(() => { if(document.getElementById('eduOverlay')) openEduLinks(); }, 900);
+  } else {
+    if(msg) msg.innerHTML = '<div class="error-box" style="display:block">⚠ تعذر الحفظ — لم يتأكد الحفظ على الخادم. تعديلاتك محفوظة هنا، أعد المحاولة.</div>';
+  }
+}
+async function __eduCancelAdmin(){
+  __eduDraft = null; __eduEditId = null;
+  await openEduLinks();
 }
 
 /* ============ الرسوم البيانية ============ */
@@ -12723,7 +13113,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=108', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=109', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
