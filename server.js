@@ -3157,6 +3157,35 @@ app.post('/api/wa/status', requireAuth, async (req, res) => {
   } catch (e) { fail(res)(e); }
 });
 
+// توثيق/سحب موافقة واتساب لطالبات محدّدات — الحدث يعمل لكل الأدوار المصرّح لها،
+// ويُكتب على الخادم مباشرة (مصدر الحقيقة) بتعديل جزئي مقفول، فلا يعتمد على دمج PUT.
+app.post('/api/wa/consent', requireAuth, async (req, res) => {
+  try {
+    const school = db.SCHOOLS[0];
+    if (!wa.canBroadcast(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const body = req.body || {};
+    const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];
+    const value = body.value === true;
+    if (!ids.length) return res.status(400).json({ error: 'invalid' });
+    const idSet = new Set(ids);
+    const now = Date.now();
+    const out = await db.mutateSchoolData(school, (d) => {
+      if (!d || !Array.isArray(d.students)) return { changed: false, value: 0 };
+      let n = 0;
+      for (const s of d.students) {
+        if (!s || !idSet.has(String(s.id))) continue;
+        if (s.waConsent === value) continue;
+        s.waConsent = value;
+        s.waConsentAt = now;
+        s.waConsentBy = req.session.id;
+        n++;
+      }
+      return { changed: n > 0, value: n };
+    });
+    res.json({ ok: true, updated: out.value || 0, value });
+  } catch (e) { fail(res)(e); }
+});
+
 // إلغاء الرسائل المعلّقة لحملة (لا يمسّ ما أُرسل فعلاً)
 app.post('/api/wa/cancel', requireAuth, async (req, res) => {
   try {

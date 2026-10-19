@@ -3217,7 +3217,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast';
+const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast wa-consent';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -6660,24 +6660,37 @@ function waTemplatesKey(){ return 'nibras_wa_templates_' + ((currentUser() && cu
 function waLoadTemplates(){ try{ const a = JSON.parse(localStorage.getItem(waTemplatesKey()) || '[]'); return Array.isArray(a) ? a : []; }catch(e){ return []; } }
 function waSaveTemplates(a){ try{ localStorage.setItem(waTemplatesKey(), JSON.stringify(a)); }catch(e){} }
 
-/* توثيق/سحب موافقة ولي الأمر — تُحفظ ضمن بيانات الطالبة وتُزامَن كبقية الحقول */
-function setStudentWaConsent(studentId, val, opts){
-  if(!isAdminCadre(currentUser())) return;
-  const o = opts || {};
+/* توثيق/سحب موافقة ولي الأمر — يُكتب على الخادم مباشرة (مصدر الحقيقة) عبر
+   /api/wa/consent، ثم يُحدَّث المحلي فوراً (متفائل) ويُسحب أحدث نسخة بعد الرد. */
+async function __waSetConsentServer(ids, value){
+  try{ const r = await __waApi('POST','/consent',{ ids: ids, value: !!value }); return !!(r.j && r.j.ok); }catch(e){ return false; }
+}
+function __waApplyConsentLocally(ids, value){
+  const set = new Set(ids.map(String));
   const d = loadDB();
-  const st = (d.students||[]).find(x => x.id === studentId);
-  if(!st) return;
   const me = currentUser();
-  st.waConsent = !!val;
-  st.waConsentAt = Date.now();
-  st.waConsentBy = me ? me.id : null;
-  saveDB(d);
+  let n = 0;
+  (d.students||[]).forEach(s => {
+    if(!set.has(String(s.id))) return;
+    if(s.waConsent === !!value) return;
+    s.waConsent = !!value; s.waConsentAt = Date.now(); s.waConsentBy = me ? me.id : null; n++;
+  });
+  if(n) saveDB(d);
+  return n;
+}
+function setStudentWaConsent(studentId, val, opts){
+  if(!canBroadcastWa(currentUser())) return;
+  const o = opts || {};
   const schoolNow = getActiveSchool();
-  if(__serverEnabled() && schoolNow){
-    __saveGuardWatch(schoolNow, 'consent', __saveGuardOutcome);
-    __syncSchedule(schoolNow, 0);
-  }
+  const ids = [studentId];
+  __waApplyConsentLocally(ids, !!val); // تفاؤلي: يظهر الأثر فوراً
   if(!o.silent) renderApp();
+  if(__serverEnabled() && schoolNow){
+    __waSetConsentServer(ids, !!val).then(async (ok) => {
+      if(ok){ try{ await __syncPull(schoolNow); }catch(e){} }
+      if(!o.silent) renderApp();
+    });
+  }
 }
 function waToggleStudentConsent(studentId){
   const s = studentById(studentId);
@@ -6816,22 +6829,22 @@ function waDeleteTemplate(i){
   if(!confirm('حذف القالب «' + arr[i].name + '»؟')) return;
   arr.splice(i,1); waSaveTemplates(arr); __waRepaint();
 }
-function waBulkConsent(){
+async function waBulkConsent(){
   const res = __waLocalResolve();
   const targets = res.list.filter(r => r.valid && !r.consent);
   if(!targets.length){ alert('لا توجد صالحة للتوثيق ضمن النطاق الحالي (كلهن موثّقات أو بلا رقم صالح).'); return; }
   if(!confirm('توثيق موافقة ولي الأمر لـ ' + targets.length + ' طالبة ضمن النطاق الحالي؟')) return;
-  const d = loadDB(); const me = currentUser();
-  let n = 0;
-  (d.students||[]).forEach(s => {
-    if(!targets.some(t => t.id === s.id)) return;
-    if(s.waConsent === true) return;
-    s.waConsent = true; s.waConsentAt = Date.now(); s.waConsentBy = me ? me.id : null; n++;
-  });
-  saveDB(d);
+  const ids = targets.map(t => t.id);
+  __waApplyConsentLocally(ids, true);
+  __waRepaint();
   const schoolNow = getActiveSchool();
-  if(__serverEnabled() && schoolNow){ __saveGuardWatch(schoolNow, 'consent', __saveGuardOutcome); __syncSchedule(schoolNow, 0); }
-  alert('تم توثيق ' + n + ' موافقة.');
+  if(__serverEnabled() && schoolNow){
+    const ok = await __waSetConsentServer(ids, true);
+    if(ok){ try{ await __syncPull(schoolNow); }catch(e){} }
+    alert(ok ? ('تم توثيق ' + ids.length + ' موافقة على الخادم.') : 'تم التوثيق محلياً، لكن تعذّر تأكيده على الخادم — أعد المحاولة.');
+  } else {
+    alert('تم توثيق ' + ids.length + ' موافقة محلياً.');
+  }
   __waRepaint();
 }
 
@@ -6839,11 +6852,26 @@ function waBulkConsent(){
 async function waCreateCampaign(){
   if(WA_BC.busy) return;
   const res = __waLocalResolve();
-  if(!res.counts.finalCount){ alert(res.warn || 'لا توجد مستلمات مؤهلات (رقم صالح + موافقة).'); return; }
+  if(!res.counts.finalCount){
+    if(res.counts.withValidPhone > 0 && res.counts.noConsent > 0){
+      if(confirm(res.counts.noConsent + ' طالبة لها رقم صالح لكن موافقتها غير موثّقة (العدد النهائي 0). توثيق الموافقة الآن ثم المتابعة؟')){
+        const ids = res.list.filter(r => r.valid && !r.consent).map(r => r.id);
+        __waApplyConsentLocally(ids, true);
+        if(__serverEnabled() && getActiveSchool()){ await __waSetConsentServer(ids, true); try{ await __syncPull(getActiveSchool()); }catch(e){} }
+        __waRepaint();
+        return waCreateCampaign();
+      }
+      return;
+    }
+    alert(res.warn || 'لا توجد مستلمات مؤهلات (رقم صالح + موافقة).');
+    return;
+  }
   if(!String(WA_BC.message||'').trim()){ alert('اكتب نص الرسالة أولاً.'); return; }
   if(!confirm('تأكيد إنشاء الحملة لـ ' + res.counts.finalCount + ' مستلمة؟ (لن يُرسَل شيء بعد)')) return;
   WA_BC.busy = true; __waRepaint();
   try{
+    // ادفع أحدث التعديلات المحلية (أرقام/موافقات) قبل إنشاء الحملة حتى يراها الخادم
+    if(__serverEnabled() && getActiveSchool()){ try{ await __syncPush(getActiveSchool()); }catch(e){} }
     const r = await __waApi('POST','/campaign',{ mode:WA_BC.mode, message:WA_BC.message, target:__waTargetPayload() });
     if(r.j && r.j.ok){
       WA_BC.campaignId = r.j.campaignId;
@@ -6984,9 +7012,11 @@ function __waShell(){
       <input type="radio" name="wa-mode" ${WA_BC.mode==='manual'?'checked':''} onchange="waSetMode('manual')"> 💬 إرسال يدوي (wa.me) — محادثة واحدة تلو الأخرى</label>
     <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;${cloudReady?'':'opacity:.5'}">
       <input type="radio" name="wa-mode" ${WA_BC.mode==='cloud'?'checked':''} ${cloudReady?'':'disabled'} onchange="waSetMode('cloud')"> ☁️ إرسال رسمي عبر WhatsApp Cloud API</label>
-    ${cloudReady
-      ? `<div class="muted small" style="margin-top:4px">مُهيّأ على الخادم · إصدار ${escapeHtml((cfg&&cfg.apiVersion)||'')}${cfg&&cfg.templateName?(' · قالب: '+escapeHtml(cfg.templateName)):''}</div>`
-      : `<div class="muted small" style="margin-top:4px;color:#b45309">غير مهيّأ على الخادم. يتطلب ضبط متغيّرات البيئة المطلوبة على الخادم${(cfg&&cfg.requirements&&cfg.requirements.length)?(' — '+escapeHtml(cfg.requirements.join(' , '))):''} — استخدم الإرسال اليدوي حالياً.</div>`}
+    ${cfg === null
+      ? `<div class="muted small" style="margin-top:4px">⏳ جارٍ التحقق من إعداد الإرسال الرسمي على الخادم…</div>`
+      : (cloudReady
+        ? `<div class="muted small" style="margin-top:4px">مُهيّأ على الخادم · إصدار ${escapeHtml((cfg&&cfg.apiVersion)||'')}${cfg&&cfg.templateName?(' · قالب: '+escapeHtml(cfg.templateName)):''}</div>`
+        : `<div class="muted small" style="margin-top:4px;color:#b45309">الإرسال الرسمي غير مهيّأ على الخادم. يتطلب ضبط متغيّرات البيئة المطلوبة على الخادم${(cfg&&cfg.requirements&&cfg.requirements.length)?(' — '+escapeHtml(cfg.requirements.join(' , '))):''} — استخدم الإرسال اليدوي (wa.me) حالياً.</div>`)}
   </div>`;
 
   const templates = waLoadTemplates();
@@ -7038,6 +7068,8 @@ function __waShell(){
       ${lr ? `<div style="margin-top:10px;padding:10px;border-radius:9px;background:${lr.ok?'#f0fdf4':'#fef2f2'};color:${lr.ok?'#166534':'#991b1b'}">
         ${lr.ok ? `تم إرسال ${lr.sent} · فشل ${lr.failed} · مُعالَج سابقاً ${lr.alreadyHandled}` : `⚠ ${(lr.message||lr.error||'تعذّر الإرسال')}`}
       </div>` : ''}
+      ${WA_BC.mode==='manual' ? `<div class="muted small" style="margin-top:8px">خطوات الإرسال اليدوي: اضغط «💬 فتح» بجانب كل طالبة ← يُفتح واتساب برسالتها جاهزة ← أرسلها من داخل واتساب ← ارجع واضغط «✅ تم».</div>` : ''}
+      ${(!rows && WA_BC.recipients && WA_BC.recipients.some(r => !r.included)) ? `<div style="margin-top:10px;padding:10px;border-radius:9px;background:#fffbeb;border:1px solid #fde68a;color:#92400e">كل الطالبات في هذه الحملة استُثنين (بلا رقم صالح أو بلا موافقة موثّقة). وثّق الموافقة ثم أنشئ حملة جديدة.</div>` : ''}
       <table class="data-table" style="margin-top:10px"><thead><tr><th>الطالبة</th><th>الفصل</th><th>الرقم</th><th>الحالة</th><th></th></tr></thead>
         <tbody>${rows || '<tr><td colspan="5" class="muted" style="text-align:center;padding:14px">لا مستلمات مؤهلات</td></tr>'}</tbody></table>
     </div>`;
@@ -7069,9 +7101,16 @@ function __waShell(){
   <div class="card" style="padding:16px;margin-top:12px">
     <h3 style="margin-top:0;font-size:15px">4) المعاينة والأعداد</h3>
     ${__waCountsHtml(res.counts)}
+    ${(res.counts.finalCount === 0) ? `<div style="margin-top:10px;padding:10px 12px;border-radius:9px;background:#fffbeb;border:1px solid #fde68a;color:#92400e">
+      ${(res.counts.withValidPhone > 0 && res.counts.noConsent > 0)
+        ? `⛔ لا يمكن الإرسال: العدد النهائي 0 لأن <b>${res.counts.noConsent}</b> طالبة لها رقم صالح لكن موافقتها غير موثّقة. اضغط «توثيق الموافقة» بالأسفل.`
+        : (res.counts.withValidPhone === 0
+            ? '⛔ لا توجد أرقام أولياء أمور صالحة في النطاق الحالي — أدخل الأرقام من ملف الطالبة أولاً.'
+            : 'لا مستلمات مؤهلات في النطاق الحالي.')}
+    </div>` : ''}
     <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn-primary" onclick="waCreateCampaign()" ${WA_BC.busy?'disabled':''}>✔️ إنشاء الحملة وتأكيد</button>
-      <button class="btn-secondary" onclick="waBulkConsent()">✅ توثيق موافقة المؤهّلات (بلا موافقة)</button>
+      <button class="btn-secondary" onclick="waBulkConsent()">✅ توثيق موافقة الصالحات (بلا موافقة)</button>
     </div>
     <div style="margin-top:12px;max-height:300px;overflow:auto">
       <table class="data-table"><thead><tr><th>الطالبة</th><th>الفصل</th><th>الرقم</th><th>الموافقة</th><th>الحالة</th></tr></thead>
@@ -13700,7 +13739,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=115', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=116', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

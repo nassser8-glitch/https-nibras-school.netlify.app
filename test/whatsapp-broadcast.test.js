@@ -175,6 +175,7 @@ test('11) الخادم: المسارات + فرض الصلاحية + الإعد�
     "app.post('/api/wa/campaign'",
     "app.post('/api/wa/send'",
     "app.post('/api/wa/status'",
+    "app.post('/api/wa/consent'",
     "app.post('/api/wa/cancel'",
     "app.get('/api/wa/campaign/:id'",
     "app.get('/api/wa/campaigns'",
@@ -200,6 +201,9 @@ test('12) الواجهة: الوصول + الموافقة + الصفحة + بل�
   assert.ok(SRC.includes('تأكيد إنشاء الحملة'), 'لا تأكيد قبل الإنشاء');
   assert.ok(SRC.includes('تأكيد الإرسال الفعلي'), 'لا تأكيد قبل الإرسال');
   assert.ok(SRC.includes('setStudentWaConsent'), 'لا توثيق موافقة (فردي/جماعي)');
+  assert.ok(SRC.includes('__waSetConsentServer') && SRC.includes("'/consent'"), 'الموافقة لا تُكتب على الخادم مباشرة');
+  assert.ok(SRC.includes('function __waApplyConsentLocally('), 'لا تحديث محلي متفائل للموافقة');
+  assert.ok(SRC.includes('توثيق موافقة الصالحات'), 'لا زر توثيق جماعي واضح');
   assert.ok(!SRC.includes('WHATSAPP_ACCESS_TOKEN'), 'لا يجوز ذكر اسم مفتاح API في الواجهة');
   assert.ok(!/accessToken\s*[:=]\s*['"][A-Za-z0-9]{6,}/.test(SRC), 'لا مفاتيح مكتوبة في الواجهة');
 });
@@ -208,8 +212,9 @@ test('13) رفع الإصدارات بعد الإضافة', () => {
   const v = SRC.match(/const __APP_VER = '([^']+)'/);
   assert.ok(v && v[1].includes('guardian-editor'), 'الإصدار لا يعكس السجل');
   assert.ok(v[1].includes('wa-broadcast'), 'الإصدار لا يحمل وسم خدمة الواتساب الجماعي');
+  assert.ok(v[1].includes('wa-consent'), 'الإصدار لا يحمل وسم توثيق الموافقة');
   const sw = fs.readFileSync(path.join(ROOT, 'public', 'sw.js'), 'utf8');
   const n = Number((sw.match(/nibras-v(\d+)/) || [])[1]);
-  assert.ok(n >= 136, 'CACHE_NAME لم يُرفَع');
-  assert.ok(SRC.includes('sw.js?v=115'), 'نسخة service worker لم تُرفَع');
+  assert.ok(n >= 137, 'CACHE_NAME لم يُرفَع');
+  assert.ok(SRC.includes('sw.js?v=116'), 'نسخة service worker لم تُرفَع');
 });
