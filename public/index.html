@@ -1343,7 +1343,7 @@ function mergeClassesLocal(lArr, sArr){
   return out;
 }
 async function __syncPush(school){
-  if(!__syncEnabled()) return;
+  if(!__syncEnabled()) return { ok:false, skipped:true };
   const key = 'nibras_'+school+'_db_v1';
   const pendKey = 'nibras_'+school+'_pending_v1';
   const st = __pushState(school);
@@ -1380,7 +1380,7 @@ let raw = null;
     const hasPendingBak = (()=>{ try{ return !!localStorage.getItem(pendKey); }catch(e){ return false; } })();
     if(!hasPendingBak && st.lastOkAt > 0 && localTsNow === st.lastOkTs){
       st.running = false;
-      return;
+      return { ok:true, noop:true };
     }
     // حماية منفصلة تجعل الرفع آمنًا عبر أجهزة متعددة:
     // قبل أي رفع نصهر تعديلات هذا الجهاز فوق أحدث نسخة من الخادم، فلا يُمكن لجهاز قديم
@@ -1395,7 +1395,7 @@ let raw = null;
     let __pushBaseTs = 0;
     try{
       const mresp = await fetch(SYNC_API + school);
-      if(mresp.status === 401){ __handleAuthError(mresp); return; }
+      if(mresp.status === 401){ __handleAuthError(mresp); return { ok:false, err:'401' }; }
       if(mresp.ok){
           const mj = await mresp.json();
           if(mj && mj.data){
@@ -1603,7 +1603,7 @@ let raw = null;
       }
     }catch(e){}
     const stillEmpty = Array.isArray(obj.classes) && obj.classes.length === 0 && Array.isArray(obj.students) && obj.students.length === 0;
-    if(stillEmpty) return;
+    if(stillEmpty) return { ok:false, skipped:true, empty:true };
     // الخادم يرفض الدفعة كاملة بـ400 إن كان أي قسم من الأقسام الثمانية ليس مصفوفة
     // (invalid_section). أصلحها هنا قبل الإرسال بدل رفض الحفظ كله.
     // قسمcameobject غير مصفوفة قد يكون خريطة معرّف=>سجل من نسخة قديمة، فنستخرج
@@ -1678,9 +1678,12 @@ let attempt = 0;
       st.lastFail = 0;
       __syncLogAdd({ ev:'push-ok', school, notes:(obj && Array.isArray(obj.notes))?obj.notes.length:0, att:(obj && Array.isArray(obj.attendance))?obj.attendance.length:0, ts:__syncTS(obj), err:(recovered?'recovered':'') });
       if(recovered) __uiToast('✅ عاد الاتصال — حُفظ ما لم يكن قد رُفع.');
-      try{ __saveGuardNotify(school, { ok:true }); }catch(e){}
+      let stillDirty = false;
+      try{ stillDirty = __syncTS(JSON.parse(localStorage.getItem(key) || 'null')) !== st.lastOkTs; }catch(e){}
+      // لا نُبلّغ النجاح إن تغيّر المحلي أثناء الرفع — الرفع التالي (st.dirty) سيكمل ويُبلّغ.
+      if(!stillDirty){ try{ __saveGuardNotify(school, { ok:true }); }catch(e){} }
       try{ setTimeout(__refreshSaveStatus, 0); }catch(e){}
-      return;
+      return { ok:true, dirty:stillDirty };
     }
     // فشل الرفع نهائياً: نحتفظ بالتعديلات في نسخة احتياطية محلية ونعيد المحاولة لاحقاً
     st.attempts++;
@@ -1702,6 +1705,7 @@ let attempt = 0;
     try{ __saveGuardNotify(school, { ok:false, err:lastErr, attempts:st.attempts }); }catch(e){}
     try{ if(__unpushedIds(school).length) __notePushFailBanner(); }catch(e){}
     try{ setTimeout(__refreshSaveStatus, 0); }catch(e){}
+    return { ok:false, err:lastErr, attempts:st.attempts };
   }catch(e){} finally {
     st.running = false;
     // إعادة جدولة الرفع إن وصل تعديل أثناء الرفع الجاري (كان __syncPush يعود
@@ -3199,7 +3203,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-19 guardian-editor';
+const __APP_VER = '2026-10-19 guardian-editor save-reliable';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -6579,7 +6583,14 @@ function editStudentPhone(studentId){
   st.guardianPhoneAt = Date.now(); // ختم زمني: يرجّح الأحدث عند دمج السحب
   if(st.whatsapp !== undefined) delete st.whatsapp; // إزالة الحقل القديم المكرّر
   saveDB(d);
-  if(__serverEnabled()) __syncSchedule(getActiveSchool(), 0); // دفع فوري للحفظ على الخادم
+  const schoolNow = getActiveSchool();
+  if(__serverEnabled() && schoolNow){
+    // موثوقية الحفظ: متابعة تأكيد الخادم بدل رفع صامت بلا نتيجة مرئية.
+    __saveGuardWatch(schoolNow, 'phone', __saveGuardOutcome);
+    __noteSaveBanner('🔵 جارٍ حفظ رقم ولي الأمر على الخادم...', false);
+    __refreshSaveStatus();
+    __syncSchedule(schoolNow, 0); // دفع فوري للحفظ على الخادم (مع متابعة النتيجة)
+  }
   const el = document.getElementById('gPhone-' + studentId);
   if(el) el.innerHTML = p ? escapeHtml(p) : '<span style="color:#94a3b8;font-weight:400">غير مُدخل بعد</span>';
   renderApp();
@@ -8653,6 +8664,8 @@ function saveAttendance(){
     alert('أيام الدراسة من الاثنين إلى الجمعة فقط — لا يمكن تسجيل حضور في العطلة (الأحد/السبت)');
     return;
   }
+  if(saveAttendance._busy) return;   // منع الإرسال المكرر بالنقر المتتابع
+  saveAttendance._busy = true;
   let lateCount = 0, latePoints = 0;
   Object.entries(attendanceState.draft).forEach(([studentId, status]) => {
     let rec = d.attendance.find(a => a.studentId === studentId && a.date === attendanceState.date);
@@ -8724,19 +8737,16 @@ function saveAttendance(){
   });
   d._ts = Date.now();
   saveDB(d);
-  // رفع مباشر مؤكد لمحتوى الحفظ (يتضمن غياب/تأخر المعلمين) بدل الاعتماد على جدولة
-  // الرفع التي قد تُهمل تعديلات كشف «المعلمون» أو يمحيها سحب لاحق — نرفع فوراً هنا.
-  {
-    const schoolNow = getActiveSchool();
-    if(__syncEnabled() && schoolNow){
-      const body = JSON.stringify({ ts: d._ts, data: d });
-      try{
-        fetch(SYNC_API + schoolNow, { method:'PUT', headers:{ 'Content-Type':'application/json' }, body })
-          .catch(()=>{ if(typeof __syncSchedule === 'function') __syncSchedule(schoolNow, 4000); });
-      }catch(e){
-        if(typeof __syncSchedule === 'function') __syncSchedule(schoolNow, 4000);
-      }
-    }
+  // موثوقية الحفظ: نرفع عبر __syncPush (دمج/تصادم/أمان) بدل fetch خام، ولا نُعلن
+  // النجاح إلا بعد تأكيد الخادم عبر __saveGuardWatch. أُزيل الاعتماد على جدولة
+  // ثابتة (4000ms) كانت سبب «أول حفظ يضيع ثم ينجح بعد ثوانٍ».
+  const schoolNow = getActiveSchool();
+  const willSync = __serverEnabled() && __syncEnabled() && schoolNow;
+  if(willSync){
+    __saveGuardWatch(schoolNow, 'attendance', __saveGuardOutcome);
+    __noteSaveBanner('🔵 جارٍ حفظ الحضور على الخادم...', false);
+    __refreshSaveStatus();
+    __syncSchedule(schoolNow, 0);
   }
   attendanceState.draft = {};
   attendanceState.absenceType = {};
@@ -8747,11 +8757,18 @@ function saveAttendance(){
   attendanceState.tLateType = {};
   const msg = document.getElementById('attSaveMsg');
   if(msg){
-    let txt = 'تم حفظ الحضور بنجاح';
-    if(lateCount > 0) txt += ' — تأخر ' + lateCount + ' طالب (خصم ' + latePoints + ' نقطة)';
-    if(lateCount > 0) msg.style.color = '#dc2626'; else { msg.style.color = '#16a34a'; }
+    let txt;
+    if(willSync){
+      txt = '⏳ جارٍ حفظ الحضور على الخادم...';
+      msg.style.color = '#1d4ed8';
+    } else {
+      txt = 'تم حفظ الحضور على هذا الجهاز';
+      if(lateCount > 0) txt += ' — تأخر ' + lateCount + ' طالب (خصم ' + latePoints + ' نقطة)';
+      msg.style.color = lateCount > 0 ? '#dc2626' : '#16a34a';
+    }
     msg.textContent = txt;
   }
+  saveAttendance._busy = false;
 }
 
 /* ============ الملاحظات ============ */
@@ -9004,7 +9021,9 @@ const __SAVE_LABEL = {
   'note':            { ok:'✅ تم حفظ الملاحظة على الخادم بنجاح.',   mid:'🔵 جارٍ حفظ الملاحظة على الخادم...',   noun:'ملاحظتك' },
   'note-del':        { ok:'✅ تم حذف النقطة على الخادم بنجاح.',     mid:'🔵 جارٍ حذف النقطة على الخادم...',     noun:'الحذف' },
   'assignment':      { ok:'✅ تم حفظ التكليف على الخادم بنجاح.',    mid:'🔵 جارٍ حفظ التكليف على الخادم...',    noun:'التكليف' },
-  'assignment-del':  { ok:'✅ تم حذف التكليف على الخادم بنجاح.',    mid:'🔵 جارٍ حذف التكليف على الخادم...',    noun:'الحذف' }
+  'assignment-del':  { ok:'✅ تم حذف التكليف على الخادم بنجاح.',    mid:'🔵 جارٍ حذف التكليف على الخادم...',    noun:'الحذف' },
+  'attendance':      { ok:'✅ تم حفظ الحضور على الخادم بنجاح.',      mid:'🔵 جارٍ حفظ الحضور على الخادم...',      noun:'الحضور' },
+  'phone':           { ok:'✅ تم حفظ رقم ولي الأمر على الخادم بنجاح.', mid:'🔵 جارٍ حفظ رقم ولي الأمر على الخادم...', noun:'الرقم' }
 };
 function __saveGuardWatch(school, kind, cb){
   if(!school) return;
@@ -9134,6 +9153,31 @@ function __refreshSaveStatus(){
     if(el) el.outerHTML = __saveStatusHtml();
   }catch(e){}
 }
+/* إلزام موثوقية الحفظ: نحفظ نسخة الدفعة المعلّقة فوراً قبل مغادرة الصفحة.
+   العلة الجذرية المرصودة: الاحتياطي (pendKey) كان يُكتب عند فشل الرفع فقط، فمن
+   أغلق التطبيق/انتقل خلال نافذة الجدولة القصيرة (700ms) قبل أن يبدأ الرفع أصلاً
+   لم يُكتب له احتياطي — فتبقى نقاطُه محليةً بلا رفع، وقد يبدو أنها «اختفت».
+   الآن نُثبّت الاحتياطي عند أي مغادرة/إخفاء ما دام هناك دفعٌ معلّق أو جارٍ أو
+   احتياطي قائم، فيُستأنف الرفع تلقائياً عند الدخول التالي (__syncPull يقرأ pendKey). */
+function __persistPendingNow(school){
+  try{
+    if(!school) return;
+    const key = 'nibras_'+school+'_db_v1';
+    const pendKey = 'nibras_'+school+'_pending_v1';
+    const local = localStorage.getItem(key);
+    if(!local) return;
+    const st = __pushState(school);
+    const pendingNow = (__pushPendingUntil[school] || 0) > Date.now() || st.running || st.attempts > 0;
+    let hasBak = false;
+    try{ hasBak = !!localStorage.getItem(pendKey); }catch(e){}
+    if(!pendingNow && !hasBak) return;
+    let localTs = 0;
+    try{ localTs = __syncTS(JSON.parse(local)); }catch(e){}
+    let cur = null;
+    try{ cur = JSON.parse(localStorage.getItem(pendKey) || 'null'); }catch(e){}
+    if(!cur || __syncTS(cur) <= localTs) localStorage.setItem(pendKey, local);
+  }catch(e){}
+}
 /* تحذير المغادرة + محاولة رفع عند إخفاء الصفحة */
 try{
   if(!window.__saveGuardUnloadHook){
@@ -9142,14 +9186,17 @@ try{
       try{
         const school = getActiveSchool();
         if(!school) return;
+        // نُثبّت الاحتياطي أولاً (كتابة متزامنة) فلا يضيع حفظٌ بدأ ولم يكتمل الرفع.
+        __persistPendingNow(school);
         const st = __pushState(school);
         const pend = !!localStorage.getItem('nibras_'+school+'_pending_v1');
         const unpushed = __unpushedIds(school).length + __assignUnpushedIds(school).length;
         if((st && st.running) || pend || unpushed > 0){ e.preventDefault(); e.returnValue = ''; return ''; }
       }catch(_){}
     });
+    window.addEventListener('pagehide', ()=>{ try{ const s = getActiveSchool(); if(s) __persistPendingNow(s); }catch(e){} });
     document.addEventListener('visibilitychange', ()=>{
-      try{ if(document.visibilityState === 'hidden'){ const s = getActiveSchool(); if(s && __serverEnabled() && __syncEnabled()) __syncPush(s); } }catch(e){}
+      try{ if(document.visibilityState === 'hidden'){ const s = getActiveSchool(); if(s){ __persistPendingNow(s); if(__serverEnabled() && __syncEnabled()) __syncPush(s); } } }catch(e){}
     });
   }
 }catch(e){}
@@ -13193,7 +13240,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=112', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=113', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
