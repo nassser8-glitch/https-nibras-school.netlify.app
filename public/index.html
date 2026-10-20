@@ -3217,7 +3217,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast wa-consent';
+const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast wa-consent tehani-wa';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -6649,6 +6649,10 @@ function __waGuardianOpen(studentId){
    - الإرسال الرسمي عبر الخادم (WhatsApp Cloud API)، أو يدوياً عبر wa.me.
    ============================================================ */
 function canBroadcastWa(u){ return !!u && ['ADMIN','AGENT','SCHOOL_AGENT','COUNSELOR'].includes(u.role); }
+// من يوثّق الموافقة من ملف الطالبة (زر فردي لا علاقة له بالإنشاء/الإرسال الجماعي):
+// أدوار الإرسال الجماعي، أو استثناء تهاني المعرّفي (GUARDIAN_PHONE_EDITOR_IDS) —
+// بوابة مطابقة لبوابة الخادم في /api/wa/consent، فلا يظهر زر لمن لا يستطيع الحفظ فعلاً.
+function canWaConsent(u){ return !!u && (canBroadcastWa(u) || GUARDIAN_PHONE_EDITOR_IDS.includes(u && u.id)); }
 function studentWaConsent(s){ return !!(s && s.waConsent === true); }
 const WA_BC = { target:'all', classId:'', date:'', ids:[], message:'', mode:'manual',
   campaignId:null, recipients:null, counts:null, warn:'', busy:false, config:null, lastResult:null };
@@ -6679,7 +6683,7 @@ function __waApplyConsentLocally(ids, value){
   return n;
 }
 function setStudentWaConsent(studentId, val, opts){
-  if(!canBroadcastWa(currentUser())) return;
+  if(!canWaConsent(currentUser())) return;
   const o = opts || {};
   const schoolNow = getActiveSchool();
   const ids = [studentId];
@@ -7214,7 +7218,7 @@ function showStudentPoints(studentId){
         <span class="muted small" style="font-weight:700">📱 رقم موبايل ولي الأمر:</span>
         <span id="gPhone-${s.id}" style="font-weight:700;direction:ltr">${studentPhone(s) ? escapeHtml(studentPhone(s)) : '<span style="color:#94a3b8;font-weight:400">غير مُدخل بعد</span>'}</span>
         <button class="btn-secondary" style="padding:2px 9px;font-size:11.5px" onclick="editStudentPhone('${escapeHtml(s.id)}')">✏️ تعديل الرقم</button>
-        ${isAdminCadre(currentUser()) ? `
+        ${canWaConsent(currentUser()) ? `
         <span style="margin-inline-start:auto;font-size:11.5px;font-weight:700;color:${studentWaConsent(s)?'#16a34a':'#d97706'}">${studentWaConsent(s)?'✅ موافقة واتساب موثّقة':'⛔ لا موافقة واتساب'}</span>
         <button class="btn-secondary" style="padding:2px 9px;font-size:11.5px" onclick="waToggleStudentConsent('${escapeHtml(s.id)}')">${studentWaConsent(s)?'سحب الموافقة':'توثيق الموافقة'}</button>` : ''}
       </div>` : ''}
@@ -13739,7 +13743,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=116', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=117', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

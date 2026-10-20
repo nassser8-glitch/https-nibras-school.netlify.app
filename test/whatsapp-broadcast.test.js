@@ -215,6 +215,6 @@ test('13) رفع الإصدارات بعد الإضافة', () => {
   assert.ok(v[1].includes('wa-consent'), 'الإصدار لا يحمل وسم توثيق الموافقة');
   const sw = fs.readFileSync(path.join(ROOT, 'public', 'sw.js'), 'utf8');
   const n = Number((sw.match(/nibras-v(\d+)/) || [])[1]);
-  assert.ok(n >= 137, 'CACHE_NAME لم يُرفَع');
-  assert.ok(SRC.includes('sw.js?v=116'), 'نسخة service worker لم تُرفَع');
+  assert.ok(n >= 138, 'CACHE_NAME لم يُرفَع');
+  assert.ok(SRC.includes('sw.js?v=117'), 'نسخة service worker لم تُرفَع');
 });

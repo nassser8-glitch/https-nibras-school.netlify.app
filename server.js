@@ -3157,12 +3157,17 @@ app.post('/api/wa/status', requireAuth, async (req, res) => {
   } catch (e) { fail(res)(e); }
 });
 
-// توثيق/سحب موافقة واتساب لطالبات محدّدات — الحدث يعمل لكل الأدوار المصرّح لها،
+// توثيق/سحب موافقة واتساب لطالبات محدّدات — الحدث يعمل للأدوار المصرّح لها،
 // ويُكتب على الخادم مباشرة (مصدر الحقيقة) بتعديل جزئي مقفول، فلا يعتمد على دمج PUT.
+// استثناء محدود معرّفي: «تهاني» (إدارية بنات — GUARDIAN_PHONE_EDITOR_IDS) توثّق الموافقة
+// من ملف الطالبة بنفسها، مع أن دورها خارج canBroadcast. الإنشاء/الإرسال الجماعي لا يُفتح لها.
 app.post('/api/wa/consent', requireAuth, async (req, res) => {
   try {
     const school = db.SCHOOLS[0];
-    if (!wa.canBroadcast(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const uid = req.session.user_id;
+    if (!wa.canBroadcast(req.session, school) && !isGuardianPhoneEditor(uid)) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
     const body = req.body || {};
     const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];
     const value = body.value === true;
@@ -3177,7 +3182,7 @@ app.post('/api/wa/consent', requireAuth, async (req, res) => {
         if (s.waConsent === value) continue;
         s.waConsent = value;
         s.waConsentAt = now;
-        s.waConsentBy = req.session.id;
+        s.waConsentBy = uid;
         n++;
       }
       return { changed: n > 0, value: n };
