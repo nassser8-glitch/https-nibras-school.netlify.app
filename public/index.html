@@ -753,6 +753,26 @@ window.__nibrasBootErr = '';
   .att-week-nav { border:1px solid #e5e7eb; background:#f9fafb; color:#374151; border-radius:8px; padding:3px 8px; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; white-space:nowrap; }
   .att-week-nav:hover:not(:disabled) { background:#eef2f7; }
   .att-week-nav:disabled { opacity:.45; cursor:not-allowed; }
+  /* ===== بطاقة شكر احتفالية ===== */
+  .thanks-overlay{ position:fixed; inset:0; z-index:1200; display:flex; align-items:center; justify-content:center; padding:14px; background:radial-gradient(120% 130% at 50% 0%, rgba(30,58,95,.88), rgba(10,16,28,.94)); }
+  .thanks-fx{ position:absolute; inset:0; width:100%; height:100%; z-index:1; pointer-events:none; }
+  .thanks-petals{ position:absolute; inset:0; overflow:hidden; z-index:1; pointer-events:none; }
+  .thanks-petal{ position:absolute; top:-7vh; line-height:1; opacity:.92; will-change:transform; animation:thanks-fall linear forwards; }
+  @keyframes thanks-fall{ from{ transform:translate3d(0,-8vh,0) rotate(0deg); opacity:.95; } to{ transform:translate3d(var(--thanks-drift,24px),112vh,0) rotate(540deg); opacity:.55; } }
+  .thanks-card{ position:relative; z-index:2; width:min(470px,100%); max-height:calc(100dvh - 28px); max-height:calc(100vh - 28px); overflow:auto; text-align:center; padding:28px 22px 18px; border-radius:22px; background:linear-gradient(165deg,#ffffff 0%,#fff8f2 52%,#fff0f5 100%); box-shadow:0 26px 64px rgba(0,0,0,.38), 0 0 0 1px rgba(255,255,255,.55) inset; }
+  .thanks-card.thanks-pop{ animation:thanks-pop .65s cubic-bezier(.2,.85,.3,1.15) both; }
+  @keyframes thanks-pop{ 0%{ transform:scale(.8) translateY(20px); opacity:0; } 62%{ transform:scale(1.035) translateY(0); opacity:1; } 100%{ transform:scale(1); opacity:1; } }
+  .thanks-corner{ position:absolute; font-size:25px; line-height:1; pointer-events:none; filter:drop-shadow(0 2px 3px rgba(0,0,0,.16)); }
+  .thanks-corner-tr{ top:9px; right:11px; transform:rotate(14deg); }
+  .thanks-corner-tl{ top:9px; left:11px; transform:rotate(-14deg); }
+  .thanks-corner-br{ bottom:9px; right:11px; transform:rotate(-10deg); }
+  .thanks-corner-bl{ bottom:9px; left:11px; transform:rotate(10deg); }
+  .thanks-emoji{ font-size:clamp(34px,8vw,46px); line-height:1.2; margin:2px 0 6px; }
+  .thanks-name{ margin:0 0 10px; font-size:clamp(20px,5.5vw,30px); font-weight:900; color:var(--primary,#0f4f88); overflow-wrap:anywhere; }
+  .thanks-msg{ margin:0 0 10px; font-size:clamp(14px,3.9vw,16px); line-height:1.95; color:#374151; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .thanks-from{ margin:0 0 14px; font-size:12.5px; color:#9ca3af; }
+  .thanks-actions{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; padding-bottom:4px; }
+  @media (prefers-reduced-motion: reduce){ .thanks-card, .thanks-card.thanks-pop, .thanks-petal{ animation:none !important; } }
 </style>
 </head>
 <body>
@@ -3335,7 +3355,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast wa-consent tehani-wa save-persist links-swap teacher-follow';
+const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast wa-consent tehani-wa save-persist links-swap teacher-follow thanks-card';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -4131,6 +4151,7 @@ function renderLayout(user, hash){
       { href:'#/memo', key:'memo', label:'المفكرة والتذكير', icon:'📒' },
       (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR') ? { href:'#/broadcast', key:'broadcast', label:'رسائل واتساب جماعية', icon:'📲' } : null,
       { href:'#/daily-msg', key:'daily-msg', label:'رسالة اليوم', icon:'📢' },
+      (user.role === 'ADMIN') ? { href:'#/thanks', key:'thanks', label:'🌸 بطاقة شكر', icon:'🌸' } : null,
       { href:'#/maintenance', key:'maintenance', label:'الصيانة', icon:'🔧' },
       (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR') ? { href:'#/guide-msgs', key:'guide-msgs', label:'رسائل المعلمين', icon:'💬', badge: msgMonitorBadge(user) } : null,
     ]},
@@ -4195,6 +4216,7 @@ function renderLayout(user, hash){
   else if(page === 'settings') pageHtml = renderSettings();
   else if(page === 'daily-msg') pageHtml = renderDailyMsg();
   else if(page === 'backup' && user.role === 'ADMIN') pageHtml = renderBackup();
+  else if(page === 'thanks' && user.role === 'ADMIN') pageHtml = renderThanksCard();
   else if(page === 'supervision' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT')) pageHtml = renderSupervisionAdmin();
   else if(page === 'notebook') pageHtml = renderNotebookPage();
   else if(page === 'about') pageHtml = renderAbout();
@@ -11205,7 +11227,10 @@ function renderTeacherPage(teacherId){
   return `
   <div class="header-row">
     <h1 class="page-title">👁 ${tl('متابعة المعلم')}: ${escapeHtml(user.name)}</h1>
-    <a href="#/users" class="btn-secondary" style="text-decoration:none">← العودة</a>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      ${isAdmin ? `<button class="btn-secondary" onclick="thanksPrefill='${escapeHtml(user.id)}';location.hash='#/thanks'">🌸 ${tl('بطاقة شكر')}</button>` : ''}
+      <a href="#/users" class="btn-secondary" style="text-decoration:none">← العودة</a>
+    </div>
   </div>
   <div class="grid grid-4">
     ${stat('🔑', st.loginCount, 'مرات الدخول', '#2563eb', 'LOGINS', 'اضغط لرؤية كل أوقات الدخول — عدد المرات التي سجّل فيها المعلم دخوله إلى الموقع حتى الآن')}
@@ -11480,6 +11505,191 @@ function supervisionForUser(user){
   const day = SUPERVISION_DAYS.find(x => x.dow === today.dayOfWeek);
   if(!day) return null;
   return { dayKey: day.key, label: day.label, date: today.date, checkedInAt: mine.checkedInAt || null };
+}
+/* ===== بطاقة شكر احتفالية للمعلمات ===== */
+// المدير يختار المعلمة المستهدفة ويكتب رسالة الشكر، فتظهر بطاقة احتفالية
+// مؤقتة (ألعاب نارية + ورود متناثرة) حول البطاقة دون أن تحجب اسم المعلمة
+// أو نص الرسالة، مع احترام إعداد «تقليل الحركة» في الجهاز.
+let thanksPrefill = null;
+let __thanksState = null;
+let __thanksFx = null;
+function thanksReducedMotion(){
+  try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch(e){ return false; }
+}
+function renderThanksCard(){
+  const d = loadDB();
+  const teachers = (d.users || []).filter(u => u && u.role === 'TEACHER' && u.active !== false)
+    .slice().sort((a, b) => String(a.name || a.username || a.id).localeCompare(String(b.name || b.username || b.id), 'ar'));
+  const pre = (thanksPrefill && teachers.some(t => t.id === thanksPrefill)) ? thanksPrefill : '';
+  thanksPrefill = null;
+  return `
+  <div class="header-row">
+    <h1 class="page-title">🌸 بطاقة شكر احتفالية</h1>
+  </div>
+  <div class="card table-card" style="max-width:640px">
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">تجهيز بطاقة الشكر</div>
+    <p class="muted small" style="margin:0 0 12px">اختاري المعلمة المستهدفة واكتبي نص رسالة الشكر، ثم اعرضي البطاقة بالاحتفال.</p>
+    <label style="font-weight:bold;display:block;margin-bottom:6px">المعلمة المستهدفة</label>
+    <select id="thanksTeacher" class="input" style="margin-bottom:14px">
+      <option value="">— اختاري المعلمة —</option>
+      ${teachers.map(t => `<option value="${escapeHtml(t.id)}" ${t.id === pre ? 'selected' : ''}>${escapeHtml(displayName(t))}</option>`).join('')}
+    </select>
+    <label style="font-weight:bold;display:block;margin-bottom:6px">نص رسالة الشكر</label>
+    <textarea id="thanksMsg" class="input" style="width:100%;min-height:90px;resize:vertical;padding:12px;font-size:14px" maxlength="400" placeholder="اكتبي رسالة الشكر هنا... مثال: شكراً لك على جهدكِ وعطائكِ المستمر مع طالباتنا"></textarea>
+    <p id="thanksHint" class="muted small" style="min-height:18px;margin:6px 0 10px"></p>
+    <button class="btn-primary" onclick="thanksShowCard()">🎉 عرض بطاقة الشكر</button>
+  </div>`;
+}
+function thanksShowCard(){
+  const sel = document.getElementById('thanksTeacher');
+  const ta = document.getElementById('thanksMsg');
+  const hint = document.getElementById('thanksHint');
+  const say = txt => { if(hint) hint.textContent = txt; };
+  const id = sel ? sel.value : '';
+  const msg = ta ? String(ta.value || '').trim() : '';
+  if(!id){ say('اختاري المعلمة المستهدفة أولاً.'); return; }
+  if(!msg){ say('اكتبي نص رسالة الشكر قبل عرض البطاقة.'); return; }
+  const t = (loadDB().users || []).find(u => u && u.id === id);
+  if(!t || t.role !== 'TEACHER'){ say('المعلمة المختارة غير موجودة.'); return; }
+  say('');
+  thanksOpen(displayName(t), msg);
+}
+function thanksOpen(name, msg){
+  thanksClose();
+  __thanksState = { name, msg };
+  const reduce = thanksReducedMotion();
+  const ov = document.createElement('div');
+  ov.className = 'thanks-overlay';
+  ov.id = 'thanksOverlay';
+  ov.innerHTML = `
+    <canvas class="thanks-fx" id="thanksFxCanvas" aria-hidden="true"></canvas>
+    <div class="thanks-petals" id="thanksPetals" aria-hidden="true"></div>
+    <div class="thanks-card ${reduce ? '' : 'thanks-pop'}" id="thanksCard" role="dialog" aria-modal="true" aria-label="بطاقة شكر">
+      <div class="thanks-corner thanks-corner-tr" aria-hidden="true">🌹</div>
+      <div class="thanks-corner thanks-corner-tl" aria-hidden="true">🌸</div>
+      <div class="thanks-corner thanks-corner-br" aria-hidden="true">🌼</div>
+      <div class="thanks-corner thanks-corner-bl" aria-hidden="true">💐</div>
+      <div class="thanks-emoji" aria-hidden="true">💖</div>
+      <h2 class="thanks-name">${escapeHtml(name)}</h2>
+      <p class="thanks-msg">${escapeHtml(msg)}</p>
+      <p class="thanks-from">مع خالص الشكر والتقدير</p>
+      <div class="thanks-actions">
+        ${reduce ? '' : `<button class="btn-secondary" id="thanksStopBtn" onclick="thanksStopMotion()">⏸ إيقاف الحركة</button>
+        <button class="btn-secondary" onclick="thanksReplay()">🔁 إعادة الاحتفال</button>`}
+        <button class="btn-primary" onclick="thanksClose()">✕ إغلاق</button>
+      </div>
+    </div>`;
+  ov.onclick = e => { if(e.target === ov) thanksClose(); };
+  document.body.appendChild(ov);
+  if(!reduce) thanksStartFx();
+}
+function thanksReplay(){
+  const card = document.getElementById('thanksCard');
+  if(card){ card.classList.remove('thanks-pop'); void card.offsetWidth; card.classList.add('thanks-pop'); }
+  if(!thanksReducedMotion()) thanksStartFx();
+}
+function thanksStopMotion(){
+  const st = __thanksFx;
+  __thanksFx = null;
+  if(!st) return;
+  if(st.raf){ try{ cancelAnimationFrame(st.raf); }catch(e){} st.raf = 0; }
+  (st.timers || []).forEach(id => { try{ clearTimeout(id); }catch(e){} });
+  if(st.canvas && st.ctx){ try{ st.ctx.clearRect(0, 0, st.canvas.width, st.canvas.height); }catch(e){} }
+  if(st.onResize){ try{ window.removeEventListener('resize', st.onResize); }catch(e){} }
+  const petals = document.getElementById('thanksPetals');
+  if(petals) petals.innerHTML = '';
+  const stopBtn = document.getElementById('thanksStopBtn');
+  if(stopBtn) stopBtn.style.display = 'none';
+}
+function thanksClose(){
+  thanksStopMotion();
+  const ov = document.getElementById('thanksOverlay');
+  if(ov && ov.parentNode) ov.parentNode.removeChild(ov);
+  __thanksState = null;
+}
+function thanksStartFx(){
+  thanksStopMotion();
+  const ov = document.getElementById('thanksOverlay');
+  const canvas = document.getElementById('thanksFxCanvas');
+  const petalsBox = document.getElementById('thanksPetals');
+  if(!ov || !canvas || !petalsBox || !canvas.getContext) return;
+  const ctx = canvas.getContext('2d');
+  if(!ctx) return;
+  const stopBtn = document.getElementById('thanksStopBtn');
+  if(stopBtn) stopBtn.style.display = '';
+  const st = { raf: 0, timers: [], ctx, canvas };
+  __thanksFx = st;
+  const fit = () => {
+    const r = ov.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.round(r.width));
+    canvas.height = Math.max(1, Math.round(r.height));
+  };
+  fit();
+  st.onResize = fit;
+  window.addEventListener('resize', st.onResize);
+  // ورود متناثرة من الأعلى — خلف البطاقة (بطاقتك معتدمة فلا يحجب النص)
+  const petalEmojis = ['🌸', '🌷', '🌺', '💮', '🌼'];
+  for(let i = 0; i < 16; i++){
+    const p = document.createElement('span');
+    p.className = 'thanks-petal';
+    p.textContent = petalEmojis[i % petalEmojis.length];
+    p.style.left = (Math.random() * 100) + '%';
+    p.style.setProperty('--thanks-drift', ((Math.random() * 120) - 60).toFixed(1) + 'px');
+    p.style.animationDuration = (4.5 + Math.random() * 4).toFixed(2) + 's';
+    p.style.animationDelay = (Math.random() * 2.2).toFixed(2) + 's';
+    p.style.fontSize = (16 + Math.random() * 14).toFixed(0) + 'px';
+    petalsBox.appendChild(p);
+  }
+  // ألعاب نارية ناعمة بألوان احتفالية — تتوقف تلقائياً بعد ~7 ثوانٍ
+  const colors = ['#f472b6', '#fbbf24', '#34d399', '#a78bfa', '#fb7185', '#60a5fa'];
+  const parts = [];
+  const spawnBurst = (x, y) => {
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const n = 24 + Math.floor(Math.random() * 14);
+    for(let i = 0; i < n; i++){
+      const a = (Math.PI * 2 * i) / n + Math.random() * 0.35;
+      const sp = 1.5 + Math.random() * 3.1;
+      parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, decay: 0.013 + Math.random() * 0.011, color, r: 1.3 + Math.random() * 1.5 });
+    }
+  };
+  let t0 = 0, last = 0, lastBurst = 0;
+  const DURATION = 7000;
+  const frame = ts => {
+    if(__thanksFx !== st) return;
+    if(!t0) t0 = ts;
+    const dt = Math.min(48, ts - (last || ts));
+    last = ts;
+    const elapsed = ts - t0;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if(elapsed < 4600 && ts - lastBurst > 820){
+      lastBurst = ts;
+      spawnBurst(canvas.width * (0.1 + Math.random() * 0.8), canvas.height * (0.08 + Math.random() * 0.52));
+      if(Math.random() < 0.55) spawnBurst(canvas.width * (0.12 + Math.random() * 0.76), canvas.height * (0.12 + Math.random() * 0.55));
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    for(let i = parts.length - 1; i >= 0; i--){
+      const p = parts[i];
+      p.x += p.vx * dt / 16;
+      p.y += p.vy * dt / 16;
+      p.vy += 0.042 * dt / 16;
+      p.vx *= 0.991;
+      p.vy *= 0.991;
+      p.life -= p.decay * dt / 16;
+      if(p.life <= 0){ parts.splice(i, 1); continue; }
+      ctx.globalAlpha = p.life * 0.9;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = p.life * 0.2;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    if(elapsed >= DURATION && parts.length === 0){ thanksStopMotion(); return; }
+    st.raf = requestAnimationFrame(frame);
+  };
+  st.raf = requestAnimationFrame(frame);
+  // سقف أمان: لا مؤثرات أبداً بعد 12 ثانية مهما كان
+  st.timers.push(setTimeout(() => { if(__thanksFx === st) thanksStopMotion(); }, 12000));
 }
 const TIMETABLE_PERIOD_NAMES = ['الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة'];
 /* جميع المواد الممكنة حسب المراحل ليختار منها المعلم عند إدخال حصته */
