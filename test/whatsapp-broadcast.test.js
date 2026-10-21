@@ -213,8 +213,9 @@ test('13) رفع الإصدارات بعد الإضافة', () => {
   assert.ok(v && v[1].includes('guardian-editor'), 'الإصدار لا يعكس السجل');
   assert.ok(v[1].includes('wa-broadcast'), 'الإصدار لا يحمل وسم خدمة الواتساب الجماعي');
   assert.ok(v[1].includes('wa-consent'), 'الإصدار لا يحمل وسم توثيق الموافقة');
+  assert.ok(v[1].includes('save-persist'), 'الإصدار لا يحمل وسم إصلاح موثوقية الحفظ');
   const sw = fs.readFileSync(path.join(ROOT, 'public', 'sw.js'), 'utf8');
   const n = Number((sw.match(/nibras-v(\d+)/) || [])[1]);
-  assert.ok(n >= 138, 'CACHE_NAME لم يُرفَع');
-  assert.ok(SRC.includes('sw.js?v=117'), 'نسخة service worker لم تُرفَع');
+  assert.ok(n >= 139, 'CACHE_NAME لم يُرفَع');
+  assert.ok(SRC.includes('sw.js?v=118'), 'نسخة service worker لم تُرفَع');
 });

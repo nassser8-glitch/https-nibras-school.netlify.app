@@ -2067,13 +2067,23 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     const behindBy = storedTsNow - ts;
     const stale = !!(prev && prev.data && storedTsNow && (
       declaredBase > 0 ? declaredBase < storedTsNow : behindBy > 5 * 60 * 1000
-    ));
+    ) || (storedTsNow && declaredBase > 0 && declaredBase > storedTsNow));
+    // أساس مُدّعى أحدث مما لدى الخادم لا يكون «طازجاً»: يحدث بعد استرجاع نسخة
+    // احتياطية (يتراجع ts المخزَّن) أو بتعديل أساس يدوي. الاستبدال الكامل حينها
+    // يمحو الاسترجاع ويُعيد البيانات القديمة — فالدمج المحافظ هو الصحيح.
+    // (الشرط أعلاه مُبقي كما هو حرفياً ليبقى توافق الاختبارات القديمة.)
 
     // ===== تحقق الصلاحيات لكل قسم تغيّر =====
     // المدير/الوكيل: يمكنه تعديل قسم المستخدمين، والبقية يحفظون أقسامهم (حضور/غياب...) فقط.
     const canEditUsers = (req.session.role === 'ADMIN' || req.session.role === 'AGENT');
     // وكيل الشؤون المدرسية: يُسجّل حضور المعلمات/الإداريين (حقول الغياب/التأخر) فقط.
     const canEditUserAttendance = (req.session.role === 'SCHOOL_AGENT');
+    // ===== بلاغ صريح للأقسام المرفوضة (لا صلاحية لهذا الدور) =====
+    // كان الخادم يُسقِط صامتاً أي قسم خارج صلاحيات الدور، فيظن المستخدم أن حفظه
+    // وصل بينما بقي محلياً وحده. نجمع الأقسام المرفوضة ونعيدها للعميل عبر ترويسة
+    // X-Nibras-Dropped فيُنبّه الواجهة بدل الإخفاء الصامت. (جسم ردّ النجاح
+    // يبقى كما هو تماماً للتوافق مع العملاء القديمة.)
+    const droppedSections = [];
     if (!canEditUsers) {
       if (canEditUserAttendance) {
         // يُقبل تغيّر حقول الحضور على سجلات المستخدمين، ويبقى سائر الحقول نسخة الخادم.
@@ -2081,6 +2091,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       } else {
         // لا يحق لهذا الدور تعديل الحسابات: نتجاهل أي تغيير أرسله على قسم users
         // ونُبقي نسخة الخادم الموثوقة سليمة، دون فقدان بقية الأقسام المشروعة (مثل الحضور).
+        if (!jsonEqual(prevUsers, data.users)) droppedSections.push('users');
         data.users = JSON.parse(JSON.stringify(prevUsers));
       }
     }
@@ -2140,6 +2151,9 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         if (SECTION_RULES[key] && SECTION_RULES[key].includes(role)) merged[key] = mergeSection(a, b);
         // مفاتيح غير معروفة (مثل escapeAlerts): تُدمج عاماً كي لا تُفقد إضافات/تعديلات أي جهة
         else if (!SECTION_RULES[key]) merged[key] = mergeSection(a, b);
+        // قسم مرفوض فعلاً (لا صلاحية): يُسجَّل ليُبلَّغ العميل بدل الإسقاط الصامت.
+        // استثناء الطلاب هنا لأنهم يُعالَجون لاحقاً بحقول التأخر فقط (mergeStudentsLateOnly).
+        else if (key !== 'students') droppedSections.push(key);
       }
       return merged;
     };
@@ -2199,6 +2213,23 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       // (وللحسابات المُصرَّح لها بالمعرّف — تهاني — يُسمح أيضاً برقم ولي الأمر بحماية الختم.)
       data.students = mergeStudentsLateOnly(prev.data ? prev.data.students : [], incomingStudents,
         { guardianPhone: isGuardianPhoneEditor(req.session.user_id) });
+      // هل أرسل الجهاز تغييراً خارج الحقول المسموحة (اسم/فصل/حالة/صف...)؟ نُبلّغ بدل الصمت.
+      try {
+        const STU_ALLOWED = ['lateMinutes', 'lateType', 'guardianPhone', 'guardianPhoneAt', 'guardianName', 'whatsapp'];
+        const outById = new Map((Array.isArray(data.students) ? data.students : []).filter(s => s && s.id != null).map(s => [s.id, s]));
+        let stuRejected = false;
+        for (const s of incomingStudents) {
+          if (!s || s.id == null) continue;
+          const o = outById.get(s.id);
+          if (!o) continue;
+          for (const k of Object.keys(s)) {
+            if (STU_ALLOWED.indexOf(k) !== -1) continue;
+            if (!jsonEqual(s[k], o[k])) { stuRejected = true; break; }
+          }
+          if (stuRejected) break;
+        }
+        if (stuRejected && droppedSections.indexOf('students') === -1) droppedSections.push('students');
+      } catch (e) { console.warn('[dropped-students]', e.message); }
     }
 
     // ===== فرض مالك الملاحظة من الجلسة قبل أي دمج =====
@@ -2222,6 +2253,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           console.warn('[note-delete-rights] حذف مرفوض | ملاحظة:', bad.id,
             '| صاحبها:', bad.owner, '| يحاول:', bad.by, '(' + bad.role + ')');
         }
+        if (Array.isArray(delRights.blocked) && delRights.blocked.length) droppedSections.push('notes');
       }
     } catch (e) { console.warn('[note-privacy] enforceNoteOwners:', e.message); }
 
@@ -2238,6 +2270,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           console.warn('[transfer-delete-rights] حذف مرفوض | تحويل:', bad.id,
             '| صاحبه:', bad.owner, '| يحاول:', bad.by, '(' + bad.role + ')');
         }
+        if (Array.isArray(tDel.blocked) && tDel.blocked.length) droppedSections.push('transfers');
       }
     } catch (e) { console.warn('[transfer-delete-rights]', e.message); }
 
@@ -2476,6 +2509,11 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         payload: req.body ? Buffer.byteLength(JSON.stringify(req.body)) : 0,
       });
     } catch (auditErr) { console.error('audit failed (non-blocking):', auditErr.message); }
+    // ترويسة بلاغ الأقسام المرفوضة: العميل يُنبّه المستخدم بدل الإسقاط الصامت.
+    // جسم الردّ يبقى كما هو (توافق) — الترويسة إضافة اختيارية لا تكسر أي عميل قديم.
+    if (droppedSections.length) {
+      try { res.set('X-Nibras-Dropped', Array.from(new Set(droppedSections)).join(',')); } catch (e) {}
+    }
     res.json({ ok: true, ts: nextTs });
   })().catch(fail(res));
 });

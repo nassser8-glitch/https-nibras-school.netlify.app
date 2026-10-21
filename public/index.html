@@ -1353,6 +1353,9 @@ async function __syncPush(school){
   try{
 let raw = null;
   try{ raw = localStorage.getItem(key); }catch(e){}
+  // لقطة التخزين عند بدء الرفع: أي كتابة بعدها تعني تعديلاً أحدث لا يجوز طمسه.
+  // (كان الرفع يكتب نسخته القديمة فوق تعديلٍ وصل أثناء الجلب، فيختفي الحفظ للتو.)
+  let __snapRaw = raw;
   let obj = null;
   if(raw){ try{ obj = JSON.parse(raw); }catch(e){} }
   if(!obj){
@@ -1379,6 +1382,10 @@ let raw = null;
     const localTsNow = __syncTS(obj);
     const hasPendingBak = (()=>{ try{ return !!localStorage.getItem(pendKey); }catch(e){ return false; } })();
     if(!hasPendingBak && st.lastOkAt > 0 && localTsNow === st.lastOkTs){
+      // لا شيء جديد لرفعه ⇒ ما في التخزين مطابق لما في الخادم: أي مراقب معلّق
+      // (عملية لم تغيّر البيانات) يُطمئن بدل أن تبقى لافتته معلّقة إلى الأبد.
+      try{ __saveGuardNotify(school, { ok:true }); }catch(e){}
+      try{ setTimeout(__refreshSaveStatus, 0); }catch(e){}
       st.running = false;
       return { ok:true, noop:true };
     }
@@ -1395,7 +1402,16 @@ let raw = null;
     let __pushBaseTs = 0;
     try{
       const mresp = await fetch(SYNC_API + school);
-      if(mresp.status === 401){ __handleAuthError(mresp); return { ok:false, err:'401' }; }
+      if(mresp.status === 401){
+        // انتهت الجلسة قبل الرفع: لا نبتلع الصمت ولا نُبقي لافتة «جارٍ الحفظ» معلّقة —
+        // نُبلّغ حارس الحفظ بسبب واضح، وتبقى البيانات في التخزين لتعود بعد الدخول.
+        __handleAuthError(mresp);
+        st.lastFail = Date.now();
+        try{ __syncLogAdd({ ev:'push-401', school, ts:__syncTS(obj) }); }catch(e){}
+        try{ __saveGuardNotify(school, { ok:false, err:'401' }); }catch(e){}
+        try{ setTimeout(__refreshSaveStatus, 0); }catch(e){}
+        return { ok:false, err:'401' };
+      }
       if(mresp.ok){
           const mj = await mresp.json();
           if(mj && mj.data){
@@ -1593,11 +1609,27 @@ let raw = null;
               const unsync = __pointsUnsyncedStudents((mj.data && mj.data.notes) || [], locNotesCarry);
               __carryLocalAdjustedPoints(sd.pointsTotals, locPTCarry, unsync);
             }catch(e){}
-            try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
+            // كتابة دمج الخادم في التخزين مشروطة ببقاء اللقطة كما هي: إن كُتب تعديل
+            // جديد أثناء الجلب فالكتابة كانت تمحوه (طمس حفظٍ حصل للتو).
+            try{
+              if(localStorage.getItem(key) === __snapRaw){
+                const __w1 = JSON.stringify(obj);
+                __origSetItem(key, __w1);
+                __snapRaw = __w1;
+              } else {
+                __syncLogAdd({ ev:'push-merge-not-written', school });
+              }
+            }catch(e){}
           } else if(serverHasData && isEmptySeed0){
             // متصفح جديد فارغ تماماً: نأخذ نسخة الخادم (لا نرفع فارغاً فوق عملية)
             obj = JSON.parse(JSON.stringify(mj.data));
-            try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
+            try{
+              if(localStorage.getItem(key) === __snapRaw){
+                const __w2 = JSON.stringify(obj);
+                __origSetItem(key, __w2);
+                __snapRaw = __w2;
+              }
+            }catch(e){}
           }
         }
       }
@@ -1628,7 +1660,17 @@ let raw = null;
         });
       }
     }catch(e){}
-let attempt = 0;
+    // نافذة قصيرة بين دمج الخادم والرفع: إن كُتب تعديل جديد أثناءها فالدفعة الحالية
+    // صارت قديمة — نُلغيها ونُعيد الجدولة بدل رفع نسخةٍ تمحو الجديد. لا نجاح كاذب:
+    // التخزين هو مصدر الحقيقة، ومنه يبدأ الرفع التالي فوراً.
+    try{
+      if(localStorage.getItem(key) !== __snapRaw){
+        __syncLogAdd({ ev:'push-stale-retry', school, ts:__syncTS(obj) });
+        st.dirty = true;
+        return { ok:false, stale:true, dirty:true };
+      }
+    }catch(e){}
+    let attempt = 0;
     let lastErr = '';
     const respOf = await (async () => {
       for(; attempt < 3; attempt++){
@@ -1646,7 +1688,7 @@ let attempt = 0;
           try{ lastErr = resp.status + ':' + (await resp.text()).slice(0, 160); }
           catch(e){ lastErr = String(resp.status); }
         }
-        if(resp.status === 401){ __handleAuthError(resp); return null; }
+        if(resp.status === 401){ lastErr = '401'; __handleAuthError(resp); return null; }
         if(resp.status === 403){
           // الحساب محجوب (بانتظار تغيير كلمة المرور مثلاً). نسجّل السبب لنعرف
           // سببَ رفض الرفع فعلاً، ونكمل مسار الفشل المعتاد فيُحتفظ بنسخة احتياطية
@@ -1663,27 +1705,47 @@ let attempt = 0;
       return null;
     })();
     if(respOf){
+      let droppedCsv = '';
       try{
         const j = await respOf.json();
         if(j && j.ts && obj && typeof obj === 'object') obj._ts = j.ts;
       }catch(e){}
-      try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
+      try{ droppedCsv = (respOf.headers && respOf.headers.get) ? (respOf.headers.get('X-Nibras-Dropped') || '') : ''; }catch(e){}
+      let freshEnd = false;
+      try{ freshEnd = localStorage.getItem(key) === __snapRaw; }catch(e){ freshEnd = false; }
+      if(freshEnd){
+        try{ __origSetItem(key, JSON.stringify(obj)); }catch(e){}
+        try{ localStorage.removeItem(pendKey); }catch(e){}
+        try{ __clearUnpushed(school); }catch(e){}
+        try{ __clearAssignUnpushed(school); }catch(e){}
+      } else {
+        // تعديل أحدث وصل أثناء الرفع: ما وصل وصل، وما كُتب بعده يبقى محلياً ويرفع في
+        // الدفعة التالية — لا نكتب نسختنا فوقه (كانت الكتابة تمحو حفظاً للتو) ولا
+        // نفرّغ سجلات ما لم يُرفع بعد.
+        __syncLogAdd({ ev:'push-local-changed', school, ts:__syncTS(obj) });
+        st.dirty = true;
+      }
       st.lastOkAt = Date.now();
       st.lastOkTs = __syncTS(obj);
-      try{ localStorage.removeItem(pendKey); }catch(e){}
-      try{ __clearUnpushed(school); }catch(e){}
-      try{ __clearAssignUnpushed(school); }catch(e){}
       const recovered = st.attempts > 0;
       st.attempts = 0;
       st.lastFail = 0;
-      __syncLogAdd({ ev:'push-ok', school, notes:(obj && Array.isArray(obj.notes))?obj.notes.length:0, att:(obj && Array.isArray(obj.attendance))?obj.attendance.length:0, ts:__syncTS(obj), err:(recovered?'recovered':'') });
+      __syncLogAdd({ ev:'push-ok', school, notes:(obj && Array.isArray(obj.notes))?obj.notes.length:0, att:(obj && Array.isArray(obj.attendance))?obj.attendance.length:0, ts:__syncTS(obj), err:(recovered?'recovered':''), dropped:droppedCsv });
       if(recovered) __uiToast('✅ عاد الاتصال — حُفظ ما لم يكن قد رُفع.');
       let stillDirty = false;
       try{ stillDirty = __syncTS(JSON.parse(localStorage.getItem(key) || 'null')) !== st.lastOkTs; }catch(e){}
+      // بلاغ صريح من الخادم: أقسام عادت نسخة الخادم لعدم صلاحية هذا الدور — لا نصمت.
+      let opDropped = false;
+      if(droppedCsv){
+        __syncLogAdd({ ev:'push-partial', school, dropped:droppedCsv });
+        __uiToast('⚠️ رُفع ما تملكين صلاحيته، وبقيت أقسام غير محفوظة لعدم الصلاحية: ' + droppedCsv.split(',').filter(Boolean).join('، '), true);
+        try{ opDropped = __saveGuardDropped(school, droppedCsv); }catch(e){ opDropped = false; }
+      }
+      if(opDropped){ try{ __saveGuardNotify(school, { ok:false, err:'403' }); }catch(e){} }
       // لا نُبلّغ النجاح إن تغيّر المحلي أثناء الرفع — الرفع التالي (st.dirty) سيكمل ويُبلّغ.
-      if(!stillDirty){ try{ __saveGuardNotify(school, { ok:true }); }catch(e){} }
+      else if(!stillDirty){ try{ __saveGuardNotify(school, { ok:true }); }catch(e){} }
       try{ setTimeout(__refreshSaveStatus, 0); }catch(e){}
-      return { ok:true, dirty:stillDirty };
+      return { ok:true, dirty:stillDirty, dropped:droppedCsv };
     }
     // فشل الرفع نهائياً: نحتفظ بالتعديلات في نسخة احتياطية محلية ونعيد المحاولة لاحقاً
     st.attempts++;
@@ -1706,7 +1768,20 @@ let attempt = 0;
     try{ if(__unpushedIds(school).length) __notePushFailBanner(); }catch(e){}
     try{ setTimeout(__refreshSaveStatus, 0); }catch(e){}
     return { ok:false, err:lastErr, attempts:st.attempts };
-  }catch(e){} finally {
+  }catch(e){
+    // أي استثناء غير متوقّع لا يُبتلع مسار الفشل: نُبلّغ حارس الحفظ ونُجدول إعادة
+    // المحاولة (كان catch(e){} صامتاً فتبقى لافتة «جارٍ الحفظ» إلى الأبد ويفقد
+    // المستخدم إشارة حفظه، ويسكت فشل الشبكة دون سبب).
+    const __em = (e && e.message) ? e.message : String(e);
+    st.attempts++; st.lastFail = Date.now();
+    try{ __syncLogAdd({ ev:'push-exception', school, err:__em }); }catch(_){}
+    try{ console.warn('[syncPush]', school, __em); }catch(_){}
+    try{ __uiToast('⚠️ تعذّر رفع حفظك للخادم الآن (' + __em + ') — بياناتك محفوظة على هذا الجهاز وسأعيد المحاولة تلقائياً.', true); }catch(_){}
+    try{ __saveGuardNotify(school, { ok:false, err:'network:' + __em, attempts:st.attempts }); }catch(_){}
+    try{ setTimeout(__refreshSaveStatus, 0); }catch(_){}
+    if(st.attempts < __PUSH_MAX_ATTEMPTS){ try{ __syncTimers[school] = setTimeout(() => __syncPush(school), 15000); }catch(_){} }
+    return { ok:false, err:'network:' + __em, attempts:st.attempts };
+  } finally {
     st.running = false;
     // إعادة جدولة الرفع إن وصل تعديل أثناء الرفع الجاري (كان __syncPush يعود
     // مبكراً وتضيع الدفعة المجدولة، فيبقى التعديل محلياً بلا رفع).
@@ -1894,6 +1969,15 @@ async function __syncPull(school){
   if(!__syncEnabled()) return;
   const st = __pushState(school);
   if(st.running) return;
+  // دفعة رفع مجدولة أو معلّقة (نافذة __pushPendingUntil): لا سحب — فالسحب يكتب دمجه
+  // فوق تخزين يحمل تعديلات لم تُرفع بعد. المستدعون المباشرون لـ__syncPull كانوا
+  // يتخطّون حارس syncPullAll في نافذة الـ700ms فتُمحى دفعةٌ معلّقة بصمت.
+  try{
+    if((__pushPendingUntil[school] || 0) > Date.now()){
+      __syncLogAdd({ ev:'pull-skipped-busy', school });
+      return;
+    }
+  }catch(_){}
   // تعديلات لم تُرفع بعد (فشل رفع سابق أو جارٍ الرفع): لا تكتب فوقها نسخة الخادم الأقدم
   // — نعيد محاولة الرفع فوراً بدل محوها، حتى لا «يختفي» حفظ المعلم بعد إعادة الفتح.
   const hasPending = (st && st.lastFail > 0 && (Date.now() - st.lastFail) < 60000);
@@ -2182,12 +2266,38 @@ async function syncPullAll(){
 // إعادة جلب نسخة القسم من الخادم بعد أي عملية حساب (أول دخول، إنشاء مستخدم، إعادة تعيين...)
 async function __refreshSchool(school){
   if(!__serverEnabled() || !school) return;
+  // حارس الحفظ المعلّق: لا نستبدل نسخة الجهاز بنسخة الخادم ما دام هناك تعديل لم
+  // يُرفع (دفعة مجدولة/فاشلة أو سجلات غير مرفوعة) — الاستبدال المباشر كان يمحو
+  // الحضور/الملاحظات/النقاط/الحضور غير المرفوع فيختفي بعد التحديث وإعادة الدخول.
+  // ندفع أولاً، ثم يجلب السحب المدمج (syncPullAll) نسخة موحدة بعد النجاح.
+  try{
+    const st0 = __pushState(school);
+    let pend0 = false;
+    try{ pend0 = !!localStorage.getItem('nibras_'+school+'_pending_v1'); }catch(e){}
+    let unp0 = 0;
+    try{ unp0 = __unpushedIds(school).length + __assignUnpushedIds(school).length; }catch(e){ unp0 = 0; }
+    if(st0.running || pend0 || unp0 > 0 || st0.lastFail > 0 || ((__pushPendingUntil[school] || 0) > Date.now())){
+      __syncLogAdd({ ev:'refresh-deferred', school, pend:pend0?1:0, unpushed:unp0, fail:st0.lastFail?1:0 });
+      __syncSchedule(school, 0);
+      return;
+    }
+  }catch(e){}
+  const __keyR = 'nibras_'+school+'_db_v1';
+  let __rawBefore = null;
+  try{ __rawBefore = localStorage.getItem(__keyR); }catch(e){}
   try{
     const resp = await fetch(SYNC_API + school);
     if(!resp.ok) return;
     const j = await resp.json();
     if(j && j.data){
-      const key = 'nibras_'+school+'_db_v1';
+      const key = __keyR;
+      // إن كُتب تعديل أثناء الجلب: نُسقط الكتابة بدل طمسه (يأتيه رفعٌ مجدول بنفسه).
+      try{
+        if(localStorage.getItem(__keyR) !== __rawBefore){
+          __syncLogAdd({ ev:'refresh-raced', school });
+          return;
+        }
+      }catch(e){}
       let local = null;
       try{ const raw = localStorage.getItem(key); if(raw) local = JSON.parse(raw); }catch(e){ local = null; }
       // دمج واعٍ للشواهد: لو كان التكليف محذوفاً محلياً (قبر) لا نعيده حتى لو وصلت نسخة قديمة
@@ -2778,21 +2888,25 @@ function loadDB(){
       }
     });
   }
-  // تنظيف تلقائي: ملاحظات متطابقة مكررة خلال دقيقتين (ضغط مزدوج على زر الحفظ)
+  // تنظيف تلقائي: السجل المكرر بمعناه الحقيقي فقط — نفس المعرّف أو نفس معرّف
+  // الدفعة (ضغط مزدوج على زر الحفظ قبل وصول التأكيد). ملاحظتان نصّهما متطابق
+  // بتوقيتين مختلفين مقصودتان (تكرار مقصود من معلمة) — لا تُحذف أبداً لأن
+  // التوقيت/النصّ/الفئة متطابقان، وهذا كان سبب اختفاء ملاحظات صحيحة.
   if(Array.isArray(d.notes) && d.notes.length > 1){
-    const seenNotes = new Map();
+    const seenNoteKeys = new Set();
     const uniqNotes = [];
+    let dupNote = false;
     d.notes.forEach(n => {
-      // شاهد القبر (المحذوفة) يُحتفظ به دائماً حتى ينتشر الحذف — لا يُدمج ولا يُحذف هنا
-      if(n && n.deleted){ uniqNotes.push(n); return; }
-      const key = n.studentId + '|' + n.type + '|' + n.category + '|' + (n.description||'') + '|' + n.createdBy + '|' + (n.points ?? '');
-      const t = n.createdAt ? new Date(n.createdAt).getTime() : 0;
-      const prev = seenNotes.get(key);
-      if(prev !== undefined && Math.abs(t - prev) < 120000){ cleaned = true; return; }
-      seenNotes.set(key, prev !== undefined ? Math.min(prev, t) : t);
+      if(!n) return;
+      const kid = (n.id != null) ? ('id:' + n.id) : null;
+      const kbatch = (n.batchId != null) ? ('batch:' + n.batchId) : null;
+      if(!kid && !kbatch){ uniqNotes.push(n); return; }
+      if((kid && seenNoteKeys.has(kid)) || (kbatch && seenNoteKeys.has(kbatch))){ dupNote = true; return; }
+      if(kid) seenNoteKeys.add(kid);
+      if(kbatch) seenNoteKeys.add(kbatch);
       uniqNotes.push(n);
     });
-    if(cleaned) d.notes = uniqNotes;
+    if(dupNote){ d.notes = uniqNotes; cleaned = true; }
   }
   // تنظيف تلقائي: بيانات دخول المعلمين — لا رقم سري؛ من لا كلمة مرور له يُجبر على تعيينها عند أول دخول
   if(Array.isArray(d.users)){
@@ -2880,6 +2994,10 @@ async function login(login, password){
         __sessionUser = r.j.user;
         __mirrorSet(r.j.user);
         setActiveSchool(r.j.user.school);
+        // موثوقية الحفظ: أي تعديل بقي معلّقاً أثناء انتهاء الجلسة يُرفع فور عودة
+        // الدخول (كان يبقى محلياً إلى أول تعديل جديد، فيبدو غير محفوظ ثم يضيع
+        // بمسح التخزين أو بنسخة خادم أقدم على الجهاز).
+        try{ __syncSchedule(r.j.user.school, 400); }catch(e){}
         return { ok:true };
       }
       if(r.status === 429) return { ok:false, error:'rate_limited' };
@@ -3217,7 +3335,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast wa-consent tehani-wa';
+const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast wa-consent tehani-wa save-persist';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -6690,8 +6808,15 @@ function setStudentWaConsent(studentId, val, opts){
   __waApplyConsentLocally(ids, !!val); // تفاؤلي: يظهر الأثر فوراً
   if(!o.silent) renderApp();
   if(__serverEnabled() && schoolNow){
+    // الموافقة محفوظة محلياً وتُرفع ضمن قسم الطلاب عبر __syncSchedule؛ ونتيجة
+    // التوثيق المباشر تُبلَّغ صراحةً — كان فشل الـPOST يمرّ بصمت فتظن المديرة
+    // أن التوثيق وصل. النجاح لا يُعلَن هنا بل برفع الدفعة نفسه (المراقب أدناه).
+    __saveGuardWatch(schoolNow, 'consent', __saveGuardOutcome);
     __waSetConsentServer(ids, !!val).then(async (ok) => {
-      if(ok){ try{ await __syncPull(schoolNow); }catch(e){} }
+      if(!ok){
+        try{ __saveGuardNotify(schoolNow, { ok:false, err:'403' }); }catch(e){}
+        try{ __uiToast('⚠️ تعذّر توثيق الموافقة على الخادم — بقيت محفوظة على هذا الجهاز وستُرفع مع المزامنة التالية.', true); }catch(e){}
+      } else { try{ await __syncPull(schoolNow); }catch(e){} }
       if(!o.silent) renderApp();
     });
   }
@@ -9539,6 +9664,22 @@ function __saveGuardNotify(school, res){
   if(res && res.ok) __saveGuards[school] = [];
   list.forEach(w => { try{ w.cb(res, w.kind); }catch(e){} });
 }
+/* بلاغ الخادم عن أقسام رُفضت لعدم الصلاحية (ترويسة X-Nibras-Dropped): نعرف إن كان
+   أحدها هو قسمُ العملية المعلّقة لتُبلَّغ الفشل بصراحة (403)، أم قسماً آخر بقي
+   محلياً (تحذير منفصل عبر toast) بينما نجاحُ العملية يبقى صحيحاً. */
+const __GUARD_SECTION = {
+  'user':'users', 'assignment':'assignments', 'assignment-del':'assignments',
+  'note':'notes', 'note-del':'notes', 'attendance':'attendance',
+  'phone':'students', 'consent':'students'
+};
+function __saveGuardDropped(school, droppedCsv){
+  try{
+    const dropped = String(droppedCsv || '').split(',').map(s => String(s).trim()).filter(Boolean);
+    if(!dropped.length) return false;
+    const list = __saveGuards[school] || [];
+    return list.some(w => dropped.indexOf(__GUARD_SECTION[w.kind] || '') !== -1);
+  }catch(e){ return false; }
+}
 /* لوحة الفشل الثابتة: رسالة صريحة + سبب + «إعادة المحاولة» + «نسخ النص» */
 function __saveGuardPanel(opts){
   try{
@@ -10709,6 +10850,14 @@ function deleteUser(id){
   const target = d.users.find(x => x.id === id);
   if(target) target.active = false;
   saveDB(d);
+  // موثوقية الحفظ: التعطيل تغييرٌ على قسم المستخدمين يجب أن يصل الخادم — نربط
+  // النجاح برفعه الفعلي بدل ترك الحالة بلا تأكيد (كان المسار بلا حراسة ولا رفع صريح).
+  if(__serverEnabled() && __syncEnabled()){
+    __saveGuardWatch(getActiveSchool(), 'user', __saveGuardOutcome);
+    __noteSaveBanner('🔵 جارٍ حفظ تعطيل الحساب على الخادم...', false);
+    try{ __refreshSaveStatus(); }catch(e){}
+    try{ __syncSchedule(getActiveSchool(), 0); }catch(e){}
+  }
   renderApp();
 }
 
@@ -11685,6 +11834,15 @@ function toggleStudentDone(aid, sid, isDone){
   if(isDone && idx < 0) a.completedBy.push(sid);
   if(!isDone && idx >= 0) a.completedBy.splice(idx, 1);
   saveDB(d);
+  // موثوقية الحفظ: نتتبّع دفعة هذا التكليف حتى تأكيد الخادم (لا نجاح بلا رفع،
+  // ولا لافتة معلّقة إن فشل الرفع — كان هذا المسار وحده بلا حراسة أصلاً).
+  try{ __markAssignUnpushed(getActiveSchool(), [a.id]); }catch(e){}
+  if(__serverEnabled() && __syncEnabled()){
+    __saveGuardWatch(getActiveSchool(), 'assignment', __saveGuardOutcome);
+    __noteSaveBanner('🔵 جارٍ حفظ حالة الإنجاز على الخادم...', false);
+    try{ __refreshSaveStatus(); }catch(e){}
+    try{ __syncSchedule(getActiveSchool(), 0); }catch(e){}
+  }
   renderApp();
 }
 function deleteAssignment(aid){
@@ -11711,11 +11869,17 @@ function deleteAssignment(aid){
   const params = new URLSearchParams((location.hash.split('?')[1]||''));
   const step = params.get('step') || 'list';
   const classId = params.get('cid') || '';
-  if(step === 'detail') location.hash = '#/assignments?step=list&cid=' + classId;
-  __saveGuardWatch(getActiveSchool(), 'assignment-del', __saveGuardOutcome);
+  const backToList = '#/assignments?step=list&cid=' + classId;
+  // لا انتقال قبل تأكيد الخادم (كما في حفظ التكليف): الانتقال الفوري كان يُظهر
+  // القائمة «نظيفة» بينما الحذف لم يُرفع بعد وربما فشل — ننتظر نتيجة الرفع.
+  __saveGuardWatch(getActiveSchool(), 'assignment-del', (res, kind)=>{
+    __saveGuardOutcome(res, kind);
+    if(res && res.ok){ if(step === 'detail'){ try{ location.hash = backToList; }catch(e){} } }
+  });
   __noteSaveBanner('🔵 جارٍ حفظ حذف التكليف على الخادم...', false);
   __refreshSaveStatus();
   try{ __syncSchedule(getActiveSchool(), 0); }catch(e){}
+  if(!__serverEnabled() || !__syncEnabled()){ if(step === 'detail') location.hash = backToList; }
   renderApp();
 }
 
@@ -13743,7 +13907,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=117', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=118', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

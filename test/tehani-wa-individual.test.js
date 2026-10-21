@@ -194,8 +194,9 @@ test('6) لا صلاحيات جديدة لتهاني خارج واتساب ال�
 test('7) البناء سليم والإصدار مرفوع', () => {
   const v = SRC.match(/const __APP_VER = '([^']+)'/);
   assert.ok(v && v[1].includes('tehani-wa'), 'الإصدار لا يحمل وسم هذا الإصلاح');
+  assert.ok(v[1].includes('save-persist'), 'الإصدار لا يحمل وسم إصلاح موثوقية الحفظ');
   const n = Number((SW.match(/nibras-v(\d+)/) || [])[1]);
-  assert.ok(n >= 138, 'CACHE_NAME لم يُرفَع');
-  assert.ok(SRC.includes('sw.js?v=117'), 'نسخة service worker لم تُرفَع');
+  assert.ok(n >= 139, 'CACHE_NAME لم يُرفَع');
+  assert.ok(SRC.includes('sw.js?v=118'), 'نسخة service worker لم تُرفَع');
   assert.ok(SRC.includes('function canWaConsent('), 'دالة البوابة مفقودة');
 });
