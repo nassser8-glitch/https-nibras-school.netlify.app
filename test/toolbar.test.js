@@ -289,7 +289,7 @@ test('languages: three locales, each with its own direction', () => {
   assert.equal(s.ur.dir, 'rtl');
   assert.equal(s.en.dir, 'ltr');
   for (const k of Object.keys(s)) {
-    for (const t of ['weather', 'clock', 'cal', 'calc', 'tr', 'prayer']) {
+    for (const t of ['e', 'weather', 'clock', 'cal', 'calc', 'tr', 'prayer']) {
       assert.ok(s[k][t], k + '.' + t + ' must exist');
     }
   }
@@ -371,7 +371,7 @@ test('boot: clicking the fab opens a panel with all six tabs', () => {
   fire(root, 'click', { target: { id: 'tbFab' } });
   const root2 = t.doc.body.children.filter(c => c.id === 'nibrasToolbar').pop();
   assert.ok(/tbPanel/.test(root2.innerHTML), 'panel must be rendered after clicking the fab');
-  for (const id of ['w', 'c', 'd', 'k', 't', 'p']) {
+  for (const id of ['e', 'c', 'd', 'k', 't', 'p']) {
     assert.ok(root2.innerHTML.indexOf('data-tab="' + id + '"') > -1, 'tab button missing: ' + id);
   }
   assert.ok(/tbBody/.test(root2.innerHTML), 'panel must have a body container');
@@ -382,7 +382,7 @@ test('boot: switching to each service tab renders its content', () => {
   const api = t.ctx.window.__tb;
   const root = t.doc.body.children.find(c => c.id === 'nibrasToolbar');
   fire(root, 'click', { target: { id: 'tbFab' } });
-  for (const id of ['w', 'c', 'd', 'k', 't', 'p']) {
+  for (const id of ['e', 'c', 'd', 'k', 't', 'p']) {
     fire(root, 'click', { target: { getAttribute: k => (k === 'data-tab' ? id : null) } });
     const cur = t.doc.body.children.filter(c => c.id === 'nibrasToolbar').pop();
     assert.ok(cur.innerHTML.length > 0, 'tab ' + id + ' rendered nothing');
@@ -395,7 +395,7 @@ test('boot: the six services are all registered with a renderer', () => {
   assert.ok(m, 'TABS array must exist');
   const rows = m[1].match(/\{\s*id:\s*'([a-z])'[^}]*run:/g) || [];
   assert.equal(rows.length, 6, 'six services registered');
-  assert.deepEqual(rows.map(r => /id:\s*'([a-z])'/.exec(r)[1]).sort(), ['c', 'd', 'k', 'p', 't', 'w']);
+  assert.deepEqual(rows.map(r => /id:\s*'([a-z])'/.exec(r)[1]).sort(), ['c', 'd', 'e', 'k', 'p', 't']);
 });
 
 test('boot: failures surface instead of failing silently', () => {

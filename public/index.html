@@ -69,7 +69,7 @@ window.__nibrasBootErr = '';
 <title>المدرسة السعودية في إسلام آباد - نظام إدارة المدرسة</title>
 <link rel="stylesheet" href="toolbar.css?v=7">
 <script src="vendor/xlsx.full.min.js"></script>
-<script src="toolbar.js?v=7"></script>
+<script src="toolbar.js?v=8"></script>
 <style>
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
@@ -3335,7 +3335,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast wa-consent tehani-wa save-persist';
+const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast wa-consent tehani-wa save-persist links-swap';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -7598,18 +7598,23 @@ function __stripTick(){
     const dt = document.getElementById('stripDate'); if(dt) dt.textContent = day;
     const hj = document.getElementById('stripHijri'); if(hj) hj.textContent = hijriIslamabad();
   }
+  if(!window.__stripWxAt || Date.now() - window.__stripWxAt >= 60000){
+    window.__stripWxAt = Date.now();
+    __stripWxRender();
+  }
 }
 function renderAppStrip(){
   const el = document.getElementById('appStrip');
   if(!el) return;
   if(!window.__appStripClock){ window.__appStripClock = setInterval(__stripTick, 1000); }
   window.__stripDay = isbDateStr();
-  // خانة الطقس المكررة (الطقس الأصلي في شريط الأدوات) صارت بوابة الروابط التعليمية.
+  window.__stripWxAt = 0;
+  // خانة الروابط التعليمية صارت الطقس (موضعها الأصلي في الشريط)،
+  // وبوابة الروابط التعليمية صارت أول أدوات شريط الأدوات.
   el.innerHTML = `
-    <div class="strip-item strip-edu" role="button" tabindex="0" title="بوابة الروابط التعليمية"
-         onclick="openEduLinks()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEduLinks();}">
-      <span class="strip-ico">🎓</span>
-      <div><div class="strip-main">الروابط التعليمية</div><div class="strip-sub">وصول سريع للأنظمة والمنصات</div></div>
+    <div class="strip-item strip-weather">
+      <span class="strip-ico" id="stripWxIco">🌤</span>
+      <div><div class="strip-main strip-temp" id="stripWxTemp">—</div><div class="strip-sub" id="stripWxDesc">الطقس</div></div>
     </div>
     <div class="strip-item strip-date">
       <span class="strip-ico">📅</span>
@@ -7618,6 +7623,46 @@ function renderAppStrip(){
         <div class="strip-sub"><span id="stripHijri">${hijriIslamabad()}</span> · <span id="stripTime">${isbTimeStr()}</span></div>
       </div>
     </div>`;
+  __stripWxRender();
+}
+/* ============ الطقس في خانة الشريط ============
+   المصدر الوحيد للبيانات هو ذاكرة شريط الأدوات المشتركة (nibras_tb_v1_weather)
+   وناقلها الوحيد إلى الشبكة هو fetchWeather في toolbar.js — هنا نقرأ ونعرض
+   ونطلب التحديث عند القِدَم فقط، فلا نداء طقس مكرر في الصفحة. */
+function __stripWxRead(){
+  try{
+    const c = JSON.parse(localStorage.getItem('nibras_tb_v1_weather'));
+    return (c && typeof c.t === 'number') ? c : null;
+  }catch(e){ return null; }
+}
+function __stripWxRender(){
+  const ico = document.getElementById('stripWxIco');
+  const main = document.getElementById('stripWxTemp');
+  const desc = document.getElementById('stripWxDesc');
+  if(!main || !desc) return;
+  const c = __stripWxRead();
+  if(c){
+    const info = weatherCodeInfo(c.code);
+    if(ico) ico.textContent = info[0];
+    main.textContent = Math.round(c.t) + '°';
+    desc.textContent = info[1];
+  }else{
+    if(ico) ico.textContent = '🌤';
+    main.textContent = '—';
+    desc.textContent = 'الطقس';
+  }
+  const fresh = c && (Date.now() - c.at) < 30 * 60 * 1000;
+  if(fresh) return;
+  if(Date.now() - (window.__stripWxLastTry || 0) < 5 * 60 * 1000) return;
+  window.__stripWxLastTry = Date.now();
+  try{
+    if(window.__tb && typeof window.__tb.fetchWeather === 'function'){
+      window.__tb.fetchWeather(null);
+      /* القراءة تصل بعد لحظات: نُعاد الفحصة قريباً لعرضها فوراً،
+         والحصّان (5 دقائق) تمنع تكرار الطلب عند التعذّر. */
+      setTimeout(function(){ window.__stripWxAt = 0; }, 2000);
+    }
+  }catch(e){}
 }
 
 /* ============ بوابة الروابط التعليمية ============
@@ -13907,7 +13952,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=118', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=119', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

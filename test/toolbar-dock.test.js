@@ -122,7 +122,7 @@ test('dock: فتح أيقونة يبسّط اللوحة بلا تكرار الت
   t.api.redock();
   let root = t.dock.children.find(c => c.id === 'nibrasToolbar');
   assert.ok(root, 'المرسى جاهز');
-  fire(root, 'click', { target: { id: '', getAttribute: k => (k === 'data-tab' ? 'w' : null) } });
+  fire(root, 'click', { target: { id: '', getAttribute: k => (k === 'data-tab' ? 'e' : null) } });
   root = t.dock.children.filter(c => c.id === 'nibrasToolbar').pop();
   assert.ok(/tbPanel/.test(root.innerHTML), 'اللوحة فُتحت');
   assert.ok(/tbBody/.test(root.innerHTML), 'حاوية المحتوى موجودة');

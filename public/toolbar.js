@@ -1,5 +1,5 @@
 /* =============================================================================
- * نبراس — شريط الأدوات: طقس، ساعة عالمية، تقويم، حاسبة، مترجم، مواقيت صلاة
+ * نبراس — شريط الأدوات: روابط تعليمية، ساعة عالمية، تقويم، حاسبة، مترجم، مواقيت صلاة
  * -----------------------------------------------------------------------------
  * ملف مستقل تماماً: لا يعدّل أي دالة في التطبيق ولا يمسّ تخزينه المحلي
  * إلا بمفاتيحه الخاصة به. الغرض أن يبقى فشل أي جزء معزولاً عن المنظومة.
@@ -31,9 +31,9 @@
    * «الأردية» لغة مستقلة بخطّها: نغطي مفردات مدرسية شائعة دون اتصال، وما عداها
    * عبر MyMemory من خادمنا. */
   var LANGS = {
-    ar: { dir: 'rtl', label: 'عربي',  weather: 'الطقس',   clock: 'الساعة',  cal: 'التقويم', calc: 'الحاسبة', tr: 'المترجم', prayer: 'الصلاة' },
-    en: { dir: 'ltr', label: 'English', weather: 'Weather', clock: 'Clock',  cal: 'Calendar', calc: 'Calculator', tr: 'Translate', prayer: 'Prayer' },
-    ur: { dir: 'rtl', label: 'اردو',  weather: 'موسم',     clock: 'گھڑی',     cal: 'کیلنڈر', calc: 'کیلکولیٹر', tr: 'مترجم', prayer: 'نماز' }
+    ar: { dir: 'rtl', label: 'عربي',  e: 'الروابط التعليمية', weather: 'الطقس',   clock: 'الساعة',  cal: 'التقويم', calc: 'الحاسبة', tr: 'المترجم', prayer: 'الصلاة' },
+    en: { dir: 'ltr', label: 'English', e: 'Links', weather: 'Weather', clock: 'Clock',  cal: 'Calendar', calc: 'Calculator', tr: 'Translate', prayer: 'Prayer' },
+    ur: { dir: 'rtl', label: 'اردو',  e: 'لنکس',  weather: 'موسم',     clock: 'گھڑی',     cal: 'کیلنڈر', calc: 'کیلکولیٹر', tr: 'مترجم', prayer: 'نماز' }
   };
   function L() { var c = lsGet('lang', 'ar'); return LANGS[c] ? c : 'ar'; }
   function setLang(c) { if (!LANGS[c]) return; lsSet('lang', c); paint(); }
@@ -479,9 +479,24 @@
       });
   }
 
+  /* ============================================ 0) بوابة الروابط التعليمية
+   * مقعدها الأول انتقل إلى هنا من خانة الطقس في الشريط العلوي. البوابة
+   * نفسها في index.html (openEduLinks) وبياناتها في إعدادات القسم —
+   * هنا نفتحها فقط، والطقس بقيت دوال جاهزة تقرأها الصفحة العلوية. */
+  function eduLinksRender(box) {
+    try {
+      if (typeof window.openEduLinks === 'function') {
+        if (!document.getElementById('eduOverlay')) window.openEduLinks();
+        box.innerHTML = '<div class="tb-muted">' + esc(T('e')) + '</div>';
+        return;
+      }
+    } catch (e) {}
+    box.innerHTML = '<div class="tb-muted">—</div>';
+  }
+
   /* ============================================================== اللوحة */
   var TABS = [
-    { id: 'w', ic: '🌤', run: weatherRender },
+    { id: 'e', ic: '🎓', run: eduLinksRender },
     { id: 'c', ic: '🕐', run: clockRender },
     { id: 'd', ic: '📅', run: calRender },
     { id: 'k', ic: '🧮', run: function (b) { calcRender(b); } },
@@ -489,7 +504,8 @@
     { id: 'p', ic: '🕌', run: prayerRender }
   ];
   var open = lsGet('open', false);
-  var tab = lsGet('tab', 'w');
+  var tab = lsGet('tab', 'e');
+  if (!TABS.some(function (t) { return t.id === tab; })) tab = 'e';
   var root = null;
   var DOCK = false; /* رُسو الشريط داخل الصفحة تحت بطاقة «المتواجدون في الموقع» */
 

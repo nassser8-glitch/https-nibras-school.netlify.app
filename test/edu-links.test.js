@@ -103,28 +103,46 @@ function buildCtx(env) {
   return ctx;
 }
 
-/* ============================ 1) الأيقونة بدل الطقس المكرر ============================ */
-test('1) خانة الطقس المكررة استُبدلت بأيقونة الروابط التعليمية', () => {
+/* ============================ 1) المقعدان تبادلا ============================ */
+test('1) خانة الطقس عادت إلى الشريط، والروابط التعليمية صارت أول تبويبات الأدوات', () => {
   const strip = extractFn(SRC, 'renderAppStrip');
-  assert.ok(strip.includes('strip-edu'), 'لا خانة للروابط التعليمية');
-  assert.ok(strip.includes('🎓'), 'لا أيقونة 🎓');
-  assert.ok(strip.includes('openEduLinks()'), 'الخانة لا تفتح البوابة');
-  assert.ok(strip.includes('الروابط التعليمية'), 'لا نص للأيقونة');
-  assert.ok(!strip.includes('stripWeather'), 'خانة الطقس المكررة ما زالت في الشريط');
-  assert.ok(!SRC.includes('stripWeather'), 'stripWeather ما زال في الصفحة');
-  assert.ok(!SRC.includes('api.open-meteo.com'), 'نداء الطقس المكرر ما زال في الصفحة');
+  assert.ok(strip.includes('strip-weather') && strip.includes('stripWxTemp'), 'لا خانة للطقس في الشريط');
+  assert.ok(strip.includes('🌤'), 'لا أيقونة افتراضية للطقس');
   assert.ok(strip.includes('strip-date') && strip.includes('stripDate'), 'خانة التاريخ تأثرت');
   assert.ok(strip.includes('stripHijri') && strip.includes('stripTime'), 'بيانات التاريخ تأثرت');
+  assert.ok(strip.includes('__stripWxRender()'), 'خانة الطقس لا تُرسم عند تجهيز الشريط');
+  assert.ok(!strip.includes('strip-edu'), 'خانة الروابط التعليمية ما زالت في الشريط');
+  assert.ok(!strip.includes('openEduLinks()'), 'الشريط ما زال يفتح البوابة بعد نقلها');
   assert.ok(SRC.includes('id="appStrip"'), 'شريط الخدمات مفقود');
+  /* شبكة الطقس: تقرأ الذاكرة المشتركة ولا تنازش شريط الأدوات في النداء */
+  const wx = extractFn(SRC, '__stripWxRender');
+  const read = extractFn(SRC, '__stripWxRead');
+  assert.ok(read.includes("localStorage.getItem('nibras_tb_v1_weather')"), 'لا قراءة لذاكرة الطقس المشتركة');
+  assert.ok(wx.includes('__stripWxRead()'), 'العارض لا يقرأ الذاكرة المشتركة');
+  assert.ok(wx.includes('window.__tb.fetchWeather'), 'لا طلب تحديث عبر شريط الأدوات');
+  assert.ok(!SRC.includes('api.open-meteo.com'), 'نداء الطقس المكرر ما زال في الصفحة');
+  assert.ok(!SRC.includes('stripWeather'), 'stripWeather ما زال في الصفحة');
+  /* البوابة انتقلت إلى شريط الأدوات: أول تبويب وأيقونة 🎓 وعارض يفتح النافذة */
+  const tabs = /var TABS = \[([\s\S]*?)\];/.exec(TOOLBAR);
+  assert.ok(tabs, 'TABS مفقودة من شريط الأدوات');
+  assert.ok(/id:\s*'e'/.test(tabs[1]) && tabs[1].includes('🎓'), 'البوابة ليست أول مقعد في شريط الأدوات');
+  assert.ok(tabs[1].includes('eduLinksRender'), 'لا عارض للبوابة في الشريط');
+  assert.ok(!/id:\s*'w'/.test(tabs[1]), 'تبويب الطقس المقطوع ما زال في الشريط');
+  assert.ok(TOOLBAR.includes('openEduLinks'), 'عارض الشريط لا يفتح بوابة التطبيق');
 });
 
 /* ============================ 2) الخدمات الأخرى سليمة ============================ */
-test('2) خدمة الطقس الأصلية (شريط الأدوات) وملفاتها لم تتأثر', () => {
+test('2) خدمة الطقس (ذاكرة الشريط المشتركة) وملفاتها لم تتأثر', () => {
   assert.ok(TOOLBAR.includes('api.open-meteo.com'), 'طقس شريط الأدوات اختفى');
   assert.ok(/fetchWeather/.test(TOOLBAR), 'دالة طقس الشريط اختفت');
+  assert.ok(/weatherRender/.test(TOOLBAR), 'عارض الطقس في الشريط اختفى');
   assert.ok(/<script src="toolbar\.js\?v=\d+"><\/script>/.test(SRC), 'سكربت الشريط غير موصول');
   assert.ok(/href="toolbar\.css\?v=\d+"/.test(SRC), 'أنماط الشريط غير موصولة');
   assert.ok(SW.includes('./toolbar.js') && SW.includes('./toolbar.css'), 'ملفات الشريط غير مخزّنة');
+  /* رقم إصدار سكربت الشريط نفسه يجب أن يطابق ما في عامل الخدمة */
+  const jv = /toolbar\.js\?v=(\d+)/.exec(SRC);
+  const js = /toolbar\.js\?v=(\d+)/.exec(SW);
+  assert.ok(jv && js && jv[1] === js[1], 'إصدار سكربت الشريط غير متطابق: ' + (jv && jv[1]) + ' vs ' + (js && js[1]));
   for (const fn of ['renderAppStrip', 'renderDashboard', 'renderAttendance', 'renderSettings']) {
     assert.ok(SRC.includes('function ' + fn + '('), 'دالة مفقودة: ' + fn);
   }
@@ -504,6 +522,8 @@ test('21) رفع الإصدار وتسجيل عامل الخدمة متسقان 
   assert.ok(cache, 'لا اسم ذاكرة تخزين مؤقت');
   assert.ok(Number(cache[1]) >= 65, 'إصدار الذاكرة أقل من الحد');
   assert.ok(Number(reg[1]) >= 65, 'إصدار sw.js أقل من الحد');
+  const v = SRC.match(/const __APP_VER = '([^']+)'/);
+  assert.ok(v && v[1].includes('links-swap'), 'الإصدار لا يحمل وسم تبادل المقعدَين');
 });
 
 /* ============================ 22) لا أخطاء JS ============================ */

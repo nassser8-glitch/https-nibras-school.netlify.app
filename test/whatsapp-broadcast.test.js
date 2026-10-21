@@ -217,5 +217,5 @@ test('13) رفع الإصدارات بعد الإضافة', () => {
   const sw = fs.readFileSync(path.join(ROOT, 'public', 'sw.js'), 'utf8');
   const n = Number((sw.match(/nibras-v(\d+)/) || [])[1]);
   assert.ok(n >= 139, 'CACHE_NAME لم يُرفَع');
-  assert.ok(SRC.includes('sw.js?v=118'), 'نسخة service worker لم تُرفَع');
+  assert.ok(SRC.includes('sw.js?v=119'), 'نسخة service worker لم تُرفَع');
 });
