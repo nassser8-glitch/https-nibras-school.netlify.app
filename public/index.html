@@ -3335,7 +3335,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast wa-consent tehani-wa save-persist links-swap';
+const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast wa-consent tehani-wa save-persist links-swap teacher-follow';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -11127,6 +11127,19 @@ function buildTeacherDetail(type, teacherId){
     const stMap = { PENDING:'قيد المراجعة', APPROVED:'معتمد', REJECTED:'مرفوض' };
     const list = d.transfers.filter(t => t.createdBy === teacherId).sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     rows = list.length ? list.map(t => { const ss = studentIdsOf(t).map(id => d.students.find(x => x.id === id)).filter(Boolean); const nm = ss.length ? ss.map(s => s.fullName).join('، ') : '—'; const fc = d.classes.find(x => x.id === t.fromClassId); const tc = d.classes.find(x => x.id === t.toClassId); return dlRow(`${escapeHtml(nm)}`, `${classLabel(fc)} ← ${classLabel(tc)} · ${stMap[t.status] || t.status} · ${fmtTime(t.createdAt)}`); }).join('') : DL_EMPTY;
+  } else if(type === 'ASSIGNMENTS'){
+    title = 'التكليفات التي أنشأتها';
+    const list = (d.assignments || []).filter(a => !(a && a.deleted) && a.teacherId === teacherId).sort((a,b) => (b.created||0) - (a.created||0));
+    rows = list.length ? list.map(a => { const c = d.classes.find(x => x.id === a.classId); return dlRow(`${escapeHtml(a.title || a.subject || 'تكليف')}`, `${a.subject ? escapeHtml(a.subject) + ' · ' : ''}${c ? escapeHtml(classLabel(c)) : '—'}${a.date ? ' · تسليم: ' + fmtDateOnly(a.date) : ''}${a.type ? ' · ' + escapeHtml(a.type) : ''}${a.created ? ' · أنشئ: ' + fmtTime(a.created) : ''}`); }).join('') : DL_EMPTY;
+  } else if(type === 'SUPERVISION'){
+    title = 'موعد الإشراف (الأسبوعي)';
+    const sched = (__supervisionSchedule && Array.isArray(__supervisionSchedule.schedule)) ? __supervisionSchedule.schedule.filter(x => x && x.teacherId === teacherId) : [];
+    const supLabel = dow => (SUPERVISION_DAYS.find(x => x.dow === dow) || {}).label || String(dow == null ? '' : dow);
+    const weekRows = sched.slice().sort((a,b) => (a.dayOfWeek||0)-(b.dayOfWeek||0)).map(x => dlRow('🛡️ ' + supLabel(x.dayOfWeek), 'إشراف أسبوعي ثابت'));
+    const today = __supervisionToday;
+    const mine = (today && Array.isArray(today.assigned)) ? today.assigned.find(x => x && x.teacherId === teacherId) : null;
+    const todayRow = today ? dlRow('اليوم — ' + supLabel(today.dayOfWeek), mine ? (mine.checkedInAt ? '🟢 باشرت الإشراف — ' + escapeHtml(mine.checkedInAt) : '🟡 لم تسجل المباشرة') : 'غير مكلفة اليوم') : '';
+    rows = (weekRows.length || todayRow) ? todayRow + weekRows.join('') : DL_EMPTY;
   }
   return { title, html: rows };
 }
@@ -11173,6 +11186,20 @@ function renderTeacherPage(teacherId){
   // الوكيل يرى رسائله هو فقط، والمدير يرى الكل
   const msgs = aliveMsgs(loadAdminMsgs()).filter(m => (m.teacherId === teacherId || m.teacherId === 'ALL') && (isAdmin || ownsMsg(m))).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
   const unread = msgs.filter(m => !m.revealed).length;
+  // أعمال المعلمة: تحويلات وتكليفات وملاحظات أنشأتها هي — المالك من الحقل
+  // (createdBy/teacherId) لا من اسم الجلسة، فلا يُنسب عمل زميلة إليها.
+  const teacherTransfers = (d.transfers||[]).filter(t => !(t && t.deleted) && t.createdBy === user.id);
+  const teacherAssignments = (d.assignments||[]).filter(a => !(a && a.deleted) && a.teacherId === user.id);
+  const teacherNotes = (d.notes||[]).filter(n => !(n && n.deleted) && n.createdBy === user.id);
+  // موعد الإشراف: مصدره الخادم — يُطلب مرة واحدة ثم يُعاد الرسم عند وصوله
+  const supSched = (__supervisionSchedule && Array.isArray(__supervisionSchedule.schedule)) ? __supervisionSchedule.schedule : null;
+  const supRows = supSched ? supSched.filter(x => x && x.teacherId === user.id) : null;
+  const supDayLabel = dow => (SUPERVISION_DAYS.find(x => x.dow === dow) || {}).label || '';
+  const supDayLabels = supRows ? supRows.slice().sort((a,b) => (a.dayOfWeek||0)-(b.dayOfWeek||0)).map(x => supDayLabel(x.dayOfWeek)).filter(Boolean) : null;
+  const supToday = (__supervisionToday && Array.isArray(__supervisionToday.assigned)) ? (__supervisionToday.assigned.find(x => x && x.teacherId === user.id) || null) : null;
+  if(__serverEnabled() && !supSched && !__supervisionScheduleLoading && (!__supervisionScheduleFailed || __supervisionScheduleAttempts < SUPERVISION_MAX_ATTEMPTS)){
+    __loadSupervisionSchedule().then(result => { if(result) renderApp(); });
+  }
   const stat = (icon, val, lbl, color, type, desc, sub) => `
     <div class="card stat ${type ? 'clickable' : ''}" ${type ? `onclick="openTeacherDetail('${type}','${teacherId}')"` : ''} ${desc ? `data-tip="${escapeHtml(desc)}"` : ''}><span class="stat-icon">${icon}</span><div><p class="muted">${lbl}</p><p class="stat-value" style="color:${color || 'inherit'}">${val}</p>${sub ? `<p class="muted" style="margin-top:4px;font-size:12px">${sub}</p>` : ''}</div></div>`;
   return `
@@ -11222,6 +11249,27 @@ function renderTeacherPage(teacherId){
       <thead><tr><th>النشاط</th><th>المناسبة</th><th>التاريخ</th><th>نوع المشاركة</th><th>الحالة</th></tr></thead>
       <tbody>${partRows.map(p => `<tr><td>${p.icon} ${escapeHtml(p.name)}</td><td>${escapeHtml(p.typeLabel)}</td><td>${fmtDateOnly(p.date)}</td><td>${p.kind ? escapeHtml(p.kind) : '—'}</td><td>${p.status.icon} ${tl(p.status.label)}</td></tr>`).join('')}</tbody>
     </table>` : `<p class="muted small">لا توجد مشاركات بعد.</p>`}
+  </div>
+  <h2 class="section-title">📋 ${tl('أعمال المعلمة')}</h2>
+  <div class="grid grid-4">
+    ${stat('📨', teacherTransfers.length, 'التحويلات', '#7c3aed', 'TRANSFERS', 'اضغط لرؤية طلبات التحويل التي أنشأتها هذه المعلمة')}
+    ${stat('📝', teacherAssignments.length, 'التكليفات', '#2563eb', 'ASSIGNMENTS', 'اضغط لرؤية التكليفات التي أنشأتها هذه المعلمة للصفوف')}
+    ${stat('⭐', teacherNotes.length, 'الملاحظات', '#0d9488', 'NOTES', 'اضغط لرؤية ملاحظات الطالبات التي سجّلتها هذه المعلمة')}
+    ${stat('🛡️', supDayLabels ? supDayLabels.length : '—', 'أيام الإشراف', '#ea580c', 'SUPERVISION', 'اضغط لرؤية موعد إشرافها الأسبوعي وحالة اليوم')}
+  </div>
+  <div class="card table-card">
+    <div style="font-size:14px;font-weight:700;margin-bottom:8px">🛡️ موعد الإشراف ${supDayLabels && supDayLabels.length ? `<span style="font-weight:400;color:#6b7280;font-size:12px">— ${supDayLabels.map(escapeHtml).join(' · ')}</span>` : ''}</div>
+    ${!__serverEnabled()
+      ? `<p class="muted small">${tl('جدول الإشراف يحتاج اتصالاً بالخادم.')}</p>`
+      : __supervisionScheduleDenied
+      ? `<p class="muted small">${tl('لا تملك صلاحية عرض بيانات الإشراف.')}</p>`
+      : (__supervisionScheduleFailed && __supervisionScheduleAttempts >= SUPERVISION_MAX_ATTEMPTS)
+      ? `<p class="muted small">${tl('تعذر تحميل جدول الإشراف. تحقق من الاتصال ثم أعد المحاولة.')}</p><button class="btn-secondary" onclick="__loadSupervisionSchedule(true).then(renderApp)">${tl('إعادة المحاولة')}</button>`
+      : !supSched
+      ? `<p class="muted small">${tl('جارٍ تحميل جدول الإشراف...')}</p>`
+      : supToday
+      ? `<p style="margin:0;font-size:13px"><b>اليوم (${escapeHtml(supDayLabel(__supervisionToday.dayOfWeek) || '—')}):</b> ${supToday.checkedInAt ? '🟢 ' + tl('باشرت الإشراف') + ' — <span class="muted">' + escapeHtml(supToday.checkedInAt) + '</span>' : '🟡 ' + tl('لم تسجل المباشرة بعد')}</p>`
+      : `<p class="muted small">${tl('غير مكلفة بالإشراف اليوم.')}</p>`}
   </div>
   <h2 class="section-title">📬 الرسائل المباشرة</h2>
   <div class="card" style="max-width:640px">
