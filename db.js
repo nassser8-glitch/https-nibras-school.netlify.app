@@ -120,44 +120,6 @@ async function initSchema() {
         PRIMARY KEY (school, teacher_id, checkin_date)
       )`);
     await client.query(`CREATE INDEX IF NOT EXISTS teacher_supervision_checkins_date_idx ON teacher_supervision_checkins(school, checkin_date)`);
-    // ===== الرسائل الجماعية عبر واتساب: حملات + رسائل (تتبّع الإرسال ومنع التكرار) =====
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS wa_campaigns (
-        id               BIGSERIAL PRIMARY KEY,
-        school           TEXT NOT NULL CHECK (school IN ('BOYS','GIRLS')),
-        created_by       TEXT,
-        created_by_name  TEXT,
-        mode             TEXT NOT NULL DEFAULT 'manual',
-        target_type      TEXT NOT NULL DEFAULT 'all',
-        target_meta      JSONB NOT NULL DEFAULT '{}'::jsonb,
-        message          TEXT NOT NULL DEFAULT '',
-        counts           JSONB NOT NULL DEFAULT '{}'::jsonb,
-        status           TEXT NOT NULL DEFAULT 'draft',
-        created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-        updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`);
-    await client.query(`CREATE INDEX IF NOT EXISTS wa_campaigns_school_idx ON wa_campaigns(school, id DESC)`);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS wa_messages (
-        id           BIGSERIAL PRIMARY KEY,
-        campaign_id  BIGINT NOT NULL REFERENCES wa_campaigns(id) ON DELETE CASCADE,
-        school       TEXT NOT NULL,
-        student_id   TEXT,
-        student_name TEXT,
-        class_name   TEXT,
-        phone        TEXT,
-        message      TEXT,
-        status       TEXT NOT NULL DEFAULT 'pending',
-        reason       TEXT,
-        provider_id  TEXT,
-        error        TEXT,
-        created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-        updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-        UNIQUE (campaign_id, student_id)
-      )`);
-    await client.query(`CREATE INDEX IF NOT EXISTS wa_messages_campaign_idx ON wa_messages(campaign_id)`);
-    // منع الإرسال المزدوج بمعرّف المزوّد الخارجي (wamid) — لا يُسجَّل نفس المعرّف مرتين
-    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS wa_messages_provider_key ON wa_messages(provider_id) WHERE provider_id IS NOT NULL`);
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
@@ -978,80 +940,6 @@ async function setFlag(key, value) {
     [key, JSON.stringify(value)]);
 }
 
-/* ===== الرسائل الجماعية عبر واتساب ===== */
-// إنشاء حملة + رسائلها في معاملة واحدة.
-// UNIQUE (campaign_id, student_id) يمنع تكرار المستلمة داخل نفس الحملة.
-async function createWaCampaign(camp, messages) {
-  const c0 = camp || {};
-  assertSupportedSchool(c0.school);
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const ins = await client.query(
-      `INSERT INTO wa_campaigns (school, created_by, created_by_name, mode, target_type, target_meta, message, counts, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, created_at`,
-      [c0.school, c0.createdBy || null, c0.createdByName || null, c0.mode || 'manual', c0.targetType || 'all',
-       JSON.stringify(c0.targetMeta || {}), String(c0.message || ''), JSON.stringify(c0.counts || {}), c0.status || 'draft']);
-    const id = ins.rows[0].id;
-    for (const m of (Array.isArray(messages) ? messages : [])) {
-      await client.query(
-        `INSERT INTO wa_messages (campaign_id, school, student_id, student_name, class_name, phone, message, status, reason)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-         ON CONFLICT (campaign_id, student_id) DO NOTHING`,
-        [id, c0.school, m.studentId, m.name || null, m.className || null, m.phone || null, m.message || null, m.status || 'pending', m.reason || null]);
-    }
-    await client.query('COMMIT');
-    return { id, createdAt: ins.rows[0].created_at };
-  } catch (e) {
-    try { await client.query('ROLLBACK'); } catch (_) {}
-    throw e;
-  } finally {
-    client.release();
-  }
-}
-async function getWaCampaign(id) {
-  const c = await pool.query('SELECT * FROM wa_campaigns WHERE id = $1', [id]);
-  if (!c.rows.length) return null;
-  const ms = await pool.query('SELECT * FROM wa_messages WHERE campaign_id = $1 ORDER BY id', [id]);
-  const camp = c.rows[0];
-  camp.messages = ms.rows;
-  return camp;
-}
-async function listWaCampaigns(school, limit) {
-  const lim = Math.min(Math.max(Number(limit) || 30, 1), 200);
-  const r = await pool.query('SELECT * FROM wa_campaigns WHERE school = $1 ORDER BY id DESC LIMIT $2', [school, lim]);
-  return r.rows;
-}
-async function updateWaCampaignStatus(id, status) {
-  const r = await pool.query('UPDATE wa_campaigns SET status = $2, updated_at = now() WHERE id = $1 RETURNING id', [id, String(status || '')]);
-  return r.rowCount > 0;
-}
-// تحديث رسالة بأعمدة مسموحة فقط (لا SQL عشوائي)
-async function updateWaMessage(id, patch) {
-  const p = patch || {};
-  const allowed = ['status', 'reason', 'provider_id', 'error'];
-  const cols = [];
-  const vals = [];
-  let i = 1;
-  for (const k of allowed) { if (k in p) { cols.push(k + ' = $' + (i++)); vals.push(p[k]); } }
-  if (!cols.length) return { updated: false };
-  vals.push(id);
-  const r = await pool.query('UPDATE wa_messages SET ' + cols.join(', ') + ', updated_at = now() WHERE id = $' + i + ' RETURNING id, status', vals);
-  return { updated: r.rowCount > 0, status: r.rows[0] && r.rows[0].status };
-}
-async function findWaMessageByProvider(providerId) {
-  if (!providerId) return null;
-  const r = await pool.query('SELECT * FROM wa_messages WHERE provider_id = $1', [String(providerId)]);
-  return r.rows[0] || null;
-}
-// إلغاء رسائل الحملة المعلّقة فقط (لا يمسّ ما أُرسل/قُبل)
-async function cancelWaCampaign(id) {
-  const r = await pool.query(
-    `UPDATE wa_messages SET status = 'cancelled', updated_at = now()
-      WHERE campaign_id = $1 AND status IN ('pending','sending')`, [id]);
-  await pool.query(`UPDATE wa_campaigns SET status = 'cancelled', updated_at = now() WHERE id = $1`, [id]);
-  return r.rowCount || 0;
-}
 
 module.exports = {
   pool, SCHOOLS,
@@ -1073,6 +961,4 @@ module.exports = {
   getSchoolSettings, setSchoolSettings,
   saveBackup, listBackups, getBackup,
   auditSync, listSyncAudit,
-  createWaCampaign, getWaCampaign, listWaCampaigns, updateWaCampaignStatus,
-  updateWaMessage, findWaMessageByProvider, cancelWaCampaign,
 };

@@ -473,25 +473,12 @@ test('9) معلمتان على قسمين: NRC_mergeNotes تُبقي ملاحظ�
   assert.equal(undeleted.find(n => n.id === 'nA').deleted, true, 'أُحيى محذوف');
 });
 
-/* ------------------------------------------------ 10) الأرقام كسلاسل: رمز الدولة والأصفار لا تضيع */
-test('10) أرقام واتساب كسلاسل نصية: normalize لكل الصيغ، وبلا تحويل رقمي يفقد الأصفار/الدقة', () => {
-  const ctx = { console, String, Math };
-  vm.createContext(ctx);
-  vm.runInContext(extractFns('__waNormalizePhone') + '\n;globalThis.N=__waNormalizePhone;', ctx);
-  assert.equal(ctx.N('+966 56 813 3414'), '966568133414', 'رمز + ومسافات');
-  assert.equal(ctx.N('0568133414'), '966568133414', 'صفر محلي 05');
-  assert.equal(ctx.N('00966568133414'), '966568133414', 'بادئة 00');
-  assert.equal(ctx.N('568133414'), '966568133414', 'بلا رمز');
-  assert.equal(ctx.N('+1 555 010 0200'), '15550100200', 'رقم خارجي يبقى كما هو');
-  assert.equal(ctx.N('0151234567'), '966151234567', 'صفر محلي 015');
-  assert.equal(ctx.N(''), '', 'فارغ');
-  // رقم بـ17 خانة (أكبر من مصفوفة 53-bit): التخزين نصّي فلا تضيع دقة
-  const big = '96650123456789012';
-  assert.strictEqual(JSON.parse(JSON.stringify({ p: big })).p, big, 'أرقام طويلة تفقد دقة عند التحويل الرقمي');
-  // لا تحويل رقمي في مسار قراءة الرقم من الطالب
-  assert.ok(SRC.includes('String(s.guardianPhone ?? s.whatsapp') || SRC.includes('s.guardianPhone ?? s.whatsapp'),
-    'الرقم لا يُقرأ كسلاسل');
-  assert.ok(!SRC.includes('Number(s.guardianPhone'), 'تحويل رقمي للرقم');
+test('10) أرقام واتساب تُحفظ كسلاسل نصية، وبلا تحويل رقمي يفقد الأصفار/الدقة', () => {
+  // دالة التطبيع الجماعي أُزيلت مع ميزة الحملات
+  assert.ok(!SRC.includes('__waNormalizePhone'), 'بقايا تطبيع الحملات أُزيلت');
+  // أرقام ولي الأمر تُخزَّن كنص، وبلا Number() يفقد الأصفار
+  assert.ok(SRC.includes('String(s.guardianPhone ?? s.whatsapp') || SRC.includes('s.guardianPhone ?? s.whatsapp'), 'رقم ولي الأمر يُخزَّن كنص');
+  assert.ok(!SRC.includes('Number(s.guardianPhone'), 'لا تحويل رقمي لرقم ولي الأمر');
 });
 
 /* ------------------------------------------------ 11) جلسة/جهاز آخر: الدمج الكامل يُبقي حفظ الاثنين */

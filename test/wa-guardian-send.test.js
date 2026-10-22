@@ -6,9 +6,7 @@
  * برقمها نفسه — للإدارة/الوكيل/الإرشاد فقط، ولا زر للمعلمة ولا للطالبة.
  * الإرسال يدويّ من واتساب نفسه: التطبيق يفتح محادثةً مسوّدةً قابلة للتعديل فقط،
  * ولا يرسل شيئاً من تلقاء نفسه لهذا الزر الفردي.
- * ملاحظة: أُضيفت لاحقاً خدمة «الرسائل الجماعية عبر واتساب» (صفحة #/broadcast)
- * بطلب إداري صريح، وهي مقيّدة بالموافقة الموثّقة وصلاحية الخادم — انظر
- * test/whatsapp-broadcast.test.js. لذلك لم يعد هذا الملف يؤكّد انعدام أي إرسال جماعي.
+ * ملاحظة: اختبارات الإرسال الجماعي أُزيلت مع الميزة نهائياً (اختبارات فردية فقط).
  * ========================================================================== */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -20,6 +18,7 @@ const ROOT = path.join(__dirname, '..');
 const SRC = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
 const SERVER = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'public', 'sw.js'), 'utf8');
+const DB = fs.readFileSync(path.join(ROOT, 'db.js'), 'utf8');
 
 function extractFns(name) {
   const start = SRC.indexOf('function ' + name + '(');
@@ -114,15 +113,17 @@ test('4) الزر يُرسم في بطاقة الطالبة وفي قائمة ا
 });
 
 // ------------------------------------------------ 5) لا إرسال جماعي أعمى
-test('5) الإرسال الجماعي مقيّد بالموافقة وصلاحية الخادم (لا إرسال أعمى)', () => {
+test('5) لا إرسال جماعي: الميزة أُزيلت ويبقى الإرسال الفردي فقط', () => {
   assert.ok(!SRC.includes('function __waSendAll'), 'لا إرسال لكل الطلاب بلا ضوابط');
-  // الخدمة الجماعية الجديدة موجودة ومربوطة بالموافقة والصلاحية
-  assert.ok(SRC.includes('function renderBroadcast('), 'واجهة الإرسال الجماعي مفقودة');
-  assert.ok(SRC.includes('canBroadcastWa('), 'بوابة صلاحية الإرسال الجماعي مفقودة');
-  assert.ok(SRC.includes('waConsent'), 'الإرسال الجماعي لا يشترط موافقة موثّقة');
-  // روابط wa.me في مواضعها المعدودة فقط (الفردي + اليدوي الجماعي + وصف الواجهة)
+  // الإرسال الجماعي أُزيل: لا واجهة حملات ولا مسارات خادم، ويبقى الإرسال الفردي فقط
+  assert.ok(!SRC.includes('function renderBroadcast('), 'واجهة الإرسال الجماعي أُزيلت');
+  assert.ok(!SRC.includes('WA_BC'), 'بقايا حالة الحملات أُزيلت من الواجهة');
+  assert.ok(SRC.includes('waConsent'), 'مسار موافقة ولي الأمر باقٍ');
+  assert.ok(!SERVER.includes('/api/wa/campaign') && !SERVER.includes('/api/wa/send') && !SERVER.includes('/api/wa/status') && !SERVER.includes('/api/wa/config') && !SERVER.includes('/api/wa/webhook'), 'مسارات الحملات أُزيلت من الخادم');
+  assert.ok(!DB.includes('WaCampaign') && !DB.includes('wa_messages'), 'طبقة الحملات أُزيلت من قاعدة البيانات');
+  // روابط wa.me: يبقى الرابط الفردي فقط، بلا أي رقم مضمّن
   const n = SRC.split('wa.me').length - 1;
-  assert.ok(n >= 2 && n <= 6, 'عدد روابط واتساب غير متوقّع: ' + n);
+  assert.ok(n >= 1 && n <= 2, 'عدد روابط واتساب غير متوقّع: ' + n);
   // لا رقم ثابت مسرّب إلى الخادم أو الـservice worker
   assert.ok(!/\b9665\d{8}\b/.test(SERVER), 'رقم مسرّب في الخادم');
   assert.ok(!/\b9665\d{8}\b/.test(SW), 'رقم مسرّب في الـservice worker');

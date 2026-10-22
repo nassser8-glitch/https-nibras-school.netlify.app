@@ -25,6 +25,7 @@ const ROOT = path.join(__dirname, '..');
 const SRC = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
 const SERVER = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'public', 'sw.js'), 'utf8');
+const DB = fs.readFileSync(path.join(ROOT, 'db.js'), 'utf8');
 
 const TEHANI = 'id_61e90132bc11ff7b';
 
@@ -151,29 +152,24 @@ test('4) زر الموافقة في ملف الطالبة يعمل لتهاني 
   assert.ok(modal.includes('waToggleStudentConsent('), 'لا زر توثيق في ملف الطالبة');
 });
 
-// ------------------------------------------------ 5) الخادم: استثناء محدود + بلا مساس بالحملات
-test('5) الخادم: الموافقة باستثناء تهاني، والحملات بقاها canBroadcast', () => {
+// ------------------------------------------------ 5) الخادم: موافقة فردية فقط + لا حملات
+test('5) الخادم: مسار الموافقة الفردية فقط، ولا حملات جماعية', () => {
   assert.ok(SERVER.includes("app.post('/api/wa/consent'"), 'لا مسار موافقة');
-  const consent = SERVER.slice(SERVER.indexOf("app.post('/api/wa/consent'"), SERVER.indexOf("app.post('/api/wa/cancel'"));
+  const consent = SERVER.slice(SERVER.indexOf("app.post('/api/wa/consent'"), SERVER.indexOf("app.use(express.static(ROOT"));
   assert.ok(consent.includes('isGuardianPhoneEditor(uid)'), 'لا استثناء معرّفي على الخادم');
   assert.ok(consent.includes('req.session.user_id'), 'لا يقرأ معرّف المستخدم الصحيح');
   assert.ok(!consent.includes('req.session.id'), 'يقرأ معرّف الجلسة بدل المستخدم');
   assert.ok(consent.includes('wa.canBroadcast(req.session, school)'), 'لا يفرض صلاحية الإرسال الجماعي على المسار');
 
-  // مسارات الحملة والإرسال ما زالت خالصة canBroadcast (لا استثناء تهاني فيها)
-  for (const [from, to, label] of [
-    ["app.post('/api/wa/campaign'", "app.post('/api/wa/send'", 'إنشاء الحملة'],
-    ["app.post('/api/wa/send'", "app.post('/api/wa/status'", 'الإرسال الرسمي'],
-    ["app.post('/api/wa/status'", "app.post('/api/wa/consent'", 'تحديث الحالات'],
-  ]) {
-    const block = SERVER.slice(SERVER.indexOf(from), SERVER.indexOf(to));
-    assert.ok(block.includes('wa.canBroadcast(req.session, school)'), label + ': فُتح على الإرسال الجماعي');
-    assert.ok(!block.includes('isGuardianPhoneEditor'), label + ': حُذِم بها استثناء');
+  // لا حملات جماعية: كل المسارات والطبقة أُزيلت نهائياً
+  for (const bad of ['/api/wa/campaign', '/api/wa/send', '/api/wa/status', '/api/wa/config', '/api/wa/cancel', '/api/wa/webhook']) {
+    assert.ok(!SERVER.includes(bad), 'مسار حملات ما زال موجوداً: ' + bad);
   }
-  // واجهة الرسائل الجماعية بقيت مقيدة — لا دخول لتهاني إليها
-  assert.ok(SRC.includes("(user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR') ? { href:'#/broadcast'"), 'تغيّر باب الرسائل الجماعية');
-  assert.ok(SRC.includes("else if(page === 'broadcast' && canBroadcastWa(user))"), 'تغيّر توجيه الرسائل الجماعية');
-  assert.equal(ctxFor(TEHANI_U).canBroadcastWa(TEHANI_U), false, 'تهاني دخلت خدمة الرسائل الجماعية');
+  assert.ok(!SERVER.includes('createWaCampaign') && !DB.includes('WaCampaign'), 'طبقة الحملات أُزيلت من قاعدة البيانات');
+  // واجهة الرسائل الجماعية أُزيلت — لا دخول لتهاني إليها
+  assert.equal(SRC.indexOf("href:'#/broadcast'"), -1, 'رابط الإرسال الجماعي أُزيل من القائمة');
+  assert.equal(SRC.indexOf("page === 'broadcast'"), -1, 'صفحة الإرسال الجماعي أُزيلت');
+  assert.equal(ctxFor(TEHANI_U).canBroadcastWa(TEHANI_U), false, 'بوابة أدوار الحملات لا تسمح لتهاني');
 });
 
 // ------------------------------------------------ 6) لا صلاحيات إضافية
