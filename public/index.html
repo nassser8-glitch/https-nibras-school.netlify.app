@@ -3333,6 +3333,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     if(!window.__notifTimer) window.__notifTimer = setInterval(checkNotifications, 15000);
     checkNotifications();
+    try{ __thanksMaybeShow(); }catch(e){}
+    if(!window.__thanksTimer) window.__thanksTimer = setInterval(() => { try{ __thanksMaybeShow(); }catch(e){} }, 15000);
     setupPasswordToggles();
     window.__nibrasBooted = true;
   }catch(__bootErr){
@@ -3355,7 +3357,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /* شارة الإصدار: تُرقَّم مع كل نشر (لا تُترك ثابتة) وإلا صارت عديمة الفائدة في
    كشف كاش قديم — وهو ما تسبّب في تعطيل تشخيص المؤشرات مرارًا.
    تاريخ البناء بصيغة YYYY-MM-DD + وصف قصير لما يحمله هذا البناء. */
-const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast wa-consent tehani-wa save-persist links-swap teacher-follow thanks-card';
+const __APP_VER = '2026-10-19 guardian-editor save-reliable name-fix wa-broadcast wa-consent tehani-wa save-persist links-swap teacher-follow thanks-card thanks-login';
 function __versionBadge(){ return '<div style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#94a3b8;background:rgba(255,255,255,.65);padding:3px 12px;border-radius:20px;z-index:5;text-align:center;direction:ltr">نسخة ' + __APP_VER + '</div>'; }
 function renderLogin(){
   ensureDefaultAccounts();
@@ -3426,6 +3428,7 @@ async function handleLogin(){
       }
       location.hash = '#/';
       renderApp();
+      try{ __thanksMaybeShow(); }catch(e){}
     } else {
       if(el){ el.style.display='block'; el.textContent = (res && res.error === 'rate_limited') ? 'محاولات فاشلة كثيرة — أعد المحاولة بعد 15 دقيقة' : (res && res.error === 'not_granted') ? 'حسابك غير مُفعَّل بعد — تواصل مع مدير النظام لتفعيل بيانات دخولك.' : 'اسم المستخدم أو كلمة المرور غير صحيحة'; }
     }
@@ -4760,7 +4763,7 @@ function checkMsgBeep(){
     window.__msgBeepIds[user.id] = {};
   }
   const rung = window.__msgBeepIds[user.id];
-  const msgs = adminMsgsFor(user.id).filter(m => !m.dismissed && !m.revealed && m.senderRole !== 'TRANSFER' && !(m.clearedBy && user.id && (user.id in m.clearedBy)));
+  const msgs = adminMsgsFor(user.id).filter(m => !m.dismissed && !m.revealed && m.kind !== 'THANKS_CARD' && m.senderRole !== 'TRANSFER' && !(m.clearedBy && user.id && (user.id in m.clearedBy)));
   const fresh = msgs.filter(m => !rung['m:' + m.id]);
   if(fresh.length){
     fresh.forEach(m => rung['m:' + m.id] = 1);
@@ -4845,7 +4848,7 @@ function renderAdminMsgAlerts(){
           && adminSeesTransferMsg(m))
         .sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))));
     }
-    let arr = dedup(adminMsgsFor(user.id).filter(m => !m.dismissed));
+    let arr = dedup(adminMsgsFor(user.id).filter(m => !m.dismissed && m.kind !== 'THANKS_CARD'));
     if(user.role !== 'TEACHER') arr = arr.filter(m => m.teacherId !== 'ALL');
     if(user.role === 'TEACHER' || user.role === 'AGENT' || user.role === 'COUNSELOR') arr = arr.filter(m => !(m.clearedBy && user.id && (user.id in m.clearedBy)));
     return arr;
@@ -11522,13 +11525,15 @@ function renderThanksCard(){
     .slice().sort((a, b) => String(a.name || a.username || a.id).localeCompare(String(b.name || b.username || b.id), 'ar'));
   const pre = (thanksPrefill && teachers.some(t => t.id === thanksPrefill)) ? thanksPrefill : '';
   thanksPrefill = null;
+  const published = aliveMsgs(loadAdminMsgs()).filter(m => m && m.kind === 'THANKS_CARD')
+    .slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   return `
   <div class="header-row">
     <h1 class="page-title">🌸 بطاقة شكر احتفالية</h1>
   </div>
   <div class="card table-card" style="max-width:640px">
     <div style="font-size:14px;font-weight:700;margin-bottom:6px">تجهيز بطاقة الشكر</div>
-    <p class="muted small" style="margin:0 0 12px">اختاري المعلمة المستهدفة واكتبي نص رسالة الشكر، ثم اعرضي البطاقة بالاحتفال.</p>
+    <p class="muted small" style="margin:0 0 12px">اختاري المعلمة المستهدفة واكتبي نص رسالة الشكر، ثم اعرضي البطاقة للمعاينة أو اعتمديها للنشر فتظهر لها تلقائياً عند دخول حسابها.</p>
     <label style="font-weight:bold;display:block;margin-bottom:6px">المعلمة المستهدفة</label>
     <select id="thanksTeacher" class="input" style="margin-bottom:14px">
       <option value="">— اختاري المعلمة —</option>
@@ -11537,24 +11542,115 @@ function renderThanksCard(){
     <label style="font-weight:bold;display:block;margin-bottom:6px">نص رسالة الشكر</label>
     <textarea id="thanksMsg" class="input" style="width:100%;min-height:90px;resize:vertical;padding:12px;font-size:14px" maxlength="400" placeholder="اكتبي رسالة الشكر هنا... مثال: شكراً لك على جهدكِ وعطائكِ المستمر مع طالباتنا"></textarea>
     <p id="thanksHint" class="muted small" style="min-height:18px;margin:6px 0 10px"></p>
-    <button class="btn-primary" onclick="thanksShowCard()">🎉 عرض بطاقة الشكر</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-secondary" onclick="thanksShowCard()">🎉 معاينة بطاقة الشكر</button>
+      <button class="btn-primary" onclick="thanksPublish()">✅ اعتماد ونشر للمعلمة</button>
+    </div>
+  </div>
+  <div class="card table-card" style="max-width:640px;margin-top:12px">
+    <div style="font-size:14px;font-weight:700;margin-bottom:8px">✅ البطاقات المنشورة</div>
+    ${published.length ? published.map(m => `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #eef2f7">
+      <span style="font-weight:700">${escapeHtml(m.teacherName || '—')}</span>
+      <span class="muted small">${fmtDateOnly(m.createdAt)}</span>
+      <span style="margin-inline-start:auto;display:flex;gap:6px">
+        <button class="btn-secondary" style="padding:3px 10px;font-size:12px" onclick="thanksPreviewPublished('${escapeHtml(m.id)}')">👁 معاينة</button>
+        <button class="btn-secondary" style="padding:3px 10px;font-size:12px" onclick="thanksUnpublish('${escapeHtml(m.id)}')">🗑 إلغاء النشر</button>
+      </span>
+    </div>`).join('') : `<p class="muted small" style="margin:0">لا توجد بطاقات منشورة بعد.</p>`}
   </div>`;
 }
-function thanksShowCard(){
+function thanksCollect(){
   const sel = document.getElementById('thanksTeacher');
   const ta = document.getElementById('thanksMsg');
   const hint = document.getElementById('thanksHint');
   const say = txt => { if(hint) hint.textContent = txt; };
   const id = sel ? sel.value : '';
   const msg = ta ? String(ta.value || '').trim() : '';
-  if(!id){ say('اختاري المعلمة المستهدفة أولاً.'); return; }
-  if(!msg){ say('اكتبي نص رسالة الشكر قبل عرض البطاقة.'); return; }
+  if(!id){ say('اختاري المعلمة المستهدفة أولاً.'); return null; }
+  if(!msg){ say('اكتبي نص رسالة الشكر قبل عرض البطاقة.'); return null; }
   const t = (loadDB().users || []).find(u => u && u.id === id);
-  if(!t || t.role !== 'TEACHER'){ say('المعلمة المختارة غير موجودة.'); return; }
+  if(!t || t.role !== 'TEACHER'){ say('المعلمة المختارة غير موجودة.'); return null; }
   say('');
-  thanksOpen(displayName(t), msg);
+  return { t, msg };
 }
-function thanksOpen(name, msg){
+function thanksShowCard(){
+  const got = thanksCollect();
+  if(got) thanksOpen(displayName(got.t), got.msg);
+}
+function thanksPublish(){
+  const got = thanksCollect();
+  if(!got) return;
+  const sender = currentUser();
+  const now = new Date().toISOString();
+  const arr = loadAdminMsgs();
+  arr.forEach(m => {
+    if(m && m.kind === 'THANKS_CARD' && m.teacherId === got.t.id && !m.deleted){
+      m.deleted = true;
+      m.dismissed = true;
+      m.updatedAt = now;
+    }
+  });
+  arr.push({ id: uid(), kind: 'THANKS_CARD', teacherId: got.t.id, teacherName: displayName(got.t), text: got.msg, createdAt: now, read:false, dismissed:false, views:0, senderRole: sender && sender.role, senderName: sender && sender.name, senderId: sender && sender.id });
+  saveAdminMsgs(arr);
+  renderApp();
+  alert('تم اعتماد بطاقة الشكر ✅ ستظهر للمعلمة عند دخول حسابها');
+}
+function thanksUnpublish(id){
+  const arr = loadAdminMsgs();
+  const m = arr.find(x => x && x.id === id);
+  if(!m) return;
+  m.deleted = true;
+  m.dismissed = true;
+  m.updatedAt = new Date().toISOString();
+  saveAdminMsgs(arr);
+  renderApp();
+}
+function thanksPreviewPublished(id){
+  const m = aliveMsgs(loadAdminMsgs()).find(x => x && x.id === id);
+  if(m) thanksOpen(m.teacherName || 'المعلمة', m.text, m.senderName);
+}
+/* اختيار آخر بطاقة شكر غير مقروءة لهذه المعلمة (الأحدث يحل محل الأقدم) */
+function __thanksCardFor(user){
+  if(!user || user.role !== 'TEACHER') return null;
+  const arr = aliveMsgs(loadAdminMsgs()).filter(m => m && m.kind === 'THANKS_CARD' && m.teacherId === user.id && !m.read);
+  if(!arr.length) return null;
+  arr.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  return arr[0];
+}
+/* بطاقة الشكر تظهر للمعلمة عند دخول حسابها (تسجيل/استعادة جلسة/دورة مزامنة)
+   وتُثبت قراءتها فلا تتكرر — والتنازل عن أي بطاقات أقدم غير مقروءة. */
+function __thanksMaybeShow(){
+  try{
+    const user = currentUser();
+    const card = __thanksCardFor(user);
+    if(!card) return;
+    if(document.getElementById('thanksOverlay')) return;
+    const arr = loadAdminMsgs();
+    const now = new Date().toISOString();
+    let touched = false;
+    arr.forEach(m => {
+      if(!m || m.kind !== 'THANKS_CARD' || m.teacherId !== user.id || m.deleted) return;
+      if(m.id === card.id){
+        m.read = true;
+        m.seenBy = m.seenBy || {};
+        m.seenBy[user.id] = now;
+        m.firstViewAt = m.firstViewAt || now;
+        m.firstViewBy = m.firstViewBy || user.id;
+        m.firstViewByName = m.firstViewByName || user.name;
+        m.updatedAt = now;
+        touched = true;
+      } else if(!m.read){
+        m.read = true;
+        m.updatedAt = now;
+        touched = true;
+      }
+    });
+    if(touched) saveAdminMsgs(arr);
+    thanksOpen(user.name, card.text, card.senderName);
+  }catch(e){}
+}
+function thanksOpen(name, msg, senderName){
   thanksClose();
   __thanksState = { name, msg };
   const reduce = thanksReducedMotion();
@@ -11572,7 +11668,7 @@ function thanksOpen(name, msg){
       <div class="thanks-emoji" aria-hidden="true">💖</div>
       <h2 class="thanks-name">${escapeHtml(name)}</h2>
       <p class="thanks-msg">${escapeHtml(msg)}</p>
-      <p class="thanks-from">مع خالص الشكر والتقدير</p>
+      <p class="thanks-from">مع خالص الشكر والتقدير${senderName ? ' — ' + escapeHtml(senderName) : ''}</p>
       <div class="thanks-actions">
         ${reduce ? '' : `<button class="btn-secondary" id="thanksStopBtn" onclick="thanksStopMotion()">⏸ إيقاف الحركة</button>
         <button class="btn-secondary" onclick="thanksReplay()">🔁 إعادة الاحتفال</button>`}
