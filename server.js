@@ -590,6 +590,11 @@ app.get('/api/auth/me', (req, res) => {
 // نقطة التواجد (من فتح التطبيق الآن): يرسلها العميل كل دقيقة فتحدَّث lastSeenAt في
 // مصدر الحقيقة ونسخة القسم — حتى يرى المدير «المتواجدون الآن» ببيانات حقيقية من كل
 // الأجهزة (كانت تُكتب محلياً فقط فتُهمَل عند رفع غير المدير وتبقى البطاقة صفراً).
+// وقت الخادم الموحّد: يستخدمه العداد الذكي لحصص المعلمات لحساب الفارق مع ساعة الجهاز.
+app.get('/api/auth/time', requireAuth, (req, res) => {
+  res.json({ ok: true, now: Date.now() });
+});
+
 app.post('/api/auth/presence', requireAuth, (req, res) => {
   (async () => {
     if (rateLimit('presence', 120, 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });

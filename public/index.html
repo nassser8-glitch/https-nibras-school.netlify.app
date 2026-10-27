@@ -3202,6 +3202,7 @@ function renderApp(){
 }
 function __renderAppInner(){
   ensureDefaultAccounts();
+  __lessonCards = {};
   const app = document.getElementById('app');
   const user = currentUser();
   const hash = location.hash || '#/';
@@ -3253,6 +3254,7 @@ function __renderAppInner(){
   __fitTables();
   checkMemoReminders();
   if(!window.__memoReminderTimer){ window.__memoReminderTimer = setInterval(checkMemoReminders, 15000); }
+  try{ lessonStart(); }catch(e){}
 }
 window.addEventListener('hashchange', renderApp);
 window.addEventListener('resize', __fitActivities);
@@ -5333,23 +5335,8 @@ function renderDashboard(){
   const myStudentsCount = isTeacher ? [...new Set(d.students.filter(s => s.active && s.classId && (d.classes.find(c => c.id === s.classId && (c.teacherIds||[]).includes(user.id)))).map(s => s.id))].length : 0;
   const myClassIds = isTeacher ? d.classes.filter(c => (c.teacherIds || []).includes(user.id)).map(c => c.id) : [];
   const myAssignments = isTeacher ? (d.assignments||[]).filter(a => myClassIds.includes(a.classId) && !(a && a.deleted)).sort((a,b) => (b.created||0)-(a.created||0)) : [];
-  // الحصة القادمة اليوم (من جدول المعلم) حسب وقت اليوم
-  const ttToday = isTeacher ? (((d.timetable||{})[user.id]||{})[timetableDay]) : null;
-  const nextPeriodNow = (() => {
-    if(!isTeacher || !ttToday) return null;
-    const nowMin = new Date().getHours()*60 + new Date().getMinutes();
-    const periods = Object.keys(ttToday).filter(p => ttToday[p] && !ttToday[p]._del).map(Number).sort((a,b)=>a-b);
-    const PERIOD_START = { 1:[7,0],2:[8,0],3:[9,0],4:[10,0],5:[11,0],6:[12,0],7:[13,0] }; // تقريبي
-    const cur = periods.find(p => {
-      const st = PERIOD_START[p] || [0,0];
-      const en = PERIOD_START[p+1] || [14,0];
-      return nowMin >= st[0]*60+st[1] && nowMin < en[0]*60+en[1];
-    });
-    if(cur){ const c = ttToday[cur]; const cl = d.classes.find(x => x.id === c.classId); return { kind:'now', p:cur, sub:c.subject, cls: cl ? classLabel(cl) : '' }; }
-    const nxt = periods.find(p => { const st = PERIOD_START[p] || [0,0]; return nowMin < st[0]*60+st[1]; });
-    if(nxt){ const c = ttToday[nxt]; const cl = d.classes.find(x => x.id === c.classId); return { kind:'next', p:nxt, sub:c.subject, cls: cl ? classLabel(cl) : '' }; }
-    return null;
-  })();
+  // العداد الذكي: حالة المعلمة وحصتها الحالية/القادمة بحسب جدولها وأوقات القسم الرسمية
+  const myLessonCard = isTeacher ? lessonCard(user, d, { key: 'self:' + user.id }) : '';
   const tpct = tDayAtt && (tDayAtt.present+tDayAtt.late) ? Math.round((tDayAtt.present+tDayAtt.late)/(tDayAtt.present+tDayAtt.absent+tDayAtt.late)*100) : null;
   const teacherQuickCards = isTeacher ? `
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 14px">
@@ -5379,17 +5366,12 @@ function renderDashboard(){
       </div>
       <div style="height:10px;border-radius:999px;background:#eef2f7;overflow:hidden"><div style="height:100%;width:${tpct}%;background:${tpct>=85?'#22c55e':tpct>=70?'#f59e0b':'#ef4444'};border-radius:999px;transition:width .3s"></div></div>
     </div>` : ''}
-    ${nextPeriodNow ? `
-    <div class="card mb" style="padding:0;overflow:hidden;border:none;border-radius:16px;background:linear-gradient(135deg,#0f766e,#1d4ed8);color:#fff;box-shadow:0 8px 22px rgba(15,79,136,.18)">
-      <div style="padding:16px 20px;display:flex;align-items:center;gap:14px">
-        <div style="width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">${nextPeriodNow.kind==='now' ? '🕐' : '⏭'}</div>
-        <div style="flex:1">
-          <div style="font-size:12px;opacity:.9">${nextPeriodNow.kind==='now' ? 'حصتك الآن — الحصة ' + nextPeriodNow.p : 'حصتك القادمة — الحصة ' + nextPeriodNow.p}</div>
-          <div style="font-weight:800;font-size:17px;margin-top:2px">${escapeHtml(nextPeriodNow.sub || '—')}</div>
-          <div style="font-size:12px;opacity:.92;margin-top:2px">${escapeHtml(nextPeriodNow.cls)}</div>
-        </div>
-        <a href="#/timetable" style="background:rgba(255,255,255,.22);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;color:#fff;text-decoration:none;white-space:nowrap">جدولي</a>
+    ${myLessonCard ? `<div class="card mb" style="padding:12px 14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
+        <span style="font-weight:800;font-size:13.5px;color:#374151">⏱ حصتي الآن</span>
+        <a href="#/timetable" style="background:#eef2ff;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;color:#1d4ed8;text-decoration:none;white-space:nowrap">جدولي</a>
       </div>
+      ${myLessonCard}
     </div>` : ''}
     ${(tDayAtt && tDayAtt.absent) ? `
     <div class="card mb" style="padding:14px 16px;border-left:4px solid #ef4444">
@@ -10068,11 +10050,12 @@ function renderUsers(){
     const assignedHtml = assigned.length ? assigned.map(c => classLabel(c)).join('، ') : '—';
     const school = getActiveSchool();
     const isSelf = u.id === currentUser().id;
-    const nameCell = u.role === 'TEACHER'
+    const nameCell = (u.role === 'TEACHER'
       ? `<a href="#/teacher/${u.id}" style="font-weight:700;color:#2563eb;text-decoration:none;cursor:pointer" title="${tl('متابعة المعلم ورسائله')}">${escapeHtml(u.name)} 👁</a>`
       : (u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE')
         ? `<span style="font-weight:600">${escapeHtml(u.name)} <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="openRoleInbox('${u.id}','${school}')" title="${tl('متابعة هذا الحساب: آخر دخول وعدد مرات الدخول وتحويلاته وإشعاراته')}">👁</button></span>`
-        : `<span style="font-weight:600">${escapeHtml(u.name)}</span>`;
+        : `<span style="font-weight:600">${escapeHtml(u.name)}</span>`)
+      + (u.role === 'TEACHER' ? lessonCard(u, d, { key: 'u:' + u.id }) : '');
     const authCell = u.role === 'TEACHER'
       ? `<div style="font-size:12px;line-height:1.7">
           ${u.email ? `<span style="display:block;direction:ltr">📧 ${escapeHtml(u.email)}</span>` : '<span style="display:block;color:#9ca3af">📧 لا يوجد بريد</span>'}
@@ -11366,6 +11349,376 @@ function thanksStartFx(){
   st.timers.push(setTimeout(() => { if(__thanksFx === st) thanksStopMotion(); }, 12000));
 }
 const TIMETABLE_PERIOD_NAMES = ['الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة'];
+
+/* ===== LESSON-COUNTER-START =====
+ * العداد الذكي لحصص المعلمين — نواة حسابية نقية (بلا DOM) ليختبرها node --test.
+ * المصدر الوحيد للجدول هو البنية القائمة: timetable[teacherId][DAY_KEY][period] = { subject, classId }.
+ * أوقات الحصص تُقرأ من إعدادات القسم المشتركة school_settings.scheduleTimes،
+ * وإن غابت تُستخدم الأوقات الافتراضية أدناه — فلا تُنشأ جداول ولا بيانات مكررة.
+ * «داخل الحصة الآن» لا تُشتق من الجدول وحده؛ تحتاج تأكيد تواجد (lastSeenAt) في الطبقة العليا.
+ */
+const LESSON_DOW_KEY = { 1:'MONDAY', 2:'TUESDAY', 3:'WEDNESDAY', 4:'THURSDAY', 5:'FRIDAY' };
+const LESSON_RECESS_AFTER = 3;
+// الجدول الرسمي: 7 حصص × 45 دقيقة من الاثنين إلى الجمعة، وفسحة 15 دقيقة (9:45 – 10:00) بعد الحصة الثالثة.
+const LESSON_DEFAULT_TIMES = {
+  periods: [
+    { start:'07:30', end:'08:15' },
+    { start:'08:15', end:'09:00' },
+    { start:'09:00', end:'09:45' },
+    { start:'10:00', end:'10:45' },
+    { start:'10:45', end:'11:30' },
+    { start:'11:30', end:'12:15' },
+    { start:'12:15', end:'13:00' }
+  ],
+  days: [1,2,3,4,5]
+};
+function lessonHmToMin(hm){
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hm == null ? '' : hm).trim());
+  if(!m) return null;
+  const h = Number(m[1]), mi = Number(m[2]);
+  if(h < 0 || h > 23 || mi < 0 || mi > 59) return null;
+  return h * 60 + mi;
+}
+function lessonMinToHm(min){
+  const v = Math.max(0, Math.min(1439, Math.round(Number(min) || 0)));
+  return String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0');
+}
+function lessonDefaultTimes(){
+  return {
+    periods: LESSON_DEFAULT_TIMES.periods.map(p => ({ start: lessonHmToMin(p.start), end: lessonHmToMin(p.end) })),
+    days: LESSON_DEFAULT_TIMES.days.slice()
+  };
+}
+// تطبيع أوقات الإعدادات: تقبل النصوص HH:MM كما يحفظها المحرر، وتُعيد الدقائق.
+// تُرفض الأوقات الناقصة/المتداخلة/غير المرتبة كي لا يُعرض وقت غير صحيح.
+function lessonNormalizeTimes(raw){
+  if(!raw || typeof raw !== 'object') return null;
+  const src = Array.isArray(raw.periods) ? raw.periods : null;
+  if(!src || !src.length || src.length > 12) return null;
+  const periods = [];
+  let prevEnd = -1;
+  for(const p of src){
+    const s = lessonHmToMin(p && p.start);
+    const e = lessonHmToMin(p && p.end);
+    if(s === null || e === null || e <= s) return null;
+    if(s < prevEnd) return null;
+    periods.push({ start:s, end:e });
+    prevEnd = e;
+  }
+  let days = Array.isArray(raw.days) ? raw.days.map(Number).filter(d => d >= 0 && d <= 6) : [];
+  if(!days.length) days = LESSON_DEFAULT_TIMES.days.slice();
+  days = Array.from(new Set(days)).sort((a, b) => a - b);
+  return { periods, days };
+}
+function lessonMsToMin(ms){
+  const d = new Date(ms);
+  return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60 + d.getMilliseconds() / 60000;
+}
+function lessonFmtDur(ms){
+  const total = Math.max(0, Math.ceil((Number(ms) || 0) / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h
+    ? h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0')
+    : String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+// حساب حالة معلم واحد في لحظة محددة. snap = { dow, times:[{start,end}], days:[...], lessons:{period:cell} }
+// الحالات: during | before | break | done | noschedule | offday
+function lessonComputeState(snap, nowMs){
+  snap = snap || {};
+  const times = Array.isArray(snap.times) ? snap.times : [];
+  const days = Array.isArray(snap.days) && snap.days.length ? snap.days : [1,2,3,4,5];
+  const lessons = (snap.lessons && typeof snap.lessons === 'object') ? snap.lessons : {};
+  const dow = (typeof snap.dow === 'number') ? snap.dow : new Date(nowMs).getDay();
+  if(days.indexOf(dow) === -1) return { kind:'offday', tone:'gray' };
+  const nowMin = lessonMsToMin(nowMs);
+  const list = Object.keys(lessons).map(k => {
+    const p = Number(k);
+    const t = times[p - 1];
+    const cell = lessons[k];
+    if(!t || !(t.end > t.start)) return null;
+    if(!cell || cell._del) return null;
+    if(!cell.subject && !cell.classId && !cell.subjectLabel && !cell.className) return null;
+    return { period:p, start:t.start, end:t.end, subjectLabel:cell.subjectLabel || '', className:cell.className || '', classId:cell.classId || '' };
+  }).filter(Boolean).sort((a, b) => (a.start - b.start) || (a.period - b.period));
+  if(!list.length) return { kind:'noschedule', tone:'gray' };
+  const cur = list.find(x => nowMin >= x.start && nowMin < x.end);
+  if(cur){
+    const span = cur.end - cur.start;
+    return {
+      kind:'during', tone:'green', period:cur.period, subjectLabel:cur.subjectLabel, className:cur.className, classId:cur.classId,
+      startMin:cur.start, endMin:cur.end, remainMs:Math.max(0, (cur.end - nowMin) * 60000),
+      progress:Math.max(0, Math.min(100, ((nowMin - cur.start) / span) * 100))
+    };
+  }
+  const next = list.find(x => nowMin < x.start);
+  if(next){
+    const ended = list.filter(x => nowMin >= x.end);
+    const left = next.start - nowMin;
+    const lastEnded = ended.length ? Math.max.apply(null, ended.map(x => x.period)) : 0;
+    return {
+      kind: ended.length ? 'break' : 'before',
+      recess: ended.length > 0 && lastEnded === LESSON_RECESS_AFTER && next.period === LESSON_RECESS_AFTER + 1,
+      tone: left < 5 ? 'orange' : 'blue',
+      period:next.period, subjectLabel:next.subjectLabel, className:next.className, classId:next.classId,
+      startMin:next.start, endMin:next.end, remainMs:Math.max(0, left * 60000), progress:0,
+      prevEndMin: ended.length ? Math.max.apply(null, ended.map(x => x.end)) : null
+    };
+  }
+  return { kind:'done', tone:'gray' };
+}
+// رسم البطاقة الأفقية. لا تعتمد على DOM، والنصوص تُهرَّب عبر escapeHtml.
+// snap.present = تأكيد التواجد؛ بدونه تُعرض «الحصة جارية حسب الجدول» لا «داخل الحصة الآن».
+function lessonCardBody(st, snap){
+  st = st || { kind:'noschedule', tone:'gray' };
+  snap = snap || {};
+  const palette = {
+    green:  { bg:'#ecfdf5', bd:'#a7f3d0', fg:'#065f46', sub:'#047857', dot:'#16a34a', bar:'#22c55e' },
+    blue:   { bg:'#eff6ff', bd:'#bfdbfe', fg:'#1e3a8a', sub:'#1d4ed8', dot:'#3b82f6', bar:'#3b82f6' },
+    orange: { bg:'#fff7ed', bd:'#fed7aa', fg:'#9a3412', sub:'#c2410c', dot:'#f97316', bar:'#f97316' },
+    gray:   { bg:'#f8fafc', bd:'#e2e8f0', fg:'#334155', sub:'#64748b', dot:'#94a3b8', bar:'#94a3b8' }
+  };
+  const c = palette[st.tone] || palette.gray;
+  const esc = (typeof escapeHtml === 'function') ? escapeHtml : (v => String(v == null ? '' : v));
+  const names = Array.isArray(snap.periodNames) ? snap.periodNames : [];
+  const periodName = p => (p && names[p - 1]) ? ('الحصة ' + names[p - 1]) : '';
+  const metaFor = (x, prefix) => {
+    const bits = [];
+    if(x.className) bits.push(x.className);
+    if(x.subjectLabel) bits.push(x.subjectLabel);
+    const pn = periodName(x.period);
+    if(pn) bits.push(pn);
+    return (bits.length ? (prefix || '') + bits.join(' — ') : '');
+  };
+  let head = '', meta = '', timeLine = '', bar = '';
+  if(st.kind === 'during'){
+    head = snap.present ? '🟢 المعلمة داخل الحصة الآن' : '🟢 الحصة جارية حسب الجدول';
+    meta = metaFor(st, '');
+    timeLine = '⏳ متبقٍ على نهاية الحصة: ' + lessonFmtDur(st.remainMs);
+    bar = `<div style="height:6px;border-radius:999px;background:rgba(255,255,255,.8);margin-top:6px;overflow:hidden;border:1px solid ${c.bd}"><div style="height:100%;width:${Math.round(st.progress || 0)}%;background:${c.bar};border-radius:999px;transition:width 1s linear"></div></div>`;
+  } else if(st.kind === 'before'){
+    head = (st.tone === 'orange' ? '🟠 الحصة القادمة' : '⏳ الحصة القادمة');
+    meta = metaFor(st, '') + (st.startMin != null ? ' — يبدأ ' + lessonMinToHm(st.startMin) : '');
+    timeLine = '⏳ تبدأ بعد ' + lessonFmtDur(st.remainMs) + (st.tone === 'orange' ? ' — اقترب موعدها' : '');
+  } else if(st.kind === 'break'){
+    head = st.recess ? '☕ وقت الفسحة' : '⏸ لا حصة الآن';
+    meta = metaFor(st, 'التالية: ');
+    timeLine = (st.recess ? '⏳ الحصة الرابعة تبدأ بعد ' : '⏳ الحصة التالية بعد ') + lessonFmtDur(st.remainMs);
+  } else if(st.kind === 'done'){
+    head = '🏁 انتهت حصص اليوم';
+    meta = 'لا حصص متبقية اليوم';
+  } else if(st.kind === 'offday'){
+    head = '🌙 لا دوام اليوم';
+    meta = 'لا توجد حصص مجدولة في هذا اليوم';
+  } else {
+    head = 'لا يوجد جدول متاح';
+    meta = 'لم تُسند لهذه المعلمة جدول لهذا اليوم';
+  }
+  return `<div style="display:flex;align-items:flex-start;gap:9px;padding:8px 11px;border:1px solid ${c.bd};background:${c.bg};color:${c.fg};border-radius:12px;min-width:0">
+    <span style="width:9px;height:9px;border-radius:50%;background:${c.dot};flex:0 0 auto;margin-top:5px${st.kind === 'during' ? ';box-shadow:0 0 0 4px rgba(34,197,94,.15)' : ''}"></span>
+    <div style="min-width:0;flex:1;line-height:1.55">
+      <div style="font-weight:800;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(head)}</div>
+      ${meta ? `<div style="font-size:11px;color:${c.sub};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(meta)}</div>` : ''}
+      ${timeLine ? `<div style="font-size:11.5px;font-weight:700">${esc(timeLine)}</div>` : ''}
+      ${bar}
+    </div>
+  </div>`;
+}
+/* ===== LESSON-COUNTER-END ===== */
+
+/* ===== ربط العداد بالواجهة: وقت الخادم + التواجد + المؤقّت كل ثانية ===== */
+let __lessonClockOffset = 0;
+let __lessonClockSyncedAt = 0;
+let __lessonClockBusy = false;
+let __lessonPresenceMap = {};
+let __lessonPresenceAt = 0;
+let __lessonPresenceBusy = false;
+let __lessonCards = {};
+let __lessonTimer = null;
+let __lessonDayKey = '';
+let __lessonPingAt = 0;
+function lessonNow(){ return Date.now() + __lessonClockOffset; }
+// فرق وقت الخادم يُحسب مرة واحدة (مع منتصف زمن الطلب) ويُحدَّث كل 5 دقائق.
+async function lessonSyncClock(){
+  if(!__serverEnabled() || __lessonClockBusy) return;
+  __lessonClockBusy = true;
+  try{
+    const t0 = Date.now();
+    const r = await __api('GET', 'time');
+    const t1 = Date.now();
+    if(r && r.ok && r.j && typeof r.j.now === 'number'){
+      __lessonClockOffset = r.j.now - Math.round((t0 + t1) / 2);
+      __lessonClockSyncedAt = Date.now();
+    }
+  }catch(e){}
+  __lessonClockBusy = false;
+}
+// التواجد: نستخدم آلية نبراس القائمة lastSeenAt (نافذة 3 دقائق) ولا نمسّ سجلات الحضور/الغياب.
+async function lessonRefreshPresence(){
+  if(!__serverEnabled() || __lessonPresenceBusy) return;
+  const u = currentUser();
+  __lessonPresenceAt = Date.now();
+  if(!u || (u.role !== 'ADMIN' && u.role !== 'AGENT')) return;
+  __lessonPresenceBusy = true;
+  try{
+    const school = getUserSchool() || getActiveSchool();
+    const r = await fetch(AUTH_API + 'presence?school=' + encodeURIComponent(school));
+    if(r.ok){
+      const j = await r.json();
+      const map = {};
+      (j.users || []).forEach(x => { if(x && x.id && x.lastSeenAt) map[x.id] = x.lastSeenAt; });
+      __lessonPresenceMap = map;
+    }
+  }catch(e){}
+  __lessonPresenceBusy = false;
+}
+function lessonPresent(snap){
+  if(!snap || snap.absentToday) return false;
+  if(snap.isSelf) return true;
+  const iso = __lessonPresenceMap[snap.userId] || snap.lastSeenAt || '';
+  const ts = Date.parse(iso);
+  return !!ts && (lessonNow() - ts) < 3 * 60 * 1000;
+}
+// وقت الحصص الفعلي من إعدادات القسم، أو الافتراضي عند غياب/فساد الإعداد.
+function lessonTimes(){
+  let raw = null;
+  try{ raw = (__schoolSettingsCache[getActiveSchool()] || {}).scheduleTimes; }catch(e){}
+  return lessonNormalizeTimes(raw) || lessonDefaultTimes();
+}
+function lessonSnapshotFor(user, d){
+  const now = lessonNow();
+  const dt = new Date(now);
+  const dow = dt.getDay();
+  const dayKey = LESSON_DOW_KEY[dow] || '';
+  const times = lessonTimes();
+  const cells = dayKey ? ((((d || {}).timetable || {})[user.id] || {})[dayKey] || {}) : {};
+  const lessons = {};
+  Object.keys(cells).forEach(p => {
+    const cell = cells[p];
+    if(!cell || cell._del) return;
+    if(!cell.subject && !cell.classId) return;
+    const cls = cell.classId ? ((d.classes || []).find(x => x.id === cell.classId) || null) : null;
+    lessons[p] = { subjectLabel: cell.subject || '', className: cls ? classLabel(cls) : '', classId: cell.classId || '', period: Number(p) };
+  });
+  const me = currentUser();
+  return {
+    userId: user.id, dow, dayKey, times: times.periods, days: times.days, lessons,
+    absentToday: Array.isArray(user.absences) && user.absences.indexOf(localDateKey(dt)) !== -1,
+    lastSeenAt: user.lastSeenAt || '', periodNames: TIMETABLE_PERIOD_NAMES,
+    isSelf: !!(me && me.id === user.id)
+  };
+}
+function lessonCard(user, d, opts){
+  opts = opts || {};
+  if(!user) return '';
+  const snap = lessonSnapshotFor(user, d);
+  snap.present = lessonPresent(snap);
+  const key = opts.key || ('t:' + user.id);
+  __lessonCards[key] = snap;
+  return `<div data-lesson-key="${escapeHtml(key)}" style="margin-top:6px">${lessonCardBody(lessonComputeState(snap, lessonNow()), snap)}</div>`;
+}
+function lessonStartTicker(){
+  if(__lessonTimer) return;
+  __lessonDayKey = localDateKey(new Date(lessonNow()));
+  __lessonTimer = setInterval(lessonTick, 1000);
+}
+// التحديث كل ثانية يمسّ البطاقات وحدها (innerHTML للبطاقة) — لا إعادة رسم للصفحة.
+function lessonTick(){
+  const now = lessonNow();
+  const today = localDateKey(new Date(now));
+  if(__lessonDayKey && __lessonDayKey !== today){ __lessonDayKey = today; renderApp(); return; }
+  Object.keys(__lessonCards).forEach(key => {
+    const snap = __lessonCards[key];
+    const el = document.querySelector('[data-lesson-key="' + key + '"]');
+    if(!el){ delete __lessonCards[key]; return; }
+    snap.present = lessonPresent(snap);
+    el.innerHTML = lessonCardBody(lessonComputeState(snap, now), snap);
+  });
+  if(Date.now() - __lessonClockSyncedAt > 5 * 60 * 1000) lessonSyncClock();
+  if(Date.now() - __lessonPresenceAt > 60 * 1000) lessonRefreshPresence();
+}
+// نبضة تواجد خفيفة (حقل lastSeenAt فقط) — ليست حضورًا ولا تغيّر سجلات الغياب.
+function lessonPresencePing(){
+  if(!__serverEnabled()) return;
+  const u = currentUser();
+  if(!u || u.role === 'STUDENT') return;
+  if(Date.now() - __lessonPingAt < 50 * 1000) return;
+  __lessonPingAt = Date.now();
+  fetch(AUTH_API + 'presence', { method:'POST' }).catch(() => {});
+}
+function lessonStart(){
+  try{ lessonStartTicker(); }catch(e){}
+  try{ lessonPresencePing(); }catch(e){}
+  if(!__lessonClockSyncedAt) lessonSyncClock();
+  if(!__lessonPresenceAt) lessonRefreshPresence();
+}
+/* ===== محرر أوقات الحصص (المدير فقط) — يُحفظ في school_settings.scheduleTimes ===== */
+let __lessonSettingsLoading = false;
+let __lessonSettingsTried = false;
+function lessonSettingsCard(){
+  const u = currentUser();
+  if(!u || u.role !== 'ADMIN') return '';
+  const t = lessonTimes();
+  const rows = t.periods.map((p, i) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+      <span style="width:104px;font-size:12.5px;font-weight:700">الحصة ${TIMETABLE_PERIOD_NAMES[i] || (i + 1)}</span>
+      <input id="lstStart${i + 1}" class="input" type="time" value="${lessonMinToHm(p.start)}" style="max-width:130px" />
+      <span class="muted">←</span>
+      <input id="lstEnd${i + 1}" class="input" type="time" value="${lessonMinToHm(p.end)}" style="max-width:130px" />
+    </div>${i === LESSON_RECESS_AFTER - 1 && t.periods[i + 1] ? `
+    <div style="display:flex;align-items:center;gap:8px;margin:2px 0 8px;padding:6px 10px;border-radius:10px;background:#fef3c7;color:#92400e;font-size:12.5px;font-weight:700;flex-wrap:wrap">
+      ☕ الفسحة: ${lessonMinToHm(p.end)} ← ${lessonMinToHm(t.periods[i + 1].start)} <span style="font-weight:500">(ليست حصة دراسية)</span>
+    </div>` : ''}`).join('');
+  return `<div class="card" style="max-width:640px">
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">🕒 أوقات الحصص</div>
+    <div style="font-size:12.5px;color:#6b7280;margin-bottom:12px">تُستخدم هذه الأوقات في العداد الذكي لحصص المعلمين، وتُحفظ كإعداد مشترك لكل القسم — الجدول الأسبوعي نفسه لا يتغيّر ولا تُنشأ بيانات مكررة.</div>
+    <div id="lessonTimesErr" class="error-box" style="display:none"></div>
+    ${rows}
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn-primary" onclick="saveLessonTimes()">💾 حفظ أوقات الحصص</button>
+      <button class="btn-secondary" onclick="resetLessonTimes()">↺ استعادة الافتراضي</button>
+    </div>
+  </div>`;
+}
+async function saveLessonTimes(){
+  const u = currentUser();
+  if(!u || u.role !== 'ADMIN'){ alert('يُسمح للمدير فقط'); return; }
+  const errEl = document.getElementById('lessonTimesErr');
+  const showErr = m => { if(errEl){ errEl.style.display = 'block'; errEl.textContent = m; } alert(m); };
+  const count = lessonTimes().periods.length;
+  const periods = [];
+  let prevEnd = -1;
+  for(let i = 1; i <= count; i++){
+    const s = lessonHmToMin((document.getElementById('lstStart' + i) || {}).value);
+    const e = lessonHmToMin((document.getElementById('lstEnd' + i) || {}).value);
+    const nm = TIMETABLE_PERIOD_NAMES[i - 1] || i;
+    if(s === null || e === null || e <= s){ showErr('تحقق من وقت الحصة ' + nm + ': البداية والنهاية مطلوبتان والنهاية بعد البداية'); return; }
+    if(s < prevEnd){ showErr('وقت الحصة ' + nm + ' يتداخل مع الحصة السابقة'); return; }
+    periods.push({ start: lessonMinToHm(s), end: lessonMinToHm(e) });
+    prevEnd = e;
+  }
+  const school = getActiveSchool();
+  const cur = await __getSchoolSettings(school);
+  const ok = await __putSchoolSettings(school, Object.assign({}, cur || {}, { scheduleTimes: { periods, days: [1,2,3,4,5] } }));
+  if(!ok){ if(errEl){ errEl.style.display = 'block'; errEl.textContent = 'تعذر حفظ الأوقات — تحقق من الاتصال والصلاحية'; } return; }
+  if(errEl) errEl.style.display = 'none';
+  renderApp();
+  alert('تم حفظ أوقات الحصص ✅');
+}
+async function resetLessonTimes(){
+  const u = currentUser();
+  if(!u || u.role !== 'ADMIN'){ alert('يُسمح للمدير فقط'); return; }
+  if(!confirm('استعادة أوقات الحصص الافتراضية؟')) return;
+  const school = getActiveSchool();
+  const cur = await __getSchoolSettings(school);
+  const def = lessonDefaultTimes();
+  const periods = def.periods.map(p => ({ start: lessonMinToHm(p.start), end: lessonMinToHm(p.end) }));
+  const ok = await __putSchoolSettings(school, Object.assign({}, cur || {}, { scheduleTimes: { periods, days: def.days } }));
+  if(!ok){ alert('تعذر الحفظ — تحقق من الاتصال والصلاحية'); return; }
+  renderApp();
+}
+
 /* جميع المواد الممكنة حسب المراحل ليختار منها المعلم عند إدخال حصته */
 const TT_SUBJECT_GROUPS = [
   { stage:'الابتدائية', subs:['القرآن الكريم','التجويد','التوحيد','الفقه','الحديث والسيرة','لغتي','اللغة العربية','الرياضيات','العلوم','اللغة الإنجليزية','الدراسات الاجتماعية','التاريخ','الجغرافيا','المهارات الرقمية','الحاسب الآلي','المهارات الحياتية والأسرية','التربية الفنية','التربية البدنية','الدراسات الإسلامية','النشاط'] },
@@ -13718,10 +14071,21 @@ function renderSettings(){
     </div>
   </div>`;
 
+  // تحميل إعدادات القسم مرة واحدة عند فتح الإعدادات كي لا يظهر الافتراضي مكان الأوقات المحفوظة
+  if(__serverEnabled() && !__schoolSettingsCache[school] && !__lessonSettingsLoading && !__lessonSettingsTried){
+    __lessonSettingsLoading = true;
+    __lessonSettingsTried = true;
+    __getSchoolSettings(school).then(() => {
+      __lessonSettingsLoading = false;
+      if((location.hash || '').indexOf('#/settings') === 0 && __schoolSettingsCache[school]) renderApp();
+    });
+  }
+
   return `
   <div class="header-row"><h1 class="page-title">الإعدادات</h1></div>
   ${passCard}
-  ${installCard}`;
+  ${installCard}
+  ${lessonSettingsCard()}`;
 }
 let __pwdBusy = false;
 async function saveMyPassword(){
