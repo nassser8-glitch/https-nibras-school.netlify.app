@@ -178,6 +178,38 @@ window.__nibrasBootErr = '';
   table.data-table tbody tr:last-child td { border-bottom:none; }
   .table-card { padding:0; overflow:hidden; overflow-x:auto; border:1px solid var(--border-color,#e0edf7); border-radius:12px; }
   .tbl-scroll { max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+/* بطاقات المعلمات: شبكة مضغوطة بهوية قسم البنات الوردية */
+.teacher-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; margin-top:4px; }
+.tcard { background:linear-gradient(180deg,#fff 0%,#fff7fb 100%); border:1px solid var(--border-color,#fce7f3); border-radius:14px; padding:12px 14px; box-shadow:0 2px 10px rgba(190,24,93,.06); display:flex; flex-direction:column; gap:8px; min-width:0; }
+.tcard-head { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; min-width:0; }
+.tcard-name { min-width:0; font-size:14px; }
+.tcard-role { font-size:11px; font-weight:700; background:var(--primary-light,#fdf2f8); color:var(--primary,#be185d); border-radius:999px; padding:2px 9px; white-space:nowrap; flex-shrink:0; }
+.tcard-meta { display:flex; flex-direction:column; gap:3px; font-size:12px; color:#6b4256; min-width:0; }
+.tcard-classes { font-size:12px; color:#7a4a63; line-height:1.6; }
+.tcard-label { font-weight:700; color:var(--primary,#be185d); }
+.tcard-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.tcard-name a { color:#be185d !important; }
+
+/* بطاقات الفصول: شبكة مضغوطة، لون كل بطاقة حسب مرحلتها (--acc) بهوية قسم البنات */
+.class-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; margin-top:4px; }
+.ccard { background:linear-gradient(180deg,color-mix(in srgb, var(--acc,#db2777) 12%, #fff) 0%,color-mix(in srgb, var(--acc,#db2777) 4%, #fff) 70%); border:1px solid color-mix(in srgb, var(--acc,#db2777) 22%, #fce7f3); border-top:3px solid var(--acc,#db2777); border-radius:14px; padding:12px 14px; box-shadow:0 2px 10px rgba(190,24,93,.05); display:flex; flex-direction:column; gap:8px; min-width:0; }
+.ccard-head { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; min-width:0; }
+.ccard-titles { min-width:0; }
+.ccard-grade { display:inline-block; font-size:11px; font-weight:700; color:#fff; background:var(--acc,#db2777); border-radius:999px; padding:2px 10px; }
+.ccard-name { font-size:16px; font-weight:800; color:#4a1d33; margin-top:4px; }
+.ccard-cap { font-size:11px; font-weight:500; color:#9d7488; }
+.ccard-count { display:flex; flex-direction:column; align-items:center; min-width:52px; padding:4px 8px; border-radius:12px; background:#fff; color:var(--acc,#db2777); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--acc,#db2777) 35%, #fff); font-weight:800; font-size:16px; line-height:1.1; text-decoration:none; flex-shrink:0; }
+.ccard-count span { font-size:10px; font-weight:700; }
+.ccard-teachers { min-width:0; }
+.ccard-tlist { font-size:12px; color:#6b4256; }
+.ccard-students { border-top:1px dashed #fbcfe8; padding-top:8px; }
+.ccard-empty { border-top-color:#f59e0b; }
+.ccard-empty .ccard-tlist { color:#b45309; font-weight:700; }
+.ccard-actions { display:flex; justify-content:flex-end; }
+.ccard-actions .del-btn { background:none; border:none; box-shadow:none; color:#b91c1c; font-size:12px; padding:2px 6px; opacity:.75; }
+.ccard-actions .del-btn:hover { opacity:1; background:#fef2f2; }
+.ccard-teachers span[style*="#dbeafe"] { background:#fdf2f8 !important; border-color:#fbcfe8 !important; color:#831843 !important; }
+
   /* بطاقات مفكرتي الشخصية */
   .nb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
   .nb-card { background:linear-gradient(180deg,#fffdf5,#fff9e6); border:1px solid #fde68a; border-radius:12px; padding:12px 14px; box-shadow:0 2px 6px rgba(0,0,0,.04); }
@@ -9882,6 +9914,14 @@ function __stageId(name){
 function __stageClassId(gradeId){
   return gradeId + '_a';
 }
+// لون مرحلة الفصل بهوية قسم البنات: ابتدائي وردي فاتح، متوسط وردي غامق، ثانوي بنفسجي، وغيرها بنفسجي فاتح
+function __classAccent(g){
+  const n = String((g && g.name) || '');
+  if(n.indexOf('ثانوي') >= 0) return '#9d174d';
+  if(n.indexOf('متوسط') >= 0) return '#be185d';
+  if(n.indexOf('ابتدائي') >= 0) return '#db2777';
+  return '#a78bfa';
+}
 function renderClasses(){
   const d = loadDB();
   const user = currentUser();
@@ -9934,7 +9974,7 @@ function renderClasses(){
     </div>`;
 
   const ptsMapClass = studentPointsMap();
-  const rows = classes.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">لا توجد فصول — جرّب زر "توليد الهيكل الافتراضي"</td></tr>` :
+  const cards = classes.length === 0 ? '<div class="muted" style="padding:24px;text-align:center">لا توجد فصول بعد — استخدم «+ إضافة فصل» أو زر الهيكل الافتراضي</div>' :
     classes.map(c => {
       const g = gradeById(c.gradeId);
       const students = d.students.filter(s => s.active && s.classId === c.id).sort((a,b)=>a.fullName.localeCompare(b.fullName,'ar'));
@@ -9942,14 +9982,18 @@ function renderClasses(){
       const teachersOf = (c.teacherIds||[]).map(id => userById(id)?.name).filter(Boolean);
       const studentsHtml = students.length === 0 ? '<span class="muted">لا يوجد طلاب</span>' :
         `<div style="display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow-y:auto">${students.map(s => `<span style="background:#f3f4f6;padding:2px 8px;border-radius:4px;font-size:12px;white-space:nowrap">${studentNameLink(s, ptsMapClass[s.id] || 0)}</span>`).join('')}</div>`;
-      return `<tr>
-        <td style="font-weight:600">${g?escapeHtml(g.name):'—'}</td>
-        <td>${escapeHtml(c.name)}${c.capacity?`<span class="muted small"> (سعة ${c.capacity})</span>`:''}</td>
-        <td>${canAssign ? teacherAssign(c.id, c.teacherIds||[]) : `<span style="font-size:12px">${teachersOf.length ? teachersOf.map(n=>escapeHtml(n)).join('، ') : '—'}</span>`}</td>
-        <td><a href="javascript:void(0)" onclick="toggleEl('classStudents-${c.id}')" style="font-weight:600;color:#2563eb">${count}</a></td>
-        <td>${isAdmin ? `<button class="del-btn" onclick="deleteClass('${c.id}')">🗑 حذف</button>` : ''}</td>
-      </tr>
-      <tr id="classStudents-${c.id}" style="display:none"><td colspan="5" style="padding:8px 16px;background:#f9fafb">${studentsHtml}</td></tr>`;
+      return `<div class="ccard${(c.teacherIds||[]).length ? '' : ' ccard-empty'}" style="--acc:${__classAccent(g)}">
+        <div class="ccard-head">
+          <div class="ccard-titles">
+            <div class="ccard-grade">${g?escapeHtml(g.name):'—'}</div>
+            <div class="ccard-name">${escapeHtml(c.name)}${c.capacity?` <span class="ccard-cap">(سعة ${c.capacity})</span>`:''}</div>
+          </div>
+          <a href="javascript:void(0)" class="ccard-count" onclick="toggleEl('classStudents-${c.id}')" title="عرض الطلاب">${count}<span>طالبة</span></a>
+        </div>
+        <div class="ccard-teachers">${canAssign ? teacherAssign(c.id, c.teacherIds||[]) : `<span class="ccard-tlist">${teachersOf.length ? teachersOf.map(n=>escapeHtml(n)).join('، ') : '—'}</span>`}</div>
+        <div id="classStudents-${c.id}" class="ccard-students" style="display:none">${studentsHtml}</div>
+        ${isAdmin ? `<div class="ccard-actions"><button class="del-btn" onclick="deleteClass('${c.id}')">🗑 حذف</button></div>` : ''}
+      </div>`;
     }).join('');
 
   return `
@@ -9967,10 +10011,7 @@ function renderClasses(){
     <input id="cCapacity" type="number" class="input" placeholder="السعة (اختياري)" data-tip="الحد الأقصى لعدد الطلاب في الفصل (اختياري — يُترك فارغًا إذا لم تكن هناك سعة محددة)" />
     <button class="btn-primary" onclick="addClass()">حفظ</button>
   </div>
-  <div class="card table-card">
-    <table class="data-table"><thead><tr><th>الصف</th><th>الفصل</th><th>${tl('معلمو الفصل')}</th><th>${tl('عدد الطلاب')}</th><th></th></tr></thead>
-    <tbody>${rows}</tbody></table>
-  </div>`;
+  <div class="class-grid">${cards}</div>`;
 }
 function addClass(){
   const gradeId = document.getElementById('cGradeId').value;
@@ -10045,7 +10086,7 @@ function renderUsers(){
   const d = loadDB();
   const isAdmin = currentUser()?.role === 'ADMIN';
   const users = d.users.filter(u => u.active && u.role === 'TEACHER');
-  const rows = users.map(u => {
+  const cards = users.map(u => {
     const assigned = d.classes.filter(c => (c.teacherIds||[]).includes(u.id));
     const assignedHtml = assigned.length ? assigned.map(c => classLabel(c)).join('، ') : '—';
     const school = getActiveSchool();
@@ -10054,22 +10095,27 @@ function renderUsers(){
       ? `<a href="#/teacher/${u.id}" style="font-weight:700;color:#2563eb;text-decoration:none;cursor:pointer" title="${tl('متابعة المعلم ورسائله')}">${escapeHtml(u.name)} 👁</a>`
       : (u.role === 'AGENT' || u.role === 'COUNSELOR' || u.role === 'ADMINISTRATIVE')
         ? `<span style="font-weight:600">${escapeHtml(u.name)} <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="openRoleInbox('${u.id}','${school}')" title="${tl('متابعة هذا الحساب: آخر دخول وعدد مرات الدخول وتحويلاته وإشعاراته')}">👁</button></span>`
-        : `<span style="font-weight:600">${escapeHtml(u.name)}</span>`)
-      + (u.role === 'TEACHER' ? lessonCard(u, d, { key: 'u:' + u.id }) : '');
+        : `<span style="font-weight:600">${escapeHtml(u.name)}</span>`);
+    const counter = (u.role === 'TEACHER' ? lessonCard(u, d, { key: 'u:' + u.id }) : '');
     const authCell = u.role === 'TEACHER'
       ? `<div style="font-size:12px;line-height:1.7">
           ${u.email ? `<span style="display:block;direction:ltr">📧 ${escapeHtml(u.email)}</span>` : '<span style="display:block;color:#9ca3af">📧 لا يوجد بريد</span>'}
           <span style="display:block;color:#047857">✅ مفعّل</span>
         </div>` : '—';
-    return `<tr>
-    <td>${nameCell}</td>
-    <td style="direction:ltr"><b>${escapeHtml(u.username || '—')}</b></td>
-    <td>${escapeHtml(u.email)}</td>
-    <td>${roleLabel(u.role)}</td>
-    <td>${authCell}</td>
-    <td style="font-size:12px;color:#6b7280;max-width:200px">${u.role==='TEACHER'?assignedHtml:'—'}</td>
-    <td>${isSelf || !isAdmin ? '' : `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="showTeacherCreds('${u.id}','${escapeHtml(u.name)}','${escapeHtml(u.username||'')}')" title="عرض بيانات الدخول">🔑 بيانات الدخول</button> `}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="resetTeacherSecret('${u.id}')">🔄 إعادة تعيين</button> ` : '')}${isSelf || !isAdmin ? '' : `<button class="del-btn" onclick="deleteUser('${u.id}')">🗑 حذف</button>`}</td>
-  </tr>`;
+    const actions = `${isSelf || !isAdmin ? '' : `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="showTeacherCreds('${u.id}','${escapeHtml(u.name)}','${escapeHtml(u.username||'')}')" title="عرض بيانات الدخول">🔑 بيانات الدخول</button>`}${isSelf || !isAdmin ? '' : (u.role==='TEACHER' ? `<button class="btn-secondary" style="padding:4px 8px;font-size:12px" onclick="resetTeacherSecret('${u.id}')">🔄 إعادة تعيين</button>` : '')}${isSelf || !isAdmin ? '' : `<button class="del-btn" onclick="deleteUser('${u.id}')">🗑 حذف</button>`}`;
+    return `<div class="tcard">
+      <div class="tcard-head">
+        <div class="tcard-name">${nameCell}</div>
+        <span class="tcard-role">${roleLabel(u.role)}</span>
+      </div>
+      ${counter}
+      <div class="tcard-meta">
+        <span style="direction:ltr"><b>${escapeHtml(u.username || '—')}</b></span>
+        ${authCell}
+      </div>
+      <div class="tcard-classes"><span class="tcard-label">${tl('الفصول')}:</span> ${u.role==='TEACHER'?assignedHtml:'—'}</div>
+      <div class="tcard-actions">${actions}</div>
+    </div>`;
   }).join('');
   const teacherMsg = window.__teacherMsg;
   window.__teacherMsg = null;
@@ -10094,10 +10140,7 @@ function renderUsers(){
     <button class="btn-primary" onclick="addUser()">حفظ</button>
   </div>
   <div id="userErr"></div>
-  <div class="card table-card">
-    <table class="data-table"><thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>البريد الإلكتروني</th><th>الدور</th><th>بيانات الدخول</th><th>${tl('الفصول')}</th><th></th></tr></thead>
-    <tbody>${rows}</tbody></table>
-  </div>`;
+  <div class="teacher-grid">${cards}</div>`;
 }
 function renderAdmins(){
   const cur = currentUser();
