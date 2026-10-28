@@ -178,6 +178,14 @@ window.__nibrasBootErr = '';
   table.data-table tbody tr:last-child td { border-bottom:none; }
   .table-card { padding:0; overflow:hidden; overflow-x:auto; border:1px solid var(--border-color,#e0edf7); border-radius:12px; }
   .tbl-scroll { max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.date-nav { display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid var(--border-color,#fce7f3); border-radius:999px; padding:4px 8px; box-shadow:0 1px 4px rgba(190,24,93,.06); }
+.date-nav-btn { background:none; border:none; cursor:pointer; font-size:14px; padding:2px 6px; color:var(--primary,#be185d); border-radius:8px; }
+.date-nav-btn:hover:not(:disabled) { background:var(--primary-light,#fdf2f8); }
+.date-nav-btn:disabled { opacity:.35; cursor:not-allowed; }
+.date-nav-label { font-size:13px; font-weight:700; color:#4a1d33; padding:0 4px; cursor:pointer; white-space:nowrap; }
+.date-nav-today { background:var(--primary,#be185d); color:#fff; border:none; border-radius:999px; padding:3px 10px; font-size:12px; font-weight:700; cursor:pointer; }
+.date-nav-today:disabled { opacity:.45; cursor:not-allowed; background:#fbcfe8; color:#9d174d; }
+@media (max-width:640px){ .date-nav-label { font-size:11px; } .date-nav-today { padding:3px 8px; font-size:11px; } }
 /* بطاقات المعلمات: شبكة مضغوطة بهوية قسم البنات الوردية */
 .teacher-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; margin-top:4px; }
 .tcard { background:linear-gradient(180deg,#fff 0%,#fff7fb 100%); border:1px solid var(--border-color,#fce7f3); border-radius:14px; padding:12px 14px; box-shadow:0 2px 10px rgba(190,24,93,.06); display:flex; flex-direction:column; gap:8px; min-width:0; }
@@ -2854,6 +2862,56 @@ function __fixPersonName(name){
   return out;
 }
 function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+/* مؤشر التاريخ (التقديم/التأخير): تاريخ مختار يُحفظ أثناء التنقل بين الصفحات */
+const __NAV_WEEKDAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const __NAV_MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+function __fmtNavDate(iso){ try { const d = new Date(String(iso).slice(0,10) + 'T00:00:00'); return __NAV_WEEKDAYS[d.getDay()] + ' ' + d.getDate() + ' ' + __NAV_MONTHS[d.getMonth()] + ' ' + d.getFullYear(); } catch(e){ return iso; } }
+function __addDaysIso(iso, n){ const d = new Date(String(iso).slice(0,10) + 'T00:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+let __navDate = (function(){ try { const v = localStorage.getItem('nibras_nav_date_v1'); if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v; } catch(e){} return todayStr(); })();
+function __setNavDate(iso){
+  if(!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+  const t = todayStr();
+  if (iso > __addDaysIso(t, 30)) iso = __addDaysIso(t, 30);
+  if (iso < __addDaysIso(t, -365)) iso = __addDaysIso(t, -365);
+  const user = (typeof currentUser === 'function') ? currentUser() : null;
+  const canPast = !!(user && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT'));
+  if (!canPast && iso < t) iso = t;
+  __navDate = iso;
+  try { localStorage.setItem('nibras_nav_date_v1', iso); } catch(e){}
+  if (typeof attendanceState !== 'undefined' && attendanceState) {
+    if (canPast || iso >= t) {
+      attendanceState.date = iso;
+      attendanceState.draft = {}; attendanceState.absenceType = {};
+      attendanceState.sLateType = {}; attendanceState.sLateMin = {};
+      attendanceState.tDraft = {}; attendanceState.tLateType = {}; attendanceState.tLateMin = {};
+      attendanceState.absencePrompted = false;
+    }
+  }
+  if (typeof timetableDay !== 'undefined') {
+    const d = new Date(iso + 'T00:00:00');
+    const td = TIMETABLE_DAYS.find(x => x.dow === d.getDay());
+    if (td) timetableDay = td.key;
+  }
+  if (typeof reportState !== 'undefined' && reportState) {
+    reportState.from = iso; reportState.to = iso; reportState.rows = null;
+  }
+  if (typeof renderApp === 'function') renderApp();
+}
+function __navPrev(){ __setNavDate(__addDaysIso(__navDate, -1)); }
+function __navNext(){ __setNavDate(__addDaysIso(__navDate, 1)); }
+function __navToday(){ __setNavDate(todayStr()); }
+function __navDateWidget(){
+  const t = todayStr();
+  const canPast = (function(){ const u = (typeof currentUser==='function')?currentUser():null; return !!(u && (u.role==='ADMIN'||u.role==='AGENT'||u.role==='SCHOOL_AGENT')); })();
+  const prevDisabled = (!canPast && __navDate <= t) || __navDate <= __addDaysIso(t, -365);
+  const nextDisabled = __navDate >= __addDaysIso(t, 30);
+  return `<div class="date-nav" role="navigation" aria-label="مؤشر التاريخ">
+    <button class="date-nav-btn" onclick="__navPrev()" ${prevDisabled?'disabled':''} title="اليوم السابق">◀</button>
+    <div class="date-nav-label" onclick="__navToday()" title="العودة إلى اليوم actual">${__fmtNavDate(__navDate)}</div>
+    <button class="date-nav-btn" onclick="__navNext()" ${nextDisabled?'disabled':''} title="اليوم التالي">▶</button>
+    <button class="date-nav-today" onclick="__navToday()" ${__navDate===t?'disabled':''}>اليوم</button>
+  </div>`;
+}
 function escapeHtml(str){ return String(str??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ============ إدارة القسم المدرسي ============ */
@@ -4272,6 +4330,7 @@ function renderLayout(user, hash){
           </div>
           <div class="topbar-actions">
             ${renderNotifState(user)}
+            ${__navDateWidget()}
             <div class="topbar-user-block" style="text-align:left">
               <div class="topbar-user-name">${escapeHtml(displayName(user))}</div>
               <div class="topbar-user-role">${roleLabel(user.role)}</div>
@@ -8745,7 +8804,7 @@ function renderAttendance(){
     </div>
     <div>
       <label class="small" style="display:block;font-weight:600;margin-bottom:4px">التاريخ</label>
-      <input type="date" class="input" value="${attendanceState.date}" onchange="attendanceState.date=this.value; attendanceState.draft={}; attendanceState.absenceType={}; attendanceState.sLateType={}; attendanceState.sLateMin={}; attendanceState.tDraft={}; attendanceState.tLateType={}; attendanceState.tLateMin={}; attendanceState.absencePrompted=false; rerenderAttendance();" data-tip="تاريخ اليوم الذي تُسجَّل له الحضور — يُسمح بالتسجيل لأيام الدراسة (الاثنين إلى الجمعة) فقط" />
+      <input type="date" class="input" value="${attendanceState.date}" onchange="__setNavDate(this.value);" data-tip="تاريخ اليوم الذي تُسجَّل له الحضور — يُسمح بالتسجيل لأيام الدراسة (الاثنين إلى الجمعة) فقط" />
     </div>
     <button class="btn-secondary" onclick="markAllPresent()">☑ الجميع حاضر</button>
     <div style="flex:1"></div>
@@ -8950,6 +9009,9 @@ function markAllPresent(){
 }
 function saveAttendance(){
   const d = loadDB();
+  if(attendanceState.date < todayStr() && canRecordPastAttendance(currentUser())){
+    if(!confirm('أنت تسجّل حضورًا لتاريخ سابق (' + attendanceState.date + '). هل تريد المتابعة؟')) return;
+  }
   if(!isSchoolDay(attendanceState.date)){
     alert('أيام الدراسة من الاثنين إلى الجمعة فقط — لا يمكن تسجيل حضور في العطلة (الأحد/السبت)');
     return;
@@ -11774,7 +11836,7 @@ function renderTeacherWeekTT(d, compact){
   const user = currentUser();
   if(!user || user.role !== 'TEACHER') return '';
   const tt = (d.timetable || {})[user.id] || {};
-  if(!timetableDay || !TIMETABLE_DAYS.some(x => x.key === timetableDay)) timetableDay = (TIMETABLE_DAYS.find(x => x.dow === new Date().getDay()) || TIMETABLE_DAYS[0]).key;
+  if(!timetableDay || !TIMETABLE_DAYS.some(x => x.key === timetableDay)) timetableDay = (TIMETABLE_DAYS.find(x => x.dow === new Date(__navDate + 'T00:00:00').getDay()) || TIMETABLE_DAYS[0]).key;
   const todayDow = new Date().getDay();
   const tabs = TIMETABLE_DAYS.map(day => `<button class="tt-tab ${day.key === timetableDay ? 'active' : ''}" onclick="setTimetableDay('${day.key}')" style="padding:5px 10px;font-size:11.5px">${day.dow === todayDow ? '📌 ' : ''}${day.label}</button>`).join('');
   const sel = TIMETABLE_DAYS.find(x => x.key === timetableDay);
@@ -11825,7 +11887,7 @@ function renderTimetable(){
   const user = currentUser();
   if(!user) return `<h1 class="page-title">غير متاح</h1>`;
   const d = loadDB();
-  if(!timetableDay || !TIMETABLE_DAYS.some(x => x.key === timetableDay)) timetableDay = (TIMETABLE_DAYS.find(x => x.dow === new Date().getDay()) || TIMETABLE_DAYS[0]).key;
+  if(!timetableDay || !TIMETABLE_DAYS.some(x => x.key === timetableDay)) timetableDay = (TIMETABLE_DAYS.find(x => x.dow === new Date(__navDate + 'T00:00:00').getDay()) || TIMETABLE_DAYS[0]).key;
   const tabs = TIMETABLE_DAYS.map(day => `<button class="tt-tab ${day.key===timetableDay?'active':''}" onclick="setTimetableDay('${day.key}')">${day.label}</button>`).join('');
 
   if(user.role === 'STUDENT'){
