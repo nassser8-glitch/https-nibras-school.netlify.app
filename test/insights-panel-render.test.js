@@ -130,7 +130,7 @@ test('تاريخ اللوحة يأتي من مفتاح تاريخ لا من كا
   // fmtDateOnly يقصّ أول 10 محارف: لو مرّرنا كائن Date لكان الناتج "Wed Sep 30 ..."
   // فطُبعت تواريخ إنجليزية داخل واجهة عربية. نتحقق أن الاستدعاء يمرّ بمفتاح.
   const srcPanel = src.slice(src.indexOf('const seesInsights ='));
-  assert.ok(!/fmtDateOnly\(new Date\(\)\)/.test(srcPanel), 'لا تمرير كائن Date إلى fmtDateOnly');
+  assert.ok(!/fmtDateOnly\(new Date\(\)\)/.test(srcPanel), 'لا Date داخل fmtDateOnly');
   assert.ok(/fmtDateOnly\(todayStr\(\)\)/.test(srcPanel), 'يستخدم مفتاح التاريخ');
 });
 

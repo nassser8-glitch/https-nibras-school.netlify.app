@@ -5373,7 +5373,7 @@ function renderDashboard(){
   }).join('');
 
   // حضور المعلمين اليوم (مثل الطلاب)
-  const todayKey = localDateKey(new Date());
+  const todayKey = __navDate || todayStr();
   const absentTeachers = teachers.filter(t => (t.absences||[]).includes(todayKey));
   const lateTeachers = teachers.filter(t => (t.markedLate||[]).includes(todayKey));
   const presentTeachers = teachers.length - absentTeachers.length;
