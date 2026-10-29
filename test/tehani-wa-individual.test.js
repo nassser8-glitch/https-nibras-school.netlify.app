@@ -193,6 +193,6 @@ test('7) البناء سليم والإصدار مرفوع', () => {
   assert.ok(v[1].includes('save-persist'), 'الإصدار لا يحمل وسم إصلاح موثوقية الحفظ');
   const n = Number((SW.match(/nibras-v(\d+)/) || [])[1]);
   assert.ok(n >= 139, 'CACHE_NAME لم يُرفَع');
-  assert.ok(SRC.includes('sw.js?v=119'), 'نسخة service worker لم تُرفَع');
+  assert.ok(SRC.includes('sw.js?v=120'), 'نسخة service worker لم تُرفَع');
   assert.ok(SRC.includes('function canWaConsent('), 'دالة البوابة مفقودة');
 });

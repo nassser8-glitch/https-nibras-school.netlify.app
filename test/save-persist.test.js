@@ -580,7 +580,7 @@ test('15) البناء سليم والإصدار مرفوع (save-persist)', () 
   const sw = fs.readFileSync(path.join(ROOT, 'public', 'sw.js'), 'utf8');
   const n = Number((sw.match(/nibras-v(\d+)/) || [])[1]);
   assert.ok(n >= 139, 'CACHE_NAME لم يُرفَع');
-  assert.ok(SRC.includes('sw.js?v=119'), 'نسخة service worker لم تُرفَع');
+  assert.ok(SRC.includes('sw.js?v=120'), 'نسخة service worker لم تُرفَع');
 });
 
 /* محوّر سحب/تحديث: يشغّل __syncPull و__refreshSchool الحقيقيتين من الملف المنشور */
