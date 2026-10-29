@@ -682,6 +682,7 @@ window.__nibrasBootErr = '';
   /* شرائح الطقس/التاريخ/الأعلام */
   .strip-item { display:flex; align-items:center; gap:10px; background:#f8fafc; border:1px solid #eef2f7; border-radius:12px; padding:8px 14px; box-shadow:0 2px 8px rgba(15,79,136,.05); }
   .strip-ico { font-size:22px; line-height:1; }
+.strip-sep { width:1px; height:28px; background:var(--border-color,#fce7f3); margin:0 2px; }
   .strip-temp { font-weight:800; font-size:16px; color:#0f172a; }
   .strip-main { font-weight:800; font-size:13px; color:#0f172a; }
   .strip-sub { font-size:10.5px; color:#64748b; }
@@ -7291,8 +7292,7 @@ function renderAppStrip(){
     <div class="strip-item strip-weather">
       <span class="strip-ico" id="stripWxIco">🌤</span>
       <div><div class="strip-main strip-temp" id="stripWxTemp">—</div><div class="strip-sub" id="stripWxDesc">الطقس</div></div>
-    </div>
-    <div class="strip-item strip-date">
+      <span class="strip-sep"></span>
       <span class="strip-ico">🕐</span>
       <div>
         <div class="strip-main" id="stripTime">${isbTimeStr()}</div>
