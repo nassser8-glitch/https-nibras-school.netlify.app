@@ -5331,7 +5331,7 @@ function renderDashboard(){
   const canMgrT = canManageTeachers(user);
   const students = getVisibleStudents();
   const teachers = d.users.filter(u => ((u.role === 'TEACHER') || isAdminRole(u.role)) && u.active);
-  const today = todayStr();
+  const today = (__navDate || todayStr());
   const visibleIds = new Set(students.map(s => s.id));
   const todayAtt = d.attendance.filter(a => a.date === today && (isMgr || visibleIds.has(a.studentId)));
   const dayAttCounts = attCountsByDate(d, today, students.map(s => s.id));
