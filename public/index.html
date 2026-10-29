@@ -178,7 +178,19 @@ window.__nibrasBootErr = '';
   table.data-table tbody tr:last-child td { border-bottom:none; }
   .table-card { padding:0; overflow:hidden; overflow-x:auto; border:1px solid var(--border-color,#e0edf7); border-radius:12px; }
   .tbl-scroll { max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-.date-nav { display:inline-flex; align-items:center; gap:10px; background:linear-gradient(180deg,#fff 0%,#fff0f7 100%); border:2px solid var(--primary,#be185d); border-radius:14px; padding:8px 12px; box-shadow:0 3px 12px rgba(190,24,93,.12); }
+.date-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:8px; padding:6px 4px; }
+.date-bar .date-nav { flex:1 1 auto; max-width:100%; }
+.date-nav { display:inline-flex; align-items:center; gap:10px; background:linear-gradient(180deg,#fff 0%,#fff0f7 100%); border:2px solid var(--primary,#be185d); border-radius:14px; padding:8px 14px; box-shadow:0 3px 12px rgba(190,24,93,.12); }
+.date-nav-btn { background:none; border:none; cursor:pointer; font-size:16px; padding:4px 8px; color:var(--primary,#be185d); border-radius:8px; font-weight:800; }
+.date-nav-btn:hover:not(:disabled) { background:var(--primary-light,#fdf2f8); }
+.date-nav-btn:disabled { opacity:.3; cursor:not-allowed; }
+.date-nav-center { display:flex; align-items:center; gap:6px; }
+.date-nav-label { font-size:15px; font-weight:800; color:#4a1d33; padding:0 6px; cursor:pointer; white-space:nowrap; }
+.date-nav-badge { font-size:10px; font-weight:700; background:#fef3c7; color:#92400e; border-radius:999px; padding:1px 7px; white-space:nowrap; }
+.date-nav-today { background:var(--primary,#be185d); color:#fff; border:none; border-radius:999px; padding:4px 12px; font-size:12px; font-weight:700; cursor:pointer; }
+.date-nav-today:disabled { opacity:.4; cursor:not-allowed; background:#fbcfe8; color:#9d174d; }
+.appStrip { flex:0 0 auto; }
+@media (max-width:640px){ .date-bar { flex-direction:column; align-items:stretch; } .date-nav { justify-content:center; } .date-nav-label { font-size:12px; } .date-nav-today { padding:3px 8px; font-size:11px; } .date-nav-btn { font-size:13px; padding:2px 4px; } .appStrip { justify-content:center; } }
 .date-nav-btn { background:none; border:none; cursor:pointer; font-size:14px; padding:2px 6px; color:var(--primary,#be185d); border-radius:8px; }
 .date-nav-btn:hover:not(:disabled) { background:var(--primary-light,#fdf2f8); }
 .date-nav-btn:disabled { opacity:.35; cursor:not-allowed; }
@@ -4324,7 +4336,6 @@ function renderLayout(user, hash){
           </div>
           <div class="topbar-actions">
             ${renderNotifState(user)}
-            ${__navDateWidget()}
             <div class="topbar-user-block" style="text-align:left">
               <div class="topbar-user-name">${escapeHtml(displayName(user))}</div>
               <div class="topbar-user-role">${roleLabel(user.role)}</div>
@@ -4332,7 +4343,10 @@ function renderLayout(user, hash){
             <button class="btn-secondary" style="padding:7px 12px" onclick="logout()">🚪 خروج</button>
           </div>
         </div>
-        <div id="appStrip" class="topbar-strip"></div>
+        <div class="date-bar">
+          ${__navDateWidget()}
+          <div id="appStrip" class="topbar-strip"></div>
+        </div>
       </div>
     </header>
     <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
