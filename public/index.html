@@ -8684,8 +8684,8 @@ function renderAttendance(){
   const classes = getClassesSorted();
   // الوكيل والمدير بإمكانهما تسجيل الغياب/التأخر لأيام سابقة — فقط نضمن وجود تاريخ افتراضي صالح (اليوم إن لم يُحدَّد بعد)
   if(!attendanceState.date) attendanceState.date = todayStr();
+  // السماح بعرض أيام سابقة للمراجعة (بما في ذلك غير المديرة)؛ الحفظ يُؤكَّد/يُمنع في saveAttendance
   const allowPastDates = canRecordPastAttendance(currentUser());
-  if(!allowPastDates && attendanceState.date < todayStr()) attendanceState.date = todayStr();
   const isStaff0 = canManageTeachers(currentUser()) && isStaffSheet(attendanceState.classId);
   if(classes.length === 0 && !isStaff0) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : null;
   else if(!attendanceState.classId || (!isStaff0 && !classes.some(c => c.id === attendanceState.classId))) attendanceState.classId = canManageTeachers(currentUser()) ? 'TEACHERS' : (classes[0] ? classes[0].id : null);
