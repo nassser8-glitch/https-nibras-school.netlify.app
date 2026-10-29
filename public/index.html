@@ -178,7 +178,7 @@ window.__nibrasBootErr = '';
   table.data-table tbody tr:last-child td { border-bottom:none; }
   .table-card { padding:0; overflow:hidden; overflow-x:auto; border:1px solid var(--border-color,#e0edf7); border-radius:12px; }
   .tbl-scroll { max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-.date-nav { display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid var(--border-color,#fce7f3); border-radius:999px; padding:4px 8px; box-shadow:0 1px 4px rgba(190,24,93,.06); }
+.date-nav { display:inline-flex; align-items:center; gap:10px; background:linear-gradient(180deg,#fff 0%,#fff0f7 100%); border:2px solid var(--primary,#be185d); border-radius:14px; padding:8px 12px; box-shadow:0 3px 12px rgba(190,24,93,.12); }
 .date-nav-btn { background:none; border:none; cursor:pointer; font-size:14px; padding:2px 6px; color:var(--primary,#be185d); border-radius:8px; }
 .date-nav-btn:hover:not(:disabled) { background:var(--primary-light,#fdf2f8); }
 .date-nav-btn:disabled { opacity:.35; cursor:not-allowed; }
@@ -2873,19 +2873,14 @@ function __setNavDate(iso){
   const t = todayStr();
   if (iso > __addDaysIso(t, 30)) iso = __addDaysIso(t, 30);
   if (iso < __addDaysIso(t, -365)) iso = __addDaysIso(t, -365);
-  const user = (typeof currentUser === 'function') ? currentUser() : null;
-  const canPast = !!(user && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT'));
-  if (!canPast && iso < t) iso = t;
   __navDate = iso;
   try { localStorage.setItem('nibras_nav_date_v1', iso); } catch(e){}
   if (typeof attendanceState !== 'undefined' && attendanceState) {
-    if (canPast || iso >= t) {
-      attendanceState.date = iso;
+    attendanceState.date = iso;
       attendanceState.draft = {}; attendanceState.absenceType = {};
       attendanceState.sLateType = {}; attendanceState.sLateMin = {};
       attendanceState.tDraft = {}; attendanceState.tLateType = {}; attendanceState.tLateMin = {};
       attendanceState.absencePrompted = false;
-    }
   }
   if (typeof timetableDay !== 'undefined') {
     const d = new Date(iso + 'T00:00:00');
@@ -2902,8 +2897,7 @@ function __navNext(){ __setNavDate(__addDaysIso(__navDate, 1)); }
 function __navToday(){ __setNavDate(todayStr()); }
 function __navDateWidget(){
   const t = todayStr();
-  const canPast = (function(){ const u = (typeof currentUser==='function')?currentUser():null; return !!(u && (u.role==='ADMIN'||u.role==='AGENT'||u.role==='SCHOOL_AGENT')); })();
-  const prevDisabled = (!canPast && __navDate <= t) || __navDate <= __addDaysIso(t, -365);
+  const prevDisabled = __navDate <= __addDaysIso(t, -365);
   const nextDisabled = __navDate >= __addDaysIso(t, 30);
   return `<div class="date-nav" role="navigation" aria-label="مؤشر التاريخ">
     <button class="date-nav-btn" onclick="__navPrev()" ${prevDisabled?'disabled':''} title="اليوم السابق">◀</button>
@@ -9009,6 +9003,10 @@ function markAllPresent(){
 }
 function saveAttendance(){
   const d = loadDB();
+  if(attendanceState.date < todayStr() && !canRecordPastAttendance(currentUser())){
+    alert('لا يمكن تسجيل حضور لتاريخ سابق — الصلاحية مقصورة على الإدارة');
+    return;
+  }
   if(attendanceState.date < todayStr() && canRecordPastAttendance(currentUser())){
     if(!confirm('أنت تسجّل حضورًا لتاريخ سابق (' + attendanceState.date + '). هل تريد المتابعة؟')) return;
   }
