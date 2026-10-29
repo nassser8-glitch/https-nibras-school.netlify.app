@@ -7266,7 +7266,6 @@ function __stripTick(){
   const day = isbDateStr();
   if(window.__stripDay !== day){
     window.__stripDay = day;
-    const dt = document.getElementById('stripDate'); if(dt) dt.textContent = day;
     const hj = document.getElementById('stripHijri'); if(hj) hj.textContent = hijriIslamabad();
   }
   if(!window.__stripWxAt || Date.now() - window.__stripWxAt >= 60000){
@@ -7288,10 +7287,10 @@ function renderAppStrip(){
       <div><div class="strip-main strip-temp" id="stripWxTemp">—</div><div class="strip-sub" id="stripWxDesc">الطقس</div></div>
     </div>
     <div class="strip-item strip-date">
-      <span class="strip-ico">📅</span>
+      <span class="strip-ico">🕐</span>
       <div>
-        <div class="strip-main" id="stripDate">${isbDateStr()}</div>
-        <div class="strip-sub"><span id="stripHijri">${hijriIslamabad()}</span> · <span id="stripTime">${isbTimeStr()}</span></div>
+        <div class="strip-main" id="stripTime">${isbTimeStr()}</div>
+        <div class="strip-sub"><span id="stripHijri">${hijriIslamabad()}</span></div>
       </div>
     </div>`;
   __stripWxRender();
