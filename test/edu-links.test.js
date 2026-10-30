@@ -108,8 +108,8 @@ test('1) خانة الطقس عادت إلى الشريط، والروابط ا�
   const strip = extractFn(SRC, 'renderAppStrip');
   assert.ok(strip.includes('strip-weather') && strip.includes('stripWxTemp'), 'لا خانة للطقس في الشريط');
   assert.ok(strip.includes('🌤'), 'لا أيقونة افتراضية للطقس');
-  assert.ok(strip.includes('stripHijri') && strip.includes('stripTime'), 'خانة التاريخ تأثرت');
-  assert.ok(strip.includes('stripHijri') && strip.includes('stripTime'), 'بيانات التاريخ تأثرت');
+  assert.ok(strip.includes('stripHijri') && strip.includes('stripSelDate'), 'خانة التاريخ تأثرت');
+  assert.ok(strip.includes('stripHijri') && strip.includes('stripSelDate'), 'بيانات التاريخ تأثرت');
   assert.ok(strip.includes('__stripWxRender()'), 'خانة الطقس لا تُرسم عند تجهيز الشريط');
   assert.ok(!strip.includes('strip-edu'), 'خانة الروابط التعليمية ما زالت في الشريط');
   assert.ok(!strip.includes('openEduLinks()'), 'الشريط ما زال يفتح البوابة بعد نقلها');

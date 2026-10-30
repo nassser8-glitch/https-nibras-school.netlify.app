@@ -4354,14 +4354,7 @@ function renderLayout(user, hash){
             <button class="btn-secondary" style="padding:7px 12px" onclick="logout()">🚪 خروج</button>
           </div>
         </div>
-        <div class="date-bar">
-          ${__navDateWidget()}
-                    <div class="date-bar-center">
-            <div class="date-bar-greg">${__fmtNavDate(__navDate)}</div>
-            <div class="date-bar-hijri">${hijriIslamabad()}</div>
-          </div>
-          <div id="appStrip" class="topbar-strip"></div>
-        </div>
+        <div id="appStrip" class="topbar-strip"></div>
       </div>
     </header>
     <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
@@ -7290,12 +7283,11 @@ function isbTimeStr(){
   return String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0');
 }
 function __stripTick(){
-  const tm = document.getElementById('stripTime');
-  if(tm) tm.textContent = isbTimeStr();
   const day = isbDateStr();
   if(window.__stripDay !== day){
     window.__stripDay = day;
     const hj = document.getElementById('stripHijri'); if(hj) hj.textContent = hijriIslamabad();
+    const sd = document.getElementById('stripSelDate'); if(sd && __navDate === day) sd.textContent = __fmtNavDate(__navDate);
   }
   if(!window.__stripWxAt || Date.now() - window.__stripWxAt >= 60000){
     window.__stripWxAt = Date.now();
@@ -7315,9 +7307,8 @@ function renderAppStrip(){
       <span class="strip-ico strip-ico-wx" id="stripWxIco">🌤</span>
       <div><div class="strip-main strip-temp" id="stripWxTemp">—</div><div class="strip-sub" id="stripWxDesc">الطقس</div></div>
       <span class="strip-sep"></span>
-      <span class="strip-ico strip-ico-clock">🕐</span>
       <div>
-        <div class="strip-main" id="stripTime">${isbTimeStr()}</div>
+        <div class="strip-main" id="stripSelDate">${__fmtNavDate(__navDate)}</div>
         <div class="strip-sub"><span id="stripHijri">${hijriIslamabad()}</span></div>
       </div>
     </div>`;
