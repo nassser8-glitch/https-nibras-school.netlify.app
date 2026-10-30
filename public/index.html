@@ -181,6 +181,10 @@ window.__nibrasBootErr = '';
 .date-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:8px; padding:8px 12px; background:linear-gradient(180deg,#fff 0%,#fdf2f8 100%); border:1px solid var(--border-color,#fce7f3); border-radius:14px; box-shadow:0 2px 8px rgba(190,24,93,.06); }
 .date-bar .date-nav { flex:0 0 auto; background:transparent; border:none; box-shadow:none; padding:4px 6px; }
 .date-bar .topbar-strip { flex:1 1 auto; justify-content:flex-end; margin-top:0; gap:8px; }
+.date-bar-center { flex:0 0 auto; text-align:center; line-height:1.25; padding:0 10px; }
+.date-bar-greg { font-size:15px; font-weight:800; color:#4a1d33; white-space:nowrap; }
+.date-bar-hijri { font-size:11px; color:#9d7488; white-space:nowrap; }
+@media (max-width:640px){ .date-bar-center { order:-1; } .date-bar-greg { font-size:13px; } }
 .date-bar .topbar-strip .strip-item { background:transparent; border:none; box-shadow:none; padding:4px 8px; }
 .date-bar .topbar-strip .strip-sep { background:var(--border-color,#fce7f3); }
 @media (max-width:640px){ .date-bar { flex-direction:column; align-items:stretch; } .date-bar .date-nav { justify-content:center; } .date-bar .topbar-strip { justify-content:center; } }
@@ -2905,11 +2909,13 @@ function __navDateWidget(){
   const t = todayStr();
   const prevDisabled = __navDate <= __addDaysIso(t, -365);
   const nextDisabled = __navDate >= __addDaysIso(t, 30);
+  const isPast = __navDate < t;
+  const isToday = __navDate === t;
   return `<div class="date-nav" role="navigation" aria-label="مؤشر التاريخ">
-    <button class="date-nav-btn" onclick="__navPrev()" ${prevDisabled?'disabled':''} title="اليوم السابق">◀</button>
-    <div class="date-nav-label" onclick="__navToday()" title="العودة إلى اليوم actual">${__fmtNavDate(__navDate)}</div>
-    <button class="date-nav-btn" onclick="__navNext()" ${nextDisabled?'disabled':''} title="اليوم التالي">▶</button>
-    <button class="date-nav-today" onclick="__navToday()" ${__navDate===t?'disabled':''}>اليوم</button>
+    <button class="date-nav-btn" onclick="__navPrev()" ${prevDisabled?'disabled':''} title="اليوم السابق" aria-label="اليوم السابق">◀</button>
+    <button class="date-nav-btn" onclick="__navNext()" ${nextDisabled?'disabled':''} title="اليوم التالي" aria-label="اليوم التالي">▶</button>
+    <button class="date-nav-today" onclick="__navToday()" ${isToday?'disabled':''}>اليوم</button>
+    ${isPast ? '<span class="date-nav-badge">مراجعة</span>' : ''}
   </div>`;
 }
 function escapeHtml(str){ return String(str??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -4339,6 +4345,10 @@ function renderLayout(user, hash){
         </div>
         <div class="date-bar">
           ${__navDateWidget()}
+                    <div class="date-bar-center">
+            <div class="date-bar-greg">${__fmtNavDate(__navDate)}</div>
+            <div class="date-bar-hijri">${hijriIslamabad()}</div>
+          </div>
           <div id="appStrip" class="topbar-strip"></div>
         </div>
       </div>
