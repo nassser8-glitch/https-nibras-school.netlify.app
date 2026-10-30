@@ -696,6 +696,12 @@ window.__nibrasBootErr = '';
   /* شرائح الطقس/التاريخ/الأعلام */
   .strip-item { display:flex; align-items:center; gap:10px; background:#f8fafc; border:1px solid #eef2f7; border-radius:12px; padding:8px 14px; box-shadow:0 2px 8px rgba(15,79,136,.05); }
   .strip-ico { font-size:20px; line-height:1; display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:8px; }
+.strip-nav-btn { background:none; border:none; cursor:pointer; font-size:14px; padding:2px 6px; color:var(--primary,#be185d); border-radius:8px; }
+.strip-nav-btn:hover:not(:disabled) { background:var(--primary-light,#fdf2f8); }
+.strip-nav-btn:disabled { opacity:.35; cursor:not-allowed; }
+.strip-today-btn { background:var(--primary,#be185d); color:#fff; border:none; border-radius:999px; padding:3px 10px; font-size:11px; font-weight:700; cursor:pointer; }
+.strip-today-btn:disabled { opacity:.45; cursor:not-allowed; background:#fbcfe8; color:#9d174d; }
+.date-nav-badge { font-size:9px; padding:1px 5px; background:#fde68a; color:#92400e; border-radius:999px; margin-inline-start:4px; }
 .strip-ico-wx { background:#fef3c7; }
 .strip-ico-clock { background:#e0e7ff; }
 .strip-sep { width:1px; height:28px; background:var(--border-color,#fce7f3); margin:0 2px; }
@@ -7307,10 +7313,13 @@ function renderAppStrip(){
       <span class="strip-ico strip-ico-wx" id="stripWxIco">🌤</span>
       <div><div class="strip-main strip-temp" id="stripWxTemp">—</div><div class="strip-sub" id="stripWxDesc">الطقس</div></div>
       <span class="strip-sep"></span>
+      <button class="strip-nav-btn" onclick="__navPrev()" ${__navDate <= __addDaysIso(todayStr(), -365)?'disabled':''} title="اليوم السابق" aria-label="اليوم السابق">◀</button>
       <div>
         <div class="strip-main" id="stripSelDate">${__fmtNavDate(__navDate)}</div>
-        <div class="strip-sub"><span id="stripHijri">${hijriIslamabad()}</span></div>
+        <div class="strip-sub"><span id="stripHijri">${hijriIslamabad()}</span>${__navDate < todayStr() ? ' <span class="date-nav-badge">مراجعة</span>' : ''}</div>
       </div>
+      <button class="strip-nav-btn" onclick="__navNext()" ${__navDate >= __addDaysIso(todayStr(), 30)?'disabled':''} title="اليوم التالي" aria-label="اليوم التالي">▶</button>
+      <button class="strip-today-btn" onclick="__navToday()" ${__navDate === todayStr()?'disabled':''}>اليوم</button>
     </div>`;
   __stripWxRender();
 }
