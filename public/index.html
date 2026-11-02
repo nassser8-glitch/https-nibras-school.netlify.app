@@ -217,14 +217,15 @@ window.__nibrasBootErr = '';
 .tcard-name a { color:#be185d !important; }
 
 /* بطاقات الفصول: شبكة مضغوطة، لون كل بطاقة حسب مرحلتها (--acc) بهوية قسم البنات */
-.class-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; margin-top:4px; }
-.ccard { background:linear-gradient(180deg,color-mix(in srgb, var(--acc,#db2777) 12%, #fff) 0%,color-mix(in srgb, var(--acc,#db2777) 4%, #fff) 70%); border:1px solid color-mix(in srgb, var(--acc,#db2777) 22%, #fce7f3); border-top:3px solid var(--acc,#db2777); border-radius:14px; padding:12px 14px; box-shadow:0 2px 10px rgba(190,24,93,.05); display:flex; flex-direction:column; gap:8px; min-width:0; }
+.class-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; margin-top:6px; align-items:stretch; }
+.ccard { background:linear-gradient(180deg,#ffffff 0%,#fff7fb 100%); border:1px solid #fce7f3; border-top:3px solid var(--acc,#db2777); border-radius:18px; padding:14px 16px; box-shadow:0 2px 12px rgba(190,24,93,.06); display:flex; flex-direction:column; gap:8px; min-width:0; min-height:210px; transition:transform .2s,box-shadow .2s; }
+.ccard:hover { transform:translateY(-3px); box-shadow:0 8px 24px rgba(190,24,93,.12); }
 .ccard-head { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; min-width:0; }
 .ccard-titles { min-width:0; }
-.ccard-grade { display:inline-block; font-size:11px; font-weight:700; color:#fff; background:var(--acc,#db2777); border-radius:999px; padding:2px 10px; }
+.ccard-grade { display:inline-block; font-size:11px; font-weight:700; color:#fff; background:var(--acc,#db2777); border-radius:999px; padding:3px 12px; }
 .ccard-name { font-size:16px; font-weight:800; color:#4a1d33; margin-top:4px; }
 .ccard-cap { font-size:11px; font-weight:500; color:#9d7488; }
-.ccard-count { display:flex; flex-direction:column; align-items:center; min-width:52px; padding:4px 8px; border-radius:12px; background:#fff; color:var(--acc,#db2777); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--acc,#db2777) 35%, #fff); font-weight:800; font-size:16px; line-height:1.1; text-decoration:none; flex-shrink:0; }
+.ccard-count { display:flex; flex-direction:column; align-items:center; min-width:54px; padding:6px 10px; border-radius:12px; background:#fff; color:var(--acc,#db2777); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--acc,#db2777) 30%, #fff); font-weight:800; font-size:17px; line-height:1.1; text-decoration:none; flex-shrink:0; }
 .ccard-count span { font-size:10px; font-weight:700; }
 .ccard-teachers { min-width:0; }
 .ccard-tlist { font-size:12px; color:#6b4256; }
