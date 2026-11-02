@@ -1293,7 +1293,7 @@ function __mergeUsersAttendanceList(localUsers, serverUsers){
 }
 /* إحصائية حضور الموعد الفريدة: مهما تعددت سجلات اليوم (عدة معلمين/حِصص لنفس الفصل)،
    يُحسب الطالب غائبًا/متأخرًا مرة واحدة فقط؛ ومن لم يُسجَّل له غياب/تأخر فهو حاضر افتراضيًا.
-   `ids` مجموعة معرفات الطلاب المطلوب حسابهم لهذا التاريخ. */
+   `ids` مجموعة معرفات الطالبات المطلوب حسابهم لهذا التاريخ. */
 function attCountsByDate(d, date, ids){
   const idSet = new Set(ids || []);
   // كل سجل غياب/تأخر يُحتسب فور تسجيله مهما كان عدد المؤكِّدين — السجل المعلّق (بانتظار
@@ -1617,7 +1617,7 @@ let raw = null;
               (obj && obj._ts) || 0,
               __syncTS(mj.data) || 0
             );
-            // الأقسام غير المُدمجة أعلاه (الطلاب/الفصول/الدرجات/المحوّلات/الصيانة/التنبيهات...):
+            // الأقسام غير المُدمجة أعلاه (الطالبات/الفصول/الدرجات/المحوّلات/الصيانة/التنبيهات...):
             // نقايضها اتحاداً حسب id كي لا يفقد هذا الجهاز تعديلاته المحلية غير المرفوعة بعد
             // حين تُستبدل obj بدمج الخادم — كان يفقد جهازُ المعلم تعديلَ الطالب (تأخر/غياب معلم)
             // بعد إعادة فتح التطبيق متى فشل الرفع المباشر أو سبقه دمجُ دفعة أخرى.
@@ -2019,11 +2019,11 @@ async function __forceSyncNow(){
     __refreshUnpushedBar();
   }
 }
-/* دمج ميداني لقسم الطلاب بين نسختين: الخادم أساس، والسجلات المحلية تُلحق،
+/* دمج ميداني لقسم الطالبات بين نسختين: الخادم أساس، والسجلات المحلية تُلحق،
    ثم تُحمى حقول رقم ولي الأمر بختم زمني — الأحدث يفوز دائماً، والفراغ بختم
    أحدث ينشر (مسح الرقم)، بينما جهاز قديم بلا ختم لا يستطيع محو رقم أحدث.
    تستعملها الوظيفتان: __syncPull و__refreshSchool — فكانت الثانية تستبدل قسم
-   الطلاب كاملاً بنسخة الخادم فيمحو الرقم الذي لم يصل بعد. */
+   الطالبات كاملاً بنسخة الخادم فيمحو الرقم الذي لم يصل بعد. */
 function __mergeStudentsLocal(localArr, srvArr){
   const m = new Map();
   for(const x of (Array.isArray(srvArr) ? srvArr : [])) if(x && x.id != null) m.set(x.id, JSON.parse(JSON.stringify(x)));
@@ -2111,7 +2111,7 @@ async function __syncPull(school){
     // تعديلات هذا الجهاز المحلية التي لم تصل بعد للخادم (ملاحظات/غياب جديدة بوقت أحدث) —
     // حتى لا يختفي عملُ المعلم ولا تغيب عنه بيانات زملائه في الفصول المشتركة.
     // لا نستبدل نسخة محلية ممتلئة بنسخة خادم فارغة لحظياً (مدرسة جديدة أو شريحة معطوبة) —
-    // وإلا محى السحبُ كلَ حفظِ المعلم بعد إعادة فتح التطبيق بمجرد صفر عدد الطلاب/الفصول.
+    // وإلا محى السحبُ كلَ حفظِ المعلم بعد إعادة فتح التطبيق بمجرد صفر عدد الطالبات/الفصول.
     if(!local){
       __origSetItem(key, JSON.stringify(server));
       __syncLogAdd({ ev:'pull-replace-fresh', school, notes:(Array.isArray(server.notes)?server.notes.length:0) });
@@ -2233,7 +2233,7 @@ async function __syncPull(school){
           }
         }
       }
-      // الأقسام غير المُدمجة أعلاه (الطلاب/الفصول/الدرجات/المحوّلات/الصيانة/التنبيهات...):
+      // الأقسام غير المُدمجة أعلاه (الطالبات/الفصول/الدرجات/المحوّلات/الصيانة/التنبيهات...):
       // نُلحق أي سجل محلي غير موجود في نسخة الخادم حتى لا يفقد السحبُ حفظَ هذا الجهاز
       // (تعديل تأخر/غياب ليس في الخادم بعد) عند إعادة فتح التطبيق على أي متصفح/جهاز.
       // الفصول استثناء: تمرّ على mergeClassesLocal بدل الإلحاق البحت، وإلا بقيت لقاعدة
@@ -2417,7 +2417,7 @@ async function __refreshSchool(school){
           out.notes = NRC_mergeNotes(Array.isArray(out.notes) ? out.notes : [], Array.isArray(local.notes) ? local.notes : []);
         }
         out._ts = Math.max((j.data && j.data._ts) || 0, (local && local._ts) || 0, Date.now());
-        // قسم الطلاب لا يُستبدل بنسخة الخادم: كان يستبدل كاملاً فيمحو رقم ولي الأمر
+        // قسم الطالبات لا يُستبدل بنسخة الخادم: كان يستبدل كاملاً فيمحو رقم ولي الأمر
         // الذي دُفع للتو ولم يصل الخادم بعد — فتختفي الأرقام فور إضافتها.
         if(Array.isArray(local.students) && Array.isArray(out.students)){
           out.students = __mergeStudentsLocal(local.students, out.students);
@@ -3336,7 +3336,7 @@ function __renderAppInner(){
     }
     app.innerHTML = renderSchoolSelect(); return;
   }
-  // أول دخول لأي مستخدم: تعيين كلمة مرور قوية قبل استخدام النظام (الطلاب يستثنون)
+  // أول دخول لأي مستخدم: تعيين كلمة مرور قوية قبل استخدام النظام (الطالبات يستثنون)
   if(user.firstLogin && user.role !== 'STUDENT'){
     if(hash !== '#/first-login') location.hash = '#/first-login';
     app.innerHTML = renderFirstLogin(user);
@@ -3830,7 +3830,7 @@ document.addEventListener('keydown', (e) => {
 });
 function resetAllData(){
   if(__serverEnabled()) return; // لا مسح جماعي للبيانات في وضع الخادم
-  if(!confirm('سيتم مسح كل البيانات (الطلاب، الحسابات، الرسائل، التحويلات، الملاحظات) والعودة للوضع الافتراضي النظيف. هل تريد المتابعة؟')) return;
+  if(!confirm('سيتم مسح كل البيانات (الطالبات، الحسابات، الرسائل، التحويلات، الملاحظات) والعودة للوضع الافتراضي النظيف. هل تريد المتابعة؟')) return;
   const keys = Object.keys(localStorage).filter(k => k.startsWith('nibras_'));
   keys.forEach(k => localStorage.removeItem(k));
   seedPersistentData();
@@ -3972,7 +3972,7 @@ function renderSchoolSelect(){
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-          <div class="school-stat-box"><span class="num">${data.students}</span><span class="lbl">${tls('الطلاب')}</span>${barMeter(data.students, maxStudents, '#be185d')}</div>
+          <div class="school-stat-box"><span class="num">${data.students}</span><span class="lbl">${tls('الطالبات')}</span>${barMeter(data.students, maxStudents, '#be185d')}</div>
           <div class="school-stat-box"><span class="num">${data.classes}</span><span class="lbl">الفصول</span>${barMeter(data.classes, maxClasses, '#be185d')}</div>
           <div class="school-stat-box"><span class="num">${data.teachers}</span><span class="lbl">${tls('المعلمون')}</span></div>
           <div class="school-stat-box"><span class="num">${data.pendingTransfers}</span><span class="lbl">التحويلات</span></div>
@@ -4048,7 +4048,7 @@ function renderStudentLeaders(){
   </div>` : ''}
   <div class="card" style="padding:16px;margin-bottom:16px;border-right:4px solid #2563eb">
     <div style="font-weight:700;font-size:14px;margin-bottom:4px;color:#2563eb">🏆 رواد نبراس — هذا الأسبوع</div>
-    <div style="font-size:12px;color:#64748b;margin-bottom:4px">تُكرم المدرسة أسبوعيًا الطلاب الأكثر تفاعلاً (تسجيل الدخول) — القائمة تتحدث مع بداية كل أسبوع.</div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:4px">تُكرم المدرسة أسبوعيًا الطالبات الأكثر تفاعلاً (تسجيل الدخول) — القائمة تتحدث مع بداية كل أسبوع.</div>
     ${renderNibrasPioneers(true)}
   </div>
   <div style="display:flex;flex-direction:column;gap:16px">
@@ -4230,7 +4230,7 @@ function renderLayout(user, hash){
     ]},
   ] : (user.role === 'SCHOOL_AGENT' ? [
     { title:'الإدارة', items:[
-      { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👥' },
+      { href:'#/students', key:'students', label:tl('الطالبات'), icon:'👥' },
       { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
       { href:'#/supervision', key:'supervision', label:'🛡️ الإشراف اليومي', icon:'🛡️' },
     ]},
@@ -4251,7 +4251,7 @@ function renderLayout(user, hash){
     { title:'الإدارة', items:[
       (user.role === 'ADMIN' || user.role === 'AGENT') ? { href:'#/users', key:'users', label:tl('المعلمون'), icon:'👤' } : null,
       (user.role === 'ADMIN' || user.role === 'AGENT') ? { href:'#/admins', key:'admins', label:'الإداريون', icon:'🛡' } : null,
-      { href:'#/students', key:'students', label:tl('الطلاب'), icon:'👥' },
+      { href:'#/students', key:'students', label:tl('الطالبات'), icon:'👥' },
       { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
       (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT') ? { href:'#/supervision', key:'supervision', label:'🛡️ الإشراف اليومي', icon:'🛡️' } : null,
     ]},
@@ -4436,7 +4436,7 @@ function switchActTab(key){
   document.querySelectorAll('.dash-tab[data-act]').forEach(b => b.classList.toggle('active', b.dataset.act === key));
   document.querySelectorAll('.act-pane').forEach(p => { p.style.display = p.dataset.act === key ? 'block' : 'none'; });
 }
-/* عرض أسماء من دخلوا ومن لم يدخلوا حساباتهم (الطلاب أو المعلمون) لنطاق معيّن */
+/* عرض أسماء من دخلوا ومن لم يدخلوا حساباتهم (الطالبات أو المعلمون) لنطاق معيّن */
 function showActNames(gkey, grp){
   const isStaffRole = r => r !== 'STUDENT' && r !== 'ADMIN';
   const isAdmin = currentUser()?.role === 'ADMIN';
@@ -4468,7 +4468,7 @@ function showActNames(gkey, grp){
       }
     }
   }
-  const roleLabel = grp === 'students' ? 'الطلاب' : (grp === 'teachers' ? 'المعلمون' : 'الإداريون والوكلاء والموجهون');
+  const roleLabel = grp === 'students' ? 'الطالبات' : (grp === 'teachers' ? 'المعلمون' : 'الإداريون والوكلاء والموجهون');
   const rangeLabel = 'بنات';
   const li = arr => arr.length ? arr.sort((a,b)=>a.localeCompare(b,'ar')).map(n => `<li>${escapeHtml(n)}</li>`).join('') : '<li class="muted">لا يوجد</li>';
   openDetails('تفعيل الحسابات — ' + roleLabel + ' (' + rangeLabel + ')',
@@ -5389,7 +5389,7 @@ function renderDashboard(){
         <span style="background:rgba(255,255,255,.22);border-radius:999px;padding:2px 10px;font-size:13px;font-weight:800;white-space:nowrap">${sts.length}</span>
       </div>
       <div style="padding:12px 14px">
-        <p class="muted" style="font-size:11px;margin:0 0 6px">${tl('عدد الطلاب')}</p>
+        <p class="muted" style="font-size:11px;margin:0 0 6px">${tl('عدد الطالبات')}</p>
         <div class="small" style="display:flex;flex-direction:column;gap:5px;font-size:12px">
           <span>✅ ${tl('الحضور')}: <b>${cp + cl}</b></span>
           <span>❌ ${tl('الغياب')}: <b class="red">${ca}</b> &nbsp; ⏰ ${tl('التأخر')}: <b class="amber">${cl}</b> <span class="muted" style="font-size:10.5px">(المتأخر حاضر)</span></span>
@@ -5400,7 +5400,7 @@ function renderDashboard(){
     </div>`;
   }).join('');
 
-  // حضور المعلمين اليوم (مثل الطلاب)
+  // حضور المعلمين اليوم (مثل الطالبات)
   const todayKey = __navDate || todayStr();
   const absentTeachers = teachers.filter(t => (t.absences||[]).includes(todayKey));
   const lateTeachers = teachers.filter(t => (t.markedLate||[]).includes(todayKey));
@@ -5442,7 +5442,7 @@ function renderDashboard(){
   };
   const tDayAtt = isTeacher ? teacherDayAtt() : null;
   const mySubjects = isTeacher ? getTeacherSubjects(user, d) : [];
-  // عدّاد الطلاب: يعتمد الفصول المسندة رسميًا للمعلمة (teacherIds) وليس فصول
+  // عدّاد الطالبات: يعتمد الفصول المسندة رسميًا للمعلمة (teacherIds) وليس فصول
   // جدول الحصص فقط — حتى يتطابق مع بطاقات الفصول وسجل الحضور (كان يظهر رقمان
   // مختلفان: 93 من الجدول مقابل 57 من الفصول المسندة، و57 هو الصحيح).
   const myStudentsCount = isTeacher ? [...new Set(d.students.filter(s => s.active && s.classId && (d.classes.find(c => c.id === s.classId && (c.teacherIds||[]).includes(user.id)))).map(s => s.id))].length : 0;
@@ -5538,7 +5538,7 @@ function renderDashboard(){
         <p class="dash-status-title" style="margin:0">${stableDay ? 'المدرسة مستقرة اليوم' : 'هناك أمور بانتظار متابعتك'}</p>
         <p class="dash-status-sub">${stableDay
           ? 'لا توجد صيانة طارئة والغياب ضمن الحدود'
-          : (urgentMaint>0 ? urgentMaint + ' بلاغ صيانة طارئ' : '') + (sAbsRate > 10 ? (urgentMaint>0 ? ' · ' : '') + 'غياب الطلاب أكثر من 10%' : '') + (tAbsRate > 10 ? ((urgentMaint>0 || sAbsRate > 10) ? ' · ' : '') + 'غياب المعلمين أكثر من 10%' : '')}</p>
+          : (urgentMaint>0 ? urgentMaint + ' بلاغ صيانة طارئ' : '') + (sAbsRate > 10 ? (urgentMaint>0 ? ' · ' : '') + 'غياب الطالبات أكثر من 10%' : '') + (tAbsRate > 10 ? ((urgentMaint>0 || sAbsRate > 10) ? ' · ' : '') + 'غياب المعلمين أكثر من 10%' : '')}</p>
       </div>
     </div>` : ''}
   </div>`;
@@ -5546,12 +5546,12 @@ function renderDashboard(){
   // شريط الإحصائيات (6 بطاقات) — أُزيل: نسبة الحضور تُعرض بيانيًا في بطاقة الحضور
 
   // يحتاج إلى متابعتك
-  // يحتاج إلى متابعتك — الأولوية: الصيانة الطارئة ← غياب المعلمين ← الطلاب (3 عناصر فقط)
+  // يحتاج إلى متابعتك — الأولوية: الصيانة الطارئة ← غياب المعلمين ← الطالبات (3 عناصر فقط)
   const needs = [];
   if(urgentMaint>0) needs.push({ icon:'🛠️', color:'#fef2f2', name:'صيانة طارئة', meta:urgentMaint + ' بلاغ بانتظار المعالجة', num:urgentMaint, click:"location.hash='#/maintenance'" });
   if(absentTeachers.length>0) needs.push({ icon:'🚫', color:'#fef2f2', name:'غياب المعلمين اليوم', meta:absentTeachers.map(t => firstNameOf(t.name)).join('، '), num:absentTeachers.length, click:'showTeacherAbsenceList()' });
-  if(absent>0) needs.push({ icon:'❌', color:'#fef2f2', name:'غائبون اليوم', meta:'من الطلاب', num:absent, click:"showAttendanceList('ABSENT')" });
-  if(needs.length < 3 && late>0) needs.push({ icon:'⏰', color:'#fffbeb', name:'متأخرون اليوم', meta:'من الطلاب', num:late, click:"showAttendanceList('LATE')" });
+  if(absent>0) needs.push({ icon:'❌', color:'#fef2f2', name:'غائبون اليوم', meta:'من الطالبات', num:absent, click:"showAttendanceList('ABSENT')" });
+  if(needs.length < 3 && late>0) needs.push({ icon:'⏰', color:'#fffbeb', name:'متأخرون اليوم', meta:'من الطالبات', num:late, click:"showAttendanceList('LATE')" });
   if(needs.length < 3 && lateTeachers.length>0) needs.push({ icon:'⏰', color:'#fffbeb', name:'تأخر المعلمين اليوم', meta:'وصلوا بعد موعد الدوام', num:lateTeachers.length, click:'showTeacherLateList()' });
   if(needs.length < 3 && partPending>0) needs.push({ icon:'✋', color:'#eff6ff', name:'طلبات مشاركة في أنشطة', meta:'بانتظار الموافقة', num:partPending, click:"location.hash='#/activities'" });
   if(needs.length < 3 && pendingTransfers>0) needs.push({ icon:'📨', color:'#f5f3ff', name:'تحويلات معلّقة', meta:'طلبات بانتظار الاعتماد', num:pendingTransfers, click:'showPendingTransfers()' });
@@ -5662,7 +5662,7 @@ function renderDashboard(){
       </div>
     </a>`).join('') : '<p class="muted small" style="margin:4px 0">لا توجد أنشطة</p>';
 
-  // الحضور اليوم — بطاقة الطلاب والمعلمين (تصميم الكود المرفق)
+  // الحضور اليوم — بطاقة الطالبات والمعلمين (تصميم الكود المرفق)
   const attGroup = (label, cls, present, absent, late, pct, click, flip, subLate) => {
     // المتأخر يُحتسب حاضرًا: العدد الوارد في `present` يشمله فعلاً، ونعرض `late` للتوضيح
     // فقط — بلا خصمٍ من الحضور وبلا شريحة منفصلة في الدائرة.
@@ -5700,7 +5700,7 @@ function renderDashboard(){
   const sPct = fmtRate(rate);
   const tRateAll = teachers.length ? Math.round(tPresent/teachers.length*100*10)/10 : null;
   const tPct = fmtRate(tRateAll);
-  // تصنيف الطلاب حسب المرحلة (ابتدائي/متوسط/ثانوي) — دائرة + ترميز الألوان
+  // تصنيف الطالبات حسب المرحلة (ابتدائي/متوسط/ثانوي) — دائرة + ترميز الألوان
   const stageCounts = (() => {
     const res = { pri:0, mid:0, sec:0 };
     const gradeById = new Map((d.grades||[]).map(g => [g.id, g]));
@@ -5740,13 +5740,13 @@ function renderDashboard(){
   const donutHTML = `
     <div class="att-card">
       ${stageGroup}
-      ${attGroup('حضور الطلاب', 'att-students', present + late, absent, late, sPct, 'showTodayAttendance()', false, false)}
+      ${attGroup('حضور الطالبات', 'att-students', present + late, absent, late, sPct, 'showTodayAttendance()', false, false)}
       ${attGroup('حضور المعلمات والإداريات', 'att-teachers', tPresent, absentTeachers.length, lateTeachers.length, tPct, canMgrT ? 'showTeacherAbsenceList()' : 'showTodayAttendance()', true, true)}
     </div>`;
   const attPanel = `
     <div class="dash-panel">
       <div class="att-head">
-        <p class="att-group-title">📊 تصنيف الطلاب</p>
+        <p class="att-group-title">📊 تصنيف الطالبات</p>
         <p class="att-today-title">✅ الحضور اليوم</p>
       </div>
       ${donutHTML}
@@ -5831,7 +5831,7 @@ function renderDashboard(){
     };
     const actTab = (g) => `
       <div class="act-grid">
-        ${miniDonut('👨‍🎓 الطلاب', g.students, g.key, 'students')}
+        ${miniDonut('👨‍🎓 الطالبات', g.students, g.key, 'students')}
         ${miniDonut('👨‍🏫 المعلمون', g.teachers, g.key, 'teachers')}
         ${miniDonut('🛡 الإداريون والوكلاء والموجهون', g.admins, g.key, 'admins')}
       </div>`;
@@ -6262,7 +6262,7 @@ function showTodayAttendance(){
   document.body.appendChild(overlay);
 }
 
-/* ==== عرض تقرير حضور المعلمين والإداريين اليوم (مثل حضور الطلاب) ==== */
+/* ==== عرض تقرير حضور المعلمين والإداريين اليوم (مثل حضور الطالبات) ==== */
 function showTeacherTodayAttendance(){
   const d = loadDB();
   const todayKey = localDateKey(new Date());
@@ -6312,8 +6312,8 @@ function showTeacherTodayAttendance(){
    - تأخر طالبات متكرر = 5 مرات تأخّر فأكثر خلال الشهر (سجل الحضور status LATE).
    - غياب المعلمات = أكثر من 3 أيام غياب في السنة الدراسية (teacher.absences).
      ولم يكن موجودًا في الأصل، فلم يرَ أحدُ متابعَي لوحة التحليلات غياب
-     معلمةٍ تجاوز 3 أيام مع بقاء كل مؤشرات الطلاب سليمة — وعتبة المؤشر
-     غير عتبة الطلاب (3 لا 5)، وأفقه امتداد السنة لا آخر 30 يومًا.
+     معلمةٍ تجاوز 3 أيام مع بقاء كل مؤشرات الطالبات سليمة — وعتبة المؤشر
+     غير عتبة الطالبات (3 لا 5)، وأفقه امتداد السنة لا آخر 30 يومًا.
    الأسس كلها سجلات الحضور/الحضور الفعلية، فتبقى الأرقام مطابقة لما في باقي اللوحة. */
 const __insightAbsOpts = { windowDays:30, daysThreshold:5, runThreshold:5 };
 const __insightTransfersThreshold = 3;
@@ -6914,7 +6914,7 @@ function setStudentWaConsent(studentId, val, opts){
   __waApplyConsentLocally(ids, !!val); // تفاؤلي: يظهر الأثر فوراً
   if(!o.silent) renderApp();
   if(__serverEnabled() && schoolNow){
-    // الموافقة محفوظة محلياً وتُرفع ضمن قسم الطلاب عبر __syncSchedule؛ ونتيجة
+    // الموافقة محفوظة محلياً وتُرفع ضمن قسم الطالبات عبر __syncSchedule؛ ونتيجة
     // التوثيق المباشر تُبلَّغ صراحةً — كان فشل الـPOST يمرّ بصمت فتظن المديرة
     // أن التوثيق وصل. النجاح لا يُعلَن هنا بل برفع الدفعة نفسه (المراقب أدناه).
     __saveGuardWatch(schoolNow, 'consent', __saveGuardOutcome);
@@ -7376,7 +7376,7 @@ const EDU_LINK_CAMPUSES = ['GIRLS', 'BOYS'];
 const EDU_CATS = [
   { id:'systems', icon:'🏛️', name:'الأنظمة التعليمية' },
   { id:'staff',   icon:'🧑‍🏫', name:'خدمات المعلمين والإدارة' },
-  { id:'family',  icon:'👨‍👩‍👧', name:'خدمات الطلاب وأولياء الأمور' }
+  { id:'family',  icon:'👨‍👩‍👧', name:'خدمات الطالبات وأولياء الأمور' }
 ];
 const EDU_LINKS_DEFAULT = [
   { id:'noor',      cat:'systems', icon:'🌟', name:'نظام نور',                     url:'https://noor.moe.gov.sa/',                                                         desc:'نظام إدارة التعليم: النتائج والغياب والخدمات الأكاديمية.' },
@@ -7388,7 +7388,7 @@ const EDU_LINKS_DEFAULT = [
   { id:'fares',     cat:'staff',   icon:'🗂️', name:'نظام فارس',                   url:'https://sshr.moe.gov.sa/OA_HTML/AppsLocalLogin.jsp',                               desc:'الخدمات الإدارية والمالية لمنسوبي التعليم.' },
   { id:'etimad',    cat:'staff',   icon:'💳', name:'منصة اعتماد',                 url:'https://login.etimad.sa/',                                                         desc:'المنافسات والمشتريات والخدمات المالية الحكومية.' },
   { id:'abroad',    cat:'staff',   icon:'🌍', name:'المدارس السعودية في الخارج',  url:'https://www.moe.gov.sa/ar/education/ResidentsAndvisitors/pages/schoolsabroad.aspx', desc:'معلومات وخدمات المدارس السعودية في الخارج.' },
-  { id:'parents',   cat:'family',  icon:'👨‍👩‍👧', name:'بوابة خدمات الطلاب وأولياء الأمور', url:'https://edugate.moe.gov.sa/', desc:'استعلام الطلاب وأولياء الأمور عن الخدمات والمتابعة.' }
+  { id:'parents',   cat:'family',  icon:'👨‍👩‍👧', name:'بوابة خدمات الطالبات وأولياء الأمور', url:'https://edugate.moe.gov.sa/', desc:'استعلام الطالبات وأولياء الأمور عن الخدمات والمتابعة.' }
 ];
 let __eduLinksCache = null;   // آخر قائمة معروفة (خادم أو مرآة)
 let __eduDraft = null;        // نسخة المدير قيد التحرير (غير محفوظة)
@@ -7990,7 +7990,7 @@ function renderCharts(d){
   </div>`;
 }
 
-/* ============ الطلاب ============ */
+/* ============ الطالبات ============ */
 // مصدر موحد لعناصر النقاط (ملاحظات + حضور) مع منع الازدواج:
 // إذا سُجّل غياب/تأخر في الحضور فتُهمل الملاحظة اليدوية لنفس اليوم حتى لا تُخصم مرتين
 const UNDONE_DEDUCTION = -4;
@@ -8161,7 +8161,7 @@ function studentPointsSplit(){
   });
   return m;
 }
-/* ============ 🏆 رائد نبراس — تكريم الطلاب الأكثر تفاعلاً أسبوعيًا ============ */
+/* ============ 🏆 رائد نبراس — تكريم الطالبات الأكثر تفاعلاً أسبوعيًا ============ */
 // عدد المكرمين أسبوعياً — قابلة للتعديل من هنا
 const NIBRAS_TOP = 9;
 // يوم بداية الأسبوع المدرسي (0=الأحد … 6=السبت) — الاثنين افتراضياً
@@ -8311,7 +8311,7 @@ function renderStudents(){
 
   return `
   <div class="header-row">
-    <h1 class="page-title">${tl('الطلاب')}</h1>
+    <h1 class="page-title">${tl('الطالبات')}</h1>
     <div class="btn-group">
       ${(canManage || canEditGuardianPhone(user)) ? `<button class="btn-secondary" onclick="downloadStudentTemplate()">⬇ تنزيل القالب</button>
       <label class="btn-secondary file-btn">📥 استيراد Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importStudents(event)"/></label>` : ''}
@@ -8321,7 +8321,7 @@ function renderStudents(){
   </div>
   <div id="studentForm" class="card form-grid-3" style="display:none">
     <input id="sFullName" class="input" placeholder="الاسم الكامل" data-tip="أدخل الاسم الكامل للطالب كما سيظهر في كشوف الحضور والتقارير" />
-    <input id="sStudentNo" class="input" placeholder="الرقم الأكاديمي" data-tip="رقم قيد الطالب أو رقمه الأكاديمي — يُستخدم للبحث في القائمة والتفريق بين الطلاب" />
+    <input id="sStudentNo" class="input" placeholder="الرقم الأكاديمي" data-tip="رقم قيد الطالب أو رقمه الأكاديمي — يُستخدم للبحث في القائمة والتفريق بين الطالبات" />
     <select id="sClassId" class="input" data-tip="اختر الفصل الذي سينضم إليه الطالب، أو اتركه بدون فصل ليُسند لاحقًا"><option value="">بدون فصل</option>${classes.map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
     <input id="sGuardianPhone" class="input" placeholder="رقم ولي الأمر (جوال)" data-tip="رقم موبايل ولي أمر الطالبة" />
     ${__serverEnabled() ? '<input id="sUsername" class="input" placeholder="اسم المستخدم (يُولّد تلقائياً إن فُرغ)" data-tip="اسم المستخدم الذي سيدخل به الطالب — يمكن توليده تلقائياً من الاسم" />' : ''}
@@ -8370,7 +8370,7 @@ function renderStudents(){
   <div class="card mb" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
     <label style="display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px">🏫 ${tl('الفصل')}:
       <select class="input" style="width:auto;padding:6px 10px" onchange="setStudentsView(this.value)">
-        <option value="all" ${studentsView==='all'?'selected':''}>جميع الطلاب</option>
+        <option value="all" ${studentsView==='all'?'selected':''}>جميع الطالبات</option>
         ${(function(){ return getClassesSorted().map(c => `<option value="${c.id}" ${studentsView===c.id?'selected':''}>${escapeHtml(classLabel(c))}</option>`).join(''); })()}
       </select>
     </label>
@@ -8405,7 +8405,7 @@ function fillStudentSelect(classSelectId, studentSelectId){
   sel.innerHTML = '<option value="">اختر الطالب</option>' + students.map(s=>`<option value="${s.id}">${escapeHtml(s.fullName)} (${escapeHtml(s.studentNo)})</option>`).join('');
   sel.disabled = !classId;
 }
-/* السجلات متعددة الطلاب: studentIds مصفوفة + studentId أول طالب للتوافق مع النسخ السابقة */
+/* السجلات متعددة الطالبات: studentIds مصفوفة + studentId أول طالب للتوافق مع النسخ السابقة */
 function studentIdsOf(rec){
   return (rec && Array.isArray(rec.studentIds) && rec.studentIds.length) ? rec.studentIds : (rec && rec.studentId ? [rec.studentId] : []);
 }
@@ -8546,7 +8546,7 @@ async function deleteStudent(id){
   renderApp();
 }
 async function deleteAllStudents(){
-  if(!confirm('هل أنت متأكد من حذف جميع الطلاب نهائيًا؟')) return;
+  if(!confirm('هل أنت متأكد من حذف جميع الطالبات نهائيًا؟')) return;
   const d = loadDB();
   const ids = d.students.filter(s => s.active).map(s => s.id);
   if(ids.length && __serverEnabled()){
@@ -8564,7 +8564,7 @@ async function deleteAllStudents(){
 }
 function saveDBRaw(key, d){ localStorage.setItem(key, JSON.stringify(d)); }
 function loadDBRaw(key){ return JSON.parse(localStorage.getItem(key)) || seedDB(); }
-/* أُزيلت دوال نقل الطلاب/المعلمين بين القسمين (لا يوجد سوى قسم البنات) */
+/* أُزيلت دوال نقل الطالبات/المعلمين بين القسمين (لا يوجد سوى قسم البنات) */
 function downloadTeacherTemplate(){
   const ws = XLSX.utils.json_to_sheet([{ 'الاسم الكامل':'أحمد محمد', 'اسم المستخدم (اختياري)':'ahmed', 'البريد الإلكتروني':'ahmed@school.local', 'كلمة المرور (اختياري — محلي فقط)':'12345678' }]);
   const wb = XLSX.utils.book_new();
@@ -8818,7 +8818,7 @@ function renderAttendance(){
   <div class="card mb form-inline">
     <div>
       <label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفصل</label>
-      <select id="attClassId" class="input" style="min-width:240px" onchange="attendanceState.classId=this.value; attendanceState.draft={}; attendanceState.absenceType={}; attendanceState.sLateType={}; attendanceState.sLateMin={}; attendanceState.tDraft={}; attendanceState.tLateType={}; attendanceState.tLateMin={}; attendanceState.absencePrompted=false; rerenderAttendance();" data-tip="اختر من تريد تسجيل حضوره: (المعلمون) جميعهم مرة واحدة، أو (الكادر الإداري) المدير/الوكيل/الموجهة/المساعدة الإدارية/وكيلة الشؤون، أو فصل دراسي محدد من الطلاب">
+      <select id="attClassId" class="input" style="min-width:240px" onchange="attendanceState.classId=this.value; attendanceState.draft={}; attendanceState.absenceType={}; attendanceState.sLateType={}; attendanceState.sLateMin={}; attendanceState.tDraft={}; attendanceState.tLateType={}; attendanceState.tLateMin={}; attendanceState.absencePrompted=false; rerenderAttendance();" data-tip="اختر من تريد تسجيل حضوره: (المعلمون) جميعهم مرة واحدة، أو (الكادر الإداري) المدير/الوكيل/الموجهة/المساعدة الإدارية/وكيلة الشؤون، أو فصل دراسي محدد من الطالبات">
         ${canManageTeachers(currentUser()) ? `<option value="TEACHERS" ${attendanceState.classId==='TEACHERS'?'selected':''}>${teacherEmoji()} ${tl('المعلمون')}</option><option value="ADMIN_STAFF" ${attendanceState.classId==='ADMIN_STAFF'?'selected':''}>🗂 الكادر الإداري</option>` : ''}
         ${classes.map(c => `<option value="${c.id}" ${c.id===attendanceState.classId?'selected':''}>${escapeHtml(classLabel(c))}</option>`).join('')}
       </select>
@@ -9220,7 +9220,7 @@ function renderNotes(){
   </div>`}
   ${isStudent ? '' : `<div id="noteForm" class="card mb" style="display:none">
     <div class="form-grid-3">
-      <select id="nClassId" class="input" onchange="fillStudentMulti('nClassId','nStudentList','n')" data-tip="اختر الفصل الذي ينتمي إليه الطلاب أولًا لتظهر قائمة الطلاب"><option value="">اختر الفصل</option>${getClassesSorted().map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
+      <select id="nClassId" class="input" onchange="fillStudentMulti('nClassId','nStudentList','n')" data-tip="اختر الفصل الذي ينتمي إليه الطالبات أولًا لتظهر قائمة الطالبات"><option value="">اختر الفصل</option>${getClassesSorted().map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
       <div id="nStudentList" class="student-multi-box" data-tip="اختر طالبًا أو أكثر لتسجيل الملاحظة عليهم جميعًا"><div class="muted small" style="padding:4px 0">اختر الفصل أولًا</div></div>
       <div style="display:flex;gap:8px">
         <button type="button" id="nTypePos" class="toggle-btn active" style="flex:1" onclick="setNoteType('POSITIVE')">🟢 إيجابية</button>
@@ -9776,7 +9776,7 @@ function renderTransfers(){
   <div class="header-row"><h1 class="page-title">${isStudent ? 'تحويلاتي' : 'التحويلات'}</h1>${isStudent ? '' : '<button class="btn-primary" onclick="toggleEl(\'transferForm\')">+ تحويل طالب</button>'}</div>
   ${isStudent ? '' : `<div id="transferForm" class="card mb" style="display:none">
     <div class="form-grid-3">
-      <select id="tClassId" class="input" onchange="fillStudentMulti('tClassId','tStudentList','t')" data-tip="اختر الفصل الذي يدرس فيه الطلاب المطلوب تحويلهم"><option value="">اختر الفصل</option>${getClassesSorted().map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
+      <select id="tClassId" class="input" onchange="fillStudentMulti('tClassId','tStudentList','t')" data-tip="اختر الفصل الذي يدرس فيه الطالبات المطلوب تحويلهم"><option value="">اختر الفصل</option>${getClassesSorted().map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
       <div id="tStudentList" class="student-multi-box" data-tip="اختر طالبًا أو أكثر للتحويل دفعة واحدة — يُنشأ طلب واحد للجميع"><div class="muted small" style="padding:4px 0">اختر الفصل أولًا</div></div>
       <select id="tTarget" class="input" data-tip="إلى من يُرسَل طلب التحويل للمراجعة والاعتماد (الوكيل، الموجه الطلابي، أو المدير)">${Object.entries(targetLabels).map(([v,l])=>`<option value="${v}">إلى: ${targetLabel(v)}</option>`).join('')}</select>
     </div>
@@ -9891,7 +9891,7 @@ function notifyTransferReceivers(d, tr){
   const sNames = ids.map(id => { const s = studentById(id); return s ? s.fullName : 'طالب/طالبة'; });
   const sName = sNames.join('، ');
   const isGirls = getActiveSchool() === 'GIRLS';
-  const studentLabel = isGirls ? 'الطالبات' : 'الطلاب';
+  const studentLabel = isGirls ? 'الطالبات' : 'الطالبات';
   const text = `📨 تحويل ${studentLabel}: ${sName} — إلى: ${targetLabel(tr.target)} — السبب: ${tr.reason}`;
   d.users.filter(u => u.active && u.role === tr.target).forEach(r => {
     // منع التكرار: إن وُجدت رسالة لنفس التحويل ونفس الموجه إليه (أجهزة مكررة) لا نُضيف أخرى
@@ -10004,10 +10004,12 @@ function __stageClassId(gradeId){
 // لون مرحلة الفصل بهوية قسم البنات: ابتدائي وردي فاتح، متوسط وردي غامق، ثانوي بنفسجي، وغيرها بنفسجي فاتح
 function __classAccent(g){
   const n = String((g && g.name) || '');
-  if(n.indexOf('ثانوي') >= 0) return '#9d174d';
-  if(n.indexOf('متوسط') >= 0) return '#be185d';
-  if(n.indexOf('ابتدائي') >= 0) return '#db2777';
-  return '#a78bfa';
+  const s = (typeof stages !== 'undefined' ? stages.find(x => x.name === n) : null);
+  const order = s ? s.order : -1;
+  // لوحة متنوّعة (12 مرحلة + التمهيدي) — كل مرحلة لونها الخاص
+  const palette = ['#db2777','#be185d','#9d174d','#7c3aed','#6d28d9','#4f46e5','#4338ca','#2563eb','#1d4ed8','#0891b2','#0d9488','#059669','#ca8a04'];
+  if (order < 0) return '#a78bfa'; // التمهيدي
+  return palette[order % palette.length];
 }
 function renderClasses(){
   const d = loadDB();
@@ -10075,7 +10077,7 @@ function renderClasses(){
             <div class="ccard-grade">${g?escapeHtml(g.name):'—'}</div>
             <div class="ccard-name">${escapeHtml(c.name)}${c.capacity?` <span class="ccard-cap">(سعة ${c.capacity})</span>`:''}</div>
           </div>
-          <a href="javascript:void(0)" class="ccard-count" onclick="toggleEl('classStudents-${c.id}')" title="عرض الطلاب">${count}<span>طالبة</span></a>
+          <a href="javascript:void(0)" class="ccard-count" onclick="toggleEl('classStudents-${c.id}')" title="عرض الطالبات">${count}<span>طالبة</span></a>
         </div>
         <div class="ccard-teachers">${canAssign ? teacherAssign(c.id, c.teacherIds||[]) : `<span class="ccard-tlist">${teachersOf.length ? teachersOf.map(n=>escapeHtml(n)).join('، ') : '—'}</span>`}</div>
         <div id="classStudents-${c.id}" class="ccard-students" style="display:none">${studentsHtml}</div>
@@ -10095,7 +10097,7 @@ function renderClasses(){
   <div id="classForm" class="card mb form-grid-3" style="display:none">
     <select id="cGradeId" class="input" data-tip="اختر المرحلة الدراسية (الصف) التي يتبعها هذا الفصل"><option value="">اختر الصف</option>${grades.map(g=>`<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('')}</select>
     <input id="cName" class="input" placeholder="اسم الفصل (مثال: أ)" value="أ" data-tip="اسم الفصل داخل المرحلة — مثال: أ، ب، ج" />
-    <input id="cCapacity" type="number" class="input" placeholder="السعة (اختياري)" data-tip="الحد الأقصى لعدد الطلاب في الفصل (اختياري — يُترك فارغًا إذا لم تكن هناك سعة محددة)" />
+    <input id="cCapacity" type="number" class="input" placeholder="السعة (اختياري)" data-tip="الحد الأقصى لعدد الطالبات في الفصل (اختياري — يُترك فارغًا إذا لم تكن هناك سعة محددة)" />
     <button class="btn-primary" onclick="addClass()">حفظ</button>
   </div>
   <div class="class-grid">${cards}</div>`;
@@ -10115,7 +10117,7 @@ function addClass(){
 function deleteClass(id){
   const d = loadDB();
   const count = d.students.filter(s => s.active && s.classId === id).length;
-  if(count > 0){ alert('لا يمكن حذف فصل يحتوي على طلاب — انقل الطلاب أولًا'); return; }
+  if(count > 0){ alert('لا يمكن حذف فصل يحتوي على طلاب — انقل الطالبات أولًا'); return; }
   if(!confirm('هل تريد حذف هذا الفصل؟')) return;
   d.classes = d.classes.filter(c => c.id !== id);
   saveDB(d);
@@ -12214,7 +12216,7 @@ function renderAssignments(){
     </div>
     <div class="card table-card" style="overflow-x:auto">
       <table class="data-table">
-        <thead><tr><th>التكليف</th><th>المادة</th><th>النوع</th><th>التاريخ</th><th>حالة الطلاب</th><th>نسبة الإنجاز</th><th>إجراءات</th></tr></thead>
+        <thead><tr><th>التكليف</th><th>المادة</th><th>النوع</th><th>التاريخ</th><th>حالة الطالبات</th><th>نسبة الإنجاز</th><th>إجراءات</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -14080,7 +14082,7 @@ async function backupRestoreFromFile(input){
     if(obj && obj.GIRLS && obj.GIRLS.data && Array.isArray(obj.GIRLS.data.users)) schools.push('GIRLS');
     if(!schools.length){ el.textContent = '⚠️ الملف ليس نسخة احتياطية صحيحة (لا يحوي بيانات المستخدمين).'; return; }
     const names = 'البنات';
-    if(!confirm('سيُعاد كل شيء (بما فيه الفصول والطلاب والجدول والغياب) لقسم ' + names + ' من هذا الملف، وتُستبدل البيانات الحالية. متابعة؟')){ input.value=''; return; }
+    if(!confirm('سيُعاد كل شيء (بما فيه الفصول والطالبات والجدول والغياب) لقسم ' + names + ' من هذا الملف، وتُستبدل البيانات الحالية. متابعة؟')){ input.value=''; return; }
     if(!confirm('تأكيد أخير قبل الكتابة فوق البيانات الحالية — متابعة؟')){ input.value=''; return; }
     const done = [];
     for(const s of schools){
