@@ -10058,7 +10058,7 @@ function renderClasses(){
         </div>
         <button class="teacher-add-btn" onclick="addTeacherToClass('${classId}')" title="إضافة">+</button>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;max-height:72px;overflow-y:auto;overflow-x:hidden">
+      <div style="display:flex;flex-wrap:nowrap;gap:4px;margin-top:6px;overflow-x:auto;overflow-y:hidden;white-space:nowrap">
         ${currentIds.map(id => {
           const t = userById(id);
           return t ? `<span class="teacher-chip">${escapeHtml(t.name)}<a href="javascript:void(0)" onclick="removeTeacherFromClass('${classId}','${id}')" class="chip-remove" title="إزالة">✕</a></span>` : '';
