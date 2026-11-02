@@ -217,7 +217,8 @@ window.__nibrasBootErr = '';
 .tcard-name a { color:#be185d !important; }
 
 /* بطاقات الفصول: شبكة مضغوطة، لون كل بطاقة حسب مرحلتها (--acc) بهوية قسم البنات */
-.class-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; margin-top:4px; }
+.class-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; margin-top:4px; align-items:stretch; }
+.ccard { min-height:220px; height:100%; display:flex; flex-direction:column; }
 .ccard { background:linear-gradient(180deg,color-mix(in srgb, var(--acc,#db2777) 12%, #fff) 0%,color-mix(in srgb, var(--acc,#db2777) 4%, #fff) 70%); border:1px solid color-mix(in srgb, var(--acc,#db2777) 22%, #fce7f3); border-top:3px solid var(--acc,#db2777); border-radius:14px; padding:12px 14px; box-shadow:0 2px 10px rgba(190,24,93,.05); display:flex; flex-direction:column; gap:8px; min-width:0; }
 .ccard-head { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; min-width:0; }
 .ccard-titles { min-width:0; }
@@ -226,6 +227,8 @@ window.__nibrasBootErr = '';
 .ccard-cap { font-size:11px; font-weight:500; color:#9d7488; }
 .ccard-count { display:flex; flex-direction:column; align-items:center; min-width:52px; padding:4px 8px; border-radius:12px; background:#fff; color:var(--acc,#db2777); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--acc,#db2777) 35%, #fff); font-weight:800; font-size:16px; line-height:1.1; text-decoration:none; flex-shrink:0; }
 .ccard-count span { font-size:10px; font-weight:700; }
+.teacher-del-btn { width:34px; height:34px; border-radius:50%; border:1px solid #f43f5e; background:#fff; color:#f43f5e; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(244,63,94,.08); }
+.teacher-del-btn:hover { background:#fef2f2; }
 .ccard-teachers { min-width:0; }
 .ccard-tlist { font-size:12px; color:#6b4256; }
 .ccard-students { border-top:1px dashed #fbcfe8; padding-top:8px; }
@@ -10046,18 +10049,23 @@ function renderClasses(){
 
   const teacherOpts = d.users.filter(u => u.active && u.role === 'TEACHER').sort((a,b)=>a.name.localeCompare(b.name,'ar'));
   const teacherAssign = (classId, currentIds) => `
-    <div style="display:flex;flex-direction:column;gap:4px;max-width:280px">
-      <div style="display:flex;gap:4px">
-        <select id="tSel-${classId}" class="input" style="padding:4px 8px;font-size:12px;min-width:150px" data-tip="اختر معلمًا لإسناده لهذا الفصل — يظهر المعلم بعدها في شارات الفصل ويظهر الفصل في صفحة متابعة المعلم ضمن (الفصول المسندة)">
-          <option value="">اختر معلمًا...</option>
-          ${teacherOpts.filter(t => !currentIds.includes(t.id)).map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}
-        </select>
-        <button class="btn-secondary" style="padding:4px 10px;font-size:13px;flex-shrink:0" onclick="addTeacherToClass('${classId}')" title="إضافة">+</button>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div class="teacher-select-wrap">
+        <div class="teacher-select">
+          <span class="ts-icon">👤</span>
+          <select id="tSel-${classId}" style="border:none;background:transparent;flex:1;font-size:12.5px;color:#4a1d33;outline:none;cursor:pointer" data-tip="اختر معلمة لإسنادها لهذا الفصل">
+            <option value="">اختر معلمة...</option>
+            ${teacherOpts.filter(t => !currentIds.includes(t.id)).map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}
+          </select>
+          <span style="color:#9d7488;font-size:12px">▾</span>
+        </div>
+        <button class="teacher-add-btn" onclick="addTeacherToClass('${classId}')" title="إضافة">+</button>
+        ${canManage ? `<button class="teacher-del-btn" onclick="deleteClass('${classId}')" title="حذف الفصل">🗑</button>` : ''}
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px">
+      <div style="display:flex;flex-wrap:wrap;gap:4px;max-height:72px;overflow-y:auto;overflow-x:hidden">
         ${currentIds.map(id => {
           const t = userById(id);
-          return t ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#dbeafe;border:1px solid #93c5fd;padding:2px 8px;border-radius:999px;font-size:12px">${escapeHtml(t.name)}<a href="javascript:void(0)" onclick="removeTeacherFromClass('${classId}','${id}')" style="color:#b91c1c;font-weight:700;text-decoration:none" title="إزالة">✕</a></span>` : '';
+          return t ? `<span class="teacher-chip">${escapeHtml(t.name)}<a href="javascript:void(0)" onclick="removeTeacherFromClass('${classId}','${id}')" class="chip-remove" title="إزالة">✕</a></span>` : '';
         }).join('')}
       </div>
     </div>`;
@@ -10081,7 +10089,6 @@ function renderClasses(){
         </div>
         <div class="ccard-teachers">${canAssign ? teacherAssign(c.id, c.teacherIds||[]) : `<span class="ccard-tlist">${teachersOf.length ? teachersOf.map(n=>escapeHtml(n)).join('، ') : '—'}</span>`}</div>
         <div id="classStudents-${c.id}" class="ccard-students" style="display:none">${studentsHtml}</div>
-        ${isAdmin ? `<div class="ccard-actions"><button class="del-btn" onclick="deleteClass('${c.id}')">🗑 حذف</button></div>` : ''}
       </div>`;
     }).join('');
 
