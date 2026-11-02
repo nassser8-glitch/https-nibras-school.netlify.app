@@ -218,7 +218,8 @@ window.__nibrasBootErr = '';
 
 /* بطاقات الفصول: شبكة مضغوطة، لون كل بطاقة حسب مرحلتها (--acc) بهوية قسم البنات */
 .class-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; margin-top:4px; }
-.ccard { background:linear-gradient(180deg,color-mix(in srgb, var(--acc,#db2777) 12%, #fff) 0%,color-mix(in srgb, var(--acc,#db2777) 4%, #fff) 70%); border:1px solid color-mix(in srgb, var(--acc,#db2777) 22%, #fce7f3); border-top:3px solid var(--acc,#db2777); border-radius:14px; padding:12px 14px; box-shadow:0 2px 10px rgba(190,24,93,.05); display:flex; flex-direction:column; gap:8px; min-width:0; }
+.ccard { background:linear-gradient(180deg,#fff 0%,#fff7fb 100%); border:1px solid var(--border-color,#fce7f3); border-top:3px solid var(--acc,#db2777); border-radius:14px; padding:12px 14px; box-shadow:0 2px 12px rgba(190,24,93,.06); display:flex; flex-direction:column; gap:8px; min-width:0; transition:transform .2s,box-shadow .2s; }
+.ccard:hover { transform:translateY(-3px); box-shadow:0 6px 18px rgba(190,24,93,.12); }
 .ccard-head { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; min-width:0; }
 .ccard-titles { min-width:0; }
 .ccard-grade { display:inline-block; font-size:11px; font-weight:700; color:#fff; background:var(--acc,#db2777); border-radius:999px; padding:2px 10px; }
