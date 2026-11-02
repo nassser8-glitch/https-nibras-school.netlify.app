@@ -10046,22 +10046,18 @@ function renderClasses(){
 
   const teacherOpts = d.users.filter(u => u.active && u.role === 'TEACHER').sort((a,b)=>a.name.localeCompare(b.name,'ar'));
   const teacherAssign = (classId, currentIds) => `
-    <div style="display:flex;flex-direction:column;gap:4px">
-      <div class="teacher-select-wrap">
-        <div class="teacher-select">
-          <span class="ts-icon">👤</span>
-          <select id="tSel-${classId}" style="border:none;background:transparent;flex:1;font-size:12.5px;color:#4a1d33;outline:none;cursor:pointer" data-tip="اختر معلمة لإسنادها لهذا الفصل">
-            <option value="">اختر معلمة...</option>
-            ${teacherOpts.filter(t => !currentIds.includes(t.id)).map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}
-          </select>
-          <span style="color:#9d7488;font-size:12px">▾</span>
-        </div>
-        <button class="teacher-add-btn" onclick="addTeacherToClass('${classId}')" title="إضافة">+</button>
+    <div style="display:flex;flex-direction:column;gap:4px;max-width:280px">
+      <div style="display:flex;gap:4px">
+        <select id="tSel-${classId}" class="input" style="padding:4px 8px;font-size:12px;min-width:150px" data-tip="اختر معلمًا لإسناده لهذا الفصل — يظهر المعلم بعدها في شارات الفصل ويظهر الفصل في صفحة متابعة المعلم ضمن (الفصول المسندة)">
+          <option value="">اختر معلمًا...</option>
+          ${teacherOpts.filter(t => !currentIds.includes(t.id)).map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}
+        </select>
+        <button class="btn-secondary" style="padding:4px 10px;font-size:13px;flex-shrink:0" onclick="addTeacherToClass('${classId}')" title="إضافة">+</button>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;max-height:72px;overflow-y:auto;overflow-x:hidden">
+      <div style="display:flex;flex-wrap:wrap;gap:4px">
         ${currentIds.map(id => {
           const t = userById(id);
-          return t ? `<span class="teacher-chip">${escapeHtml(t.name)}<a href="javascript:void(0)" onclick="removeTeacherFromClass('${classId}','${id}')" class="chip-remove" title="إزالة">✕</a></span>` : '';
+          return t ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#dbeafe;border:1px solid #93c5fd;padding:2px 8px;border-radius:999px;font-size:12px">${escapeHtml(t.name)}<a href="javascript:void(0)" onclick="removeTeacherFromClass('${classId}','${id}')" style="color:#b91c1c;font-weight:700;text-decoration:none" title="إزالة">✕</a></span>` : '';
         }).join('')}
       </div>
     </div>`;
@@ -10079,7 +10075,7 @@ function renderClasses(){
         <div class="ccard-head">
           <div class="ccard-titles">
             <div class="ccard-grade">${g?escapeHtml(g.name):'—'}</div>
-            <div class="ccard-name">${c.capacity?`<span class="ccard-cap">سعة ${c.capacity}</span>`:''}</div>
+            <div class="ccard-name">${escapeHtml(c.name)}${c.capacity?` <span class="ccard-cap">(سعة ${c.capacity})</span>`:''}</div>
           </div>
           <a href="javascript:void(0)" class="ccard-count" onclick="toggleEl('classStudents-${c.id}')" title="عرض الطالبات">${count}<span>طالبة</span></a>
         </div>
