@@ -10075,7 +10075,7 @@ function renderClasses(){
         <div class="ccard-head">
           <div class="ccard-titles">
             <div class="ccard-grade">${g?escapeHtml(g.name):'—'}</div>
-            <div class="ccard-name">${escapeHtml(c.name)}${c.capacity?` <span class="ccard-cap">(سعة ${c.capacity})</span>`:''}</div>
+            <div class="ccard-name">${c.capacity?`<span class="ccard-cap">سعة ${c.capacity}</span>`:''}</div>
           </div>
           <a href="javascript:void(0)" class="ccard-count" onclick="toggleEl('classStudents-${c.id}')" title="عرض الطالبات">${count}<span>طالبة</span></a>
         </div>
