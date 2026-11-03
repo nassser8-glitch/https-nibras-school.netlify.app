@@ -262,6 +262,10 @@ window.__nibrasBootErr = '';
 .cls-stat-warn b { color:#b45309; }
 .ccard-tchips { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
 .ccard-tchips > span { min-width:0; word-break:break-word; }
+.class-grid .ccard-tchips { padding:8px; border-radius:12px; background:linear-gradient(120deg,#fbcfe8,#ddd6fe,#a7f3d0,#fde68a,#fbcfe8); background-size:300% 300%; animation:tchipWave 9s ease-in-out infinite; }
+@keyframes tchipWave { 0% { background-position:0% 50%; } 50% { background-position:100% 50%; } 100% { background-position:0% 50%; } }
+.class-grid .ccard-teachers .ccard-tchips > span { background:rgba(255,255,255,.85) !important; border-color:rgba(255,255,255,.95) !important; color:#1d4ed8 !important; font-weight:700; }
+@media (prefers-reduced-motion: reduce) { .class-grid .ccard-tchips { animation:none; } }
 .ccard-tchip { display:block; background:#fdf2f8; border:1px solid #fbcfe8; color:#831843; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:600; text-align:center; line-height:1.4; }
 .class-grid > .ccard:not(.ccard-empty):nth-child(4n+1) { background:linear-gradient(135deg,#ffffff 0%,#fdf2f8 100%); border-inline-start-color:#db2777; }
 .class-grid > .ccard:not(.ccard-empty):nth-child(4n+2) { background:linear-gradient(135deg,#ffffff 0%,#f5f3ff 100%); border-inline-start-color:#8b5cf6; }
