@@ -247,15 +247,15 @@ window.__nibrasBootErr = '';
 .ccard-teachers span[style*="#dbeafe"] { background:#fdf2f8 !important; border-color:#fbcfe8 !important; color:#831843 !important; }
 .cls-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-top:6px; }
 .cls-page { position:relative; isolation:isolate; margin-bottom:8px; padding:18px 20px 22px; border:1px solid #e8e1d3; border-radius:18px; background-color:#fdfbf6; background-image:
-  radial-gradient(55% 45% at 0% 0%, rgba(251,207,232,.38), transparent 70%),
-  radial-gradient(50% 42% at 100% 100%, rgba(167,243,208,.30), transparent 72%),
-  radial-gradient(42% 38% at 100% 0%, rgba(199,210,254,.30), transparent 70%),
-  radial-gradient(40% 36% at 0% 100%, rgba(254,240,138,.22), transparent 72%),
-  linear-gradient(to left, transparent 0 58px, rgba(248,113,113,.28) 58px 59px, transparent 59px),
-  repeating-linear-gradient(180deg, transparent 0 31px, rgba(147,197,253,.22) 31px 32px);
+  radial-gradient(55% 45% at 0% 0%, rgba(251,207,232,.16), transparent 70%),
+  radial-gradient(50% 42% at 100% 100%, rgba(167,243,208,.13), transparent 72%),
+  radial-gradient(42% 38% at 100% 0%, rgba(199,210,254,.13), transparent 70%),
+  radial-gradient(40% 36% at 0% 100%, rgba(254,240,138,.10), transparent 72%),
+  linear-gradient(to left, transparent 0 58px, rgba(248,113,113,.12) 58px 59px, transparent 59px),
+  repeating-linear-gradient(180deg, transparent 0 31px, rgba(147,197,253,.10) 31px 32px);
   box-shadow:0 8px 28px -18px rgba(92,64,31,.25); }
 .cls-page .header-row { border-bottom:1px dashed #d8cfbd; padding-bottom:12px; margin-bottom:14px; }
-.cls-page .cls-stat, .cls-page .ccard, .cls-page #classForm { position:relative; z-index:1; }
+.cls-page .cls-stat, .cls-page .ccard, .cls-page .tcard, .cls-page #classForm { position:relative; z-index:1; }
 .cls-stat { position:relative; overflow:hidden; border:1px solid #fce7f3; border-radius:18px; padding:14px 16px 14px 18px; display:flex; flex-direction:column; gap:2px; box-shadow:0 4px 16px rgba(190,24,93,.07); transition:transform .2s, box-shadow .2s; }
 .cls-stat:hover { transform:translateY(-2px); box-shadow:0 10px 24px rgba(190,24,93,.12); }
 .cls-stat em { position:absolute; top:10px; inset-inline-end:12px; font-style:normal; font-size:22px; opacity:.9; }
@@ -10269,6 +10269,7 @@ function renderUsers(){
   window.__teacherMsg = null;
 
   return `
+  <div class="cls-page">
   <div class="header-row"><h1 class="page-title">${tl('المعلمون')}</h1>
     <div class="btn-group">
       <button class="btn-secondary" onclick="downloadTeacherTemplate()">⬇ تنزيل القالب</button>
@@ -10288,7 +10289,8 @@ function renderUsers(){
     <button class="btn-primary" onclick="addUser()">حفظ</button>
   </div>
   <div id="userErr"></div>
-  <div class="teacher-grid">${cards}</div>`;
+  <div class="teacher-grid">${cards}</div>
+  </div>`;
 }
 function renderAdmins(){
   const cur = currentUser();
