@@ -236,6 +236,12 @@ window.__nibrasBootErr = '';
 .ccard-actions .del-btn { background:none; border:none; box-shadow:none; color:#b91c1c; font-size:12px; padding:2px 6px; opacity:.75; }
 .ccard-actions .del-btn:hover { opacity:1; background:#fef2f2; }
 .ccard-teachers span[style*="#dbeafe"] { background:#fdf2f8 !important; border-color:#fbcfe8 !important; color:#831843 !important; }
+.cls-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-top:6px; }
+.cls-stat { background:#fff; border:1px solid #fce7f3; border-radius:16px; padding:12px 16px; display:flex; flex-direction:column; gap:2px; box-shadow:0 2px 10px rgba(190,24,93,.05); }
+.cls-stat b { font-size:24px; font-weight:800; color:#be185d; line-height:1.2; }
+.cls-stat span { font-size:12px; font-weight:700; color:#9d7488; }
+.cls-stat-warn { background:#fffbeb; border-color:#fde68a; }
+.cls-stat-warn b { color:#b45309; }
 
   /* بطاقات مفكرتي الشخصية */
   .nb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
@@ -10064,6 +10070,8 @@ function renderClasses(){
     </div>`;
 
   const ptsMapClass = studentPointsMap();
+  const totalStudents = d.students.filter(s => s.active && classes.some(c => c.id === s.classId)).length;
+  const noTeacherCount = classes.filter(c => !(c.teacherIds||[]).length).length;
   const cards = classes.length === 0 ? '<div class="muted" style="padding:24px;text-align:center">لا توجد فصول بعد — استخدم «+ إضافة فصل» أو زر الهيكل الافتراضي</div>' :
     classes.map(c => {
       const g = gradeById(c.gradeId);
@@ -10080,7 +10088,7 @@ function renderClasses(){
           </div>
           <a href="javascript:void(0)" class="ccard-count" onclick="toggleEl('classStudents-${c.id}')" title="عرض الطالبات">${count}<span>طالبة</span></a>
         </div>
-        <div class="ccard-teachers">${canAssign ? teacherAssign(c.id, c.teacherIds||[]) : `<span class="ccard-tlist">${teachersOf.length ? teachersOf.map(n=>escapeHtml(n)).join('، ') : '—'}</span>`}</div>
+        <div class="ccard-teachers">${canAssign ? teacherAssign(c.id, c.teacherIds||[]) : `<span class="ccard-tlist">${teachersOf.length ? teachersOf.map(n=>escapeHtml(n)).join('، ') : 'لم يُسند معلم بعد'}</span>`}</div>
         <div id="classStudents-${c.id}" class="ccard-students" style="display:none">${studentsHtml}</div>
         ${isAdmin ? `<div class="ccard-actions"><button class="del-btn" onclick="deleteClass('${c.id}')">🗑 حذف</button></div>` : ''}
       </div>`;
@@ -10100,6 +10108,12 @@ function renderClasses(){
     <input id="cName" class="input" placeholder="اسم الفصل (مثال: أ)" value="أ" data-tip="اسم الفصل داخل المرحلة — مثال: أ، ب، ج" />
     <input id="cCapacity" type="number" class="input" placeholder="السعة (اختياري)" data-tip="الحد الأقصى لعدد الطالبات في الفصل (اختياري — يُترك فارغًا إذا لم تكن هناك سعة محددة)" />
     <button class="btn-primary" onclick="addClass()">حفظ</button>
+  </div>
+  <div class="cls-stats">
+    <div class="cls-stat"><b>${classes.length}</b><span>إجمالي الفصول</span></div>
+    <div class="cls-stat"><b>${totalStudents}</b><span>إجمالي الطالبات</span></div>
+    <div class="cls-stat"><b>${classes.length - noTeacherCount}</b><span>فصول لها معلمة</span></div>
+    <div class="cls-stat${noTeacherCount ? ' cls-stat-warn' : ''}"><b>${noTeacherCount}</b><span>فصول بدون معلمة</span></div>
   </div>
   <div class="class-grid">${cards}</div>`;
 }
