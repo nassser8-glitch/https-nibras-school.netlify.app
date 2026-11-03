@@ -215,6 +215,15 @@ window.__nibrasBootErr = '';
 .tcard-label { font-weight:700; color:var(--primary,#be185d); }
 .tcard-actions { display:flex; flex-wrap:wrap; gap:6px; }
 .tcard-name a { color:#be185d !important; }
+.teacher-grid > .tcard { border:1px solid #fce7f3; border-inline-start:4px solid #db2777; background:linear-gradient(135deg,#ffffff 0%,#fdf2f8 100%); box-shadow:0 4px 16px rgba(190,24,93,.07); transition:transform .2s, box-shadow .2s; }
+.teacher-grid > .tcard:hover { transform:translateY(-3px); box-shadow:0 10px 24px rgba(190,24,93,.12); }
+.teacher-grid > .tcard:nth-child(4n+2) { background:linear-gradient(135deg,#ffffff 0%,#f5f3ff 100%); border-inline-start-color:#8b5cf6; }
+.teacher-grid > .tcard:nth-child(4n+3) { background:linear-gradient(135deg,#ffffff 0%,#ecfdf5 100%); border-inline-start-color:#10b981; }
+.teacher-grid > .tcard:nth-child(4n+4) { background:linear-gradient(135deg,#ffffff 0%,#fffbeb 100%); border-inline-start-color:#f59e0b; }
+.teacher-grid .tcard-name a { color:#1d4ed8 !important; font-weight:800; }
+.teacher-grid .tcard-classes { padding:8px 10px; border-radius:12px; background:linear-gradient(120deg,rgba(251,207,232,.28),rgba(221,214,254,.28),rgba(167,243,208,.28),rgba(253,230,138,.28),rgba(251,207,232,.28)); background-size:300% 300%; animation:tchipWave 9s ease-in-out infinite; color:#1d4ed8; }
+.teacher-grid .tcard-classes .tcard-label { color:#1d4ed8; }
+@media (prefers-reduced-motion: reduce) { .teacher-grid .tcard-classes { animation:none; } .teacher-grid > .tcard { transition:none; } }
 
 /* بطاقات الفصول: شبكة مضغوطة، لون كل بطاقة حسب مرحلتها (--acc) بهوية قسم البنات */
 .class-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; margin-top:6px; align-items:stretch; }
