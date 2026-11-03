@@ -237,11 +237,25 @@ window.__nibrasBootErr = '';
 .ccard-actions .del-btn:hover { opacity:1; background:#fef2f2; }
 .ccard-teachers span[style*="#dbeafe"] { background:#fdf2f8 !important; border-color:#fbcfe8 !important; color:#831843 !important; }
 .cls-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-top:6px; }
-.cls-stat { background:#fff; border:1px solid #fce7f3; border-radius:16px; padding:12px 16px; display:flex; flex-direction:column; gap:2px; box-shadow:0 2px 10px rgba(190,24,93,.05); }
-.cls-stat b { font-size:24px; font-weight:800; color:#be185d; line-height:1.2; }
-.cls-stat span { font-size:12px; font-weight:700; color:#9d7488; }
-.cls-stat-warn { background:#fffbeb; border-color:#fde68a; }
+.cls-page { position:relative; }
+#page:has(> .cls-page) { position:relative; isolation:isolate; }
+.cls-page::before { content:''; position:absolute; inset:-24px -16px auto; height:360px; z-index:-1; pointer-events:none; background:radial-gradient(45% 60% at 12% 18%, rgba(244,114,182,.28), transparent 70%), radial-gradient(40% 55% at 88% 8%, rgba(167,139,250,.24), transparent 70%), radial-gradient(50% 50% at 60% 100%, rgba(251,191,36,.16), transparent 70%); animation:clsDrift 16s ease-in-out infinite alternate; }
+@keyframes clsDrift { from { transform:translate3d(0,0,0) scale(1); } to { transform:translate3d(0,18px,0) scale(1.04); } }
+.cls-page .page-title { background:linear-gradient(90deg,#9d174d 0%,#db2777 55%,#7c3aed 100%); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.cls-stat { position:relative; overflow:hidden; border:1px solid #fce7f3; border-radius:18px; padding:14px 16px 14px 18px; display:flex; flex-direction:column; gap:2px; box-shadow:0 4px 16px rgba(190,24,93,.07); transition:transform .2s, box-shadow .2s; }
+.cls-stat:hover { transform:translateY(-2px); box-shadow:0 10px 24px rgba(190,24,93,.12); }
+.cls-stat em { position:absolute; top:10px; inset-inline-end:12px; font-style:normal; font-size:22px; opacity:.9; }
+.cls-stat b { font-size:26px; font-weight:800; line-height:1.2; }
+.cls-stat span { font-size:12px; font-weight:700; color:#7b5068; }
+.cls-stat-pink { background:linear-gradient(135deg,#ffffff 0%,#fdf2f8 100%); border-inline-start:4px solid #db2777; }
+.cls-stat-pink b { color:#be185d; }
+.cls-stat-violet { background:linear-gradient(135deg,#ffffff 0%,#f5f3ff 100%); border-inline-start:4px solid #8b5cf6; }
+.cls-stat-violet b { color:#6d28d9; }
+.cls-stat-emerald { background:linear-gradient(135deg,#ffffff 0%,#ecfdf5 100%); border-inline-start:4px solid #10b981; }
+.cls-stat-emerald b { color:#047857; }
+.cls-stat-warn { background:linear-gradient(135deg,#ffffff 0%,#fffbeb 100%); border-inline-start:4px solid #f59e0b; }
 .cls-stat-warn b { color:#b45309; }
+@media (prefers-reduced-motion: reduce) { .cls-page::before { animation:none; } .cls-stat { transition:none; } }
 .ccard-tchips { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
 .ccard-tchips > span { min-width:0; word-break:break-word; }
 .ccard-tchip { display:block; background:#fdf2f8; border:1px solid #fbcfe8; color:#831843; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:600; text-align:center; line-height:1.4; }
@@ -10098,6 +10112,7 @@ function renderClasses(){
     }).join('');
 
   return `
+  <div class="cls-page">
   <div class="header-row">
     <h1 class="page-title">الفصول</h1>
     <div class="btn-group">
@@ -10113,12 +10128,13 @@ function renderClasses(){
     <button class="btn-primary" onclick="addClass()">حفظ</button>
   </div>
   <div class="cls-stats">
-    <div class="cls-stat"><b>${classes.length}</b><span>إجمالي الفصول</span></div>
-    <div class="cls-stat"><b>${totalStudents}</b><span>إجمالي الطالبات</span></div>
-    <div class="cls-stat"><b>${classes.length - noTeacherCount}</b><span>فصول لها معلمة</span></div>
-    <div class="cls-stat${noTeacherCount ? ' cls-stat-warn' : ''}"><b>${noTeacherCount}</b><span>فصول بدون معلمة</span></div>
+    <div class="cls-stat cls-stat-pink"><em>🏫</em><b>${classes.length}</b><span>إجمالي الفصول</span></div>
+    <div class="cls-stat cls-stat-violet"><em>👩‍🎓</em><b>${totalStudents}</b><span>إجمالي الطالبات</span></div>
+    <div class="cls-stat cls-stat-emerald"><em>✅</em><b>${classes.length - noTeacherCount}</b><span>فصول لها معلمة</span></div>
+    <div class="cls-stat cls-stat-warn"><em>⚠️</em><b>${noTeacherCount}</b><span>فصول بدون معلمة</span></div>
   </div>
-  <div class="class-grid">${cards}</div>`;
+  <div class="class-grid">${cards}</div>
+  </div>`;
 }
 function addClass(){
   const gradeId = document.getElementById('cGradeId').value;
