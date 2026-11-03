@@ -242,6 +242,9 @@ window.__nibrasBootErr = '';
 .cls-stat span { font-size:12px; font-weight:700; color:#9d7488; }
 .cls-stat-warn { background:#fffbeb; border-color:#fde68a; }
 .cls-stat-warn b { color:#b45309; }
+.ccard-tchips { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
+.ccard-tchips > span { min-width:0; word-break:break-word; }
+.ccard-tchip { display:block; background:#fdf2f8; border:1px solid #fbcfe8; color:#831843; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:600; text-align:center; line-height:1.4; }
 
   /* بطاقات مفكرتي الشخصية */
   .nb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
@@ -10061,7 +10064,7 @@ function renderClasses(){
         </select>
         <button class="btn-secondary" style="padding:4px 10px;font-size:13px;flex-shrink:0" onclick="addTeacherToClass('${classId}')" title="إضافة">+</button>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px">
+      <div class="ccard-tchips">
         ${currentIds.map(id => {
           const t = userById(id);
           return t ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#dbeafe;border:1px solid #93c5fd;padding:2px 8px;border-radius:999px;font-size:12px">${escapeHtml(t.name)}<a href="javascript:void(0)" onclick="removeTeacherFromClass('${classId}','${id}')" style="color:#b91c1c;font-weight:700;text-decoration:none" title="إزالة">✕</a></span>` : '';
@@ -10088,7 +10091,7 @@ function renderClasses(){
           </div>
           <a href="javascript:void(0)" class="ccard-count" onclick="toggleEl('classStudents-${c.id}')" title="عرض الطالبات">${count}<span>طالبة</span></a>
         </div>
-        <div class="ccard-teachers">${canAssign ? teacherAssign(c.id, c.teacherIds||[]) : `<span class="ccard-tlist">${teachersOf.length ? teachersOf.map(n=>escapeHtml(n)).join('، ') : 'لم يُسند معلم بعد'}</span>`}</div>
+        <div class="ccard-teachers">${canAssign ? teacherAssign(c.id, c.teacherIds||[]) : `${teachersOf.length ? `<div class="ccard-tchips">${teachersOf.map(n=>`<span class="ccard-tchip" title="${escapeHtml(n)}">${escapeHtml(n)}</span>`).join('')}</div>` : '<span class="ccard-tlist">لم يُسند معلم بعد</span>'}`}</div>
         <div id="classStudents-${c.id}" class="ccard-students" style="display:none">${studentsHtml}</div>
         ${isAdmin ? `<div class="ccard-actions"><button class="del-btn" onclick="deleteClass('${c.id}')">🗑 حذف</button></div>` : ''}
       </div>`;
