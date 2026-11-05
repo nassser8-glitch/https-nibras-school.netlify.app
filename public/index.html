@@ -10132,7 +10132,7 @@ function renderClasses(){
         </div>
         <div class="ccard-teachers">${canAssign ? teacherAssign(c.id, c.teacherIds||[]) : `${teachersOf.length ? `<div class="ccard-tchips">${teachersOf.map(n=>`<span class="ccard-tchip" title="${escapeHtml(n)}">${escapeHtml(n)}</span>`).join('')}</div>` : '<span class="ccard-tlist">لم يُسند معلم بعد</span>'}`}</div>
         <div id="classStudents-${c.id}" class="ccard-students" style="display:none">${studentsHtml}</div>
-        ${isAdmin ? `<div class="ccard-actions"><button class="del-btn" onclick="deleteClass('${c.id}')">🗑 حذف</button></div>` : ''}
+        ${isAdmin ? `<div class="ccard-actions"><button class="del-btn" onclick="viewClassSchedule('${c.id}')" title="عرض جدول حصص الفصل (أسبوع)">👁</button> <button class="del-btn" onclick="deleteClass('${c.id}')">🗑 حذف</button></div>` : ''}
       </div>`;
     }).join('');
 
@@ -10182,6 +10182,66 @@ function deleteClass(id){
   saveDB(d);
   renderApp();
 }
+let __lastClassScheduleHTML = '';
+function viewClassSchedule(classId){
+  const d = loadDB();
+  const c = d.classes.find(x => x.id === classId);
+  if(!c){ alert('الفصل غير موجود'); return; }
+  const g = gradeById(c.gradeId);
+  const sched = {};
+  TIMETABLE_DAYS.forEach(day => { sched[day.key] = {}; });
+  for (const tid of Object.keys(d.timetable || {})) {
+    const t = userById(tid);
+    const tname = t ? t.name : tid;
+    TIMETABLE_DAYS.forEach(day => {
+      const cells = ((d.timetable[tid] || {})[day.key]) || {};
+      for (const [p, cell] of Object.entries(cells)) {
+        if (cell && !cell._del && cell.classId === classId) {
+          sched[day.key][p] = { subject: cell.subject || '—', teacher: tname };
+        }
+      }
+    });
+  }
+  const dayColors = ['#eef6ff','#f0fdf4','#fefce8','#fdf2f8','#f5f3ff'];
+  const rows = TIMETABLE_PERIOD_NAMES.map((name, i) => {
+    const p = i + 1;
+    const rowBg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
+    const cells = TIMETABLE_DAYS.map((day, di) => {
+      const info = sched[day.key][p];
+      const cellBg = info ? dayColors[di] : rowBg;
+      return `<td style="padding:6px;text-align:center;font-size:12px;border:1px solid #e2e8f0;background:${cellBg};">${info ? escapeHtml(info.subject) + '<br><span class="muted small">' + escapeHtml(String(info.teacher).trim().split(/\s+/).filter(Boolean).slice(0,2).join(' ')) + '</span>' : '<span class="muted">—</span>'}</td>`;
+    }).join('');
+    return `<tr style="background:${rowBg};"><td style="padding:6px;font-weight:700;font-size:12px;border:1px solid #e2e8f0;background:#e2e8f0;">${name}</td>${cells}</tr>`;
+  }).join('');
+  const title = '🗓 جدول حصص ' + (g?g.name:'') + ' — ' + c.name + ' (أسبوع كامل)';
+  __lastClassScheduleHTML = '<h2 style="text-align:center;">' + escapeHtml(title) + '</h2><table><thead><tr><th>الحصة</th>' + TIMETABLE_DAYS.map(d=>'<th>'+d.label+'</th>').join('') + '</tr></thead><tbody>' + rows.replace(/style="[^"]*"/g,'') + '</tbody></table>';
+  const html = `<div class="modal-overlay" onclick="if(event.target===this) closeClassSchedule()">
+    <div class="modal-box" style="max-width:960px;width:96vw;">
+      <div class="modal-head"><h3>🎓 ${escapeHtml(title)} 📅</h3><div style="display:flex;gap:8px;"><button class="btn-secondary" style="padding:4px 10px;font-size:13px" onclick="printClassSchedule()">🖨 طباعة</button><button class="modal-close" onclick="closeClassSchedule()">✕</button></div></div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr><th style="padding:6px;border:1px solid #cbd5e1;background:#1e3a8a;color:#fff;">الحصة</th>${TIMETABLE_DAYS.map((d,di)=>`<th style="padding:6px;border:1px solid #cbd5e1;background:${['#2563eb','#0891b2','#059669','#d97706','#7c3aed'][di]};color:#fff;">${d.label}</th>`).join('')}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+  const old = document.querySelector('.modal-overlay'); if (old) old.remove();
+  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
+}
+function closeClassSchedule(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
+function printClassSchedule(){
+  if(!__lastClassScheduleHTML){ alert('لا يوجد جدول للطباعة'); return; }
+  const w = window.open('', '_blank', 'width=900,height=700');
+  if(!w){ alert('يرجى السماح بالنوافذ المنبثقة للطباعة'); return; }
+  w.document.write('<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>جدول حصص</title><style>body{font-family:Tahoma,Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #333;padding:6px;text-align:center;font-size:12px;} th{background:#eee;} @media print{ button{display:none;} }</style></head><body>');
+  w.document.write(__lastClassScheduleHTML);
+  w.document.write('</body></html>');
+  w.document.close();
+  w.focus();
+  setTimeout(() => { w.print(); }, 300);
+}
+
 function addTeacherToClass(classId){
   if(!canManageTeachers(currentUser())) return;
   const sel = document.getElementById('tSel-'+classId);
