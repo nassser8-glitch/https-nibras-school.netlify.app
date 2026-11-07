@@ -10205,8 +10205,8 @@ function viewClassSchedule(classId){
     if (!t) t = (d.users || []).find(u => String(u.username||'').toLowerCase() === String(tid).toLowerCase() || String(u.email||'').toLowerCase() === String(tid).toLowerCase());
     let tname = t ? (t.name || t.fullName || t.displayName || '') : '';
     if (!tname || !tname.trim()) {
-      if (cls && Array.isArray(cls.teacherIds)) {
-        for (const ctid of cls.teacherIds) {
+      if (c && Array.isArray(c.teacherIds)) {
+        for (const ctid of c.teacherIds) {
           const ct = (d.users || []).find(u => u.id === ctid);
           if (ct && (ct.name || ct.fullName)) { t = ct; tname = ct.name || ct.fullName || ''; break; }
         }
