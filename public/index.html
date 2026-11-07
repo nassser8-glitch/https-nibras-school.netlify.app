@@ -5906,13 +5906,7 @@ function renderDashboard(){
         ${groups.map((g,i) => `<button class="dash-tab ${i===0?'active':''}" data-act="${g.key}" onclick="switchActTab('${g.key}')">${g.school}</button>`).join('')}
       </div>
       ${groups.map(g => `<div class="act-pane" data-act="${g.key}" style="${g.key==='ALL'?'':'display:none'}">${actTab(g)}</div>`).join('')}`}
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
-        <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openSchoolCalendar()" title="التقويم الدراسي 1448-1449هـ">🗓️ التقويم الدراسي</button>
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEduLinks()" title="بوابة الروابط التعليمية">📚 روابط تعليمية</button>
-        <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://calendar.google.com" target="_blank" rel="noopener">📅 تقويم</a>
-        <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://www.islamicfinder.org" target="_blank" rel="noopener">🕌 مواقيت الصلاة</a>
-        <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://translate.google.com" target="_blank" rel="noopener">🌐 مترجم</a>
-      </div>
+
     </div>`;
   })();
 
