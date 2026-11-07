@@ -12140,6 +12140,7 @@ function renderTimetable(){
       return `<div class="header-row"><h1 class="page-title">🗓 جدولي</h1></div>
       <div class="card" style="background:#fef3c7"><p class="muted" style="margin:0">⚠️ أنت غير مسند لأي فصل بعد.</p></div>`;
     }
+    const __viewFullBtn = `<button class="btn-secondary" style="padding:4px 10px;font-size:13px" onclick="viewClassSchedule('${myClassId}')" title="عرض جدول فصلي (أسبوع كامل)">👁 جدول</button>`;
     const rows = TIMETABLE_PERIOD_NAMES.map((name, i) => {
       const p = i + 1;
       const cell = merged[p];
@@ -12161,7 +12162,10 @@ function renderTimetable(){
     return `
     <div class="header-row">
       <h1 class="page-title">🗓 جدولي — ${escapeHtml(clsLabel)}</h1>
-      <a href="#/" class="btn-secondary" style="text-decoration:none">← العودة</a>
+      <div style="display:flex;gap:8px;">
+        ${__viewFullBtn}
+        <a href="#/" class="btn-secondary" style="text-decoration:none">← العودة</a>
+      </div>
     </div>
     <div class="tt-tabs">${tabs}</div>
     <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px">${rows}</div>`;
