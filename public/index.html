@@ -10148,7 +10148,10 @@ function renderClasses(){
         </div>
         <div class="ccard-teachers">${canAssign ? teacherAssign(c.id, c.teacherIds||[]) : `${teachersOf.length ? `<div class="ccard-tchips">${teachersOf.map(n=>`<span class="ccard-tchip" title="${escapeHtml(n)}">${escapeHtml(n)}</span>`).join('')}</div>` : '<span class="ccard-tlist">لم يُسند معلم بعد</span>'}`}</div>
         <div id="classStudents-${c.id}" class="ccard-students" style="display:none">${studentsHtml}</div>
-        ${isAdmin ? `<div class="ccard-actions"><button class="del-btn" onclick="viewClassSchedule('${c.id}')" title="عرض جدول حصص الفصل">👁 جدول</button> <button class="del-btn" onclick="deleteClass('${c.id}')">🗑 حذف</button></div>` : ''}
+        <div class="ccard-actions">
+          <button class="del-btn" onclick="viewClassSchedule('${c.id}')" title="عرض جدول حصص الفصل">👁 جدول</button>
+          ${isAdmin ? `<button class="del-btn" onclick="deleteClass('${c.id}')">🗑 حذف</button>` : ''}
+        </div>
       </div>`;
     }).join('');
 
