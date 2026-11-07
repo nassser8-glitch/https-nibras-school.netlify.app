@@ -4281,7 +4281,7 @@ function renderLayout(user, hash){
     { title:'الإدارة', items:[
       { href:'#/students', key:'students', label:tl('الطالبات'), icon:'👥' },
       { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
-      { href:'#/supervision', key:'supervision', label:'🛡️ الإشراف اليومي', icon:'🛡️' },
+      { href:'#/supervision', key:'supervision', label:'الإشراف اليومي', icon:'🛡️' },
     ]},
     { title:'المتابعة', items:[
       { href:'#/attendance', key:'attendance', label:'الحضور والغياب', icon:'✓' },
@@ -4302,7 +4302,7 @@ function renderLayout(user, hash){
       (user.role === 'ADMIN' || user.role === 'AGENT') ? { href:'#/admins', key:'admins', label:'الإداريون', icon:'🛡' } : null,
       { href:'#/students', key:'students', label:tl('الطالبات'), icon:'👥' },
       { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
-      (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT') ? { href:'#/supervision', key:'supervision', label:'🛡️ الإشراف اليومي', icon:'🛡️' } : null,
+      (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT') ? { href:'#/supervision', key:'supervision', label:'الإشراف اليومي', icon:'🛡️' } : null,
     ]},
     { title:'المتابعة', items:[
       { href:'#/attendance', key:'attendance', label:'الحضور والغياب', icon:'✓' },
@@ -4315,7 +4315,7 @@ function renderLayout(user, hash){
       (user.role !== 'STUDENT') ? { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉', badge: user.role === 'AGENT' ? pendingPartRequests() : 0 } : null,
       { href:'#/memo', key:'memo', label:'المفكرة والتذكير', icon:'📒' },
       { href:'#/daily-msg', key:'daily-msg', label:'رسالة اليوم', icon:'📢' },
-      (user.role === 'ADMIN') ? { href:'#/thanks', key:'thanks', label:'🌸 بطاقة شكر', icon:'🌸' } : null,
+      (user.role === 'ADMIN') ? { href:'#/thanks', key:'thanks', label:'بطاقة شكر', icon:'🌸' } : null,
       { href:'#/maintenance', key:'maintenance', label:'الصيانة', icon:'🔧' },
       (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR') ? { href:'#/guide-msgs', key:'guide-msgs', label:'رسائل المعلمين', icon:'💬', badge: msgMonitorBadge(user) } : null,
     ]},
