@@ -10211,10 +10211,14 @@ function openSchoolCalendar(){
           <button class="modal-close" onclick="closeSchoolCalendar()">✕</button>
         </div>
       </div>
-      <div style="flex:1;overflow:auto;border-radius:8px;background:#f1f5f9;min-height:60vh;position:relative;">
-        <embed src="${pdfUrl}" type="application/pdf" style="width:100%;height:100%;min-height:60vh;border:none;" />
-        <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,.9);padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;color:#1e3a8a;box-shadow:0 2px 8px rgba(0,0,0,.1);white-space:nowrap;">
-          إذا لم يظهر PDF، <a href="${pdfUrl}" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:underline;">افتحه في تبويب جديد</a>.
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px 20px;background:#f1f5f9;border-radius:8px;min-height:30vh;">
+        <div style="font-size:48px;">🗓️</div>
+        <div style="font-size:16px;font-weight:700;color:#1e3a8a;">التقويم الدراسي 1448–1449هـ</div>
+        <div style="font-size:13px;color:#64748b;text-align:center;">الملف: تقويم إسلام آباد 1448هـ.pdf (3 صفحات)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:8px;">
+          <a class="btn-primary" style="text-decoration:none;padding:10px 20px;font-size:14px;" href="${pdfUrl}" target="_blank" rel="noopener">🔗 فتح</a>
+          <a class="btn-secondary" style="text-decoration:none;padding:10px 20px;font-size:14px;" href="${pdfUrl}" download>⬇️ تنزيل</a>
+          <button class="btn-secondary" style="padding:10px 20px;font-size:14px" onclick="printSchoolCalendar()">🖨 طباعة</button>
         </div>
       </div>
     </div>
