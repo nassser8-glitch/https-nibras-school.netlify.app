@@ -10211,9 +10211,12 @@ function openSchoolCalendar(){
           <button class="modal-close" onclick="closeSchoolCalendar()">✕</button>
         </div>
       </div>
-      <div style="flex:1;overflow:hidden;border-radius:8px;">
-        <iframe src="${pdfUrl}" style="width:100%;height:100%;border:none;" title="التقويم الدراسي"></iframe>
+      <div style="flex:1;overflow:auto;border-radius:8px;background:#f1f5f9;min-height:60vh;">
+        <iframe src="${pdfUrl}" style="width:100%;height:100%;min-height:60vh;border:none;" title="التقويم الدراسي"></iframe>
       </div>
+      <p class="muted small" style="margin-top:8px;text-align:center;">
+        إذا لم يظهر PDF، <a href="${pdfUrl}" target="_blank" rel="noopener" style="color:#2563eb;">افتحه في تبويب جديد</a>.
+      </p>
     </div>
   </div>`;
   const old = document.querySelector('.modal-overlay'); if (old) old.remove();
@@ -10221,9 +10224,12 @@ function openSchoolCalendar(){
 }
 function closeSchoolCalendar(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
 function printSchoolCalendar(){
-  const w = window.open('تقويم إسلام آباد 1448هـ.pdf', '_blank');
+  const iframe = document.querySelector('.modal-overlay iframe');
+  if (iframe && iframe.contentWindow) {
+    try { iframe.contentWindow.print(); return; } catch(e) { /* fallback */ }
+  }
+  const w = window.open('school-calendar-1448.pdf', '_blank');
   if(!w){ alert('يرجى السماح بالنوافذ المنبثقة'); return; }
-  setTimeout(() => { w.print(); }, 1000);
 }
 
 let __lastClassScheduleHTML = '';
