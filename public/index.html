@@ -5896,7 +5896,8 @@ function renderDashboard(){
       </div>
       ${groups.map(g => `<div class="act-pane" data-act="${g.key}" style="${g.key==='ALL'?'':'display:none'}">${actTab(g)}</div>`).join('')}`}
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
-        <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://www.moe.gov.sa" target="_blank" rel="noopener">📚 روابط تعليمية</a>
+        <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openSchoolCalendar()" title="التقويم الدراسي 1448-1449هـ">🗓️ التقويم الدراسي</button>
+      <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://www.moe.gov.sa" target="_blank" rel="noopener">📚 روابط تعليمية</a>
         <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://calendar.google.com" target="_blank" rel="noopener">📅 تقويم</a>
         <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://www.islamicfinder.org" target="_blank" rel="noopener">🕌 مواقيت الصلاة</a>
         <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://translate.google.com" target="_blank" rel="noopener">🌐 مترجم</a>
@@ -10167,6 +10168,7 @@ function renderClasses(){
   <div class="card mb" style="margin-top:12px;">
     <div style="font-weight:700;margin-bottom:8px;">🔗 روابط مفيدة</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openSchoolCalendar()" title="التقويم الدراسي 1448-1449هـ">🗓️ التقويم الدراسي</button>
       <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://www.moe.gov.sa" target="_blank" rel="noopener">📚 روابط تعليمية</a>
       <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://calendar.google.com" target="_blank" rel="noopener">📅 تقويم</a>
       <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://www.islamicfinder.org" target="_blank" rel="noopener">🕌 مواقيت الصلاة</a>
@@ -10196,6 +10198,34 @@ function deleteClass(id){
   saveDB(d);
   renderApp();
 }
+function openSchoolCalendar(){
+  const pdfUrl = 'تقويم إسلام آباد 1448هـ.pdf';
+  const html = `<div class="modal-overlay" onclick="if(event.target===this) closeSchoolCalendar()">
+    <div class="modal-box" style="max-width:96vw;width:96vw;height:90vh;display:flex;flex-direction:column;">
+      <div class="modal-head">
+        <h3>🗓️ التقويم الدراسي 1448–1449هـ</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <a class="btn-secondary" style="padding:4px 10px;font-size:13px;text-decoration:none;" href="${pdfUrl}" target="_blank" rel="noopener" title="فتح في تبويب جديد">🔗 فتح</a>
+          <a class="btn-secondary" style="padding:4px 10px;font-size:13px;text-decoration:none;" href="${pdfUrl}" download title="تنزيل PDF">⬇️ تنزيل</a>
+          <button class="btn-secondary" style="padding:4px 10px;font-size:13px" onclick="printSchoolCalendar()" title="طباعة">🖨 طباعة</button>
+          <button class="modal-close" onclick="closeSchoolCalendar()">✕</button>
+        </div>
+      </div>
+      <div style="flex:1;overflow:hidden;border-radius:8px;">
+        <iframe src="${pdfUrl}" style="width:100%;height:100%;border:none;" title="التقويم الدراسي"></iframe>
+      </div>
+    </div>
+  </div>`;
+  const old = document.querySelector('.modal-overlay'); if (old) old.remove();
+  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
+}
+function closeSchoolCalendar(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
+function printSchoolCalendar(){
+  const w = window.open('تقويم إسلام آباد 1448هـ.pdf', '_blank');
+  if(!w){ alert('يرجى السماح بالنوافذ المنبثقة'); return; }
+  setTimeout(() => { w.print(); }, 1000);
+}
+
 let __lastClassScheduleHTML = '';
 function viewClassSchedule(classId){
   const d = loadDB();
