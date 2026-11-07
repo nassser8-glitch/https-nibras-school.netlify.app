@@ -11394,12 +11394,12 @@ function renderSupervisionAdmin(){
   }).join('');
   const today = __supervisionToday;
   const todayRows = today && today.assigned ? today.assigned : [];
-  const todayBlock = `<div class="panel"><h3>🛡️ مشرفات اليوم – ${escapeHtml((SUPERVISION_DAYS.find(x=>x.dow===today?.dayOfWeek)||{}).label || 'لا يوجد إشراف')}</h3>
+  const todayBlock = `<div class="panel"><h3>🛡️ مشرفو اليوم – ${escapeHtml((SUPERVISION_DAYS.find(x=>x.dow===today?.dayOfWeek)||{}).label || 'لا يوجد إشراف')}</h3>
     ${todayRows.length ? todayRows.map(x => `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #eee;flex-wrap:wrap">${x.checkedInAt ? '🟢 باشرت الإشراف' : '🟡 لم تسجل المباشرة'} — <b>${escapeHtml(x.name || x.teacherId)}</b>${x.checkedInAt ? ` <span class="muted">${escapeHtml(x.checkedInAt)}</span>` : ''}
       ${canRecord ? (x.checkedInAt
         ? `<button type="button" class="btn-secondary" style="padding:2px 10px;font-size:12px;margin-inline-start:auto" onclick="__recordSupervision('${x.teacherId}',false)">إلغاء (لم تؤده)</button>`
         : `<button type="button" class="btn-primary" style="padding:2px 10px;font-size:12px;margin-inline-start:auto" onclick="__recordSupervision('${x.teacherId}',true)">أدت الإشراف</button>`) : ''}
-    </div>`).join('') : '<p class="muted">لا توجد مشرفات اليوم</p>'}</div>`;
+    </div>`).join('') : '<p class="muted">لا يوجد مشرفون اليوم</p>'}</div>`;
   const history = __supervisionHistory && __supervisionHistory.history;
    const historyBlock = '';
   return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">جدول أسبوعي ثابت يتكرر تلقائيًا من الاثنين إلى الجمعة.</p>${canEditSchedule ? '<button class="btn-primary" onclick="__saveSupervisionSchedule()">حفظ جدول الإشراف</button>' : ''}</section>${todayBlock}${days}${historyBlock}`;
