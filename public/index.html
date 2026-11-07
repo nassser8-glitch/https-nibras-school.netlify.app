@@ -6088,7 +6088,7 @@ function renderDashboard(){
       <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://calendar.google.com" target="_blank" rel="noopener">📅 تقويم</a>
       <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://www.islamicfinder.org" target="_blank" rel="noopener">🕌 مواقيت الصلاة</a>
       <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://translate.google.com" target="_blank" rel="noopener">🌐 مترجم</a>
-      ${isStudent ? `<button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="const _s=loadDB().students.find(x=>x.id===currentUser()?.id); if(_s && _s.classId) viewClassSchedule(_s.classId); else alert('غير مسند لفصل')" title="عرض جدول فصلي (أسبوع)">👁 جدول</button>` : ''}
+      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="const _s=loadDB().students.find(x=>x.id===currentUser()?.id); if(_s && _s.classId) viewClassSchedule(_s.classId); else alert('غير مسند لفصل')" title="عرض جدول فصلي (أسبوع)">👁 جدول</button>
     </div>
   </div>
   `;
