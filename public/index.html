@@ -11401,7 +11401,7 @@ function renderSupervisionAdmin(){
         : `<button type="button" class="btn-primary" style="padding:2px 10px;font-size:12px;margin-inline-start:auto" onclick="__recordSupervision('${x.teacherId}',true)">أدت الإشراف</button>`) : ''}
     </div>`).join('') : '<p class="muted">لا توجد مشرفات اليوم</p>'}</div>`;
   const history = __supervisionHistory && __supervisionHistory.history;
-  const historyBlock = history ? `<div class="panel"><h3>📜 سجل الإشراف</h3>${history.length ? history.map(x => `<div style="padding:7px 0;border-bottom:1px solid #eee">${escapeHtml(x.supervision_date || x.checkin_date || x.date || '')} — ${escapeHtml(x.name || x.teacher_id || '')} — ${x.checked_in_at || x.checkin_time ? '🟢 ' + escapeHtml(x.checked_in_at || x.checkin_time) : '🟡 لم تسجل المباشرة'}</div>`).join('') : '<p class="muted">لا توجد سجلات بعد</p>'}</div>` : '<button class="btn-secondary" onclick="__loadSupervisionHistory()">عرض سجل الإشراف</button>';
+   const historyBlock = '';
   return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">جدول أسبوعي ثابت يتكرر تلقائيًا من الاثنين إلى الجمعة.</p>${canEditSchedule ? '<button class="btn-primary" onclick="__saveSupervisionSchedule()">حفظ جدول الإشراف</button>' : ''}</section>${todayBlock}${days}${historyBlock}`;
 }
 
