@@ -5358,9 +5358,9 @@ function renderStudentDashboard(){
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openSchoolCalendar()" title="التقويم الدراسي 1448-1449هـ">🗓️ التقويم الدراسي</button>
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEduLinks()" title="بوابة الروابط التعليمية">📚 روابط تعليمية</button>
-      <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://calendar.google.com" target="_blank" rel="noopener">📅 تقويم</a>
-      <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://www.islamicfinder.org" target="_blank" rel="noopener">🕌 مواقيت الصلاة</a>
-      <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://translate.google.com" target="_blank" rel="noopener">🌐 مترجم</a>
+      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('📅 تقويم Google', 'https://calendar.google.com/calendar/embed?src=ar.sa%23holiday%40group.v.calendar.google.com&ctz=Asia/Riyadh')" title="Google Calendar">📅 تقويم</button>
+      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🕌 مواقيت الصلاة', 'https://www.islamicfinder.org/prayer-widget/')" title="IslamicFinder">🕌 مواقيت الصلاة</button>
+      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://translate.google.com/?sl=auto&tl=ar&op=translate')" title="Google Translate">🌐 مترجم</button>
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="const _s=loadDB().students.find(x=>x.id===currentUser()?.id); if(_s && _s.classId) viewClassSchedule(_s.classId); else alert('غير مسند لفصل')" title="عرض جدول فصلي (أسبوع)">👁 جدول</button>
     </div>
   </div>
@@ -6079,9 +6079,9 @@ function renderDashboard(){
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openSchoolCalendar()" title="التقويم الدراسي 1448-1449هـ">🗓️ التقويم الدراسي</button>
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEduLinks()" title="بوابة الروابط التعليمية">📚 روابط تعليمية</button>
-      <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://calendar.google.com" target="_blank" rel="noopener">📅 تقويم</a>
-      <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://www.islamicfinder.org" target="_blank" rel="noopener">🕌 مواقيت الصلاة</a>
-      <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://translate.google.com" target="_blank" rel="noopener">🌐 مترجم</a>
+      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('📅 تقويم Google', 'https://calendar.google.com/calendar/embed?src=ar.sa%23holiday%40group.v.calendar.google.com&ctz=Asia/Riyadh')" title="Google Calendar">📅 تقويم</button>
+      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🕌 مواقيت الصلاة', 'https://www.islamicfinder.org/prayer-widget/')" title="IslamicFinder">🕌 مواقيت الصلاة</button>
+      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://translate.google.com/?sl=auto&tl=ar&op=translate')" title="Google Translate">🌐 مترجم</button>
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="const _s=loadDB().students.find(x=>x.id===currentUser()?.id); if(_s && _s.classId) viewClassSchedule(_s.classId); else alert('غير مسند لفصل')" title="عرض جدول فصلي (أسبوع)">👁 جدول</button>
     </div>
   </div>
@@ -10207,6 +10207,49 @@ function deleteClass(id){
   saveDB(d);
   renderApp();
 }
+function openEmbeddedViewer(title, url){
+  // Check if the site blocks iframe (X-Frame-Options)
+  const blockedSites = ['translate.google.com'];
+  const isBlocked = blockedSites.some(s => url.includes(s));
+  
+  let bodyHtml = '';
+  if (isBlocked) {
+    bodyHtml = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px 20px;background:#f1f5f9;border-radius:8px;min-height:40vh;">
+      <div style="font-size:48px;">🚫</div>
+      <div style="font-size:16px;font-weight:700;color:#1e3a8a;">${escapeHtml(title)}</div>
+      <div style="font-size:13px;color:#64748b;text-align:center;max-width:400px;">
+        هذا الموقع يمنع عرضه داخل نبراس (X-Frame-Options).<br>
+        يمكنك فتحه في تبويب جديد.
+      </div>
+      <a class="btn-primary" style="text-decoration:none;padding:10px 20px;font-size:14px;margin-top:8px;" href="${url}" target="_blank" rel="noopener">🔗 فتح في تبويب جديد</a>
+    </div>`;
+  } else {
+    bodyHtml = `<div style="flex:1;overflow:auto;border-radius:8px;background:#f1f5f9;min-height:60vh;position:relative;">
+      <iframe src="${url}" style="width:100%;height:100%;min-height:60vh;border:none;" title="${escapeHtml(title)}" onload="this.style.display='block'" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"></iframe>
+      <div style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px 20px;min-height:40vh;">
+        <div style="font-size:48px;">🚫</div>
+        <div style="font-size:13px;color:#64748b;text-align:center;">إذا لم يظهر المحتوى، <a href="${url}" target="_blank" rel="noopener" style="color:#2563eb;">افتحه في تبويب جديد</a>.</div>
+      </div>
+    </div>`;
+  }
+  
+  const html = `<div class="modal-overlay" onclick="if(event.target===this) closeEmbeddedViewer()">
+    <div class="modal-box" style="max-width:96vw;width:96vw;height:90vh;display:flex;flex-direction:column;">
+      <div class="modal-head">
+        <h3>${escapeHtml(title)}</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <a class="btn-secondary" style="padding:4px 10px;font-size:13px;text-decoration:none;" href="${url}" target="_blank" rel="noopener" title="فتح في تبويب جديد">🔗 فتح</a>
+          <button class="modal-close" onclick="closeEmbeddedViewer()">✕</button>
+        </div>
+      </div>
+      ${bodyHtml}
+    </div>
+  </div>`;
+  const old = document.querySelector('.modal-overlay'); if (old) old.remove();
+  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
+}
+function closeEmbeddedViewer(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
+
 function openSchoolCalendar(){
   const pdfUrl = 'school-calendar-1448.pdf';
   const html = `<div class="modal-overlay" onclick="if(event.target===this) closeSchoolCalendar()">
