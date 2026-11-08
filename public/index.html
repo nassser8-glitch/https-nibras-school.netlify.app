@@ -4057,7 +4057,7 @@ function renderStudentLeaders(){
   const medals = ['🥇','🥈','🥉'];
   const stageGroups = [
     { tab:'myclass', label:'فصلي', min:-1, max:-1 },
-    { tab:'pri', label:'الابتدائي', min:-1, max:5 },
+    
     { tab:'mid', label:'المتوسط', min:6, max:8 },
     { tab:'sec', label:'الثانوي', min:9, max:11 },
   ];
@@ -5915,7 +5915,6 @@ function renderDashboard(){
   const medals = ['🥇','🥈','🥉'];
   const classLabelOf = s => { const c = s.classId ? classById(s.classId) : null; return c ? classLabel(c) : '—'; };
   const stageGroups = [
-    { tab:'pri', label:'ابتدائي', min:-1, max:5 },
     { tab:'mid', label:'متوسط', min:6, max:8 },
     { tab:'sec', label:'ثانوي', min:9, max:11 },
   ];
