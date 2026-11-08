@@ -4105,18 +4105,6 @@ function renderStudentLeaders(){
       <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#2563eb">🏫 فصلي</div>
       ${renderStage(stageGroups[0], false)}
     </div>
-    <div class="card" style="padding:16px;border-right:4px solid #16a34a">
-      <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#16a34a">🎓 الابتدائي</div>
-      ${renderStage(stageGroups[1], true)}
-    </div>
-    <div class="card" style="padding:16px;border-right:4px solid #f59e0b">
-      <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#f59e0b">🎓 المتوسط</div>
-      ${renderStage(stageGroups[2], true)}
-    </div>
-    <div class="card" style="padding:16px;border-right:4px solid #8b5cf6">
-      <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#8b5cf6">🎓 الثانوي</div>
-      ${renderStage(stageGroups[3], true)}
-    </div>
   </div>`;
 }
 /* ============ نقاطي — صفحة الطالب ============ */
@@ -6230,7 +6218,6 @@ function renderPointsSection(){
 /* ============ لوحة الأوائل: أعلى المعلمين + أعلى طالب في كل مرحلة (للمدير) ============ */
 function renderStageLeaders(d){
   const stageGroups = [
-    { label:'🎓 الابتدائي', min:-1, max:5 },
     { label:'🎓 المتوسط', min:6, max:8 },
     { label:'🎓 الثانوي', min:9, max:11 },
   ];
