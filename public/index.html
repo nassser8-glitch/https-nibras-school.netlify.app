@@ -4057,9 +4057,6 @@ function renderStudentLeaders(){
   const medals = ['🥇','🥈','🥉'];
   const stageGroups = [
     { tab:'myclass', label:'فصلي', min:-1, max:-1 },
-    
-    { tab:'mid', label:'المتوسط', min:6, max:8 },
-    { tab:'sec', label:'الثانوي', min:9, max:11 },
   ];
   const renderStage = (g, showClass) => {
     let studs;
@@ -5348,7 +5345,7 @@ function renderStudentDashboard(){
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEduLinks()" title="بوابة الروابط التعليمية">📚 روابط تعليمية</button>
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('📅 تقويم Google', 'https://calendar.google.com/calendar/embed?src=ar.sa%23holiday%40group.v.calendar.google.com&ctz=Asia/Riyadh')" title="Google Calendar">📅 تقويم</button>
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🕌 مواقيت الصلاة', 'https://www.islamicfinder.org/prayer-widget/')" title="IslamicFinder">🕌 مواقيت الصلاة</button>
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://translate.google.com/?sl=auto&tl=ar&op=translate')" title="Google Translate">🌐 مترجم</button>
+      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://www.bing.com/translator')" title="Bing Translator">🌐 مترجم</button>
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="const _s=loadDB().students.find(x=>x.id===currentUser()?.id); if(_s && _s.classId) viewClassSchedule(_s.classId); else alert('غير مسند لفصل')" title="عرض جدول فصلي (أسبوع)">👁 جدول</button>
     </div>
   </div>
@@ -6068,7 +6065,7 @@ function renderDashboard(){
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEduLinks()" title="بوابة الروابط التعليمية">📚 روابط تعليمية</button>
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('📅 تقويم Google', 'https://calendar.google.com/calendar/embed?src=ar.sa%23holiday%40group.v.calendar.google.com&ctz=Asia/Riyadh')" title="Google Calendar">📅 تقويم</button>
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🕌 مواقيت الصلاة', 'https://www.islamicfinder.org/prayer-widget/')" title="IslamicFinder">🕌 مواقيت الصلاة</button>
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://translate.google.com/?sl=auto&tl=ar&op=translate')" title="Google Translate">🌐 مترجم</button>
+      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://www.bing.com/translator')" title="Bing Translator">🌐 مترجم</button>
       <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="const _s=loadDB().students.find(x=>x.id===currentUser()?.id); if(_s && _s.classId) viewClassSchedule(_s.classId); else alert('غير مسند لفصل')" title="عرض جدول فصلي (أسبوع)">👁 جدول</button>
     </div>
   </div>
@@ -10196,8 +10193,13 @@ function deleteClass(id){
 function openEmbeddedViewer(title, url){
   // Check if the site blocks iframe (X-Frame-Options)
   // Google Translate blocks iframe (X-Frame-Options: SAMEORIGIN).
-  const blockedSites = ['translate.google.com'];
-  const isBlocked = blockedSites.some(s => url.includes(s));
+  // Bing Translator allows iframe (Google Translate blocks with SAMEORIGIN).
+  // If URL is Google Translate, use Bing Translator instead.
+  if (url.includes('translate.google.com')) {
+    url = 'https://www.bing.com/translator';
+  }
+  const blockedSites = [];
+  const isBlocked = false;
   
   let bodyHtml = '';
   if (isBlocked) {
@@ -10260,9 +10262,9 @@ function openSchoolCalendar(){
           <button class="btn-secondary" style="padding:10px 20px;font-size:14px" onclick="printSchoolCalendar()">🖨 طباعة</button>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px;border-top:1px dashed #cbd5e1;padding-top:12px;">
-          <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://calendar.google.com" target="_blank" rel="noopener">📅 تقويم</a>
-          <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://www.islamicfinder.org" target="_blank" rel="noopener">🕌 مواقيت الصلاة</a>
-          <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://translate.google.com" target="_blank" rel="noopener">🌐 مترجم</a>
+          <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('📅 تقويم Google', 'https://calendar.google.com/calendar/embed?src=ar.sa%23holiday%40group.v.calendar.google.com&ctz=Asia/Riyadh')" title="Google Calendar">📅 تقويم</button>
+          <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🕌 مواقيت الصلاة', 'https://www.islamicfinder.org/prayer-widget/')" title="IslamicFinder">🕌 مواقيت الصلاة</button>
+          <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://www.bing.com/translator')" title="Bing Translator">🌐 مترجم</button>
         </div>
       </div>
     </div>
