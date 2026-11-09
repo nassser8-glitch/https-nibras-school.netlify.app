@@ -4334,15 +4334,22 @@ function renderLayout(user, hash){
   const starAvatar = starName ? starName.charAt(0) : '⭐';
   const canSetStar = (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR');
   const starOfWeekWidget = `
-    <div class="msg-day-center" style="margin-top:8px;background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #f59e0b;" title="نجمة الأسبوع">
-      <div class="dash-welcome-label" style="color:#92400e;">⭐ نجمة الأسبوع</div>
+    <div class="msg-day-center" style="margin-top:10px;padding:14px 12px;background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 50%,#fde68a 100%);border:2px solid #f59e0b;border-radius:14px;box-shadow:0 4px 12px rgba(245,158,11,.15);position:relative;overflow:hidden;" title="نجمة الأسبوع">
+      <div style="position:absolute;top:-8px;right:-8px;font-size:48px;opacity:.12;transform:rotate(15deg);">⭐</div>
+      <div style="font-size:11px;font-weight:800;color:#92400e;letter-spacing:.5px;margin-bottom:8px;text-transform:uppercase;">⭐ نجمة الأسبوع</div>
       ${starName ? `
-        <div style="display:flex;align-items:center;gap:10px;justify-content:center;padding:6px 0;">
-          <div style="width:44px;height:44px;border-radius:50%;background:#fff;border:2px solid #f59e0b;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#92400e;flex-shrink:0;">${escapeHtml(starAvatar)}</div>
-          <div style="font-size:14px;font-weight:700;color:#78350f;">${escapeHtml(starName)}</div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+          <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);border:3px solid #fff;box-shadow:0 2px 8px rgba(245,158,11,.4);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#fff;flex-shrink:0;">${escapeHtml(starAvatar)}</div>
+          <div style="font-size:15px;font-weight:800;color:#78350f;text-align:center;line-height:1.3;">${escapeHtml(starName)}</div>
+          <div style="font-size:10px;color:#a16207;font-weight:600;">🏆 مبروك!</div>
         </div>
-      ` : `<div style="font-size:12px;color:#92400e;padding:6px 0;">لم تُحدد بعد</div>`}
-      ${canSetStar ? `<button class="btn-secondary" style="margin-top:6px;padding:4px 10px;font-size:12px;" onclick="setStarOfWeekPrompt()" title="تعيين نجمة الأسبوع">✏️ ${starName ? 'تغيير' : 'تعيين'}</button>` : ''}
+      ` : `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;">
+          <div style="font-size:36px;opacity:.5;">⭐</div>
+          <div style="font-size:12px;color:#92400e;font-weight:600;">لم تُحدد بعد</div>
+        </div>
+      `}
+      ${canSetStar ? `<button class="btn-secondary" style="margin-top:8px;padding:5px 14px;font-size:12px;border-radius:8px;background:#fff;border:1px solid #f59e0b;color:#92400e;font-weight:700;" onclick="setStarOfWeekPrompt()" title="تعيين نجمة الأسبوع">✏️ ${starName ? 'تغيير' : 'تعيين'}</button>` : ''}
     </div>`;
 
   let pageHtml = '';
