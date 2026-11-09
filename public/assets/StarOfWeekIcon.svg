@@ -1,16 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320">
   <defs>
     <linearGradient id="starOfWeekGold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#FFF0A6"/><stop offset="50%" stop-color="#E6B83F"/><stop offset="100%" stop-color="#B77A12"/>
+      <stop offset="0%" stop-color="#E8D5A0"/><stop offset="50%" stop-color="#D6B35D"/><stop offset="100%" stop-color="#B8943A"/>
     </linearGradient>
-    <linearGradient id="starOfWeekGreen" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#176344"/><stop offset="100%" stop-color="#063B29"/>
+    <linearGradient id="starOfWeekNavy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#24577A"/><stop offset="100%" stop-color="#123B5D"/>
     </linearGradient>
   </defs>
   <circle cx="160" cy="165" r="125" fill="none" stroke="url(#starOfWeekGold)" stroke-width="9"/>
   <path d="M160 18 L176 56 L217 59 L186 87 L195 127 L160 106 L125 127 L134 87 L103 59 L144 56 Z" fill="url(#starOfWeekGold)"/>
-  <circle cx="160" cy="165" r="36" fill="url(#starOfWeekGreen)"/>
-  <path d="M92 262 Q98 207 160 207 Q222 207 228 262 Z" fill="url(#starOfWeekGreen)"/>
+  <!-- Person circle background: ice blue -->
+  <circle cx="160" cy="165" r="36" fill="#EAF2F8"/>
+  <!-- Person silhouette: navy -->
+  <circle cx="160" cy="152" r="14" fill="#123B5D"/>
+  <path d="M136 190 Q138 172 160 172 Q182 172 184 190 Z" fill="#123B5D"/>
   <g fill="url(#starOfWeekGold)">
     <path d="M62 248 Q22 180 56 118 Q38 180 76 238 Z"/>
     <path d="M258 248 Q298 180 264 118 Q282 180 244 238 Z"/>
