@@ -2206,6 +2206,18 @@ async function __syncPull(school){
       if(Array.isArray(local.notes)){
         merged.notes = NRC_mergeNotes(Array.isArray(merged.notes) ? merged.notes : [], local.notes);
       }
+      // نجم الأسبوع: نحفظ النسخة الأحدث (حسب setAt) — لا تُمحى عند Synchronization
+      if(local.starOfWeek && (!merged.starOfWeek || (local.starOfWeek.setAt || 0) > (merged.starOfWeek.setAt || 0))){
+        merged.starOfWeek = local.starOfWeek;
+      }
+      if(Array.isArray(local.starOfWeekHistory)){
+        const mergedHist = Array.isArray(merged.starOfWeekHistory) ? merged.starOfWeekHistory.slice() : [];
+        const seenIds = new Set(mergedHist.map(h => h.setAt));
+        for(const h of local.starOfWeekHistory){
+          if(!seenIds.has(h.setAt)){ mergedHist.push(h); seenIds.add(h.setAt); }
+        }
+        merged.starOfWeekHistory = mergedHist;
+      }
       // تكليفات/نشاطات محلية غير مرفوعة بعد: نضمن بقاءها (لا تُمسح عند أخذ نسخة الخادم)
       const betterItemP = (a, b) => {
         if(!a) return b;
