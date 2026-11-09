@@ -14521,6 +14521,114 @@ function renderDailyMsg(){
   ${adminInboxCard}
   ${directMsgCard}`;
 }
+function starBadgeSvg(photoUrl, size){
+  const s = size || 160;
+  const r = s * 0.38; // circle radius
+  const cx = s / 2;
+  const cy = s * 0.42;
+  const starSize = s * 0.18;
+  const bannerH = s * 0.22;
+  const bannerY = s * 0.78;
+  const laurelW = s * 0.12;
+
+  // Person silhouette path (scaled to fit in circle)
+  const personPath = `
+    M${cx},${cy - r*0.15}
+    C${cx - r*0.25},${cy - r*0.15} ${cx - r*0.35},${cy + r*0.05} ${cx - r*0.2},${cy + r*0.35}
+    L${cx - r*0.25},${cy + r*0.6}
+    L${cx + r*0.25},${cy + r*0.6}
+    L${cx + r*0.2},${cy + r*0.35}
+    C${cx + r*0.35},${cy + r*0.05} ${cx + r*0.25},${cy - r*0.15} ${cx},${cy - r*0.15}
+    Z
+  `;
+
+  // Head circle
+  const headR = r * 0.22;
+  const headCy = cy - r * 0.35;
+
+  let centerContent = '';
+  if(photoUrl){
+    // Clip path for photo
+    centerContent = `
+      <defs>
+        <clipPath id="photoClip">
+          <circle cx="${cx}" cy="${cy}" r="${r * 0.85}" />
+        </clipPath>
+      </defs>
+      <image href="${photoUrl}" x="${cx - r*0.85}" y="${cy - r*0.85}" width="${r*1.7}" height="${r*1.7}" clip-path="url(#photoClip)" preserveAspectRatio="xMidYMid slice" />
+    `;
+  } else {
+    // Person silhouette
+    centerContent = `
+      <circle cx="${cx}" cy="${headCy}" r="${headR}" fill="#14532d" />
+      <path d="${personPath}" fill="#14532d" />
+    `;
+  }
+
+  // Laurel branch (left) - simplified
+  const laurelLeft = `
+    <g transform="translate(${cx - r - laurelW*0.5}, ${cy - r*0.3}) scale(${laurelW/20})">
+      <path d="M0,0 Q-5,-8 -2,-16 Q-8,-12 -4,-20 Q-10,-16 -6,-24" stroke="#14532d" stroke-width="1.5" fill="none" />
+      <ellipse cx="-3" cy="-6" rx="3" ry="2" fill="#16a34a" transform="rotate(-30,-3,-6)" />
+      <ellipse cx="-5" cy="-12" rx="3" ry="2" fill="#16a34a" transform="rotate(-40,-5,-12)" />
+      <ellipse cx="-7" cy="-18" rx="3" ry="2" fill="#16a34a" transform="rotate(-50,-7,-18)" />
+    </g>
+  `;
+  const laurelRight = `
+    <g transform="translate(${cx + r + laurelW*0.5}, ${cy - r*0.3}) scale(${-laurelW/20}, ${laurelW/20})">
+      <path d="M0,0 Q-5,-8 -2,-16 Q-8,-12 -4,-20 Q-10,-16 -6,-24" stroke="#14532d" stroke-width="1.5" fill="none" />
+      <ellipse cx="-3" cy="-6" rx="3" ry="2" fill="#16a34a" transform="rotate(-30,-3,-6)" />
+      <ellipse cx="-5" cy="-12" rx="3" ry="2" fill="#16a34a" transform="rotate(-40,-5,-12)" />
+      <ellipse cx="-7" cy="-18" rx="3" ry="2" fill="#16a34a" transform="rotate(-50,-7,-18)" />
+    </g>
+  `;
+
+  // Star on top
+  const starCx = cx;
+  const starCy = cy - r - starSize * 0.3;
+  const starPath = `
+    M${starCx},${starCy - starSize}
+    L${starCx + starSize*0.3},${starCy - starSize*0.3}
+    L${starCx + starSize},${starCy - starSize*0.1}
+    L${starCx + starSize*0.4},${starCy + starSize*0.2}
+    L${starCx + starSize*0.6},${starCy + starSize}
+    L${starCx},${starCy + starSize*0.5}
+    L${starCx - starSize*0.6},${starCy + starSize}
+    L${starCx - starSize*0.4},${starCy + starSize*0.2}
+    L${starCx - starSize},${starCy - starSize*0.1}
+    L${starCx - starSize*0.3},${starCy - starSize*0.3}
+    Z
+  `;
+
+  // Banner
+  const bannerW = s * 0.7;
+  const bannerX = cx - bannerW/2;
+  const bannerR = 6;
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s + bannerH*0.5}" viewBox="0 0 ${s} ${s + bannerH*0.5}" style="max-width:100%;height:auto;">
+      <!-- Golden circle frame -->
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="#f59e0b" stroke-width="${s*0.025}" />
+      <circle cx="${cx}" cy="${cy}" r="${r*0.88}" fill="#fffbeb" stroke="#fbbf24" stroke-width="${s*0.012}" />
+
+      <!-- Laurel branches -->
+      ${laurelLeft}
+      ${laurelRight}
+
+      <!-- Center content (photo or person) -->
+      ${centerContent}
+
+      <!-- Golden star on top -->
+      <path d="${starPath}" fill="#f59e0b" stroke="#d97706" stroke-width="1" />
+
+      <!-- Dark green banner -->
+      <rect x="${bannerX}" y="${bannerY}" width="${bannerW}" height="${bannerH}" rx="${bannerR}" fill="#14532d" />
+      <text x="${cx}" y="${bannerY + bannerH*0.62}" text-anchor="middle" font-family="Tahoma,Arial,sans-serif" font-size="${s*0.09}" font-weight="800" fill="#fff">نجمة الأسبوع</text>
+    </svg>
+  `;
+  return svg.trim();
+}
+
 function renderStarOfWeek(){
   const d = loadDB();
   const user = currentUser();
@@ -14548,18 +14656,15 @@ function renderStarOfWeek(){
   // Main star card
   let mainCardHtml = '';
   if(currentStar && currentStar.name){
-    const avatar = currentStar.photo ? `<img src="${escapeHtml(currentStar.photo)}" style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:4px solid #f59e0b;box-shadow:0 4px 16px rgba(245,158,11,.3);" />` : `<div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);border:4px solid #fff;box-shadow:0 4px 16px rgba(245,158,11,.4);display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:900;color:#fff;">${escapeHtml(avatarOf(currentStar.name))}</div>`;
+    const badgeSvg = starBadgeSvg(currentStar.photo || null, 180);
     mainCardHtml = `
       <div style="background:#fff;border:2px solid #f59e0b;border-radius:20px;padding:32px 24px;text-align:center;box-shadow:0 8px 24px rgba(245,158,11,.12);position:relative;overflow:hidden;margin-bottom:24px;">
-        <div style="position:absolute;top:0;left:0;right:0;height:6px;background:linear-gradient(90deg,#fbbf24,#f59e0b,#fbbf24);"></div>
-        <div style="position:absolute;top:12px;left:12px;font-size:28px;opacity:.15;">👑</div>
-        <div style="position:absolute;top:12px;right:12px;font-size:28px;opacity:.15;">⭐</div>
-        <div style="margin-bottom:16px;">${avatar}</div>
-        <div style="display:inline-block;padding:4px 16px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#fff;border-radius:20px;font-size:12px;font-weight:800;margin-bottom:12px;box-shadow:0 2px 8px rgba(245,158,11,.3);">🏆 نجم الأسبوع</div>
+        <div style="position:absolute;top:0;left:0;right:0;height:6px;background:linear-gradient(90deg,#14532d,#f59e0b,#14532d);"></div>
+        <div style="margin-bottom:16px;display:flex;justify-content:center;">${badgeSvg}</div>
         <h2 style="font-size:24px;font-weight:900;color:#78350f;margin:0 0 4px;">${escapeHtml(currentStar.name)}</h2>
         ${currentStar.className ? `<div style="font-size:14px;color:#92400e;font-weight:600;margin-bottom:4px;">${escapeHtml(currentStar.className)}</div>` : ''}
         <div style="font-size:12px;color:#a16207;margin-bottom:12px;">قسم ${sectionLabel} · ${escapeHtml(currentStar.week || 'الأسبوع الحالي')}</div>
-        ${currentStar.reason ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px 16px;margin:12px auto;max-width:480px;font-size:13px;color:#78350f;line-height:1.6;text-align:right;">📝 ${escapeHtml(currentStar.reason)}</div>` : ''}
+        ${currentStar.reason ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px 16px;margin:12px auto;max-width:480px;font-size:13px;color:#14532d;line-height:1.6;text-align:right;">📝 ${escapeHtml(currentStar.reason)}</div>` : ''}
         <div style="font-size:14px;font-weight:700;color:#16a34a;margin-top:12px;">🎉 مبروك! نفخر بتميزك</div>
         ${currentStar.setBy ? `<div style="font-size:10px;color:#a16207;margin-top:8px;">عيّنه: ${escapeHtml(currentStar.setBy)} · ${fmtDate(currentStar.setAt)}</div>` : ''}
       </div>`;
