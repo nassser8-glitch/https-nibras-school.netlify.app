@@ -14629,6 +14629,67 @@ function starBadgeSvg(photoUrl, size){
   return svg.trim();
 }
 
+function starOfWeekBadgeSvg(photoUrl, size){
+  const s = size || 200;
+  const scale = s / 320;
+  const goldGrad = 'starOfWeekGold';
+  const greenGrad = 'starOfWeekGreen';
+
+  // Center content: photo or person silhouette
+  let centerContent = '';
+  if(photoUrl){
+    centerContent = `
+      <defs>
+        <clipPath id="sowPhotoClip">
+          <circle cx="160" cy="165" r="36" />
+        </clipPath>
+      </defs>
+      <image href="${photoUrl}" x="124" y="129" width="72" height="72" clip-path="url(#sowPhotoClip)" preserveAspectRatio="xMidYMid slice" />
+    `;
+  } else {
+    centerContent = `
+      <circle cx="160" cy="165" r="36" fill="url(#${greenGrad})"/>
+      <path d="M92 262 Q98 207 160 207 Q222 207 228 262 Z" fill="url(#${greenGrad})"/>
+    `;
+  }
+
+  // If photo, also keep the body silhouette behind? No, just show photo in circle
+  // But we need to hide the body path when photo is shown
+  const bodyPath = photoUrl ? '' : `<path d="M92 262 Q98 207 160 207 Q222 207 228 262 Z" fill="url(#${greenGrad})"/>`;
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="${s}" height="${s}" style="max-width:100%;height:auto;">
+      <defs>
+        <linearGradient id="${goldGrad}" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#FFF0A6"/><stop offset="50%" stop-color="#E6B83F"/><stop offset="100%" stop-color="#B77A12"/>
+        </linearGradient>
+        <linearGradient id="${greenGrad}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#176344"/><stop offset="100%" stop-color="#063B29"/>
+        </linearGradient>
+        ${photoUrl ? '<clipPath id="sowPhotoClip"><circle cx="160" cy="165" r="36" /></clipPath>' : ''}
+      </defs>
+      <circle cx="160" cy="165" r="125" fill="#fff"/>
+      <circle cx="160" cy="165" r="125" fill="none" stroke="url(#${goldGrad})" stroke-width="9"/>
+      <path d="M160 18 L176 56 L217 59 L186 87 L195 127 L160 106 L125 127 L134 87 L103 59 L144 56 Z" fill="url(#${goldGrad})"/>
+      ${photoUrl ? `
+        <image href="${photoUrl}" x="124" y="129" width="72" height="72" clip-path="url(#sowPhotoClip)" preserveAspectRatio="xMidYMid slice" />
+      ` : `
+        <circle cx="160" cy="165" r="36" fill="url(#${greenGrad})"/>
+        <path d="M92 262 Q98 207 160 207 Q222 207 228 262 Z" fill="url(#${greenGrad})"/>
+      `}
+      <g fill="url(#${goldGrad})">
+        <path d="M62 248 Q22 180 56 118 Q38 180 76 238 Z"/>
+        <path d="M258 248 Q298 180 264 118 Q282 180 244 238 Z"/>
+        <ellipse cx="50" cy="168" rx="9" ry="20" transform="rotate(-35 50 168)"/>
+        <ellipse cx="58" cy="206" rx="9" ry="20" transform="rotate(-55 58 206)"/>
+        <ellipse cx="270" cy="168" rx="9" ry="20" transform="rotate(35 270 168)"/>
+        <ellipse cx="262" cy="206" rx="9" ry="20" transform="rotate(55 262 206)"/>
+      </g>
+    </svg>
+  `;
+  return svg.trim();
+}
+
 function renderStarOfWeek(){
   const d = loadDB();
   const user = currentUser();
@@ -14656,7 +14717,7 @@ function renderStarOfWeek(){
   // Main star card
   let mainCardHtml = '';
   if(currentStar && currentStar.name){
-    const badgeSvg = starBadgeSvg(currentStar.photo || null, 180);
+    const badgeSvg = starOfWeekBadgeSvg(currentStar.photo || null, 200);
     mainCardHtml = `
       <div style="background:#fff;border:2px solid #f59e0b;border-radius:20px;padding:32px 24px;text-align:center;box-shadow:0 8px 24px rgba(245,158,11,.12);position:relative;overflow:hidden;margin-bottom:24px;">
         <div style="position:absolute;top:0;left:0;right:0;height:6px;background:linear-gradient(90deg,#14532d,#f59e0b,#14532d);"></div>

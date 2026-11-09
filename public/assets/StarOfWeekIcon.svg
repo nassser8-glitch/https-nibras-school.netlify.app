@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320">
+  <defs>
+    <linearGradient id="starOfWeekGold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFF0A6"/><stop offset="50%" stop-color="#E6B83F"/><stop offset="100%" stop-color="#B77A12"/>
+    </linearGradient>
+    <linearGradient id="starOfWeekGreen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#176344"/><stop offset="100%" stop-color="#063B29"/>
+    </linearGradient>
+  </defs>
+  <circle cx="160" cy="165" r="125" fill="#fff"/>
+  <circle cx="160" cy="165" r="125" fill="none" stroke="url(#starOfWeekGold)" stroke-width="9"/>
+  <path d="M160 18 L176 56 L217 59 L186 87 L195 127 L160 106 L125 127 L134 87 L103 59 L144 56 Z" fill="url(#starOfWeekGold)"/>
+  <circle cx="160" cy="165" r="36" fill="url(#starOfWeekGreen)"/>
+  <path d="M92 262 Q98 207 160 207 Q222 207 228 262 Z" fill="url(#starOfWeekGreen)"/>
+  <g fill="url(#starOfWeekGold)">
+    <path d="M62 248 Q22 180 56 118 Q38 180 76 238 Z"/>
+    <path d="M258 248 Q298 180 264 118 Q282 180 244 238 Z"/>
+    <ellipse cx="50" cy="168" rx="9" ry="20" transform="rotate(-35 50 168)"/>
+    <ellipse cx="58" cy="206" rx="9" ry="20" transform="rotate(-55 58 206)"/>
+    <ellipse cx="270" cy="168" rx="9" ry="20" transform="rotate(35 270 168)"/>
+    <ellipse cx="262" cy="206" rx="9" ry="20" transform="rotate(55 262 206)"/>
+  </g>
+</svg>
