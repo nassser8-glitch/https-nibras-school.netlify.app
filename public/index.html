@@ -4342,7 +4342,7 @@ function renderLayout(user, hash){
       ${senderFirstName ? `<div class="msg-sender">— ${escapeHtml(senderFirstName)}</div>` : ''}
     </div>`;
   // نجمة الأسبوع — يختارها الموجه الطلابي (كتابة يدوية)
-  const starOfWeek = (loadDB().starOfWeek) || null;
+  const starOfWeek = getStarOfWeek();
   const starName = starOfWeek ? (starOfWeek.name || '') : '';
   const starAvatar = starName ? starName.charAt(0) : '⭐';
   const canSetStar = (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR');
@@ -10342,6 +10342,7 @@ function saveStarOfWeek(){
   saveDB(d);
   // حفظ مستقل (لا يُمحى عند Synchronization)
   try { localStorage.setItem('nibras_starOfWeek_' + getActiveSchool(), JSON.stringify(d.starOfWeek)); } catch(e){}
+  try { localStorage.setItem('nibras_starOfWeekHistory_' + getActiveSchool(), JSON.stringify(d.starOfWeekHistory)); } catch(e){}
   __syncSchedule(getActiveSchool(), 0);
   renderApp();
   alert('تم اعتماد "' + trimmed + '" كنجمة الأسبوع ⭐');
@@ -10356,6 +10357,7 @@ function clearStarOfWeekConfirm(){
   delete d.starOfWeek;
   saveDB(d);
   try { localStorage.removeItem('nibras_starOfWeek_' + getActiveSchool()); } catch(e){}
+  try { localStorage.setItem('nibras_starOfWeekHistory_' + getActiveSchool(), JSON.stringify(d.starOfWeekHistory)); } catch(e){}
   __syncSchedule(getActiveSchool(), 0);
   renderApp();
   alert('تم إلغاء نجم الأسبوع');
@@ -14717,8 +14719,8 @@ function renderStarOfWeek(){
   const sectionLabel = isGirls ? 'بنات' : 'بنين';
   const canManage = (user && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR'));
 
-  const currentStar = d.starOfWeek || null;
-  const history = Array.isArray(d.starOfWeekHistory) ? d.starOfWeekHistory : [];
+  const currentStar = getStarOfWeek();
+  const history = (function(){ try{ const raw = localStorage.getItem('nibras_starOfWeekHistory_' + getActiveSchool()); if(raw){ const o = JSON.parse(raw); if(Array.isArray(o)) return o; } }catch(e){} const d = loadDB(); return Array.isArray(d.starOfWeekHistory) ? d.starOfWeekHistory : []; })();
 
   const avatarOf = (name) => {
     if(!name) return '⭐';
