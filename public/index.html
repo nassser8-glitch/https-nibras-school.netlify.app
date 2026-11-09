@@ -4328,6 +4328,22 @@ function renderLayout(user, hash){
       <div class="msg-static">${escapeHtml(msgMarquee)}</div>
       ${senderFirstName ? `<div class="msg-sender">— ${escapeHtml(senderFirstName)}</div>` : ''}
     </div>`;
+  // نجمة الأسبوع — يختارها الموجه الطلابي (كتابة يدوية)
+  const starOfWeek = (loadDB().starOfWeek) || null;
+  const starName = starOfWeek ? (starOfWeek.name || '') : '';
+  const starAvatar = starName ? starName.charAt(0) : '⭐';
+  const canSetStar = (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR');
+  const starOfWeekWidget = `
+    <div class="msg-day-center" style="margin-top:8px;background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #f59e0b;" title="نجمة الأسبوع">
+      <div class="dash-welcome-label" style="color:#92400e;">⭐ نجمة الأسبوع</div>
+      ${starName ? `
+        <div style="display:flex;align-items:center;gap:10px;justify-content:center;padding:6px 0;">
+          <div style="width:44px;height:44px;border-radius:50%;background:#fff;border:2px solid #f59e0b;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#92400e;flex-shrink:0;">${escapeHtml(starAvatar)}</div>
+          <div style="font-size:14px;font-weight:700;color:#78350f;">${escapeHtml(starName)}</div>
+        </div>
+      ` : `<div style="font-size:12px;color:#92400e;padding:6px 0;">لم تُحدد بعد</div>`}
+      ${canSetStar ? `<button class="btn-secondary" style="margin-top:6px;padding:4px 10px;font-size:12px;" onclick="setStarOfWeekPrompt()" title="تعيين نجمة الأسبوع">✏️ ${starName ? 'تغيير' : 'تعيين'}</button>` : ''}
+    </div>`;
 
   let pageHtml = '';
   if(page === 'home') pageHtml = (user.role === 'STUDENT') ? renderStudentDashboard() : renderDashboard();
@@ -4403,6 +4419,7 @@ function renderLayout(user, hash){
         <nav class="menu">${nav}</nav>
         <div class="sidebar-widgets">
           ${user.role !== 'STUDENT' ? msgTodayWidget : ''}
+          ${user.role !== 'STUDENT' ? starOfWeekWidget : ''}
           <div id="nibrasToolbarDock"></div>
         </div>
       </aside>
@@ -10238,6 +10255,29 @@ function openEmbeddedViewer(title, url){
   const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
 }
 function closeEmbeddedViewer(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
+
+/* ============ نجمة الأسبوع ============ */
+function getStarOfWeek(){
+  try { const d = loadDB(); return (d && d.starOfWeek) ? d.starOfWeek : null; } catch(e){ return null; }
+}
+function setStarOfWeekPrompt(){
+  const cur = getStarOfWeek();
+  const name = prompt('اسم نجمة الأسبوع:', cur ? (cur.name || '') : '');
+  if(name === null) return;
+  const trimmed = String(name).trim();
+  if(!trimmed){ alert('الاسم مطلوب'); return; }
+  const d = loadDB();
+  d.starOfWeek = { name: trimmed, setBy: (currentUser()||{}).name || (currentUser()||{}).username || '', setAt: Date.now() };
+  saveDB(d);
+  renderApp();
+  alert('تم تعيين "' + trimmed + '" كنجمة الأسبوع ⭐');
+}
+function clearStarOfWeek(){
+  const d = loadDB();
+  delete d.starOfWeek;
+  saveDB(d);
+  renderApp();
+}
 
 function openSchoolCalendar(){
   const pdfUrl = 'school-calendar-1448.pdf';
