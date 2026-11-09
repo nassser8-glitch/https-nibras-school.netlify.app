@@ -14737,7 +14737,7 @@ function renderStarOfWeek(){
   let mainCardHtml = '';
   if(currentStar && currentStar.name){
     const photoHtml = currentStar.photo
-      ? `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:72px;height:72px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.2);">
+      ? `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:72px;height:72px;border-radius:50%;overflow:hidden;border:3px solid #f59e0b;box-shadow:0 2px 8px rgba(0,0,0,.2);">
            <img src="${escapeHtml(currentStar.photo)}" style="width:100%;height:100%;object-fit:cover;" />
          </div>`
       : `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#176344,#063B29);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#fff;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.2);">
