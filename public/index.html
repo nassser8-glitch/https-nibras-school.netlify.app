@@ -4300,6 +4300,7 @@ function renderLayout(user, hash){
       (user.role !== 'STUDENT') ? { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉', badge: user.role === 'AGENT' ? pendingPartRequests() : 0 } : null,
       { href:'#/memo', key:'memo', label:'المفكرة والتذكير', icon:'📒' },
       { href:'#/daily-msg', key:'daily-msg', label:'رسالة اليوم', icon:'📢' },
+       { href:'#/star-of-week', key:'star-of-week', label:'نجمة الأسبوع', icon:'⭐' },
       (user.role === 'ADMIN') ? { href:'#/thanks', key:'thanks', label:'بطاقة شكر', icon:'🌸' } : null,
       { href:'#/maintenance', key:'maintenance', label:'الصيانة', icon:'🔧' },
       (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR') ? { href:'#/guide-msgs', key:'guide-msgs', label:'رسائل المعلمين', icon:'💬', badge: msgMonitorBadge(user) } : null,
@@ -4386,6 +4387,7 @@ function renderLayout(user, hash){
   else if(page === 'guide-msgs' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR')) pageHtml = renderGuideMsgs();
   else if(page === 'settings') pageHtml = renderSettings();
   else if(page === 'daily-msg') pageHtml = renderDailyMsg();
+   else if(page === 'star-of-week') pageHtml = renderStarOfWeek();
   else if(page === 'backup' && user.role === 'ADMIN') pageHtml = renderBackup();
   else if(page === 'thanks' && user.role === 'ADMIN') pageHtml = renderThanksCard();
   else if(page === 'supervision' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT')) pageHtml = renderSupervisionAdmin();
@@ -10285,6 +10287,60 @@ function clearStarOfWeek(){
   saveDB(d);
   renderApp();
 }
+let starPhotoBase64 = null;
+function previewStarPhoto(input){
+  const file = input.files[0];
+  if(!file) return;
+  if(file.size > 2*1024*1024){ alert('الحجم الأقصى 2 ميجا'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    starPhotoBase64 = e.target.result;
+    const preview = document.getElementById('starPhotoPreview');
+    const hint = document.getElementById('starPhotoHint');
+    if(preview){ preview.src = starPhotoBase64; preview.style.display = ''; }
+    if(hint) hint.style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+function saveStarOfWeek(){
+  const name = (document.getElementById('starNameInput')||{}).value || '';
+  const className = (document.getElementById('starClassInput')||{}).value || '';
+  const week = (document.getElementById('starWeekInput')||{}).value || '';
+  const reason = (document.getElementById('starReasonInput')||{}).value || '';
+  const trimmed = String(name).trim();
+  if(!trimmed){ alert('اسم الطالب مطلوب'); return; }
+  const d = loadDB();
+  // Move current to history
+  if(d.starOfWeek && d.starOfWeek.name){
+    if(!Array.isArray(d.starOfWeekHistory)) d.starOfWeekHistory = [];
+    d.starOfWeekHistory.push(Object.assign({}, d.starOfWeek));
+  }
+  d.starOfWeek = {
+    name: trimmed,
+    className: String(className).trim(),
+    week: String(week).trim(),
+    reason: String(reason).trim(),
+    photo: starPhotoBase64 || (d.starOfWeek ? d.starOfWeek.photo : null),
+    setBy: (currentUser()||{}).name || (currentUser()||{}).username || '',
+    setAt: Date.now(),
+  };
+  starPhotoBase64 = null;
+  saveDB(d);
+  renderApp();
+  alert('تم اعتماد "' + trimmed + '" كنجمة الأسبوع ⭐');
+}
+function clearStarOfWeekConfirm(){
+  if(!confirm('إلغاء نجم الأسبوع الحالي؟ (سيُحفظ في السجل)')) return;
+  const d = loadDB();
+  if(d.starOfWeek && d.starOfWeek.name){
+    if(!Array.isArray(d.starOfWeekHistory)) d.starOfWeekHistory = [];
+    d.starOfWeekHistory.push(Object.assign({}, d.starOfWeek));
+  }
+  delete d.starOfWeek;
+  saveDB(d);
+  renderApp();
+  alert('تم إلغاء نجم الأسبوع');
+}
 
 function openSchoolCalendar(){
   const pdfUrl = 'school-calendar-1448.pdf';
@@ -14465,6 +14521,129 @@ function renderDailyMsg(){
   ${adminInboxCard}
   ${directMsgCard}`;
 }
+function renderStarOfWeek(){
+  const d = loadDB();
+  const user = currentUser();
+  const school = getActiveSchool();
+  const isGirls = school === 'GIRLS';
+  const sectionLabel = isGirls ? 'بنات' : 'بنين';
+  const canManage = (user && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR'));
+
+  const currentStar = d.starOfWeek || null;
+  const history = Array.isArray(d.starOfWeekHistory) ? d.starOfWeekHistory : [];
+
+  // Helper: avatar from name
+  const avatarOf = (name) => {
+    if(!name) return '⭐';
+    return name.trim().charAt(0);
+  };
+
+  // Helper: format date
+  const fmtDate = (ts) => {
+    if(!ts) return '—';
+    try { return new Date(ts).toLocaleDateString('ar-SA', { year:'numeric', month:'long', day:'numeric' }); }
+    catch(e){ return new Date(ts).toLocaleDateString(); }
+  };
+
+  // Main star card
+  let mainCardHtml = '';
+  if(currentStar && currentStar.name){
+    const avatar = currentStar.photo ? `<img src="${escapeHtml(currentStar.photo)}" style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:4px solid #f59e0b;box-shadow:0 4px 16px rgba(245,158,11,.3);" />` : `<div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);border:4px solid #fff;box-shadow:0 4px 16px rgba(245,158,11,.4);display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:900;color:#fff;">${escapeHtml(avatarOf(currentStar.name))}</div>`;
+    mainCardHtml = `
+      <div style="background:#fff;border:2px solid #f59e0b;border-radius:20px;padding:32px 24px;text-align:center;box-shadow:0 8px 24px rgba(245,158,11,.12);position:relative;overflow:hidden;margin-bottom:24px;">
+        <div style="position:absolute;top:0;left:0;right:0;height:6px;background:linear-gradient(90deg,#fbbf24,#f59e0b,#fbbf24);"></div>
+        <div style="position:absolute;top:12px;left:12px;font-size:28px;opacity:.15;">👑</div>
+        <div style="position:absolute;top:12px;right:12px;font-size:28px;opacity:.15;">⭐</div>
+        <div style="margin-bottom:16px;">${avatar}</div>
+        <div style="display:inline-block;padding:4px 16px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#fff;border-radius:20px;font-size:12px;font-weight:800;margin-bottom:12px;box-shadow:0 2px 8px rgba(245,158,11,.3);">🏆 نجم الأسبوع</div>
+        <h2 style="font-size:24px;font-weight:900;color:#78350f;margin:0 0 4px;">${escapeHtml(currentStar.name)}</h2>
+        ${currentStar.className ? `<div style="font-size:14px;color:#92400e;font-weight:600;margin-bottom:4px;">${escapeHtml(currentStar.className)}</div>` : ''}
+        <div style="font-size:12px;color:#a16207;margin-bottom:12px;">قسم ${sectionLabel} · ${escapeHtml(currentStar.week || 'الأسبوع الحالي')}</div>
+        ${currentStar.reason ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px 16px;margin:12px auto;max-width:480px;font-size:13px;color:#78350f;line-height:1.6;text-align:right;">📝 ${escapeHtml(currentStar.reason)}</div>` : ''}
+        <div style="font-size:14px;font-weight:700;color:#16a34a;margin-top:12px;">🎉 مبروك! نفخر بتميزك</div>
+        ${currentStar.setBy ? `<div style="font-size:10px;color:#a16207;margin-top:8px;">عيّنه: ${escapeHtml(currentStar.setBy)} · ${fmtDate(currentStar.setAt)}</div>` : ''}
+      </div>`;
+  } else {
+    mainCardHtml = `
+      <div style="background:#fff;border:2px dashed #f59e0b;border-radius:20px;padding:48px 24px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,.04);margin-bottom:24px;">
+        <div style="font-size:64px;opacity:.3;margin-bottom:12px;">⭐</div>
+        <div style="font-size:18px;font-weight:700;color:#92400e;margin-bottom:4px;">لم يتم اختيار نجم للأسبوع بعد</div>
+        <div style="font-size:13px;color:#a16207;">${canManage ? 'استخدم لوحة التحكم أدناه لتعيين نجم الأسبوع' : 'سيتم الإعلان قريباً'}</div>
+      </div>`;
+  }
+
+  // Management panel (for counselors/admins)
+  let manageHtml = '';
+  if(canManage){
+    manageHtml = `
+      <div style="background:#fff;border:1px solid var(--line,#e5e7eb);border-radius:16px;padding:20px;margin-bottom:24px;box-shadow:0 2px 8px rgba(0,0,0,.04);">
+        <div style="font-size:16px;font-weight:800;color:#1e3a8a;margin-bottom:16px;display:flex;align-items:center;gap:8px;">⚙️ لوحة تحكم نجم الأسبوع</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">اسم الطالب</label>
+            <input id="starNameInput" class="input" style="width:100%;padding:10px;font-size:14px;" placeholder="اسم الطالب كاملاً" value="${escapeHtml(currentStar ? currentStar.name || '' : '')}" />
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">الصف والفصل</label>
+            <input id="starClassInput" class="input" style="width:100%;padding:10px;font-size:14px;" placeholder="مثال: الثالث الثانوي — الفصل أ" value="${escapeHtml(currentStar ? currentStar.className || '' : '')}" />
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">الأسبوع</label>
+          <input id="starWeekInput" class="input" style="width:100%;padding:10px;font-size:14px;" placeholder="مثال: الأسبوع 5" value="${escapeHtml(currentStar ? currentStar.week || '' : '')}" />
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">سبب الاختيار</label>
+          <textarea id="starReasonInput" class="input" style="width:100%;min-height:70px;resize:vertical;padding:10px;font-size:14px;" placeholder="مثال: تميز أكاديمي وسلوك إيجابي">${escapeHtml(currentStar ? currentStar.reason || '' : '')}</textarea>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">صورة الطالب (اختياري)</label>
+          <div style="border:2px dashed var(--line,#e5e7eb);border-radius:12px;padding:14px;text-align:center;cursor:pointer;" onclick="document.getElementById('starPhotoInput').click()" id="starPhotoUploadArea">
+            <div id="starPhotoHint" style="color:var(--muted,#6b7280);font-size:12px;">📷 اضغط لرفع صورة (JPG, PNG — حد أقصى 2 ميجا)</div>
+            ${currentStar && currentStar.photo ? `<img id="starPhotoPreview" src="${escapeHtml(currentStar.photo)}" style="max-width:100%;max-height:120px;border-radius:10px;margin-top:4px;" />` : `<img id="starPhotoPreview" style="display:none;max-width:100%;max-height:120px;border-radius:10px;margin-top:4px;" />`}
+          </div>
+          <input type="file" id="starPhotoInput" accept="image/*" style="display:none" onchange="previewStarPhoto(this)" />
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-primary" style="flex:1;min-width:120px;" onclick="saveStarOfWeek()">✅ اعتماد ونشر</button>
+          ${currentStar ? `<button class="btn-secondary" style="flex:1;min-width:120px;" onclick="clearStarOfWeekConfirm()">🗑 إلغاء النجم</button>` : ''}
+        </div>
+      </div>`;
+  }
+
+  // History section
+  let historyHtml = '';
+  if(history.length > 0){
+    historyHtml = `
+      <div style="background:#fff;border:1px solid var(--line,#e5e7eb);border-radius:16px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.04);">
+        <div style="font-size:16px;font-weight:800;color:#1e3a8a;margin-bottom:16px;display:flex;align-items:center;gap:8px;">📜 سجل النجوم السابقين</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;">
+          ${history.slice().reverse().map(h => {
+            const av = h.photo ? `<img src="${escapeHtml(h.photo)}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid #f59e0b;" />` : `<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:#fff;">${escapeHtml(avatarOf(h.name))}</div>`;
+            return `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px;text-align:center;">
+              ${av}
+              <div style="font-size:13px;font-weight:700;color:#78350f;margin-top:8px;">${escapeHtml(h.name)}</div>
+              ${h.className ? `<div style="font-size:11px;color:#92400e;">${escapeHtml(h.className)}</div>` : ''}
+              <div style="font-size:10px;color:#a16207;margin-top:4px;">${escapeHtml(h.week || '—')}</div>
+              <div style="font-size:9px;color:#6b7280;margin-top:2px;">${fmtDate(h.setAt)}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  return `
+    <div style="max-width:900px;margin:0 auto;padding:8px;">
+      <div style="text-align:center;margin-bottom:24px;">
+        <h1 style="font-size:28px;font-weight:900;color:#1e3a8a;margin:0 0 4px;">⭐ نجوم نبراس</h1>
+        <p style="font-size:14px;color:#64748b;margin:0;">نحتفي بالتميز ونصنع الإبداع</p>
+      </div>
+      ${mainCardHtml}
+      ${manageHtml}
+      ${historyHtml}
+    </div>`;
+}
+
 function renderSettings(){
   const school = getActiveSchool();
 
