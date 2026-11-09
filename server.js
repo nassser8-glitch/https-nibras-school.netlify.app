@@ -181,6 +181,8 @@ const SECTION_RULES = {
   adminMsgs:     ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
   announcements: ['ADMIN'],
   suggestions:   ['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE'],
+  starOfWeek:    ['ADMIN', 'AGENT', 'COUNSELOR'],
+  starOfWeekHistory: ['ADMIN', 'AGENT', 'COUNSELOR'],
 };
 const SECTION_KEYS = ['users','grades','classes','students','attendance','notes','transfers','activities','timetable','videos','assignments','maintenance','adminMsgs','announcements','suggestions'];
 // إسناد إداري مثبّت: مسؤولو الأقسام يُسندون لجميع فصول قسمهم ويبقون مثبتين في كل حفظ
@@ -2140,6 +2142,31 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         if (key === 'attendance') { merged[key] = mergeAttendance(a, b); continue; }
         if (key === 'activities') { merged[key] = mergeActivities(a, b); continue; }
         if (key === 'adminMsgs') { merged[key] = mergeAdminMsgs(a, b); continue; }
+        // نجم الأسبوع: last-write-wins (النسخة الأحدث حسب setAt) — لا يُدمج كجدول
+        if (key === 'starOfWeek') {
+          const pa = a && typeof a === 'object' ? a : null;
+          const pb = b && typeof b === 'object' ? b : null;
+          if (pa && pb) merged[key] = ( (pb.setAt||0) >= (pa.setAt||0) ) ? JSON.parse(JSON.stringify(pb)) : JSON.parse(JSON.stringify(pa));
+          else if (pb) merged[key] = JSON.parse(JSON.stringify(pb));
+          else if (pa) merged[key] = JSON.parse(JSON.stringify(pa));
+          else merged[key] = b || a || null;
+          continue;
+        }
+        // سجل النجوم السابقين: اتحاد حسب setAt (لا حذف)
+        if (key === 'starOfWeekHistory') {
+          const pa = Array.isArray(a) ? a : [];
+          const pb = Array.isArray(b) ? b : [];
+          const seen = new Set();
+          const out = [];
+          for (const h of [...pa, ...pb]) {
+            const k = h && h.setAt ? h.setAt : JSON.stringify(h);
+            if (seen.has(k)) continue;
+            seen.add(k);
+            out.push(JSON.parse(JSON.stringify(h)));
+          }
+          merged[key] = out;
+          continue;
+        }
         if (key === 'classes') { merged[key] = mergeClasses(a, b); continue; }
         // التحويلات: شاهد الحذف لاصق والحل لا يُمحى (mergeTransfers)،
         // بخلاف mergeSection العام الذي يترك الواصل يكفي فتفقد الحلول.
