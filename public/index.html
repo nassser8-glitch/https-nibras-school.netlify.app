@@ -2206,18 +2206,6 @@ async function __syncPull(school){
       if(Array.isArray(local.notes)){
         merged.notes = NRC_mergeNotes(Array.isArray(merged.notes) ? merged.notes : [], local.notes);
       }
-      // نجم الأسبوع: نحفظ النسخة الأحدث (حسب setAt) — لا تُمحى عند Synchronization
-      if(local.starOfWeek && (!merged.starOfWeek || (local.starOfWeek.setAt || 0) > (merged.starOfWeek.setAt || 0))){
-        merged.starOfWeek = local.starOfWeek;
-      }
-      if(Array.isArray(local.starOfWeekHistory)){
-        const mergedHist = Array.isArray(merged.starOfWeekHistory) ? merged.starOfWeekHistory.slice() : [];
-        const seenIds = new Set(mergedHist.map(h => h.setAt));
-        for(const h of local.starOfWeekHistory){
-          if(!seenIds.has(h.setAt)){ mergedHist.push(h); seenIds.add(h.setAt); }
-        }
-        merged.starOfWeekHistory = mergedHist;
-      }
       // تكليفات/نشاطات محلية غير مرفوعة بعد: نضمن بقاءها (لا تُمسح عند أخذ نسخة الخادم)
       const betterItemP = (a, b) => {
         if(!a) return b;
@@ -4347,18 +4335,594 @@ function renderLayout(user, hash){
   const starAvatar = starName ? starName.charAt(0) : '⭐';
   const canSetStar = (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR');
   const starOfWeekWidget = `
-    <div class="msg-day-center" style="margin-top:10px;padding:12px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.04);text-align:center;" title="نجمة الأسبوع">
-      <div style="font-size:10px;font-weight:800;color:#92400e;letter-spacing:.5px;margin-bottom:6px;text-transform:uppercase;">⭐ نجمة الأسبوع</div>
+    <div class="msg-day-center" style="margin-top:10px;padding:14px 12px;background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 50%,#fde68a 100%);border:2px solid #f59e0b;border-radius:14px;box-shadow:0 4px 12px rgba(245,158,11,.15);position:relative;overflow:hidden;" title="نجمة الأسبوع">
+      <div style="position:absolute;top:-8px;right:-8px;font-size:48px;opacity:.12;transform:rotate(15deg);">⭐</div>
+      <div style="font-size:11px;font-weight:800;color:#92400e;letter-spacing:.5px;margin-bottom:8px;text-transform:uppercase;">⭐ نجمة الأسبوع</div>
       ${starName ? `
-        <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:80px;height:80px;margin:0 auto 6px;display:block;" />
-        <div style="font-size:13px;font-weight:700;color:#78350f;">${escapeHtml(starName)}</div>
-        ${starOfWeek && starOfWeek.className ? `<div style="font-size:10px;color:#92400e;margin-top:2px;">${escapeHtml(starOfWeek.className)}</div>` : ''}
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+          <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);border:3px solid #fff;box-shadow:0 2px 8px rgba(245,158,11,.4);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#fff;flex-shrink:0;">${escapeHtml(starAvatar)}</div>
+          <div style="font-size:15px;font-weight:800;color:#78350f;text-align:center;line-height:1.3;">${escapeHtml(starName)}</div>
+          <div style="font-size:10px;color:#a16207;font-weight:600;">🏆 مبروك!</div>
+        </div>
       ` : `
-        <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:60px;height:60px;margin:0 auto 6px;display:block;opacity:.35;" />
-        <div style="font-size:11px;color:#9ca3af;">لم تُحدد بعد</div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;">
+          <div style="font-size:36px;opacity:.5;">⭐</div>
+          <div style="font-size:12px;color:#92400e;font-weight:600;">لم تُحدد بعد</div>
+        </div>
       `}
-      ${canSetStar ? `<a href="#/star-of-week" style="display:inline-block;margin-top:6px;padding:3px 10px;font-size:11px;border-radius:6px;background:#fffbeb;border:1px solid #f59e0b;color:#92400e;font-weight:700;text-decoration:none;">✏️ ${starName ? 'تغيير' : 'تعيين'}</a>` : ''}
+      ${canSetStar ? `<button class="btn-secondary" style="margin-top:8px;padding:5px 14px;font-size:12px;border-radius:8px;background:#fff;border:1px solid #f59e0b;color:#92400e;font-weight:700;" onclick="setStarOfWeekPrompt()" title="تعيين نجمة الأسبوع">✏️ ${starName ? 'تغيير' : 'تعيين'}</button>` : ''}
     </div>`;
+
+  let pageHtml = '';
+  if(page === 'home') pageHtml = (user.role === 'STUDENT') ? renderStudentDashboard() : renderDashboard();
+  else if(page === 'students') pageHtml = renderStudents();
+  else if(page === 'attendance') pageHtml = renderAttendance();
+  else if(page === 'notes'){
+    pageHtml = renderNotes();
+    // طابور مطالبات إعادة الملكية: يظهر للإدارة فقط، ويُجلب بعد الرسم
+    // لأن عناصره غير موجودة في HTML المُعاد.
+    if(user.role !== 'STUDENT'){
+      setTimeout(NRC_loadClaims, 0);
+      setTimeout(__refreshUnpushedBar, 0);
+    }
+  }
+  else if(page === 'memo') pageHtml = renderMemo();
+  else if(page === 'transfers') pageHtml = renderTransfers();
+  else if(page === 'reports') pageHtml = renderReports();
+  else if(page === 'classes') pageHtml = renderClasses();
+  else if(page === 'videos') pageHtml = renderVideos();
+  else if(page === 'maintenance' && user.role !== 'STUDENT') pageHtml = renderMaintenance();
+  else if(page === 'users' && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderUsers();
+  else if(page === 'admins' && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderAdmins();
+  else if(page === 'timetable' && (user.role === 'TEACHER' || user.role === 'STUDENT')) pageHtml = renderTimetable();
+  else if(page === 'assignments' && user.role === 'TEACHER') pageHtml = renderAssignments();
+  else if(page === 'assignments' && user.role === 'STUDENT') pageHtml = renderStudentAssignments();
+  else if(page === 'account' && (user.role === 'TEACHER' || user.role === 'STUDENT')) pageHtml = renderAccount();
+  else if(page === 'activities' && user.role !== 'STUDENT') pageHtml = renderActivities();
+  else if(page === 'student-activities' && user.role === 'STUDENT') pageHtml = renderStudentActivities();
+  else if(page === 'student-leaders' && user.role === 'STUDENT') pageHtml = renderStudentLeaders();
+  else if(page === 'my-points' && user.role === 'STUDENT') pageHtml = renderMyPoints();
+  else if(page.startsWith('activity/') && user.role !== 'STUDENT') pageHtml = renderActivityDetail(page.split('/')[1]);
+  else if(page.startsWith('teacher/') && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderTeacherPage(page.split('/')[1]);
+  else if(page === 'guide-msgs' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR')) pageHtml = renderGuideMsgs();
+  else if(page === 'settings') pageHtml = renderSettings();
+  else if(page === 'daily-msg') pageHtml = renderDailyMsg();
+   else if(page === 'star-of-week') pageHtml = renderStarOfWeek();
+  else if(page === 'backup' && user.role === 'ADMIN') pageHtml = renderBackup();
+  else if(page === 'thanks' && user.role === 'ADMIN') pageHtml = renderThanksCard();
+  else if(page === 'supervision' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT')) pageHtml = renderSupervisionAdmin();
+  else if(page === 'notebook') pageHtml = renderNotebookPage();
+  else if(page === 'about') pageHtml = renderAbout();
+  else pageHtml = renderDashboard();
+
+  const themeClass = 'theme-girls';
+  setTimeout(__warnPendingOnOpen, 0);
+  return `
+  <div class="layout ${themeClass}">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="topbar-row">
+          <button class="menu-toggle" onclick="toggleSidebar()" title="القائمة">☰</button>
+          <div class="topbar-brand">
+            <img src="logo.jpg" alt="شعار المدرسة" class="topbar-logo" />
+            <div>
+              <h1>المدرسة السعودية في إسلام آباد</h1>
+              <p class="muted small">${escapeHtml(schoolName)} <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span></p>
+            </div>
+          </div>
+          <div class="topbar-actions">
+            ${renderNotifState(user)}
+            <div class="topbar-user-block" style="text-align:left">
+              <div class="topbar-user-name">${escapeHtml(displayName(user))}</div>
+              <div class="topbar-user-role">${roleLabel(user.role)}</div>
+            </div>
+            <button class="btn-secondary" style="padding:7px 12px" onclick="logout()">🚪 خروج</button>
+          </div>
+        </div>
+        <div id="appStrip" class="topbar-strip"></div>
+      </div>
+    </header>
+    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
+    <div class="layout-body">
+      <aside class="sidebar" id="sidebar">
+        <nav class="menu">${nav}</nav>
+        <div class="sidebar-widgets">
+          ${user.role !== 'STUDENT' ? msgTodayWidget : ''}
+          ${user.role !== 'STUDENT' ? starOfWeekWidget : ''}
+          <div id="nibrasToolbarDock"></div>
+        </div>
+      </aside>
+      <main class="main">
+        <div id="page">${pageHtml}</div>
+      </main>
+    </div>
+    <footer class="app-footer">نظام نبراس لإدارة المدرسة — جميع الحقوق محفوظة © 2026 <span class="school-badge ${school.toLowerCase()}">${campusLabels[school]}</span> <span class="build-badge">v106</span></footer>
+  </div>`;
+}
+function toggleSidebar(forceClose){
+  const sb = document.getElementById('sidebar');
+  const bk = document.getElementById('sidebarBackdrop');
+  if(!sb || !bk) return;
+  const open = forceClose ? false : !sb.classList.contains('open');
+  sb.classList.toggle('open', open);
+  bk.classList.toggle('show', open);
+  document.body.classList.toggle('sidebar-locked', open);
+}
+/* تبويبات لوحة الأوائل */
+function switchLeadersTab(tab){
+  document.querySelectorAll('.dash-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.dash-leader-pane').forEach(p => { p.style.display = p.dataset.tab === tab ? 'block' : 'none'; });
+  __fitActivities();
+}
+/* يُظهر من قائمة «الأنشطة» ما يتناسب مع ارتفاع العمود المجاور (الأوائل/المتابعة)، ويخفي ما لا يدخل كاملاً.
+   على الشاشات الضيقة (عمود واحد) تُعرض كل الأنشطة بلا قصّ. */
+function __fitActivities(){
+  const panel = document.querySelector('.acts-panel');
+  if(!panel) return;
+  const head = panel.querySelector('.acts-head');
+  const body = panel.querySelector('.acts-body');
+  if(!head || !body) return;
+  const items = Array.from(body.querySelectorAll('.dash-activity-item'));
+  // إعادة الضبط أولاً
+  items.forEach(it => { it.style.display = ''; });
+  body.style.maxHeight = '';
+  const bottom = panel.parentElement;
+  const mid = bottom ? Array.from(bottom.children).find(c => c.classList.contains('dash-mid')) : null;
+  if(!bottom || !mid || !items.length) return;
+  const cols = getComputedStyle(bottom).gridTemplateColumns.split(/\s+/).filter(Boolean).length;
+  if(window.matchMedia('(max-width:1180px)').matches || cols < 2) return; // عمود واحد: بلا قصّ
+  // نُصفّر ارتفاع القائمة لقياس الارتفاع الطبيعي للعمود المجاور
+  body.style.maxHeight = '0px';
+  void body.offsetHeight;
+  const H = Math.round(mid.getBoundingClientRect().height);
+  const cs = getComputedStyle(panel);
+  const padT = parseFloat(cs.paddingTop) || 0;
+  const padB = parseFloat(cs.paddingBottom) || 0;
+  const borderY = (panel.offsetHeight || 0) - (panel.clientHeight || 0);
+  const headB = head.offsetHeight + (parseFloat(getComputedStyle(head).marginBottom) || 0);
+  const avail = Math.floor(H - padT - padB - borderY - headB);
+  if(avail <= 0){ items.forEach(it => { it.style.display = 'none'; }); return; }
+  body.style.maxHeight = avail + 'px';
+  // إخفاء العناصر التي لا تدخل كاملة داخل الفراغ المتاح
+  const clipBottom = body.getBoundingClientRect().top + avail;
+  let cut = false;
+  items.forEach(it => {
+    if(cut){ it.style.display = 'none'; return; }
+    if(it.getBoundingClientRect().bottom > clipBottom + 0.5){ it.style.display = 'none'; cut = true; }
+  });
+}
+/* تبويبات نسبة تفعيل الحسابات في لوحة المدير */
+function switchActTab(key){
+  document.querySelectorAll('.dash-tab[data-act]').forEach(b => b.classList.toggle('active', b.dataset.act === key));
+  document.querySelectorAll('.act-pane').forEach(p => { p.style.display = p.dataset.act === key ? 'block' : 'none'; });
+}
+/* عرض أسماء من دخلوا ومن لم يدخلوا حساباتهم (الطالبات أو المعلمون) لنطاق معيّن */
+function showActNames(gkey, grp){
+  const isStaffRole = r => r !== 'STUDENT' && r !== 'ADMIN';
+  const isAdmin = currentUser()?.role === 'ADMIN';
+  if(!isAdmin) return;
+  const hasLoggedIn = u => !!(u && (u.lastLogin || (u.loginCount || 0) > 0));
+  const sdDate = v => { if(!v) return ''; const d = new Date(v); return (!isNaN(d) ? d.toLocaleDateString('ar') + ' ' + d.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}) : ''); };
+  const schools = ['GIRLS'];
+  const multi = schools.length > 1;
+  const actNames = [], pendNames = [];
+  const tag = school => multi ? ' (بنات)' : '';
+  for(const school of schools){
+    const sd = loadSchoolDB(school);
+    const userMap = new Map((sd.users||[]).map(u => [u.id, u]));
+    if(grp === 'students'){
+      for(const s of (sd.students||[])){
+        if(!s.active) continue;
+        const u = userMap.get(s.id);
+        if(!u || u.role !== 'STUDENT') continue;
+        const nm = (s.fullName || s.name) + tag(school);
+        if(hasLoggedIn(u)) actNames.push(nm + (u.lastLogin ? ' — دخل: ' + sdDate(u.lastLogin) : '')); else pendNames.push(nm);
+      }
+    } else {
+      for(const u of (sd.users||[])){
+        if(u.active === false) continue;
+        if(grp === 'teachers'){ if(u.role !== 'TEACHER') continue; }
+        else { if(!isStaffRole(u.role) || u.role === 'TEACHER') continue; }
+        const nm = (u.name || u.username) + tag(school);
+        if(hasLoggedIn(u)) actNames.push(nm + (u.lastLogin ? ' — دخل: ' + sdDate(u.lastLogin) : '')); else pendNames.push(nm);
+      }
+    }
+  }
+  const roleLabel = grp === 'students' ? 'الطالبات' : (grp === 'teachers' ? 'المعلمون' : 'الإداريون والوكلاء والموجهون');
+  const rangeLabel = 'بنات';
+  const li = arr => arr.length ? arr.sort((a,b)=>a.localeCompare(b,'ar')).map(n => `<li>${escapeHtml(n)}</li>`).join('') : '<li class="muted">لا يوجد</li>';
+  openDetails('تفعيل الحسابات — ' + roleLabel + ' (' + rangeLabel + ')',
+    `<li style="font-weight:800;color:#16a34a">✅ دخلوا حسابهم (${actNames.length})</li>${li(actNames)}<li style="font-weight:800;color:#9ca3af;margin-top:6px">⏳ لم يدخلوا بعد (${pendNames.length})</li>${li(pendNames)}`);
+}
+
+/* ============ الإشعارات: وميض + صوت (صيانة / مشاركة أنشطة) ============ */
+const NOTIF_SEEN_KEY = 'nibras_notif_seen_';
+let __notifLastPoll = 0;      // أعلى طابع زمني لوحظ في هذه الجلسة (يمنع تكرار الصوت)
+let __notifSoundLock = true;  // أول جولة بعد الدخول: تحديث صامت
+let __audioCtx = null;
+function ensureAudio(){
+  try{
+    if(!__audioCtx) __audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    if(__audioCtx && __audioCtx.state === 'suspended') __audioCtx.resume();
+  }catch(e){}
+}
+document.addEventListener('pointerdown', ensureAudio, { once:true });
+document.addEventListener('keydown', ensureAudio, { once:true });
+function playNotifSound(){
+  try{
+    ensureAudio();
+    if(!__audioCtx) return;
+    const t = __audioCtx.currentTime;
+    [[880,0],[660,0.18]].forEach(([f,d]) => {
+      const o = __audioCtx.createOscillator(), g = __audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t + d);
+      g.gain.exponentialRampToValueAtTime(0.35, t + d + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.25);
+      o.connect(g); g.connect(__audioCtx.destination);
+      o.start(t + d); o.stop(t + d + 0.3);
+    });
+  }catch(e){}
+}
+function notifItemsFor(user){
+  if(!user) return [];
+  const d = loadDB();
+  const items = [];
+  // الطالبات: يظهر لهن إشعار بالجرس عن كل تكليف جديد صدر لفصلهن
+  if(user.role === 'STUDENT'){
+    const myStudent = (d.students||[]).find(s => s.id === user.id);
+    if(myStudent && myStudent.classId){
+      (d.assignments||[]).forEach(a => {
+        if(a && !a.deleted && a.classId === myStudent.classId && (a.created||0) > 0){
+          items.push({ kind:'assign', href:'#/assignments', title:'📝 تكليف جديد — ' + (a.title || 'بدون عنوان'), text:(a.subject||'') + (a.type ? ' · ' + a.type : '') + (a.date ? ' · ' + a.date : ''), ts:a.created, key:'assign-' + a.id });
+        }
+      });
+    }
+    return items.sort((x,y) => y.ts - x.ts);
+  }
+  const isMgr = user.role === 'ADMIN' || user.role === 'AGENT';
+  const seesMaint = isMgr || user.role === 'ADMINISTRATIVE' || user.role === 'COUNSELOR';
+  if(seesMaint){
+    (d.maintenance || []).forEach(m => {
+      if(m.status === 'جديد'){
+        items.push({ kind:'maint', href:'#/maintenance', title:'🛠️ بلاغ صيانة جديد', text:(m.createdByName || '—') + ' · ' + (m.description || 'بدون وصف'), ts: Date.parse(m.createdAt) || 0, key:'maint-' + m.id });
+      }
+      if(m.status === 'بانتظار اعتماد الوكيل' && user.role === 'AGENT'){
+        items.push({ kind:'maint', href:'#/maintenance', title:'🛠️ بلاغ صيانة بانتظار اعتمادك', text:(m.createdByName || '—') + ' · ' + (m.description || ''), ts: Date.parse(m.forwardedAt || m.createdAt) || 0, key:'maintf-' + m.id });
+      }
+    });
+  }
+  if(isMgr){
+    (d.activities || []).forEach(a => {
+      (a.requests || []).forEach(r => {
+        if(r.status === 'PENDING'){
+          items.push({ kind:'part', href:'#/activities/' + a.id, title:'✋ طلب مشاركة في نشاط', text:(r.teacherName || '—') + ' · ' + (a.name || ''), ts: Date.parse(r.createdAt) || 0, key:'part-' + a.id + '-' + r.id });
+        }
+      });
+    });
+  }
+  // أي رسالة موجهة للمدير مباشرةً → تنبيه على الجرس (يرى رسائل القسمين معًا)
+  if(user.role === 'ADMIN'){
+    const adminIds = {};
+    ['GIRLS'].forEach(s => {
+      try{
+        const db = JSON.parse(localStorage.getItem('nibras_'+s+'_db_v1') || 'null');
+        const adm = db && db.users && db.users.find(u => u.role === 'ADMIN' && u.active);
+        adminIds[s] = adm ? adm.id : null;
+      }catch(e){ adminIds[s] = null; }
+    });
+    ['GIRLS'].forEach(s => {
+      const adminId = adminIds[s];
+      if(!adminId) return;
+      (loadAdminMsgsFor(s) || []).forEach(m => {
+        const viewedBy = m.clearedBy && user && user.id && (user.id in m.clearedBy);
+        if(m.teacherId === adminId && !m.deleted && !m.dismissed && !viewedBy){
+          items.push({ kind:'adminmsg', href:'#/guide-msgs', title:'📨 رسالة موجهة إليك', text:(m.teacherName || '') + ' · ' + (m.text || ''), ts: Date.parse(m.createdAt) || 0, key:'adminmsg-' + s + '-' + m.id });
+        }
+      });
+    });
+  }
+  return items.sort((x,y) => y.ts - x.ts);
+}
+function notifSeenStamp(user){
+  try{ return parseInt(localStorage.getItem(NOTIF_SEEN_KEY + (user ? user.id : '')) || '0', 10) || 0; }catch(e){ return 0; }
+}
+function setNotifSeenStamp(user, ts){
+  try{ localStorage.setItem(NOTIF_SEEN_KEY + (user ? user.id : ''), String(ts || Date.now())); }catch(e){}
+}
+function renderNotifState(user){
+  if(!user) return '';
+  const items = notifItemsFor(user);
+  const seen = notifSeenStamp(user);
+  const unread = items.filter(x => x.ts > seen);
+  const badge = unread.length ? `<span class="notif-badge">${Math.min(unread.length, 99)}</span>` : '';
+  const blink = unread.length ? ' notif-blink' : '';
+  return `<span style="position:relative">
+    <button class="notif-btn${blink}" id="notifBell" onclick="toggleNotifDrop()" title="${unread.length ? 'لديك إشعارات جديدة' : 'الإشعارات'}">🔔${badge}</button>
+    <div class="notif-drop" id="notifDrop" style="display:none"></div>
+  </span>`;
+}
+function renderNotifDropHTML(user){
+  const items = notifItemsFor(user);
+  const seen = notifSeenStamp(user);
+  return (items.length ? items.map(it => {
+    const isNew = it.ts > seen;
+    return `<a class="notif-item" href="${it.href}" onclick="closeNotifDrop()">${it.title}${isNew ? ' <span style="color:#dc2626;font-size:10px">●</span>' : ''}<div class="small muted" style="font-weight:400">${escapeHtml(it.text)}</div></a>`;
+  }).join('') : '<div class="small muted" style="padding:8px 12px">لا توجد إشعارات</div>');
+}
+function refreshNotifBell(){
+  const u = currentUser();
+  const bell = document.getElementById('notifBell');
+  if(!u || !bell) return;
+  const items = notifItemsFor(u);
+  const seen = notifSeenStamp(u);
+  const unread = items.filter(x => x.ts > seen);
+  let badge = bell.querySelector('.notif-badge');
+  if(unread.length){
+    if(badge) badge.textContent = String(Math.min(unread.length, 99));
+    else bell.insertAdjacentHTML('afterbegin', `<span class="notif-badge">${Math.min(unread.length, 99)}</span>`);
+    bell.classList.add('notif-blink');
+    bell.title = 'لديك إشعارات جديدة';
+  } else {
+    if(badge) badge.remove();
+    bell.classList.remove('notif-blink');
+    bell.title = 'الإشعارات';
+  }
+}
+function toggleNotifDrop(){
+  const d = document.getElementById('notifDrop');
+  if(!d) return;
+  if(d.style.display !== 'none'){ closeNotifDrop(); return; }
+  const u = currentUser();
+  markAllNotifRead();
+  d.innerHTML = renderNotifDropHTML(u);
+  d.style.display = 'block';
+}
+function closeNotifDrop(){
+  const d = document.getElementById('notifDrop');
+  if(d) d.style.display = 'none';
+}
+function markAllNotifRead(){
+  const u = currentUser();
+  if(!u) return;
+  setNotifSeenStamp(u, Date.now());
+  refreshNotifBell();
+}
+function checkNotifications(){
+  const u = currentUser();
+  if(!u){ __notifSoundLock = false; return; }
+  const items = notifItemsFor(u);
+  const fresh = items.filter(x => x.ts > __notifLastPoll);
+  if(fresh.length){
+    const maxTs = Math.max(...fresh.map(x => x.ts));
+    if(__notifLastPoll > 0 && !__notifSoundLock) playNotifSound();
+    __notifLastPoll = maxTs;
+    refreshNotifBell();
+  }
+  __notifSoundLock = false;
+}
+
+/* ============ رسائل المدير إلى المعلمين ============ */
+function loadAdminMsgs(){
+  return loadAdminMsgsFor(getActiveSchool());
+}
+/* إشعارات قسم محدد دون تغيير القسم النشط (للمدير: رؤية القسمين معًا) */
+function loadAdminMsgsFor(school){
+  try{ const d = loadSchoolDB(school); if(Array.isArray(d.adminMsgs)) return d.adminMsgs; }catch(e){}
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem(ADMIN_MSGS_KEY(school)) || '[]'); } catch(e){ arr = []; }
+  return Array.isArray(arr) ? arr : [];
+}
+function saveAdminMsgs(arr){ saveAdminMsgsFor(getActiveSchool(), arr); }
+function saveAdminMsgsFor(school, arr){ __persistMsgs(school, arr); }
+/* حفظ الرسائل في مرآة قاعدة البيانات (تتزامن مع كل الأجهزة عبر الخادم) مع نسخة محلية احتياطية */
+function __persistMsgs(school, arr){
+  try{ const d = loadSchoolDB(school); d.adminMsgs = JSON.parse(JSON.stringify(arr)); d._ts = Date.now(); saveDB(d); }catch(e){}
+  try{ localStorage.setItem(ADMIN_MSGS_KEY(school), JSON.stringify(arr)); }catch(e){}
+  __syncSchedule(school, 0);
+}
+/* أسافين الحذف (deleted) لاصقة: الرسالة تُحذف بوضع علامة لا بمحوها، فتبقى شاهدًا
+   في القسم حتى يجمعها الخادم ولا تُعدَّ إحياؤها من جهاز قديم. والفلترة عند
+   القراءة لا عند التحميل، لأن كل مسار كتابة (إرسال/تعديل/حذف) يعيد كتابة القسم
+   من المصفوفة نفسها — ولو قُطعت الأسافين منها هناك لأعادها الخادم بعدها. */
+function aliveMsgs(arr){ return (Array.isArray(arr) ? arr : []).filter(m => m && !m.deleted); }
+/* البحث عن رسالة في كلا القسمين (للمدير) أو القسم النشط فقط */
+function findAdminMsgAcross(id){
+  const user = currentUser();
+  const schools = user?.role === 'ADMIN' ? ['GIRLS'] : [getActiveSchool()];
+  for(const s of schools){
+    const arr = loadAdminMsgsFor(s);
+    const m = arr.find(x => x.id === id);
+    if(m) return { school: s, arr, m };
+  }
+  return null;
+}
+/* عدّاد الرسائل غير المقروءة لكل مرسل (الموجهة/الوكيل/الوكيلة) — يظهر حسب الدور */
+function unreadForSchool(school, email){
+  try{
+    const d = JSON.parse(localStorage.getItem('nibras_' + school + '_db_v1') || 'null');
+    const u = d && d.users.find(x => x.email === email);
+    if(!u) return 0;
+    const arr = (d && Array.isArray(d.adminMsgs)) ? d.adminMsgs : [];
+    return arr.filter(m => m && !m.deleted && m.senderId === u.id && !m.read && !m.dismissed).length;
+  }catch(e){ return 0; }
+}
+function msgMonitorBadge(user){
+  if(!user) return 0;
+  // نظام GIRLS فقط: حساب واحد لكل دور.
+  const g = unreadForSchool('GIRLS', 'counselor_girls@nibras.local');
+  const gh = unreadForSchool('GIRLS', 'wakilah@nibras.local');
+  if(user.role === 'ADMIN') return g + gh;
+  if(user.role === 'AGENT') return g;
+  if(user.role === 'COUNSELOR') return gh;
+  return 0;
+}
+function adminMsgsFor(teacherId){
+  const order = { ADMIN:0, AGENT:1, COUNSELOR:2, TRANSFER:3 };
+  return aliveMsgs(loadAdminMsgs())
+    .filter(m => m.teacherId === teacherId || m.teacherId === 'ALL')
+    .sort((a,b) => ((order[a.senderRole] ?? 4) - (order[b.senderRole] ?? 4)) || b.createdAt.localeCompare(a.createdAt));
+}
+function sendAdminMsg(){
+  const text = (document.getElementById('admMsgText')?.value || '').trim();
+  if(!text){ alert('اكتب نص الرسالة أولاً'); return; }
+  const rawTarget = document.getElementById('admMsgTarget')?.value;
+  if(!rawTarget){ alert('اختر المعلم أو "' + tl('جميع المعلمين') + '"'); return; }
+  // القيمة قد تكون "school:teacherId" (المدير يختار معلمًا من أي قسم)
+  let targetSchool = getActiveSchool();
+  let target = rawTarget;
+  if(rawTarget.includes(':')){
+    const parts = rawTarget.split(':');
+    targetSchool = parts[0];
+    target = parts.slice(1).join(':');
+  }
+  const d = loadSchoolDB(targetSchool);
+  const tName = target === 'ALL' ? tl('جميع المعلمين') : (d.users.find(u => u.id === target)?.name || '—');
+  const sender = currentUser();
+  const arr = loadAdminMsgsFor(targetSchool);
+  arr.push({ id: uid(), teacherId: target, teacherName: tName, text, createdAt: new Date().toISOString(), read:false, dismissed:false, views:0, senderRole: sender?.role, senderName: sender?.name, senderId: sender?.id });
+  saveAdminMsgsFor(targetSchool, arr);
+  renderApp();
+  const color = sender?.role === 'AGENT' ? 'بالبرتقالي' : (sender?.role === 'COUNSELOR' ? 'بالأخضر' : 'بالأحمر');
+  alert('تم إرسال الرسالة ✅ ستظهر للمعلم ' + color + ' عند دخوله، وسيُثبت اطلاعه تلقائيًا');
+}
+function dismissAdminMsg(id){
+  const found = findAdminMsgAcross(id);
+  if(!found) return;
+  const { school, arr } = found;
+  const u = currentUser();
+  // لا تُحتسب بعضوٍ من النظام/المدير سوى على مجموعة الرسائل نفسها: إخفاء كل النسخ
+  // المكررة التي تخص نفس المصدر (transferId/partReqId/النص) حتى لا تبقى نسخة
+  // "تعاود الظهور" بعد اطلاع النسخة الأولى (كان التحويل يُنشئ نسختين متطابقتين).
+  let target = found.m;
+  // مفتاح المصدر: للتحويل/النشاط بالمعرّف الخاص، وللمراسلة العادية بصمة المحتوى
+  // (المرسل + الهدف + النص المُطبّع) لا بالمعرّف — فالشقيقتان المتطابقتان اللتان
+  // أُنشئتا بمعرّفين مختلفين تُعامَلان كمصدرٍ واحد ويُسقط ضغطُ «تم الاطلاع» كلتيهما
+  // معًا، فلا تعود شقيقةٌ بعد إسقاط أختها وضغط إعادة الدخول.
+  const normTxt = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+  const key = (m) => m.senderRole === 'TRANSFER' && m.transferId ? 't:' + m.transferId
+    : (m.senderRole === 'ACTIVITY' && m.partReqId ? 'p:' + m.partReqId
+    : 'm:' + (m.senderRole || '') + '|' + (m.teacherId || '') + '|' + normTxt(m.text).toLowerCase());
+  const k = key(target);
+  const stamp = new Date().toISOString();
+  arr.forEach(m => {
+    if(key(m) !== k) return;
+    m.seenBy = m.seenBy || {};
+    m.seenBy[u.id] = stamp;
+    m.clearedBy = m.clearedBy || {};
+    m.clearedBy[u.id] = stamp;
+    m.lastViewAt = stamp;
+    m.lastViewByName = u.name || '';
+    m.lastViewBy = u.id;
+    m.read = true;
+    // dismissed هو الحقل الذي تحترمه كل الفروع (المدير والمعلم…) عند العرض،
+    // فنضبطه هنا أيضاً: الاكتفاء بـ clearedBy كان سبب بقاء الإشعار على شاشة
+    // المدير، وقد يضيع إن سحبت نسخة من الخادم لا تحمله.
+    m.dismissed = true;
+    m.updatedAt = stamp;
+  });
+  saveAdminMsgsFor(school, arr);
+  if(__serverEnabled()) __syncSchedule(school, 0);
+  renderApp();
+}
+function revealAdminMsg(id){
+  const found = findAdminMsgAcross(id);
+  if(!found) return;
+  const { school, arr, m } = found;
+  const u = currentUser();
+  m.seenBy = m.seenBy || {};
+  if(!(u.id in m.seenBy)){
+    m.seenBy[u.id] = new Date().toISOString();
+    if(!m.firstViewAt){ m.firstViewAt = new Date().toISOString(); m.firstViewByName = u.name || ''; m.firstViewBy = u.id; }
+  }
+  const stamp = new Date().toISOString();
+  m.lastViewAt = stamp;
+  m.lastViewByName = u.name || '';
+  m.lastViewBy = u.id;
+  m.revealed = true;
+  m.revealedBy = u.name || '';
+  m.read = true;
+  // الاطلاع يُسقط الرسالة فوراً للاطَّلاع: تختفي من بطاقات المعلم مباشرة
+  // ولا تعود بعد السحب القادم (نُرفع للخادم فوراً).
+  m.clearedBy = m.clearedBy || {};
+  if(!(u.id in m.clearedBy)) m.clearedBy[u.id] = stamp;
+  m.updatedAt = stamp;
+  saveAdminMsgsFor(school, arr);
+  if(__serverEnabled()) __syncSchedule(school, 0);
+  renderApp();
+}
+function deleteAdminMsg(id){
+  const found = findAdminMsgAcross(id);
+  if(!found) return;
+  const { school, arr, m } = found;
+  if(!confirm('حذف هذه الرسالة؟')) return;
+  // علامة حذف لا محوا: المحواة تختفي محلياً ثم يعيدها دمج الخادم (الدمج اتحادي
+  // حسب id) فتعود للظهور بعد أي سحب — وهذا ما لاحظته الإدارة عند حذف رسائلٍ عدة.
+  m.deleted = true;
+  m.deletedAt = new Date().toISOString();
+  m.deletedBy = currentUser()?.name || '';
+  saveAdminMsgsFor(school, arr);
+  renderApp();
+}
+function editAdminMsg(id){
+  const found = findAdminMsgAcross(id);
+  if(!found) return;
+  const { school, arr, m } = found;
+  const newText = prompt('تعديل نص الرسالة:', m.text);
+  if(newText === null || newText === undefined) return;
+  const text = String(newText).trim();
+  if(!text){ alert('نص الرسالة لا يمكن أن يكون فارغاً'); return; }
+  m.text = text;
+  m.editedAt = new Date().toISOString();
+  m.editedBy = currentUser()?.name || '';
+  saveAdminMsgsFor(school, arr);
+  renderApp();
+}
+function renderGuideMsgs(){
+  const user = currentUser();
+  const isAdmin = user.role === 'ADMIN';
+  const active = getActiveSchool();
+  // المدير يرى معلمي ورسائل القسمين (بنين وبنات) معًا
+  const teacherSources = isAdmin ? ['GIRLS'] : [active];
+  const teachers = teacherSources.map(s => loadSchoolDB(s).users.filter(u => u.role === 'TEACHER' && u.active).map(t => ({ ...t, _school: s })))
+    .flat().sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+  const msgSources = isAdmin ? ['GIRLS'] : [active];
+  const all = aliveMsgs(msgSources.map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s }))).flat());
+  // المدير يرى جميع الرسائل المرسلة للمعلمين (من أي مرسل)، وغيره يرى رسائله فقط
+  const msgs = all.filter(m => (isAdmin ? (m.senderRole !== 'TRANSFER' || adminSeesTransferMsg(m)) : m.senderId === user.id)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const transIn = all.filter(m => m.senderRole === 'TRANSFER' && m.teacherId === user.id && !m.dismissed && (isAdmin ? adminSeesTransferMsg(m) : true)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const schoolBadge = (s) => `<span class="badge badge-girls" style="margin-left:6px">${campusLabels[s] || s}</span>`;
+  const targetOpts = isAdmin
+    ? [`<option value="${active}:ALL">${tl('جميع المعلمين')} (${campusLabels[active]})</option>`]
+        .concat(teachers.map(t => `<option value="${t._school}:${t.id}">${escapeHtml(t.name)} — ${campusLabels[t._school]}</option>`))
+    : [`<option value="ALL">${tl('جميع المعلمين')}</option>`]
+        .concat(teachers.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`));
+  const sentRowBg = (m) => {
+    if(m.senderRole === 'ACTIVITY') return 'background:#f0fdfa;color:#134e4a';
+    if(m.senderRole === 'AGENT') return 'background:#fff7ed;color:#9a3412';
+    if(m.senderRole === 'COUNSELOR') return 'background:#f0fdf4;color:#14532d';
+    if(m.senderRole === 'TRANSFER') return 'background:#f5f3ff;color:#4c1d95';
+    return 'background:#fef2f2;color:#7f1d1d';
+  };
+  const senderLabel = (m) => m.senderName || tl(roleLabels[m.senderRole] || m.senderRole || '—');
+  const msgsRows = msgs.map(m => `<tr style="${sentRowBg(m)}"><td>${isAdmin ? schoolBadge(m._school) : ''}${escapeHtml(m.teacherName)}</td><td style="white-space:pre-wrap">${escapeHtml(m.text)}</td><td>${fmtTime(m.createdAt)}</td>${isAdmin ? `<td>${escapeHtml(senderLabel(m))}</td><td style="white-space:nowrap"><button class="btn-secondary" style="padding:3px 8px;font-size:12px" onclick="editAdminMsg('${m.id}')" title="تعديل نص الرسالة">✏️</button> <button class="btn-secondary danger" style="padding:3px 8px;font-size:12px" onclick="deleteAdminMsg('${m.id}')" title="حذف الرسالة">🗑</button></td>` : ''}</tr>`).join('');
+  const msgsHeader = `<tr><th>${tl('المرسل إليه')}</th><th>${tl('الرسالة')}</th><th>${tl('التاريخ')}</th>${isAdmin ? '<th>المرسل</th><th>إجراءات</th>' : ''}</tr>`;
+  return `
+  <div class="header-row"><h1 class="page-title">💬 ${tl('رسائل للمعلمين')}</h1></div>
+  <div class="card" style="max-width:640px">
+    <label style="display:block;font-weight:600;margin-bottom:6px">👨‍🏫 ${tl('اختر المعلم')}</label>
+    <select id="admMsgTarget" class="input" data-tip="${escapeHtml(tl('اختر المعلم الذي تريد إرسال الرسالة إليه، أو جميع المعلمين'))}">${targetOpts}</select>
+    <label style="display:block;font-weight:600;margin:12px 0 6px">✉️ ${tl('نص الرسالة')}</label>
+    <textarea id="admMsgText" class="input" style="width:100%;min-height:80px;resize:vertical;padding:12px;font-size:14px" maxlength="500" placeholder="${escapeHtml(tl('اكتب رسالتك — ستظهر للمعلم باللون الأخضر أعلى صفحته مباشرة...'))}"></textarea>
+    <button class="btn-primary" style="margin-top:12px" onclick="sendAdminMsg()">📨 إرسال</button>
+    <p class="muted small" style="margin-top:10px">💚 تصل الرسالة للمعلم باللون الأخضر مع إثبات الاطلاع</p>
+  </div>
+  ${transIn.length ? `
+  <h2 class="section-title">📨 إشعارات التحويل الواردة</h2>
+  <div class="card table-card"><table class="data-table"><thead><tr><th>الرسالة</th><th>التاريخ</th></tr></thead><tbody>${transIn.map(m => `<tr style="background:#f5f3ff;color:#4c1d95"><td style="white-space:pre-wrap">${escapeHtml(m.text)}</td><td>${fmtTime(m.createdAt)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+  <h2 class="section-title">🗂 ${tl('الرسائل المرسلة')}</h2>
+  ${msgs.length ? `<div class="card table-card"><table class="data-table"><thead>${msgsHeader}</thead><tbody>${msgsRows}</tbody></table></div>` : `<div class="card"><p class="muted">${isAdmin ? tl('لا توجد رسائل بعد') : tl('لم ترسل أي رسائل بعد')}</p></div>`}
+  `;
 }
 /* تنبيه صوتي مستمر حتى فتح الرسالة */
 function checkMsgBeep(){
