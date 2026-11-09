@@ -4435,7 +4435,7 @@ function renderLayout(user, hash){
         <nav class="menu">${nav}</nav>
         <div class="sidebar-widgets">
           ${user.role !== 'STUDENT' ? msgTodayWidget : ''}
-          ${user.role !== 'STUDENT' ? starOfWeekWidget : ''}
+          ${starOfWeekWidget}
           <div id="nibrasToolbarDock"></div>
         </div>
       </aside>
