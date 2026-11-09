@@ -4347,22 +4347,17 @@ function renderLayout(user, hash){
   const starAvatar = starName ? starName.charAt(0) : '⭐';
   const canSetStar = (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR');
   const starOfWeekWidget = `
-    <div class="msg-day-center" style="margin-top:10px;padding:14px 12px;background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 50%,#fde68a 100%);border:2px solid #f59e0b;border-radius:14px;box-shadow:0 4px 12px rgba(245,158,11,.15);position:relative;overflow:hidden;" title="نجمة الأسبوع">
-      <div style="position:absolute;top:-8px;right:-8px;font-size:48px;opacity:.12;transform:rotate(15deg);">⭐</div>
-      <div style="font-size:11px;font-weight:800;color:#92400e;letter-spacing:.5px;margin-bottom:8px;text-transform:uppercase;">⭐ نجمة الأسبوع</div>
+    <div class="msg-day-center" style="margin-top:10px;padding:12px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.04);text-align:center;" title="نجمة الأسبوع">
+      <div style="font-size:10px;font-weight:800;color:#92400e;letter-spacing:.5px;margin-bottom:6px;text-transform:uppercase;">⭐ نجمة الأسبوع</div>
       ${starName ? `
-        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-          <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);border:3px solid #fff;box-shadow:0 2px 8px rgba(245,158,11,.4);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#fff;flex-shrink:0;">${escapeHtml(starAvatar)}</div>
-          <div style="font-size:15px;font-weight:800;color:#78350f;text-align:center;line-height:1.3;">${escapeHtml(starName)}</div>
-          <div style="font-size:10px;color:#a16207;font-weight:600;">🏆 مبروك!</div>
-        </div>
+        <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:80px;height:80px;margin:0 auto 6px;display:block;" />
+        <div style="font-size:13px;font-weight:700;color:#78350f;">${escapeHtml(starName)}</div>
+        ${starOfWeek && starOfWeek.className ? `<div style="font-size:10px;color:#92400e;margin-top:2px;">${escapeHtml(starOfWeek.className)}</div>` : ''}
       ` : `
-        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;">
-          <div style="font-size:36px;opacity:.5;">⭐</div>
-          <div style="font-size:12px;color:#92400e;font-weight:600;">لم تُحدد بعد</div>
-        </div>
+        <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:60px;height:60px;margin:0 auto 6px;display:block;opacity:.35;" />
+        <div style="font-size:11px;color:#9ca3af;">لم تُحدد بعد</div>
       `}
-      ${canSetStar ? `<button class="btn-secondary" style="margin-top:8px;padding:5px 14px;font-size:12px;border-radius:8px;background:#fff;border:1px solid #f59e0b;color:#92400e;font-weight:700;" onclick="setStarOfWeekPrompt()" title="تعيين نجمة الأسبوع">✏️ ${starName ? 'تغيير' : 'تعيين'}</button>` : ''}
+      ${canSetStar ? `<a href="#/star-of-week" style="display:inline-block;margin-top:6px;padding:3px 10px;font-size:11px;border-radius:6px;background:#fffbeb;border:1px solid #f59e0b;color:#92400e;font-weight:700;text-decoration:none;">✏️ ${starName ? 'تغيير' : 'تعيين'}</a>` : ''}
     </div>`;
 
   let pageHtml = '';
