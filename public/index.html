@@ -10333,6 +10333,7 @@ function saveStarOfWeek(){
   };
   starPhotoBase64 = null;
   saveDB(d);
+  __syncSchedule(getActiveSchool(), 0);
   renderApp();
   alert('تم اعتماد "' + trimmed + '" كنجمة الأسبوع ⭐');
 }
@@ -10345,6 +10346,7 @@ function clearStarOfWeekConfirm(){
   }
   delete d.starOfWeek;
   saveDB(d);
+  __syncSchedule(getActiveSchool(), 0);
   renderApp();
   alert('تم إلغاء نجم الأسبوع');
 }
