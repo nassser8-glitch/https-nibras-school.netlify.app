@@ -4350,11 +4350,12 @@ function renderLayout(user, hash){
     <div style="margin-top:8px;padding:8px 4px;text-align:center;" title="نجمة الأسبوع">
       <div style="font-size:11px;font-weight:800;color:#fff;letter-spacing:.5px;margin-bottom:4px;text-transform:uppercase;">⭐ نجمة الأسبوع</div>
       ${starName ? `
-        <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:72px;height:72px;margin:0 auto 4px;display:block;" />
-        <div style="font-size:14px;font-weight:800;color:#fff;">${escapeHtml(starName)}</div>
+        <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:88px;height:88px;margin:0 auto 4px;display:block;" />
+        <div style="font-size:15px;font-weight:800;color:#fff;">${escapeHtml(starName)}</div>
+        <div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.85);margin-top:2px;">طالبة متميزة ومتفوقة ومثابرة</div>
         ${starOfWeek && starOfWeek.className ? `<div style="font-size:11px;color:rgba(255,255,255,.8);margin-top:2px;">${escapeHtml(starOfWeek.className)}</div>` : ''}
       ` : `
-        <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:56px;height:56px;margin:0 auto 4px;display:block;opacity:.4;" />
+        <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:64px;height:64px;margin:0 auto 4px;display:block;opacity:.4;" />
         <div style="font-size:11px;color:rgba(255,255,255,.6);">لم تُحدد بعد</div>
       `}
       ${canSetStar ? `<a href="#/star-of-week" style="display:inline-block;margin-top:4px;padding:2px 8px;font-size:10px;border-radius:4px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-weight:700;text-decoration:none;">✏️ ${starName ? 'تغيير' : 'تعيين'}</a>` : ''}
@@ -10408,6 +10409,7 @@ function printSchoolCalendar(){
 
 let __lastClassScheduleHTML = '';
 function viewClassSchedule(classId){
+  try {
   const d = loadDB();
   const c = d.classes.find(x => x.id === classId);
   if(!c){ alert('الفصل غير موجود'); return; }
@@ -10468,6 +10470,7 @@ function viewClassSchedule(classId){
   </div>`;
   const old = document.querySelector('.modal-overlay'); if (old) old.remove();
   const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
+  } catch(e) { console.error('[viewClassSchedule] Error:', e); alert('خطأ في عرض الجدول: ' + e.message); }
 }
 function closeClassSchedule(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
 function printClassSchedule(){
@@ -14752,7 +14755,8 @@ function renderStarOfWeek(){
             ${photoHtml}
           </div>
           <div style="display:inline-block;padding:6px 20px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border-radius:24px;font-size:13px;font-weight:800;margin-bottom:16px;box-shadow:0 3px 10px rgba(245,158,11,.3);letter-spacing:.5px;">🏆 نجمة الأسبوع</div>
-          <h2 style="font-size:26px;font-weight:900;color:#14532d;margin:0 0 6px;line-height:1.3;">${escapeHtml(currentStar.name)}</h2>
+          <h2 style="font-size:28px;font-weight:900;color:#14532d;margin:0 0 4px;line-height:1.3;">${escapeHtml(currentStar.name)}</h2>
+        <div style="font-size:14px;font-weight:700;color:#24577A;margin-bottom:8px;">طالبة متميزة ومتفوقة ومثابرة</div>
           ${currentStar.className ? `<div style="font-size:15px;color:#166534;font-weight:600;margin-bottom:4px;">${escapeHtml(currentStar.className)}</div>` : ''}
           <div style="width:60%;height:3px;background:linear-gradient(90deg,transparent,#D6B35D,transparent);margin:8px auto 12px;border-radius:2px;"></div>
           <div style="font-size:12px;color:#6b7280;margin-bottom:16px;">قسم ${sectionLabel} · ${escapeHtml(currentStar.week || 'الأسبوع الحالي')}</div>
