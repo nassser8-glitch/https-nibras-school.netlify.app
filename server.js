@@ -2567,10 +2567,41 @@ app.put('/api/settings/:school', requireAuth, (req, res) => {
     const school = String(req.params.school).toUpperCase();
     if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
     if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
-    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    if (req.session.role !== 'ADMIN' && req.session.role !== 'COUNSELOR') return res.status(403).json({ error: 'forbidden' });
     const data = req.body && req.body.data;
     if (!data || typeof data !== 'object' || Array.isArray(data)) return res.status(400).json({ error: 'invalid_payload' });
     await db.setSchoolSettings(school, data);
+    res.json({ ok: true });
+  })().catch(fail(res));
+});
+
+
+/* ===== نجمة الأسبوع — API مخصص (حفظ واسترجاع من قاعدة البيانات) ===== */
+app.get('/api/star-of-week/:school', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.params.school).toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const settings = await db.getSchoolSettings(school);
+    const star = (settings && settings.starOfWeek) ? settings.starOfWeek : null;
+    const history = (settings && Array.isArray(settings.starOfWeekHistory)) ? settings.starOfWeekHistory : [];
+    res.json({ ok: true, star, history });
+  })().catch(fail(res));
+});
+app.post('/api/star-of-week/:school', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.params.school).toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    if (req.session.role !== 'ADMIN' && req.session.role !== 'COUNSELOR' && req.session.role !== 'AGENT') return res.status(403).json({ error: 'forbidden' });
+    const star = req.body && req.body.star;
+    const history = req.body && req.body.history;
+    const settings = await db.getSchoolSettings(school);
+    const merged = Object.assign({}, settings || {});
+    if (star) merged.starOfWeek = star;
+    else delete merged.starOfWeek;
+    if (Array.isArray(history)) merged.starOfWeekHistory = history;
+    await db.setSchoolSettings(school, merged);
     res.json({ ok: true });
   })().catch(fail(res));
 });

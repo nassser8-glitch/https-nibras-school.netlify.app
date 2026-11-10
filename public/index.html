@@ -10279,13 +10279,16 @@ async function __starOfWeekLoad(school){
   if(!__serverEnabled()) return null;
   school = school || getActiveSchool();
   try{
-    const data = await __getSchoolSettings(school);
-    if(data && data.starOfWeek){
-      __starOfWeekCache[school] = data.starOfWeek;
-      try { localStorage.setItem('nibras_starOfWeek_' + school, JSON.stringify(data.starOfWeek)); } catch(e){}
-      return data.starOfWeek;
+    const resp = await fetch('/api/star-of-week/' + school);
+    if(!resp.ok) return null;
+    const j = await resp.json();
+    if(j && j.ok && j.star){
+      __starOfWeekCache[school] = j.star;
+      try { localStorage.setItem('nibras_starOfWeek_' + school, JSON.stringify(j.star)); } catch(e){}
+      if(Array.isArray(j.history)) { try { localStorage.setItem('nibras_starOfWeekHistory_' + school, JSON.stringify(j.history)); } catch(e){} }
+      return j.star;
     }
-  }catch(e){}
+  }catch(e){ console.warn('[starOfWeek load]', e); }
   return null;
 }
 function getStarOfWeek(){
@@ -10358,12 +10361,12 @@ async function saveStarOfWeek(){
   // حفظ مستقل (لا يُمحى عند Synchronization)
   try { localStorage.setItem('nibras_starOfWeek_' + getActiveSchool(), JSON.stringify(d.starOfWeek)); } catch(e){}
   try { localStorage.setItem('nibras_starOfWeekHistory_' + getActiveSchool(), JSON.stringify(d.starOfWeekHistory)); } catch(e){}
-  // حفظ في الخادم (app_settings) للتزامن بين الأجهزة
+  // حفظ في الخادم (API مخصص) للتزامن بين الأجهزة
   try {
     const school = getActiveSchool();
-    const cur = await __getSchoolSettings(school);
-    await __putSchoolSettings(school, Object.assign({}, cur || {}, { starOfWeek: d.starOfWeek, starOfWeekHistory: d.starOfWeekHistory }));
-    __starOfWeekCache[school] = d.starOfWeek;
+    const resp = await fetch('/api/star-of-week/' + school, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ star: d.starOfWeek, history: d.starOfWeekHistory }) });
+    if(resp.ok){ __starOfWeekCache[school] = d.starOfWeek; }
+    else { console.warn('[starOfWeek save] server returned', resp.status); }
   } catch(e) { console.warn('[starOfWeek save to server]', e); }
   __syncSchedule(getActiveSchool(), 0);
   renderApp();
@@ -10383,9 +10386,8 @@ async function clearStarOfWeekConfirm(){
   // حذف من الخادم
   try {
     const school = getActiveSchool();
-    const cur = await __getSchoolSettings(school);
-    if(cur) { delete cur.starOfWeek; await __putSchoolSettings(school, cur); }
-    delete __starOfWeekCache[school];
+    const resp = await fetch('/api/star-of-week/' + school, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ star: null, history: d.starOfWeekHistory }) });
+    if(resp.ok){ delete __starOfWeekCache[school]; }
   } catch(e) { console.warn('[starOfWeek delete from server]', e); }
   __syncSchedule(getActiveSchool(), 0);
   renderApp();
