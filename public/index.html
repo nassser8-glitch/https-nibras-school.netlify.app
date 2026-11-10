@@ -10274,10 +10274,24 @@ function openEmbeddedViewer(title, url){
 function closeEmbeddedViewer(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
 
 /* ============ نجمة الأسبوع ============ */
+const __starOfWeekCache = {};
+async function __starOfWeekLoad(school){
+  if(!__serverEnabled()) return null;
+  school = school || getActiveSchool();
+  try{
+    const data = await __getSchoolSettings(school);
+    if(data && data.starOfWeek){
+      __starOfWeekCache[school] = data.starOfWeek;
+      try { localStorage.setItem('nibras_starOfWeek_' + school, JSON.stringify(data.starOfWeek)); } catch(e){}
+      return data.starOfWeek;
+    }
+  }catch(e){}
+  return null;
+}
 function getStarOfWeek(){
   try {
-    // قراءة من التخزين المستقل أولاً (لا يُمحى عند Synchronization)
     const school = getActiveSchool();
+    if(__starOfWeekCache[school] && __starOfWeekCache[school].name) return __starOfWeekCache[school];
     const raw = localStorage.getItem('nibras_starOfWeek_' + school);
     if(raw){ try { const o = JSON.parse(raw); if(o && o.name) return o; }catch(e){} }
     const d = loadDB();
@@ -10317,7 +10331,7 @@ function previewStarPhoto(input){
   };
   reader.readAsDataURL(file);
 }
-function saveStarOfWeek(){
+async function saveStarOfWeek(){
   const name = (document.getElementById('starNameInput')||{}).value || '';
   const className = (document.getElementById('starClassInput')||{}).value || '';
   const week = (document.getElementById('starWeekInput')||{}).value || '';
@@ -10344,11 +10358,18 @@ function saveStarOfWeek(){
   // حفظ مستقل (لا يُمحى عند Synchronization)
   try { localStorage.setItem('nibras_starOfWeek_' + getActiveSchool(), JSON.stringify(d.starOfWeek)); } catch(e){}
   try { localStorage.setItem('nibras_starOfWeekHistory_' + getActiveSchool(), JSON.stringify(d.starOfWeekHistory)); } catch(e){}
+  // حفظ في الخادم (app_settings) للتزامن بين الأجهزة
+  try {
+    const school = getActiveSchool();
+    const cur = await __getSchoolSettings(school);
+    await __putSchoolSettings(school, Object.assign({}, cur || {}, { starOfWeek: d.starOfWeek, starOfWeekHistory: d.starOfWeekHistory }));
+    __starOfWeekCache[school] = d.starOfWeek;
+  } catch(e) { console.warn('[starOfWeek save to server]', e); }
   __syncSchedule(getActiveSchool(), 0);
   renderApp();
   alert('تم اعتماد "' + trimmed + '" كنجمة الأسبوع ⭐');
 }
-function clearStarOfWeekConfirm(){
+async function clearStarOfWeekConfirm(){
   if(!confirm('إلغاء نجم الأسبوع الحالي؟ (سيُحفظ في السجل)')) return;
   const d = loadDB();
   if(d.starOfWeek && d.starOfWeek.name){
@@ -10359,6 +10380,13 @@ function clearStarOfWeekConfirm(){
   saveDB(d);
   try { localStorage.removeItem('nibras_starOfWeek_' + getActiveSchool()); } catch(e){}
   try { localStorage.setItem('nibras_starOfWeekHistory_' + getActiveSchool(), JSON.stringify(d.starOfWeekHistory)); } catch(e){}
+  // حذف من الخادم
+  try {
+    const school = getActiveSchool();
+    const cur = await __getSchoolSettings(school);
+    if(cur) { delete cur.starOfWeek; await __putSchoolSettings(school, cur); }
+    delete __starOfWeekCache[school];
+  } catch(e) { console.warn('[starOfWeek delete from server]', e); }
   __syncSchedule(getActiveSchool(), 0);
   renderApp();
   alert('تم إلغاء نجم الأسبوع');
@@ -14724,6 +14752,8 @@ function renderStarOfWeek(){
 
   const currentStar = getStarOfWeek();
   const history = (function(){ try{ const raw = localStorage.getItem('nibras_starOfWeekHistory_' + getActiveSchool()); if(raw){ const o = JSON.parse(raw); if(Array.isArray(o)) return o; } }catch(e){} const d = loadDB(); return Array.isArray(d.starOfWeekHistory) ? d.starOfWeekHistory : []; })();
+  // Load from server in background
+  __starOfWeekLoad(getActiveSchool()).then(() => { if((location.hash || '').indexOf('#/star-of-week') === 0) renderApp(); });
 
   const avatarOf = (name) => {
     if(!name) return '⭐';
@@ -15047,6 +15077,7 @@ function saveAnnouncement(){
 /* تسجيل Service Worker للتثبيت والعمل دون اتصال — يعمل فقط عبر http/https */
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   window.addEventListener('load', function(){
+    try{ __starOfWeekLoad(getActiveSchool()).then(() => { try{ renderApp(); }catch(e){} }); }catch(e){}
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
