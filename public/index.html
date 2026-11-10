@@ -2379,6 +2379,7 @@ async function syncPullAll(){
   }
   await Promise.all(schools.map(s => __syncPull(s)));
   await Promise.all(schools.filter(Boolean).map(s => __getSchoolSettings(s)));
+  try { await __starOfWeekLoad(getActiveSchool()); } catch(e) {}
   // عرض الإشعارات الجديدة فور وصولها دون انتظار تحديث يدوي للصفحة
   // (السحب الدوري يجلب الرسائل إلى التخزين، لكن بدون إعادة الرسم لا تظهر للوكيل/الموجهة/المدير)
   const key = 'nibras_'+(user.school||'GIRLS')+'_db_v1';
@@ -14761,7 +14762,7 @@ function renderStarOfWeek(){
   const currentStar = getStarOfWeek();
   const history = (function(){ try{ const raw = localStorage.getItem('nibras_starOfWeekHistory_' + getActiveSchool()); if(raw){ const o = JSON.parse(raw); if(Array.isArray(o)) return o; } }catch(e){} const d = loadDB(); return Array.isArray(d.starOfWeekHistory) ? d.starOfWeekHistory : []; })();
   // Load from server in background
-  __starOfWeekLoad(getActiveSchool()).then(() => { if((location.hash || '').indexOf('#/star-of-week') === 0) renderApp(); });
+  if(!window.__starLoadTriggered){ window.__starLoadTriggered = true; __starOfWeekLoad(getActiveSchool()).then(() => { window.__starLoadTriggered = false; renderApp(); }); }
 
   const avatarOf = (name) => {
     if(!name) return '⭐';
