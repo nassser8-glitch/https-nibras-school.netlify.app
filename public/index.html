@@ -9209,6 +9209,8 @@ async function saveAttendance(){
   });
   d._ts = Date.now();
   saveDB(d);
+  // حفظ مستقل (لا يُمحى عند Synchronization)
+  try { localStorage.setItem('nibras_attendance_' + getActiveSchool(), JSON.stringify(d.attendance)); } catch(e){}
   // موثوقية الحفظ: نرفع عبر __syncPush (دمج/تصادم/أمان) بدل fetch خام، ولا نُعلن
   // النجاح إلا بعد تأكيد الخادم عبر __saveGuardWatch. أُزيل الاعتماد على جدولة
   // ثابتة (4000ms) كانت سبب «أول حفظ يضيع ثم ينجح بعد ثوانٍ».
@@ -9219,7 +9221,12 @@ async function saveAttendance(){
     __noteSaveBanner('🔵 جارٍ حفظ الحضور على الخادم...', false);
     __refreshSaveStatus();
     __syncSchedule(schoolNow, 0);
-    // حفظ فوري في الخادم
+    // حفظ فوري في الخادم (API مخصص)
+    try {
+      const resp = await fetch('/api/attendance/' + schoolNow, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ attendance: d.attendance }) });
+      if(!resp.ok) console.warn('[saveAttendance] server returned', resp.status);
+    } catch(e) { console.warn('[saveAttendance save to server]', e); }
+    // حفظ فوري في الخادم (sync)
     try { await __syncPush(schoolNow); } catch(e) { console.warn('[saveAttendance push]', e); }
   }
   attendanceState.draft = {};
@@ -10284,6 +10291,22 @@ function closeEmbeddedViewer(){ const ov = document.querySelector('.modal-overla
 
 /* ============ نجمة الأسبوع ============ */
 const __starOfWeekCache = {};
+const __attendanceCache = {};
+async function __attendanceLoad(school){
+  if(!__serverEnabled()) return null;
+  school = school || getActiveSchool();
+  try{
+    const resp = await fetch('/api/attendance/' + school);
+    if(!resp.ok) return null;
+    const j = await resp.json();
+    if(j && j.ok && Array.isArray(j.attendance)){
+      __attendanceCache[school] = j.attendance;
+      try { localStorage.setItem('nibras_attendance_' + school, JSON.stringify(j.attendance)); } catch(e){}
+      return j.attendance;
+    }
+  }catch(e){ console.warn('[attendance load]', e); }
+  return null;
+}
 async function __starOfWeekLoad(school){
   if(!__serverEnabled()) return null;
   school = school || getActiveSchool();
@@ -15089,6 +15112,7 @@ function saveAnnouncement(){
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   window.addEventListener('load', function(){
     try{ __starOfWeekLoad(getActiveSchool()).then(() => { try{ renderApp(); }catch(e){} }); }catch(e){}
+     try{ __attendanceLoad(getActiveSchool()).then(() => { try{ renderApp(); }catch(e){} }); }catch(e){}
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
