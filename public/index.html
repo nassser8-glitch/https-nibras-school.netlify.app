@@ -9123,7 +9123,7 @@ function markAllPresent(){
   document.querySelectorAll('#attTableBody input[type="radio"]').forEach(inp => { if(inp.dataset.status === 'PRESENT') inp.checked = true; });
   refreshAttendanceSummary();
 }
-function saveAttendance(){
+async function saveAttendance(){
   const d = loadDB();
   if(attendanceState.date < todayStr() && !canRecordPastAttendance(currentUser())){
     alert('لا يمكن تسجيل حضور لتاريخ سابق — الصلاحية مقصورة على الإدارة');
@@ -9219,6 +9219,8 @@ function saveAttendance(){
     __noteSaveBanner('🔵 جارٍ حفظ الحضور على الخادم...', false);
     __refreshSaveStatus();
     __syncSchedule(schoolNow, 0);
+    // حفظ فوري في الخادم
+    try { await __syncPush(schoolNow); } catch(e) { console.warn('[saveAttendance push]', e); }
   }
   attendanceState.draft = {};
   attendanceState.absenceType = {};

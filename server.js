@@ -3150,6 +3150,33 @@ app.post('/api/wa/consent', requireAuth, async (req, res) => {
 
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));
 
+
+/* ===== الحضور والغياب — API مخصص (حفظ واسترجاع من قاعدة البيانات) ===== */
+app.get('/api/attendance/:school', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.params.school).toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const data = await db.getSchoolData(school);
+    const attendance = (data && Array.isArray(data.attendance)) ? data.attendance : [];
+    res.json({ ok: true, attendance });
+  })().catch(fail(res));
+});
+app.post('/api/attendance/:school', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.params.school).toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const attendance = req.body && Array.isArray(req.body.attendance) ? req.body.attendance : null;
+    if (!attendance) return res.status(400).json({ error: 'invalid_payload' });
+    const prev = await db.getSchoolData(school);
+    const data = (prev && typeof prev === 'object') ? JSON.parse(JSON.stringify(prev)) : {};
+    data.attendance = attendance;
+    data._ts = Date.now();
+    await db.setSchoolData(school, data, Date.now());
+    res.json({ ok: true, count: attendance.length });
+  })().catch(fail(res));
+});
 app.use((req, res) => res.status(404).json({ error: 'not_found' }));
 
 // إبقاء المثيل نشطًا على خطة Render المجانية (ينام بعد 15 دقيقة خمول فيبرد أول دخول)
