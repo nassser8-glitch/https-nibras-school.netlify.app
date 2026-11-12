@@ -2380,6 +2380,7 @@ async function syncPullAll(){
   await Promise.all(schools.map(s => __syncPull(s)));
   await Promise.all(schools.filter(Boolean).map(s => __getSchoolSettings(s)));
   try { await __starOfWeekLoad(getActiveSchool()); } catch(e) {}
+  try { await __attendanceLoad(getActiveSchool()); } catch(e) {}
   // عرض الإشعارات الجديدة فور وصولها دون انتظار تحديث يدوي للصفحة
   // (السحب الدوري يجلب الرسائل إلى التخزين، لكن بدون إعادة الرسم لا تظهر للوكيل/الموجهة/المدير)
   const key = 'nibras_'+(user.school||'GIRLS')+'_db_v1';
@@ -8803,7 +8804,14 @@ function staffSheetMembers(d, sheetId){
 function staffSheetEmptyMsg(sheetId){ return sheetId === 'ADMIN_STAFF' ? 'لا يوجد كادر إداري بعد' : tl('لا يوجد معلمون بعد'); }
 function renderAttendance(){
   const d = loadDB();
+  // Use cached attendance from server if available
+  const __attCache = __attendanceCache[getActiveSchool()];
+  if(__attCache && Array.isArray(__attCache) && __attCache.length > (d.attendance||[]).length){
+    d.attendance = __attCache.slice();
+  }
   const classes = getClassesSorted();
+  // Load attendance from server in background
+  __attendanceLoad(getActiveSchool()).then(() => { if((location.hash || '').indexOf('#/attendance') === 0) renderApp(); });
   // الوكيل والمدير بإمكانهما تسجيل الغياب/التأخر لأيام سابقة — فقط نضمن وجود تاريخ افتراضي صالح (اليوم إن لم يُحدَّد بعد)
   if(!attendanceState.date) attendanceState.date = todayStr();
   // السماح بعرض أيام سابقة للمراجعة (بما في ذلك غير المديرة)؛ الحفظ يُؤكَّد/يُمنع في saveAttendance
@@ -9225,6 +9233,7 @@ async function saveAttendance(){
     try {
       const resp = await fetch('/api/attendance/' + schoolNow, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ attendance: d.attendance }) });
       if(!resp.ok) console.warn('[saveAttendance] server returned', resp.status);
+      else { __attendanceCache[schoolNow] = d.attendance.slice(); }
     } catch(e) { console.warn('[saveAttendance save to server]', e); }
     // حفظ فوري في الخادم (sync)
     try { await __syncPush(schoolNow); } catch(e) { console.warn('[saveAttendance push]', e); }
