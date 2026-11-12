@@ -2593,7 +2593,7 @@ app.post('/api/star-of-week/:school', requireAuth, (req, res) => {
     const school = String(req.params.school).toUpperCase();
     if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
     if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
-    if (req.session.role !== 'ADMIN' && req.session.role !== 'COUNSELOR' && req.session.role !== 'AGENT') return res.status(403).json({ error: 'forbidden' });
+    if (req.session.role !== 'ADMIN' && req.session.role !== 'COUNSELOR' && req.session.role !== 'AGENT' && req.session.role !== 'TEACHER') return res.status(403).json({ error: 'forbidden' });
     const star = req.body && req.body.star;
     const history = req.body && req.body.history;
     const settings = await db.getSchoolSettings(school);
