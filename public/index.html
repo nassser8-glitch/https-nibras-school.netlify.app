@@ -1798,13 +1798,9 @@ let raw = null;
     // نافذة قصيرة بين دمج الخادم والرفع: إن كُتب تعديل جديد أثناءها فالدفعة الحالية
     // صارت قديمة — نُلغيها ونُعيد الجدولة بدل رفع نسخةٍ تمحو الجديد. لا نجاح كاذب:
     // التخزين هو مصدر الحقيقة، ومنه يبدأ الرفع التالي فوراً.
-    try{
-      if(localStorage.getItem(key) !== __snapRaw){
-        __syncLogAdd({ ev:'push-stale-retry', school, ts:__syncTS(obj) });
-        st.dirty = true;
-        return { ok:false, stale:true, dirty:true };
-      }
-    }catch(e){}
+      // تم إزالة فحص __snapRaw: كان يُلغي الرفع عندما تُعدّل __syncPull
+  // التخزين المحلي أثناء الرفع (سباق كاذب)، فتُفقد سجلات الحضور/الغياب.
+  // الخادم يدمج البيانات (mergeAttendance) فلا ضرورة للفحص here.
     let attempt = 0;
     let lastErr = '';
     const respOf = await (async () => {
