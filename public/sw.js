@@ -1,5 +1,5 @@
-﻿/* نبراس — Service Worker للتثبيت والعمل دون اتصال */
-const CACHE_NAME = 'nibras-v172';
+/* ����� � Service Worker ������� ������ ��� ����� */
+const CACHE_NAME = 'nibras-v173';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -25,11 +25,11 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim()).then(() =>
-      // بعد سيطرة النسخة الجديدة نطلب من كل النوافذ إعادة التحميل مرة واحدة
-      // حتى لا تبقى أي جهاز يعمل بملفات قديمة مخزنة
+      // ��� ����� ������ ������� ���� �� �� ������� ����� ������� ��� �����
+      // ��� �� ���� �� ���� ���� ������ ����� �����
       self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) =>
         clients.forEach((client) => {
-          try { client.postMessage({ type: 'NEW_VERSION', version: CACHE_NAME }); } catch (_) { /* تجاهل */ }
+          try { client.postMessage({ type: 'NEW_VERSION', version: CACHE_NAME }); } catch (_) { /* ����� */ }
         })
       )
     )
@@ -46,7 +46,7 @@ self.addEventListener('fetch', (event) => {
 
   const isDocument = req.mode === 'navigate' || req.headers.get('accept').indexOf('text/html') === 0;
   if (isDocument) {
-    // index.html ط¯ط§ط¦ظ…ظ‹ط§ ظ…ظ† ط§ظ„ط´ط¨ظƒط© (ظ…ط¹ ط§ظ„ط³ظ‚ظˆط· ط¥ظ„ظ‰ ط§ظ„ط®ط¨ط·ط© ط¹ظ†ط¯ ط§ظ†ظ‚ط·ط§ط¹ ط§ظ„ظ†طھ) â€” ظ„ط§ طھظˆط¬ط¯ ظ†ط³ط®ط© ظ‚ط¯ظٹظ…ط© ط¹ط§ظ„ظ‚ط©
+    // index.html دائمًا من الشبكة (مع السقوط إلى الخبطة عند انقطاع النت) — لا توجد نسخة قديمة عالقة
     event.respondWith(
       fetch(req).then((resp) => {
         if (resp && resp.status === 200 && resp.type === 'basic') {
