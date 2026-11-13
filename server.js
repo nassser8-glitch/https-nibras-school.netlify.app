@@ -1989,6 +1989,44 @@ async function normalizeTeacherDuplicates(school, data) {
   return { remapped: 0, dropped };
 }
 
+/* حارس الاستمرارية: الكتابة الواردة لا تُسقط طالبات أو حضوراً أو ملاحظات كانت محفوظة
+   على الخادم (نسخة قديمة/ناقصة من جهاز). الحذف المقصود محفوظ: الحذف الناعم بعلامة deleted
+   داخل السجل نفسه، والحذف النهائي مسجّل في _blockedStudents/_blockedClasses فلا يُعاد السجل.
+   ولا يُعاد فتح فصل فيه طالبات بعلامة محذوف من نسخة قديمة. */
+function protectContinuity(prevData, clean) {
+  const restored = {};
+  if (!prevData || typeof prevData !== 'object' || !clean || typeof clean !== 'object') return restored;
+  const blockedStudents = new Set((Array.isArray(prevData._blockedStudents) ? prevData._blockedStudents : []).map(String));
+  const blockedClasses = new Set((Array.isArray(prevData._blockedClasses) ? prevData._blockedClasses : []).map(String));
+  const keyOf = (r) => (r.id != null ? 'id:' + r.id : 'sd:' + (r.studentId || '') + '|' + (r.date || ''));
+  const keep = (key, isBlocked) => {
+    const prevArr = Array.isArray(prevData[key]) ? prevData[key] : [];
+    const curArr = Array.isArray(clean[key]) ? clean[key] : [];
+    const have = new Set(curArr.filter(Boolean).map(keyOf));
+    const missing = prevArr.filter(r => r && typeof r === 'object' && !have.has(keyOf(r)) && !(isBlocked && isBlocked(r)));
+    if (missing.length) { clean[key] = curArr.concat(missing); restored[key] = missing.length; }
+  };
+  keep('students', (s) => blockedStudents.has(String(s.id)));
+  keep('notes', (n) => blockedStudents.has(String(n.studentId)));
+  keep('attendance', (a) => blockedStudents.has(String(a.studentId)));
+  const activeClassIds = new Set((Array.isArray(prevData.students) ? prevData.students : [])
+    .filter(s => s && s.classId && !s.deleted).map(s => String(s.classId)));
+  if (Array.isArray(prevData.classes) && Array.isArray(clean.classes)) {
+    let reopened = 0;
+    clean.classes = clean.classes.map(c => {
+      if (!c || !c.deleted) return c;
+      const prevC = prevData.classes.find(p => p && String(p.id) === String(c.id));
+      if (prevC && !prevC.deleted && activeClassIds.has(String(c.id)) && !blockedClasses.has(String(c.id))) {
+        reopened++;
+        return Object.assign({}, c, { deleted: false });
+      }
+      return c;
+    });
+    if (reopened) restored.classesReopened = reopened;
+  }
+  return restored;
+}
+
 app.put('/api/db/:school', requireAuth, (req, res) => {
   (async () => {
     // تدقيق الرفض: كل ردٍّ غير ناجح على هذا المسار يُسجَّل بسببه ومَن صاحبه،
@@ -2487,6 +2525,8 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
 
     // لا تُكتب نسخة بلا قسم: المفتاح الناقص يُملأ من نسخة الخادم السابقة أو
     // بقائمة فارغة، فيتوقف زوال المفتاح من الجذر (كان يُسقط شاشات العميل).
+    const continuity = protectContinuity(prev ? prev.data : null, clean);
+    if (Object.keys(continuity).length) console.warn('[continuity]', school, JSON.stringify(continuity));
     ensureDataSections(clean, prev ? prev.data : null);
 
     let putRes = await db.setSchoolData(school, clean, nextTs);
