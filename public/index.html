@@ -4214,17 +4214,8 @@ function enterSchool(school){
   const d = loadDB();
   const sessionId = localStorage.getItem(LOCAL_SESSION_KEY);
   ensureUserInDB(school, sessionId);
-  if(d.classes.length === 0 && d.grades.length === 0 && d.students.length === 0){
-    stages.forEach(stage => {
-      let grade = d.grades.find(g => g.name === stage.name);
-      if(!grade){ grade = { id:stage.id, name:stage.name, order:stage.order }; d.grades.push(grade); }
-      if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ')){
-        d.classes.push({ id:__stageClassId(grade.id), gradeId:grade.id, name:'أ', campus:school, capacity:null, teacherIds:[] });
-      }
-    });
-    saveDB(d);
-    ensureUserInDB(school, sessionId);
-  }
+  // لا إنشاء تلقائي للصفوف والفصول عند دخول جهاز فارغ: البيانات تُسحب من الخادم،
+  // وإنشاء الصفوف الناقصة إجراء إداري صريح فقط (createMissingStageClasses).
   location.hash = '#/';
   renderApp();
 }
@@ -10165,35 +10156,57 @@ function __classAccent(g){
   if (order < 0) return '#a78bfa'; // التمهيدي
   return palette[order % palette.length];
 }
+/* إنشاء الصفوف الناقصة إجراء إداري صريح فقط (زر في صفحة الفصول)، ولا يُستدعى عند فتح الصفحة. */
+function __missingStageNames(d){
+  const out = [];
+  stages.forEach(stage => {
+    const grade = d.grades.find(g => g.name === stage.name);
+    const gid = grade ? grade.id : stage.id;
+    const __clsId = __stageClassId(gid);
+    const hasRecord = d.classes.some(c => c.id === __clsId);
+    const isBlocked = (Array.isArray(d._blockedClasses) ? d._blockedClasses : []).includes(__clsId);
+    if(!d.classes.some(c => c.gradeId===gid && c.name==='أ' && !c.deleted) && !hasRecord && !isBlocked) out.push(stage.name);
+  });
+  return out;
+}
+function createMissingStageClasses(){
+  const user = currentUser();
+  if(!isManager(user)) return;
+  const d = loadDB();
+  const campus = getActiveSchool();
+  let added = 0;
+  const addedNames = [];
+  stages.forEach(stage => {
+    let grade = d.grades.find(g => g.name === stage.name);
+    if(!grade){ grade = { id:stage.id, name:stage.name, order:stage.order }; d.grades.push(grade); }
+    const __clsId = __stageClassId(grade.id);
+    // فصل محذوف عمداً يحمل id موجوداً أو مُحجوباً في _blockedClasses لا يُعاد إنتاجه:
+    // الخادم يرفض أي إحياء بنفس المعرّف (mergeClasses يتجاهل ما في tomb) فتدور الحلقة
+    // بلا نهاية، وكل دورة تُسقط teacherIds التي أُضيفت بينها. الشرط مكتوب هنا بلا متغيّر
+    // خارجي حتى يبقى آلياً (extractAutoRepairBlock في الاختبارات ينفّذه في سياق معزول).
+    const hasRecord = d.classes.some(c => c.id === __clsId);
+    const isBlocked = (Array.isArray(d._blockedClasses) ? d._blockedClasses : []).includes(__clsId);
+    if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ' && !c.deleted) && !hasRecord && !isBlocked){
+      d.classes.push({ id:__stageClassId(grade.id), gradeId:grade.id, name:'أ', campus, capacity:null, teacherIds:[] });
+      added++;
+      addedNames.push(stage.name);
+    }
+  });
+  if(added > 0){ saveDB(d); __uiToast('تمت إضافة ' + added + ' صف ناقص (' + addedNames.join('، ') + ')'); }
+  else __uiToast('لا توجد صفوف ناقصة');
+  renderApp();
+}
 function renderClasses(){
   const d = loadDB();
   const user = currentUser();
   const isAdmin = user?.role === 'ADMIN';
   const canManage = isManager(user);
   const canAssign = canManageTeachers(user);
-  // إصلاح تلقائي: إكمال الصفوف الناقصة (المتوسط والثانوي) عند الحاجة
+  // لا يُكتب شيء عند فتح الصفحة: إنشاء الصفوف الناقصة إجراء إداري صريح (زر أدناه).
   let addedMsg = '';
   if(canManage){
-    const campus = getActiveSchool();
-    let added = 0;
-    const addedNames = [];
-    stages.forEach(stage => {
-      let grade = d.grades.find(g => g.name === stage.name);
-      if(!grade){ grade = { id:stage.id, name:stage.name, order:stage.order }; d.grades.push(grade); }
-      const __clsId = __stageClassId(grade.id);
-      // فصل محذوف عمداً يحمل id موجوداً أو مُحجوباً في _blockedClasses لا يُعاد إنتاجه:
-      // الخادم يرفض أي إحياء بنفس المعرّف (mergeClasses يتجاهل ما في tomb) فتدور الحلقة
-      // بلا نهاية، وكل دورة تُسقط teacherIds التي أُضيفت بينها. الشرط مكتوب هنا بلا متغيّر
-      // خارجي حتى يبقى آلياً (extractAutoRepairBlock في الاختبارات ينفّذه في سياق معزول).
-      const hasRecord = d.classes.some(c => c.id === __clsId);
-      const isBlocked = (Array.isArray(d._blockedClasses) ? d._blockedClasses : []).includes(__clsId);
-      if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ' && !c.deleted) && !hasRecord && !isBlocked){
-        d.classes.push({ id:__stageClassId(grade.id), gradeId:grade.id, name:'أ', campus, capacity:null, teacherIds:[] });
-        added++;
-        addedNames.push(stage.name);
-      }
-    });
-    if(added > 0){ saveDB(d); addedMsg = `<div class="card mb" style="color:#16a34a;font-weight:600">تمت إضافة ${added} صف ناقص (${addedNames.join('، ')}) بنجاح</div>`; }
+    const __missing = __missingStageNames(d);
+    if(__missing.length) addedMsg = `<div class="card mb" style="color:#b45309;font-weight:600">يوجد ${__missing.length} صف ناقص (${__missing.join('، ')}) — <button class="btn-secondary" onclick="createMissingStageClasses()">إنشاء الصفوف الناقصة</button></div>`;
   }
   const classes = getClassesSorted();
   const grades = d.grades.slice().sort((a,b)=>a.order-b.order);
