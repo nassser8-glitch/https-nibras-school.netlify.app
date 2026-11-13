@@ -2009,6 +2009,12 @@ function protectContinuity(prevData, clean) {
   keep('students', (s) => blockedStudents.has(String(s.id)));
   keep('notes', (n) => blockedStudents.has(String(n.studentId)));
   keep('attendance', (a) => blockedStudents.has(String(a.studentId)));
+  // مستخدمو القسم (المعلمات/الإدارة) لا يُسقطون من نسخة قديمة أو ناقصة
+  if (Array.isArray(prevData.users) && Array.isArray(clean.users)) {
+    const haveU = new Set(clean.users.filter(Boolean).map(u => String(u.id)));
+    const missingU = prevData.users.filter(u => u && u.id != null && !haveU.has(String(u.id)) && u.role !== 'STUDENT');
+    if (missingU.length) { clean.users = clean.users.concat(missingU.map(u => JSON.parse(JSON.stringify(u)))); restored.users = missingU.length; }
+  }
   const activeClassIds = new Set((Array.isArray(prevData.students) ? prevData.students : [])
     .filter(s => s && s.classId && !s.deleted).map(s => String(s.classId)));
   if (Array.isArray(prevData.classes) && Array.isArray(clean.classes)) {
@@ -2386,6 +2392,8 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     } catch (e) { console.warn('[blockedStudents]', e.message); }
 
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
+    // إزالة حسابات الطالبات من users (أُدخلت خطأً من أجهزة): school_data.users يحتوي المعلمات/الإدارة فقط.
+    if (Array.isArray(data.users)) data.users = data.users.filter(u => u && u.role !== 'STUDENT');
     const clean = JSON.parse(JSON.stringify(data));
     // تصحيح أسماء العائلة المثبّتة قبل التخزين (فيصحّح جدول الحسابات عبر reconcileUserTable)
     fixUsersNames(clean.users);
