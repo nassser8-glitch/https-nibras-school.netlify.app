@@ -8833,7 +8833,7 @@ function renderAttendance(){
   }
   const classes = getClassesSorted();
   // Load attendance from server in background
-  __attendanceLoad(getActiveSchool()).then(() => { if((location.hash || '').indexOf('#/attendance') === 0) renderApp(); });
+  __attendanceRefreshRender(getActiveSchool());
   // الوكيل والمدير بإمكانهما تسجيل الغياب/التأخر لأيام سابقة — فقط نضمن وجود تاريخ افتراضي صالح (اليوم إن لم يُحدَّد بعد)
   if(!attendanceState.date) attendanceState.date = todayStr();
   // السماح بعرض أيام سابقة للمراجعة (بما في ذلك غير المديرة)؛ الحفظ يُؤكَّد/يُمنع في saveAttendance
@@ -10369,6 +10369,29 @@ async function __attendanceLoad(school){
     }
   }catch(e){ console.warn('[attendance load]', e); }
   return null;
+}
+/* تحديث الحضور من الخادم دون حلقة إعادة رسم: لا يُعاد رسم الصفحة إلا إذا تغيّر محتوى الحضور
+   فعلاً، ولا يُرسل طلب جديد أثناء طلب قائم أو خلال 3 ثوانٍ من آخر طلب. */
+const __attRefresh = { inflight: false, at: 0, sig: null };
+function __attendanceSigOf(arr){
+  const s = arr.map(r => r ? [r.id, r.status, r._t, r.studentId, r.date].join('~') : '').join('|');
+  let h = 0;
+  for(let i = 0; i < s.length; i++){ h = (h * 31 + s.charCodeAt(i)) | 0; }
+  return arr.length + ':' + h;
+}
+function __attendanceRefreshRender(school){
+  const now = Date.now();
+  if(__attRefresh.inflight || now - __attRefresh.at < 3000) return;
+  __attRefresh.inflight = true;
+  __attRefresh.at = now;
+  __attendanceLoad(school).then(arr => {
+    __attRefresh.inflight = false;
+    if(!arr) return;
+    const sig = __attendanceSigOf(arr);
+    if(sig === __attRefresh.sig) return;
+    __attRefresh.sig = sig;
+    if((location.hash || '').indexOf('#/attendance') === 0) renderApp();
+  }).catch(() => { __attRefresh.inflight = false; });
 }
 async function __starOfWeekLoad(school){
   if(!__serverEnabled()) return null;
@@ -15175,7 +15198,7 @@ function saveAnnouncement(){
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   window.addEventListener('load', function(){
     try{ __starOfWeekLoad(getActiveSchool()).then(() => { try{ renderApp(); }catch(e){} }); }catch(e){}
-     try{ __attendanceLoad(getActiveSchool()).then(() => { try{ renderApp(); }catch(e){} }); }catch(e){}
+     try{ __attendanceRefreshRender(getActiveSchool()); }catch(e){}
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
