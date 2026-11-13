@@ -764,7 +764,8 @@ function _attKey(r) {
   return 'sd:' + (r.studentId || '') + '|' + (r.date || '');
 }
 // طبقة data زائدة تحوي أقسام المدرسة نفسها (لقطة قديمة متداخلة): لا يلتقطها _looksWrapped
-// لأن الصف يحوي students/classes. نكتفي بدمج حضورها (الأحدث _t يفوز) ثم حذف الطبقة.
+// لأن الصف يحوي students/classes. ندمج حضورها (الأحدث _t يفوز) ومستخدميها (المعلمات)
+// ثم حذف الطبقة — لا نفقد معلمة تعيش في طبقة متداخلة (وإلا تُفقد أسماء المعلمات).
 function _isStrayDataLayer(d) {
   if (!d || typeof d !== 'object' || Array.isArray(d)) return false;
   const inner = d.data;
@@ -781,15 +782,21 @@ function absorbStrayDataLayers(d) {
     if (!ex || (Number(r._t) || 0) >= (Number(ex._t) || 0)) merged.set(k, r);
   };
   (Array.isArray(d.attendance) ? d.attendance : []).forEach(add);
+  const usersById = new Map();
+  for (const u of (Array.isArray(d.users) ? d.users : [])) if (u && u.id != null) usersById.set(u.id, u);
   let cur = d.data;
   let guard = 0;
   while (cur && typeof cur === 'object' && !Array.isArray(cur) && guard++ < 50) {
     if (Array.isArray(cur.attendance)) cur.attendance.forEach(add);
+    if (Array.isArray(cur.users)) {
+      for (const u of cur.users) if (u && u.id != null && !usersById.has(u.id)) usersById.set(u.id, u);
+    }
     cur = cur.data;
   }
   const out = Object.assign({}, d);
   delete out.data;
   out.attendance = Array.from(merged.values());
+  out.users = Array.from(usersById.values());
   return out;
 }
 function unwrapSchoolData(data) {

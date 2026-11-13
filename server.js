@@ -2040,6 +2040,9 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     } catch (e) { console.warn('[normalizeTeacherDuplicates]', e.message); }
     const prev = await db.getSchoolData(school);
     const prevUsers = (prev.data && Array.isArray(prev.data.users)) ? prev.data.users : [];
+    if ((!data.users || data.users.length === 0) && prevUsers.length > 0) {
+      return res.status(409).json({ error: 'wipe_blocked', reason: 'users' });
+    }
     // ===== حارس ضد المسح الفارغ (wipe-guard) =====
     // متصفح/جهاز جديد يفتح التطبيق أول مرة يكون تخزينه المحلي فارغاً، ومع خوارزميات
     // الوقت القديمة يُرى «أحدث» فيدفع القسم فارغاً فيمسح قسمَ المدرسة كله (users=students=classes=0).
