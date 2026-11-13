@@ -2012,14 +2012,16 @@ function protectContinuity(prevData, clean) {
   const activeClassIds = new Set((Array.isArray(prevData.students) ? prevData.students : [])
     .filter(s => s && s.classId && !s.deleted).map(s => String(s.classId)));
   if (Array.isArray(prevData.classes) && Array.isArray(clean.classes)) {
+    // 1) استعادة فصول مفقودة (حسب id) من النسخة المخزنة
+    const have = new Set(clean.classes.filter(Boolean).map(c => String(c.id)));
+    const missingClasses = prevData.classes.filter(p => p && p.id != null && !have.has(String(p.id)) && !blockedClasses.has(String(p.id)));
+    if (missingClasses.length) { clean.classes = clean.classes.concat(missingClasses.map(c => JSON.parse(JSON.stringify(c)))); restored.classesRestored = missingClasses.length; }
+    // 2) فصل فيه طالبات نشطات لا يُعلَّم محذوفاً بنسخة قديمة ( blocked/tombstoned ones honored)
     let reopened = 0;
     clean.classes = clean.classes.map(c => {
-      if (!c || !c.deleted) return c;
-      const prevC = prevData.classes.find(p => p && String(p.id) === String(c.id));
-      if (prevC && !prevC.deleted && activeClassIds.has(String(c.id)) && !blockedClasses.has(String(c.id))) {
-        reopened++;
-        return Object.assign({}, c, { deleted: false });
-      }
+      if (!c || !c.id) return c;
+      if (blockedClasses.has(String(c.id))) return c; // محجوب نهائياً stays deleted
+      if (activeClassIds.has(String(c.id)) && c.deleted) { reopened++; return Object.assign({}, c, { deleted: false }); }
       return c;
     });
     if (reopened) restored.classesReopened = reopened;
