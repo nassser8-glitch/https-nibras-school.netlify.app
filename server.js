@@ -2017,6 +2017,8 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     let data = req.body && req.body.data;
     if (!data || typeof data !== 'object' || Array.isArray(data))
       return res.status(400).json({ error: 'invalid_payload' });
+    // طبقات data المتداخلة الموروثة من عميل قديم لا تُخزَّن: تُدمج حضورها وتُحذف.
+    data = db.unwrapSchoolData(data);
     for (const k of ['users','grades','classes','students','attendance','notes','transfers','maintenance']) {
       if (!Array.isArray(data[k])) return res.status(400).json({ error: 'invalid_section:' + k });
     }
@@ -3205,6 +3207,11 @@ app.post('/api/attendance/:school', requireAuth, (req, res) => {
     });
     res.json({ ok: true, count: attendance.length, total: out && out.value });
   })().catch(fail(res));
+});
+app.use((err, req, res, next) => {
+  if (err && err.type === 'entity.too.large') return res.status(413).json({ error: 'payload_too_large', limit: MAX_BODY_MB + 'mb' });
+  if (err && err.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid_json' });
+  return next(err);
 });
 app.use((req, res) => res.status(404).json({ error: 'not_found' }));
 

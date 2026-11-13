@@ -763,7 +763,39 @@ function _attKey(r) {
   if (r.id != null) return 'id:' + r.id;
   return 'sd:' + (r.studentId || '') + '|' + (r.date || '');
 }
+// طبقة data زائدة تحوي أقسام المدرسة نفسها (لقطة قديمة متداخلة): لا يلتقطها _looksWrapped
+// لأن الصف يحوي students/classes. نكتفي بدمج حضورها (الأحدث _t يفوز) ثم حذف الطبقة.
+function _isStrayDataLayer(d) {
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return false;
+  const inner = d.data;
+  if (!inner || typeof inner !== 'object' || Array.isArray(inner)) return false;
+  return ['students','classes','attendance','notes','users','assignments'].some(k => Array.isArray(inner[k])) || !!inner.data;
+}
+function absorbStrayDataLayers(d) {
+  if (!_isStrayDataLayer(d)) return d;
+  const merged = new Map();
+  const add = (r) => {
+    if (!r || typeof r !== 'object') return;
+    const k = _attKey(r);
+    const ex = merged.get(k);
+    if (!ex || (Number(r._t) || 0) >= (Number(ex._t) || 0)) merged.set(k, r);
+  };
+  (Array.isArray(d.attendance) ? d.attendance : []).forEach(add);
+  let cur = d.data;
+  let guard = 0;
+  while (cur && typeof cur === 'object' && !Array.isArray(cur) && guard++ < 50) {
+    if (Array.isArray(cur.attendance)) cur.attendance.forEach(add);
+    cur = cur.data;
+  }
+  const out = Object.assign({}, d);
+  delete out.data;
+  out.attendance = Array.from(merged.values());
+  return out;
+}
 function unwrapSchoolData(data) {
+  return absorbStrayDataLayers(_unwrapLegacySchoolData(data));
+}
+function _unwrapLegacySchoolData(data) {
   let cur = data;
   let outerAttendance = null;
   let guard = 0;
@@ -800,7 +832,7 @@ async function repairSchoolData(school) {
     const sel = await client.query('SELECT data, ts FROM school_data WHERE school = $1 FOR UPDATE', [school]);
     if (!sel.rows.length) { await client.query('ROLLBACK'); return { repaired: false, reason: 'no_row' }; }
     const raw = sel.rows[0].data;
-    if (!_looksWrappedSchoolData(raw)) { await client.query('ROLLBACK'); return { repaired: false, reason: 'clean' }; }
+    if (!_looksWrappedSchoolData(raw) && !_isStrayDataLayer(raw)) { await client.query('ROLLBACK'); return { repaired: false, reason: 'clean' }; }
     const fixed = unwrapSchoolData(raw);
     const storedTs = Number(sel.rows[0].ts) || 0;
     const nextTs = Math.max(Date.now(), storedTs + 1);
