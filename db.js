@@ -746,10 +746,77 @@ async function getSupervisionHistory(school, limit) {
 }
 
 /* ===== بيانات الأقسام ===== */
+// ===== فكّ طبقة تلوّث بيانات القسم =====
+// حادثة 2026-11-13: مسار /api/attendance/:school كان يكتب ناتج getSchoolData()
+// كما هو ({ data, ts }) داخل عمود data، فيصير شكل الصف
+//   { data:{ students, classes, ... }, ts, attendance, _ts }
+// فيقرأه العميل بلا students/classes فتُعرض المدرسة فارغة أو تتعطّل الصفحة.
+// هذه الدوال تفكّ الطبقات وتعيد دمج سجل الحضور الذي كتبه المسار المعطوب،
+// بلا حذف أيّ سجل إطلاقاً. آمنة على البيانات السليمة (تعيدها كما هي).
+function _looksWrappedSchoolData(d) {
+  return !!(d && typeof d === 'object' && !Array.isArray(d)
+    && d.data && typeof d.data === 'object' && !Array.isArray(d.data)
+    && d.students === undefined && d.classes === undefined);
+}
+function _attKey(r) {
+  if (!r || typeof r !== 'object') return '';
+  if (r.id != null) return 'id:' + r.id;
+  return 'sd:' + (r.studentId || '') + '|' + (r.date || '');
+}
+function unwrapSchoolData(data) {
+  let cur = data;
+  let outerAttendance = null;
+  let guard = 0;
+  while (_looksWrappedSchoolData(cur) && guard++ < 5) {
+    if (Array.isArray(cur.attendance) && cur.attendance.length) outerAttendance = cur.attendance;
+    cur = cur.data;
+  }
+  if (!outerAttendance || !cur || typeof cur !== 'object') return cur;
+  const merged = new Map();
+  for (const r of (Array.isArray(cur.attendance) ? cur.attendance : [])) {
+    if (r) merged.set(_attKey(r), r);
+  }
+  for (const r of outerAttendance) {
+    if (!r) continue;
+    const k = _attKey(r);
+    const ex = merged.get(k);
+    if (!ex || (Number(r._t) || 0) >= (Number(ex._t) || 0)) merged.set(k, r);
+  }
+  return Object.assign({}, cur, { attendance: Array.from(merged.values()) });
+}
 async function getSchoolData(school) {
   const r = await pool.query('SELECT data, ts FROM school_data WHERE school = $1', [school]);
   if (!r.rows.length) return { data: null, ts: 0 };
-  return { data: r.rows[0].data, ts: Number(r.rows[0].ts) || 0 };
+  // نتسامح مع صفٍّ لوّثه مسار الحضور القديم: يرى كل قارئ بياناتٍ سليمة فوراً.
+  return { data: unwrapSchoolData(r.rows[0].data), ts: Number(r.rows[0].ts) || 0 };
+}
+// إصلاح دائم للصف: إن كان مغلّفاً نكتب النسخة المفكوكة بزمن أحدث (بلا حذف سجلات).
+// يُستدعى عند الإقلاع، فتُشفى قاعدة الإنتاج تلقائياً بعد نشر هذا الإصلاح.
+async function repairSchoolData(school) {
+  assertSupportedSchool(school);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const sel = await client.query('SELECT data, ts FROM school_data WHERE school = $1 FOR UPDATE', [school]);
+    if (!sel.rows.length) { await client.query('ROLLBACK'); return { repaired: false, reason: 'no_row' }; }
+    const raw = sel.rows[0].data;
+    if (!_looksWrappedSchoolData(raw)) { await client.query('ROLLBACK'); return { repaired: false, reason: 'clean' }; }
+    const fixed = unwrapSchoolData(raw);
+    const storedTs = Number(sel.rows[0].ts) || 0;
+    const nextTs = Math.max(Date.now(), storedTs + 1);
+    if (fixed && typeof fixed === 'object') fixed._ts = nextTs;
+    const upd = await client.query(
+      'UPDATE school_data SET data = $2::jsonb, ts = $3, updated_at = now() WHERE school = $1 AND ts = $4',
+      [school, JSON.stringify(fixed), nextTs, storedTs]);
+    if (!upd.rowCount) { await client.query('ROLLBACK'); return { repaired: false, reason: 'race' }; }
+    await client.query('COMMIT');
+    return { repaired: true, ts: nextTs };
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 // كتابة محمية زمنياً: لا تُستبدل نسخة ذات ts أحدث بنسخة ts أقدم.
 // السبب: school_data صف واحد لكل قسم ويحوي النظام كله (users/classes/students...).
@@ -812,14 +879,18 @@ async function mutateSchoolData(school, mutator) {
     }
     const data = sel.rows[0].data;
     const storedTs = Number(sel.rows[0].ts) || 0;
-    const n = _normMutatorOut(await mutator(data));
-    if (!n.changed) { await client.query('ROLLBACK'); return { written: false, value: n.value, reason: 'no_change' }; }
+    // صفٌّ مغلّف من مسار الحضور القديم: نفكّه في الذاكرة ونعتبره تغييراً،
+    // فيُكتب نظيفاً مع هذا التعديل (شفاء تلقائي بلا حذف أي سجل).
+    const wasWrapped = _looksWrappedSchoolData(data);
+    const working = wasWrapped ? unwrapSchoolData(data) : data;
+    const n = _normMutatorOut(await mutator(working));
+    if (!n.changed && !wasWrapped) { await client.query('ROLLBACK'); return { written: false, value: n.value, reason: 'no_change' }; }
     // ts رتيب: لا نسمح لأي كتابة بأن تُرجع الساعة للخلف مقارنة بالصف المقفول.
     const nextTs = Math.max(Date.now(), storedTs + 1);
     const upd = await client.query(
       `UPDATE school_data SET data = $2::jsonb, ts = $3, updated_at = now()
         WHERE school = $1 AND ts < $3`,
-      [school, JSON.stringify(data), nextTs]);
+      [school, JSON.stringify(working), nextTs]);
     if (!upd.rowCount) { await client.query('ROLLBACK'); return { written: false, value: n.value, reason: 'stale' }; }
     await client.query('COMMIT');
     return { written: true, value: n.value, ts: nextTs };
@@ -958,6 +1029,7 @@ module.exports = {
   canViewSupervisionToday, filterSupervisionAssignments,
   supervisionVisibleRoles: () => [...SUPERVISION_VISIBLE_ROLES],
   getSchoolData, setSchoolData, mutateSchoolData, patchSchoolUserStats, touchUserPresence,
+  unwrapSchoolData, repairSchoolData,
   getSchoolSettings, setSchoolSettings,
   saveBackup, listBackups, getBackup,
   auditSync, listSyncAudit,

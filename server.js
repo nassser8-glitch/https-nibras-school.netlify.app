@@ -2749,6 +2749,20 @@ async function takeBackups() {
     }
   } catch (e) { console.error('[backup]', e.message); }
 }
+// إصلاح ذاتي عند الإقلاع: يفكّ أي طبقة تلوّث في بيانات القسم (حادثة مسار الحضور
+// في 2026-11-13 التي كانت تكتب { data:{...}, ts } داخل العمود نفسه).
+// لا يحذف أيّ سجل: يعيد بنية القسم الأصلية ويدمج سجلات الحضور.
+async function repairAllSchools() {
+  for (const school of db.SCHOOLS) {
+    try {
+      const r = await db.repairSchoolData(school);
+      if (r && r.repaired) {
+        console.warn('[repair] فُكّت طبقة بيانات تالفة للقسم', school,
+          '— أُعيدت البنية الأصلية (طلاب/فصول/حسابات) بلا حذف أي سجل. ts=', r.ts);
+      }
+    } catch (e) { console.warn('[repair]', school, e.message); }
+  }
+}
 app.get('/api/backups', requireAuth, (req, res) => {
   (async () => {
     if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
@@ -3157,8 +3171,11 @@ app.get('/api/attendance/:school', requireAuth, (req, res) => {
     const school = String(req.params.school).toUpperCase();
     if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
     if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
-    const data = await db.getSchoolData(school);
-    const attendance = (data && Array.isArray(data.attendance)) ? data.attendance : [];
+    // getSchoolData() يعيد { data, ts } — لا الكائن نفسه. الخطأ السابق كان يقرأ
+    // data.attendance على الغلاف فيعود دائماً [] وتظهر الحضور وكأنه ضاع.
+    const rec = await db.getSchoolData(school);
+    const data = (rec && rec.data) || {};
+    const attendance = Array.isArray(data.attendance) ? data.attendance : [];
     res.json({ ok: true, attendance });
   })().catch(fail(res));
 });
@@ -3169,12 +3186,24 @@ app.post('/api/attendance/:school', requireAuth, (req, res) => {
     if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
     const attendance = req.body && Array.isArray(req.body.attendance) ? req.body.attendance : null;
     if (!attendance) return res.status(400).json({ error: 'invalid_payload' });
-    const prev = await db.getSchoolData(school);
-    const data = (prev && typeof prev === 'object') ? JSON.parse(JSON.stringify(prev)) : {};
-    data.attendance = attendance;
-    data._ts = Date.now();
-    await db.setSchoolData(school, data, Date.now());
-    res.json({ ok: true, count: attendance.length });
+    // تعديل جزئي داخل معاملة واحدة: نكتب داخل كائن القسم نفسه (attendance فقط)
+    // لا فوقه. الخطأ السابق كان يعيد كتابة ناتج getSchoolData كاملاً
+    // ({ data, ts }) فتصير بيانات المدرسة متداخلة تحت مفتاح data وتُفقد من العميل.
+    // ندمج بسجل الحضور: الأحدث _t يفوز، فلا يمحو جهازٌ حفظَ جهازٍ آخر في نفس اللحظة.
+    const out = await db.mutateSchoolData(school, (d) => {
+      const merged = new Map();
+      for (const r of (Array.isArray(d.attendance) ? d.attendance : [])) if (r) merged.set(String(r.studentId || '') + '|' + String(r.date || ''), r);
+      for (const r of attendance) {
+        if (!r) continue;
+        const k = String(r.studentId || '') + '|' + String(r.date || '');
+        const ex = merged.get(k);
+        if (!ex || (Number(r._t) || 0) >= (Number(ex._t) || 0)) merged.set(k, r);
+      }
+      d.attendance = Array.from(merged.values());
+      d._ts = Date.now();
+      return { changed: true, value: d.attendance.length };
+    });
+    res.json({ ok: true, count: attendance.length, total: out && out.value });
   })().catch(fail(res));
 });
 app.use((req, res) => res.status(404).json({ error: 'not_found' }));
@@ -3189,6 +3218,7 @@ app.listen(PORT, async () => {
   const dbOk = await (async () => {
     try {
       await db.initSchema();
+      await repairAllSchools();
       const seed = require('./seed');
       const temp = await seed.ensureAdminAccount();
       if (temp) {
@@ -3215,6 +3245,7 @@ app.listen(PORT, async () => {
     const tryConn = async () => {
       try {
         await db.initSchema();
+        await repairAllSchools();
         console.log('✅ استعاد الخادم الاتصال بقاعدة البيانات.');
         try { takeBackups(); } catch (e) {}
       } catch (e) {
