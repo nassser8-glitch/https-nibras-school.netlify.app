@@ -2401,6 +2401,15 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     // . _ - فقط، بلا مسافات.
     try {
       const prevMapU = new Map((prevUsers || []).map(u => [u.id, String(u.username || '').trim().toLowerCase()]));
+      // جدول الحسابات مصدر الحقيقة لأسماء المستخدمين: الحساب الموجود فيه باسمه نفسه يُعد غير متغيّر
+      // (حتى لو غاب عن نسخة القسم)، فلا يُرفض الحفظ بسبب اسم قديم لطالبة مثلاً.
+      const hasAccountNames = (clean.users || []).some(nu => nu && !prevMapU.has(nu.id));
+      if (hasAccountNames) {
+        const accRows = await db.pool.query('SELECT id, username FROM users WHERE school = $1', [school]);
+        for (const r of accRows.rows) {
+          if (!prevMapU.has(r.id)) prevMapU.set(r.id, String(r.username || '').trim().toLowerCase());
+        }
+      }
       const seenLocal = new Set();
       for (const nu of (clean.users || [])) {
         const uname = String((nu && nu.username) || '').trim().toLowerCase();
