@@ -4346,7 +4346,7 @@ function renderLayout(user, hash){
       { href:'#/notes', key:'notes', label:'الملاحظات', icon:'★' },
       { href:'#/transfers', key:'transfers', label:'التحويلات', icon:'↔' },
       { href:'#/reports', key:'reports', label:'التقارير', icon:'▥' },
-      (user.role === 'TEACHER') ? { href:'#/assignments', key:'assignments', label:'التكليفات', icon:'📝' } : null,
+      (user.role === 'TEACHER' || user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT' || user.role === 'ADMINISTRATIVE') ? { href:'#/assignments', key:'assignments', label:'التكليفات', icon:'📝' } : null,
     ]},
     { title:'المدرسة', items:[
       (user.role !== 'STUDENT') ? { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉', badge: user.role === 'AGENT' ? pendingPartRequests() : 0 } : null,
@@ -4429,7 +4429,7 @@ function renderLayout(user, hash){
   else if(page === 'users' && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderUsers();
   else if(page === 'admins' && (user.role === 'ADMIN' || user.role === 'AGENT')) pageHtml = renderAdmins();
   else if(page === 'timetable' && (user.role === 'TEACHER' || user.role === 'STUDENT')) pageHtml = renderTimetable();
-  else if(page === 'assignments' && user.role === 'TEACHER') pageHtml = renderAssignments();
+  else if(page === 'assignments' && (user.role === 'TEACHER' || user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT' || user.role === 'ADMINISTRATIVE')) pageHtml = renderAssignments();
   else if(page === 'assignments' && user.role === 'STUDENT') pageHtml = renderStudentAssignments();
   else if(page === 'account' && (user.role === 'TEACHER' || user.role === 'STUDENT')) pageHtml = renderAccount();
   else if(page === 'activities' && user.role !== 'STUDENT') pageHtml = renderActivities();
@@ -5572,7 +5572,7 @@ function renderDashboard(){
   // مختلفان: 93 من الجدول مقابل 57 من الفصول المسندة، و57 هو الصحيح).
   const myStudentsCount = isTeacher ? [...new Set(d.students.filter(s => s.active && s.classId && (d.classes.find(c => c.id === s.classId && (c.teacherIds||[]).includes(user.id)))).map(s => s.id))].length : 0;
   const myClassIds = isTeacher ? d.classes.filter(c => (c.teacherIds || []).includes(user.id)).map(c => c.id) : [];
-  const myAssignments = isTeacher ? (d.assignments||[]).filter(a => myClassIds.includes(a.classId) && !(a && a.deleted)).sort((a,b) => (b.created||0)-(a.created||0)) : [];
+  const myAssignments = isTeacher ? (d.assignments||[]).filter(a => !(a && a.deleted) && (myClassIds.includes(a.classId) || a.teacherId === user.id || (Array.isArray(a.teacherIds) && a.teacherIds.some(x => String(x) === String(user.id))))).sort((a,b) => (b.created||0)-(a.created||0)) : [];
   // العداد الذكي: حالة المعلمة وحصتها الحالية/القادمة بحسب جدولها وأوقات القسم الرسمية
   const myLessonCard = isTeacher ? lessonCard(user, d, { key: 'self:' + user.id }) : '';
   const tpct = tDayAtt && (tDayAtt.present+tDayAtt.late) ? Math.round((tDayAtt.present+tDayAtt.late)/(tDayAtt.present+tDayAtt.absent+tDayAtt.late)*100) : null;
@@ -6156,7 +6156,7 @@ function renderDashboard(){
 function renderTeacherRecent(d, user){
   if(!user || user.role !== 'TEACHER') return '';
   const items = {
-    assignments: (d.assignments||[]).filter(a => !(a && a.deleted) && a.teacherId === user.id)
+    assignments: (d.assignments||[]).filter(a => !(a && a.deleted) && (a.teacherId === user.id || (Array.isArray(a.teacherIds) && a.teacherIds.some(x => String(x) === String(user.id)))))
       .sort((a,b) => (b.created||0) - (a.created||0)).slice(0,3),
     transfers: (d.transfers||[]).filter(t => !(t && t.deleted) && t.createdBy === user.id)
       .sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,3),
@@ -11376,7 +11376,7 @@ function buildTeacherDetail(type, teacherId){
     rows = list.length ? list.map(t => { const ss = studentIdsOf(t).map(id => d.students.find(x => x.id === id)).filter(Boolean); const nm = ss.length ? ss.map(s => s.fullName).join('، ') : '—'; const fc = d.classes.find(x => x.id === t.fromClassId); const tc = d.classes.find(x => x.id === t.toClassId); return dlRow(`${escapeHtml(nm)}`, `${classLabel(fc)} ← ${classLabel(tc)} · ${stMap[t.status] || t.status} · ${fmtTime(t.createdAt)}`); }).join('') : DL_EMPTY;
   } else if(type === 'ASSIGNMENTS'){
     title = 'التكليفات التي أنشأتها';
-    const list = (d.assignments || []).filter(a => !(a && a.deleted) && a.teacherId === teacherId).sort((a,b) => (b.created||0) - (a.created||0));
+    const list = (d.assignments || []).filter(a => !(a && a.deleted) && (a.teacherId === teacherId || (Array.isArray(a.teacherIds) && a.teacherIds.some(x => String(x) === String(teacherId))))).sort((a,b) => (b.created||0) - (a.created||0));
     rows = list.length ? list.map(a => { const c = d.classes.find(x => x.id === a.classId); return dlRow(`${escapeHtml(a.title || a.subject || 'تكليف')}`, `${a.subject ? escapeHtml(a.subject) + ' · ' : ''}${c ? escapeHtml(classLabel(c)) : '—'}${a.date ? ' · تسليم: ' + fmtDateOnly(a.date) : ''}${a.type ? ' · ' + escapeHtml(a.type) : ''}${a.created ? ' · أنشئ: ' + fmtTime(a.created) : ''}`); }).join('') : DL_EMPTY;
   } else if(type === 'SUPERVISION'){
     title = 'موعد الإشراف (الأسبوعي)';
@@ -11436,7 +11436,7 @@ function renderTeacherPage(teacherId){
   // أعمال المعلمة: تحويلات وتكليفات وملاحظات أنشأتها هي — المالك من الحقل
   // (createdBy/teacherId) لا من اسم الجلسة، فلا يُنسب عمل زميلة إليها.
   const teacherTransfers = (d.transfers||[]).filter(t => !(t && t.deleted) && t.createdBy === user.id);
-  const teacherAssignments = (d.assignments||[]).filter(a => !(a && a.deleted) && a.teacherId === user.id);
+  const teacherAssignments = (d.assignments||[]).filter(a => !(a && a.deleted) && (a.teacherId === user.id || (Array.isArray(a.teacherIds) && a.teacherIds.some(x => String(x) === String(user.id)))));
   const teacherNotes = (d.notes||[]).filter(n => !(n && n.deleted) && n.createdBy === user.id);
   // موعد الإشراف: مصدره الخادم — يُطلب مرة واحدة ثم يُعاد الرسم عند وصوله
   const supSched = (__supervisionSchedule && Array.isArray(__supervisionSchedule.schedule)) ? __supervisionSchedule.schedule : null;
@@ -12609,34 +12609,129 @@ function deleteTtCell(period){
 /* نظام GIRLS فقط: أُزيل انعكاس الجدول على «المدرسة الأخرى». */
 
 /* ============ التكليفات ============ */
+function canManageAllAssignments(user){
+  return !!(user && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT' || user.role === 'ADMINISTRATIVE'));
+}
+function isAssignmentForTeacher(a, teacherId){
+  if(!a || !teacherId) return false;
+  const id = String(teacherId);
+  return String(a.teacherId || '') === id ||
+    (Array.isArray(a.teacherIds) && a.teacherIds.some(x => String(x || '') === id));
+}
 function getTeacherSubjects(user, d){
-  const tt = (d.timetable || {})[user.id] || {};
+  if(!user) return [];
   const map = {};
-  Object.values(tt).forEach(day => {
-    Object.values(day).forEach(cell => {
-      if(cell && cell.subject && cell.classId){
-        const cls = d.classes.find(c => c.id === cell.classId);
-        if(cls){
-          const key = cell.classId + '|' + cell.subject;
-          if(!map[key]) map[key] = { classId: cell.classId, subject: cell.subject, className: cls.name, gradeId: cls.gradeId };
+  const addTeacherTimetable = (teacherId, timetable) => {
+    Object.values(timetable || {}).forEach(day => {
+      Object.values(day || {}).forEach(cell => {
+        if(cell && !cell._del && cell.subject && cell.classId){
+          const cls = (d.classes || []).find(c => c && c.id === cell.classId);
+          if(cls){
+            const key = cell.classId + '|' + cell.subject;
+            if(!map[key]) map[key] = { classId: cell.classId, subject: cell.subject, className: cls.name, gradeId: cls.gradeId, teacherIds: [] };
+            if(teacherId && !map[key].teacherIds.includes(teacherId)) map[key].teacherIds.push(teacherId);
+          }
         }
-      }
+      });
     });
-  });
+  };
+  if(canManageAllAssignments(user)){
+    Object.entries(d.timetable || {}).forEach(([teacherId, timetable]) => addTeacherTimetable(teacherId, timetable));
+  } else {
+    addTeacherTimetable(user.id, (d.timetable || {})[user.id] || {});
+  }
   return Object.values(map);
 }
-// فصول المعلمة في التكليفات: المسندة إليها (teacherIds) + فصول فيها تكليفاتها حتى لو لم تكن
-// مسندة رسميًا + فصول جدولها. التكليف يخص الفصل: فأي تكليف في هذه الفصول يظهر لها ولتقريرها
-// (سابقًا كان يظهر في التقارير ولا يظهر في خانة التكليفات عند اختلاف حساب المنشئ عن المعلمة).
+// فصول المعلمة في التكليفات: الفصول المسندة إليها أو التي أُسندت إليها تكليفاتها.
+// المدير والوكيل والمساعد الإداري يرون جميع الفصول لإدارة التكليفات.
 function getAssignmentClassIds(user, d){
+  if(!user) return [];
+  if(canManageAllAssignments(user)){
+    return (d.classes || []).filter(c => c && !c.deleted).map(c => c.id);
+  }
   const taughtClassIds = (d.classes||[]).filter(c => Array.isArray(c.teacherIds) && c.teacherIds.includes(user.id)).map(c => c.id);
-  const myAssignClassIds = (d.assignments||[]).filter(a => a.teacherId === user.id && !(a && a.deleted)).map(a => a.classId).filter(Boolean);
+  const myAssignClassIds = (d.assignments||[]).filter(a => !(a && a.deleted) && isAssignmentForTeacher(a, user.id)).map(a => a.classId).filter(Boolean);
   const subClassIds = getTeacherSubjects(user, d).map(s => s.classId);
   return [...new Set([...taughtClassIds, ...myAssignClassIds, ...subClassIds])];
 }
+function __renderAssignmentFormFields(d, user, classId, subject, assignmentType){
+  const isMgr = canManageAllAssignments(user);
+  const cls = (d.classes || []).find(c => c.id === classId);
+  const allSubs = [];
+  const seenSub = new Set();
+  getTeacherSubjects(user, d).filter(s => s.classId === classId).forEach(s => {
+    if(s.subject && !seenSub.has(s.subject)){ seenSub.add(s.subject); allSubs.push(s.subject); }
+  });
+  TT_SUBJECT_GROUPS.forEach(g => (g.subs || []).forEach(s => {
+    if(s && !seenSub.has(s)){ seenSub.add(s); allSubs.push(s); }
+  }));
+  const subHtml = subject
+    ? `<div class="muted">${escapeHtml(subject)}</div><input type="hidden" id="assSubject" value="${escapeHtml(subject)}" />`
+    : `<select id="assSubject" class="input"><option value="">— اختر المادة —</option>${allSubs.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}</select>`;
+  const typesList = ['واجب','مشروع','حفظ','أخرى'];
+  const typeHtml = `<select id="assType" class="input">${typesList.map(t => `<option value="${escapeHtml(t)}" ${t === assignmentType ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('')}</select>`;
+  let teacherBox = '';
+  if(isMgr){
+    const teachers = (d.users || []).filter(u => u && u.role === 'TEACHER' && u.active !== false)
+      .sort((a,b) => String(a.name||'').localeCompare(String(b.name||''), 'ar'));
+    const clsTids = new Set(cls && Array.isArray(cls.teacherIds) ? cls.teacherIds : []);
+    const subTids = new Set();
+    if(subject && d.timetable){
+      Object.entries(d.timetable).forEach(([tid, tDays]) => {
+        Object.values(tDays || {}).forEach(day => {
+          Object.values(day || {}).forEach(cell => {
+            if(cell && !cell._del && cell.classId === classId && cell.subject === subject) subTids.add(tid);
+          });
+        });
+      });
+    }
+    const activeTeacherIds = new Set(teachers.map(t => String(t.id)));
+    const defaultTids = (subTids.size > 0 ? subTids : clsTids);
+    teacherBox = `<div>
+      <label style="font-weight:bold;display:block;margin-bottom:6px">👩‍🏫 المعلمة / المعلمات المكلفات</label>
+      <div id="assTeacherList" style="max-height:170px;overflow-y:auto;border:1px solid var(--line,#e2e8f0);border-radius:10px;padding:8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px">
+        ${teachers.map(t => {
+          const checked = defaultTids.has(t.id) ? 'checked' : '';
+          const inCls = clsTids.has(t.id);
+          const shortName = String(t.name || t.username || t.id).trim().split(/\s+/).filter(Boolean).slice(0,2).join(' ');
+          return `<label style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:12.5px;background:${inCls ? '#fdf2f8' : '#fff7fb'}">
+            <input type="checkbox" class="ass-teacher-cb" value="${escapeHtml(t.id)}" ${checked && activeTeacherIds.has(String(t.id)) ? 'checked' : ''} />
+            <span style="font-weight:${inCls ? '700' : '500'}">${escapeHtml(shortName)}</span>
+            ${inCls ? '<span style="font-size:10px;color:#be185d;margin-right:auto">معلمة الفصل</span>' : ''}
+          </label>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+  return { subHtml, typeHtml, teacherBox };
+}
+function __resolveAssignmentInput(params, d, user){
+  const subEl = typeof document !== 'undefined' ? document.getElementById('assSubject') : null;
+  const typeEl = typeof document !== 'undefined' ? document.getElementById('assType') : null;
+  const subject = (subEl && subEl.value ? subEl.value.trim() : '') || decodeURIComponent(params.get('sub')||'') || 'عام';
+  const type = (typeEl && typeEl.value ? typeEl.value.trim() : '') || decodeURIComponent(params.get('type')||'واجب');
+  const classId = params.get('cid')||'';
+  let teacherIds = [user.id];
+  if(canManageAllAssignments(user)){
+    const checked = (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function')
+      ? Array.from(document.querySelectorAll('.ass-teacher-cb:checked')).map(c => String(c.value || '')).filter(Boolean)
+      : [];
+    const teacherBoxRendered = typeof document !== 'undefined' && !!document.getElementById('assTeacherList');
+    if(teacherBoxRendered){
+      teacherIds = checked;
+    } else {
+      const cls = (d.classes || []).find(c => c && c.id === classId);
+      teacherIds = cls && Array.isArray(cls.teacherIds) ? cls.teacherIds.map(String) : [];
+    }
+    const activeTeachers = new Set((d.users || []).filter(u => u && u.role === 'TEACHER' && u.active !== false).map(u => String(u.id)));
+    teacherIds = [...new Set(teacherIds.map(String))].filter(id => activeTeachers.has(id));
+  }
+  const teacherId = teacherIds[0] || (canManageAllAssignments(user) ? '' : user.id);
+  return { classId, subject, type, teacherId, teacherIds };
+}
 function renderAssignments(){
   const user = currentUser();
-  if(!user || user.role !== 'TEACHER') return '<h1 class="page-title">غير متاح</h1>';
+  if(!user || (user.role !== 'TEACHER' && !canManageAllAssignments(user))) return '<h1 class="page-title">غير متاح</h1>';
   const d = loadDB();
   const params = new URLSearchParams((location.hash.split('?')[1]||''));
   const step = params.get('step') || 'class';
@@ -12735,7 +12830,7 @@ function renderAssignments(){
           </div>
         </td>
         <td style="white-space:nowrap"><span style="color:${pct>=75?'#16a34a':pct>=50?'#d97706':'#dc2626'};font-weight:700">${doneCount}/${clsStudents.length}</span></td>
-        ${user && (user.role==='ADMIN' || user.role==='AGENT' || a.teacherId===user.id) ? `<td><button class="icon-btn" title="حذف التكليف" onclick="deleteAssignment('${a.id}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:#dc2626">🗑</button></td>` : ''}
+        ${user && (canManageAllAssignments(user) || isAssignmentForTeacher(a, user.id)) ? `<td><button class="icon-btn" title="حذف التكليف" onclick="deleteAssignment('${a.id}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:#dc2626">🗑</button></td>` : ''}
       </tr>`;
     }).join('');
     return `<div class="page-title">📝 التكليفات — ${cls ? escapeHtml(classLabel(cls)) : ''}</div>
@@ -12762,7 +12857,7 @@ function renderAssignments(){
     if(!a) return `<div class="page-title">التكليف غير موجود</div><a href="#/assignments?step=list&cid=${classId}" style="font-size:13px">← الرجوع</a>`;
     // عكس فلتر القائمة: أي معلمة يظهر الفصل في خانة تكليفاتها ترى تفاصيل تكليفه
     // (التكليف يخص الفصل لا مالك الحساب) — الحذف والتعديل يبقيان للمالك/المدير فقط.
-    if(user.role !== 'ADMIN' && user.role !== 'AGENT' && !myClassIds.includes(a.classId)) return `<div class="page-title">غير متاح</div><a href="#/assignments?step=list&cid=${classId}" style="font-size:13px">← الرجوع</a>`;
+    if(!canManageAllAssignments(user) && !myClassIds.includes(a.classId)) return `<div class="page-title">غير متاح</div><a href="#/assignments?step=list&cid=${classId}" style="font-size:13px">← الرجوع</a>`;
     const doneCount = clsStudents.filter(s => (a.completedBy||[]).includes(s.id)).length;
     const pct = clsStudents.length ? Math.round(doneCount/clsStudents.length*100) : 0;
     const typeColors = { 'واجب':'#1d7fd6', 'مشروع':'#e67e22', 'حفظ':'#16a34a', 'أخرى':'#8e44ad' };
@@ -12784,7 +12879,7 @@ function renderAssignments(){
     }).join('');
     return `<div class="page-title">📝 ${escapeHtml(a.title||'')}</div>
     <a href="#/assignments?step=list&cid=${classId}" style="font-size:13px">← الرجوع لقائمة التكليفات</a>
-    ${user && (user.role==='ADMIN' || user.role==='AGENT' || a.teacherId===user.id) ? `<button style="margin:0 12px;font-size:13px;padding:6px 14px;color:#fff;background:#dc2626;border:none;border-radius:8px;cursor:pointer" onclick="deleteAssignment('${a.id}')">🗑 حذف التكليف</button>` : ''}
+    ${user && (canManageAllAssignments(user) || isAssignmentForTeacher(a, user.id)) ? `<button style="margin:0 12px;font-size:13px;padding:6px 14px;color:#fff;background:#dc2626;border:none;border-radius:8px;cursor:pointer" onclick="deleteAssignment('${a.id}')">🗑 حذف التكليف</button>` : ''}
     <div style="margin:10px 0;font-size:13px;color:#6b7280">
       <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${typeColors[a.type]||'#888'};margin-left:4px"></span>
       ${escapeHtml(a.subject||'')} — ${escapeHtml(a.type||'')} — ${a.date||''}
@@ -12801,6 +12896,24 @@ function renderAssignments(){
   if(step === 'form'){
     const assignmentType = decodeURIComponent(params.get('type') || 'واجب');
     const cls = d.classes.find(c => c.id === classId);
+    if(canManageAllAssignments(user)){
+      const ff = __renderAssignmentFormFields(d, user, classId, subject, assignmentType);
+      return `<div class="page-title">📝 تسجيل تكليف</div>
+      <div style="margin:6px 0">${(typeof __saveStatusHtml==='function')?__saveStatusHtml():''}</div>
+      <a href="#/assignments?step=list&cid=${classId}" style="font-size:13px">← الرجوع لقائمة التكليفات</a>
+      <div class="card" style="padding:24px;margin-top:14px">
+        <div style="display:grid;gap:14px">
+          <div><label style="font-weight:bold">الفصل</label><div class="muted">${cls ? escapeHtml(classLabel(cls)) : '—'}</div></div>
+          <div><label style="font-weight:bold">المادة</label>${ff.subHtml}</div>
+          <div><label style="font-weight:bold">نوع التكليف</label>${ff.typeHtml}</div>
+          ${ff.teacherBox}
+          <div><label style="font-weight:bold">عنوان التكليف</label><input id="assTitle" class="input" placeholder="مثال: تمارين صفحة 45" /></div>
+          <div><label style="font-weight:bold">الوصف (اختياري)</label><textarea id="assDesc" class="input" rows="3" placeholder="تفاصيل إضافية..."></textarea></div>
+          <div><label style="font-weight:bold">التاريخ</label><input id="assDate" class="input" type="date" value="${new Date().toISOString().slice(0,10)}" /></div>
+          <button class="btn-primary full" onclick="saveAssignment()">💾 حفظ التكليف</button>
+        </div>
+      </div>`;
+    }
     return `<div class="page-title">📝 تسجيل تكليف</div>
     <div style="margin:6px 0">${(typeof __saveStatusHtml==='function')?__saveStatusHtml():''}</div>
     <a href="#/assignments?step=type&cid=${classId}&sub=${encodeURIComponent(subject)}" style="font-size:13px">← الرجوع لأنواع التكليف</a>
@@ -12846,7 +12959,7 @@ function deleteAssignment(aid){
   const a = (d.assignments||[]).find(x => x.id === aid);
   if(!a) return;
   // صلاحية: المعلم هو من أنشأ التكليف (أو مدير/وكيل)
-  if(user.role !== 'ADMIN' && user.role !== 'AGENT' && a.teacherId !== user.id){
+  if(user.role !== 'ADMIN' && user.role !== 'AGENT' && user.role !== 'SCHOOL_AGENT' && user.role !== 'ADMINISTRATIVE' && a.teacherId !== user.id && !(Array.isArray(a.teacherIds) && a.teacherIds.some(x => String(x) === String(user.id)))){
     alert('لا يمكنك حذف هذا التكليف — أنشأه معلم آخر');
     return;
   }
@@ -12885,27 +12998,25 @@ function saveAssignment(){
   const title = (document.getElementById('assTitle')||{}).value||'';
   const desc = (document.getElementById('assDesc')||{}).value||'';
   const date = (document.getElementById('assDate')||{}).value||'';
-  const subject = decodeURIComponent(params.get('sub')||'');
-  const classId = params.get('cid')||'';
-  const type = decodeURIComponent(params.get('type')||'واجب');
+  const { classId, subject, type, teacherId, teacherIds } = __resolveAssignmentInput(params, d, user);
   if(!title){ alert('اكتب عنوان التكليف'); return; }
-  const nav = () => { location.hash = '#/assignments?step=type&cid=' + classId + '&sub=' + encodeURIComponent(subject); };
+  if(canManageAllAssignments(user) && !teacherIds.length){ alert('حدد معلمة واحدة على الأقل'); return; }
+  const nav = () => { location.hash = canManageAllAssignments(user) ? '#/assignments?step=list&cid=' + classId : '#/assignments?step=type&cid=' + classId + '&sub=' + encodeURIComponent(subject); };
   if(savingAssignment) return;
   savingAssignment = true;
   try {
     d.assignments = d.assignments || [];
     const clsStudents = (d.students||[]).filter(s => s.active && s.classId === classId).map(s => s.id);
-    // منع التكرار عند إعادة الإرسال بعد فشل: نفس معرّف التكليف من المسودة المحلية
     const priorDraft = __draftGet('assignment') || {};
     const aid = priorDraft.aid || uid();
     let a = (d.assignments||[]).find(x => x && x.id === aid);
     if(a){
-      a.teacherId = user.id; a.classId = classId; a.subject = subject; a.type = type;
+      a.teacherId = teacherId; a.teacherIds = teacherIds; a.classId = classId; a.subject = subject; a.type = type;
       a.title = title; a.desc = desc; a.date = date;
       a._v = (typeof a._v === 'number' ? a._v : 0) + 1;
       a.deleted = false;
     } else {
-      a = { id: aid, teacherId: user.id, classId, subject, type, title, desc, date, created: Date.now(), _v: 1, completedBy: clsStudents.slice() };
+      a = { id: aid, teacherId, teacherIds, classId, subject, type, title, desc, date, created: Date.now(), _v: 1, completedBy: clsStudents.slice() };
       d.assignments.push(a);
     }
     saveDB(d);
@@ -12913,7 +13024,6 @@ function saveAssignment(){
     try{ __markAssignUnpushed(getActiveSchool(), [aid]); }catch(e){}
     // بلا خادم: نحفظ محلياً وننتقل (لا يوجد تأكيد ممكن)
     if(!__serverEnabled() || !__syncEnabled()){ __draftClear('assignment'); nav(); return; }
-    // لا انتقال ولا نجاح قبل تأكيد الخادم: المراقب ينقل عند النجاح، ويُبقي النموذج عند الفشل.
     __saveGuardWatch(getActiveSchool(), 'assignment', (res, kind)=>{
       __saveGuardOutcome(res, kind);
       if(res && res.ok){ try{ __draftClear('assignment'); }catch(e){} nav(); }
