@@ -45,7 +45,7 @@ function loadAttHelpers() {
   };
   vm.createContext(context);
   // الدوال المساعدة التي يعتمدها __attWinner
-  for (const m of ['__attRealClerks', '__attPendingConfirm', '__attIsAbsent']) {
+  for (const m of ['__cleanClerkId', '__attRealClerks', '__attPendingConfirm', '__attOverridable', '__attIsAbsent']) {
     vm.runInContext(extractFn(m), context);
   }
   const winnerSrc = extractFn('__attWinner');
@@ -53,14 +53,14 @@ function loadAttHelpers() {
   return context;
 }
 
-function makeRec(id, status, absClerks, _t) {
-  return { id, studentId: id, date: '2026-01-04', status, absClerks, _t };
+function makeRec(id, status, absClerks, _t, createdBy) {
+  return { id, studentId: id, date: '2026-01-04', status, absClerks, _t, createdBy: createdBy !== undefined ? createdBy : (absClerks && absClerks[0] ? absClerks[0] : undefined) };
 }
 
 test('حضورٌ أحدث زمناً يهزم غياباً «معلَّقاً» أقدم (إلغاء صريح من صاحب التسجيل)', () => {
   const ctx = loadAttHelpers();
   const pendingAbs = makeRec('s1', 'ABSENT', ['teacher-A'], 100);
-  const explicitCancel = makeRec('s1', 'PRESENT', [], 200);
+  const explicitCancel = makeRec('s1', 'PRESENT', [], 200, 'teacher-A');
   const win = ctx.__attWinner(pendingAbs, explicitCancel);
   assert.equal(win.status, 'PRESENT', 'الحاضرُ الأحدث يجب أن يهزم الغيابَ المعلَّق الأقدم');
   assert.equal(win.id, 's1');

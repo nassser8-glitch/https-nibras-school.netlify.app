@@ -9,9 +9,7 @@
   </defs>
   <circle cx="160" cy="165" r="125" fill="none" stroke="url(#starOfWeekGold)" stroke-width="9"/>
   <path d="M160 18 L176 56 L217 59 L186 87 L195 127 L160 106 L125 127 L134 87 L103 59 L144 56 Z" fill="url(#starOfWeekGold)"/>
-  <!-- Person circle background: ice blue -->
   <circle cx="160" cy="165" r="36" fill="#EAF2F8"/>
-  <!-- Person silhouette: navy -->
   <circle cx="160" cy="152" r="14" fill="#123B5D"/>
   <path d="M136 190 Q138 172 160 172 Q182 172 184 190 Z" fill="#123B5D"/>
   <g fill="url(#starOfWeekGold)">

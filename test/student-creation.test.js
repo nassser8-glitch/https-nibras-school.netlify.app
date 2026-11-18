@@ -99,7 +99,7 @@ test('rejects duplicate studentNo for an active student without changing existin
   const originalPoints = JSON.parse(JSON.stringify(state.schoolData.points));
   installPool(state);
   await assert.rejects(
-    db.createStudentAccountAndRecord(input({ student: { fullName: 'طالبة ثانية', studentNo: '100', active: true } })),
+    db.createStudentAccountAndRecord(input({ student: { fullName: 'طالبة ثانية', studentNo: '100', gradeId: 'g1', classId: 'c1', active: true } })),
     { code: 'student_number_exists' },
   );
   assert.equal(state.users.length, 0);
@@ -116,6 +116,18 @@ test('rejects an existing account id', async () => {
   assert.equal(state.schoolData.students.length, 0);
 });
 
+test('creates a student without email and returns grade/class from the assigned class', async () => {
+  const state = fixture();
+  installPool(state);
+  const result = await db.createStudentAccountAndRecord(input({ email: null, student: { fullName: 'طالبة جديدة', studentNo: '101', gradeId: 'g1', classId: null, active: true } }));
+  assert.equal(state.users[0].email, null);
+  assert.equal(state.schoolData.users[0].email, null);
+  assert.equal(result.student.gradeId, 'g1');
+  assert.equal(result.student.classId, 'c1');
+  assert.equal(result.grade, 'الأول');
+  assert.equal(result.class, 'أ');
+});
+
 test('keeps exact username and returns grade/class from the student class', async () => {
   const state = fixture();
   installPool(state);
@@ -124,4 +136,13 @@ test('keeps exact username and returns grade/class from the student class', asyn
   assert.equal(result.grade, 'الأول');
   assert.equal(result.class, 'أ');
   assert.equal(state.users[0].username, 'MiXeD_Name');
+});
+
+
+test('username collision check is case-insensitive in the transactional create path', async () => {
+  const state = fixture();
+  state.users.push({ id: 'existing', username: 'StudentExact' });
+  installPool(state);
+  await assert.rejects(db.createStudentAccountAndRecord(input({ username: 'studentexact' })), { code: 'username_exists' });
+  assert.equal(state.schoolData.students.length, 0);
 });

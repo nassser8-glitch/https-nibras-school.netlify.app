@@ -4,7 +4,7 @@
 <!--
   نظام نبراس لإدارة المدرسة — Nibras School Management System
   جميع الحقوق محفوظة © 2026 ناصر العتيبي
-
+  هذا التطبيق وقف لله تعالى، ولا يجوز بيعه دون إذن كتابي.
   All rights reserved. Do not copy, redistribute, or reuse without written permission.
 -->
 <meta charset="UTF-8" />
@@ -24,28 +24,10 @@ window.__nibrasBootErr = '';
   var KEY = 'nibrasBootRepair_v1';
   var already = false;
   try { already = sessionStorage.getItem(KEY) === '1'; sessionStorage.setItem(KEY, '1'); } catch(_){}
-  var fmtErr = function(e){
-    try{
-      var reason = e && e.reason;
-      var msg = (e && e.message) || (reason && (reason.message || reason)) || (e && e.type) || '';
-      var file = (e && e.filename) || (reason && reason.fileName) || '';
-      var line = (e && e.lineno) || (reason && reason.lineNumber) || '';
-      var col = (e && e.colno) || (reason && reason.columnNumber) || '';
-      var st = (e && e.error && e.error.stack) || (reason && reason.stack) || '';
-      var out = String(msg || 'unknown error');
-      if(file) out += ' @ ' + file + (line ? ':' + line : '') + (col ? ':' + col : '');
-      if(st) out += '\n' + String(st);
-      return out;
-    }catch(_){ return 'unknown error'; }
-  };
   window.addEventListener('error', function(e){
     if (window.__nibrasBooted) return;
-    window.__nibrasBootErr = fmtErr(e);
+    window.__nibrasBootErr = String((e && (e.message || e.type)) || e || 'unknown error');
   }, true);
-  window.addEventListener('unhandledrejection', function(e){
-    if (window.__nibrasBooted) return;
-    window.__nibrasBootErr = fmtErr(e);
-  });
   var esc = function(s){
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   };
@@ -66,7 +48,6 @@ window.__nibrasBootErr = '';
       return;
     }
     var box = document.createElement('div');
-    box.id = 'nibrasBootErrorBox';
     box.style.cssText = 'max-width:560px;margin:60px auto;padding:22px;border:2px solid #dc2626;border-radius:14px;background:#fff;color:#111;font-family:inherit';
     box.setAttribute('dir', 'rtl');
     box.innerHTML =
@@ -77,7 +58,7 @@ window.__nibrasBootErr = '';
       '</pre>' +
       '<button onclick="location.reload()" style="margin-top:12px;padding:8px 16px">إعادة المحاولة</button>';
     (document.body || document.documentElement).appendChild(box);
-  }, 15000);
+  }, 7000);
 })();
 </script>
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
@@ -260,7 +241,7 @@ window.__nibrasBootErr = '';
 .ccard-students { border-top:1px dashed #fbcfe8; padding-top:8px; }
 .ccard-empty { border-inline-start-color:#f59e0b; background:linear-gradient(135deg,#ffffff 0%,#fffbeb 100%); }
 .ccard-empty .ccard-tlist { color:#b45309; font-weight:700; }
-.ccard-actions { display:flex; justify-content:space-between; gap:4px; flex-wrap:nowrap; align-items:center; }
+.ccard-actions { display:flex; justify-content:flex-end; }
 .ccard-actions .del-btn { background:none; border:none; box-shadow:none; color:#b91c1c; font-size:12px; padding:2px 6px; opacity:.75; }
 .ccard-actions .del-btn:hover { opacity:1; background:#fef2f2; }
 .ccard-teachers span[style*="#dbeafe"] { background:#fdf2f8 !important; border-color:#fbcfe8 !important; color:#831843 !important; }
@@ -930,7 +911,6 @@ const NOTES_CLAIM_API = '/api/notes/claim';
 const SYNC_INTERVAL = 300000;
 const __origSetItem = localStorage.setItem.bind(localStorage);
 let __sessionUser = null; // المستخدم الحالي (من الخادم) — المرجع الوحيد للصلاحيات
-let __sessionExpired = false; // true when server returns 401 — stops sync attempts until re-login
 let __syncTimers = {};
 /* نافذة «الدفعة معلّقة» لكل مدرسة: تكتبها __syncSchedule وتقرأها syncPullAll لتمتنع
    عن السحب ما دامت هناك دفعة لم تُرفع بعد. كائن مستقل عن __syncTimers (مؤقّتات). */
@@ -939,7 +919,6 @@ let __pushPendingUntil = {};
    إلى الأبد، فتتراكم الطلبات ويضجيج السجل بلا نهاية. نُبقي النسخة المعلّقة في
    التخزين (لا يفقد المستخدم شيئاً) ونتوقف، ثم نستأنف عند عودة الشبكة أو أي تفاعل. */
 const __PUSH_MAX_ATTEMPTS = 6;
-const __PUSH_MAX_BYTES = 19 * 1024 * 1024;
 let __supervisionToday = null;
 let __supervisionTodayLoading = false;
 let __supervisionTodayFailed = false;
@@ -953,6 +932,76 @@ let __supervisionScheduleDenied = false; // الخادم رفض الطلب (401/
 let __supervisionHistory = null;
 let __supervisionDraftSchedule = null; // مسودة العميل: { [dayOfWeek]: Set<teacherId> } — تُبنى من __supervisionSchedule وتُصفَّر بعد الحفظ الناجح
 let __supervisionAddOpenDay = null; // اليوم الذي تُعرض له قائمة "+ إضافة مشرفة" حاليًا، أو null
+let __supervisionPickerSelected = {}; // حفظ اختيارات الـ checkboxes لكل يوم لمنع فقدانها أثناء أي إعادة رسم للواجهة
+const SUPERVISION_DRAFT_KEY_PREFIX = 'nibras_supervision_draft_v1_';
+
+function __getSupervisionDraftStorageKey(){
+  const s = (typeof getActiveSchool === 'function' ? getActiveSchool() : 'GIRLS') || 'GIRLS';
+  return SUPERVISION_DRAFT_KEY_PREFIX + String(s).toLowerCase();
+}
+
+function __persistSupervisionDraft(){
+  if(typeof localStorage === 'undefined' || !__supervisionDraftSchedule) return;
+  try{
+    const serializable = {};
+    SUPERVISION_DAYS.forEach(day => {
+      serializable[day.dow] = [...(__supervisionDraftSchedule[day.dow] || [])];
+    });
+    localStorage.setItem(__getSupervisionDraftStorageKey(), JSON.stringify({
+      ts: Date.now(),
+      schedule: serializable
+    }));
+  }catch(_){}
+}
+
+function __clearSupervisionDraftStorage(){
+  if(typeof localStorage === 'undefined') return;
+  try{
+    localStorage.removeItem(__getSupervisionDraftStorageKey());
+  }catch(_){}
+}
+
+function __loadPersistedSupervisionDraft(){
+  if(typeof localStorage === 'undefined') return null;
+  try{
+    const raw = localStorage.getItem(__getSupervisionDraftStorageKey());
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    if(parsed && parsed.schedule && typeof parsed.schedule === 'object'){
+      const draft = {};
+      SUPERVISION_DAYS.forEach(day => {
+        draft[day.dow] = new Set(Array.isArray(parsed.schedule[day.dow]) ? parsed.schedule[day.dow] : []);
+      });
+      return draft;
+    }
+  }catch(_){}
+  return null;
+}
+
+function __isSupervisionDraftDirty(){
+  if(!__supervisionDraftSchedule || !__supervisionSchedule) return false;
+  const serverMap = {};
+  SUPERVISION_DAYS.forEach(day => { serverMap[day.dow] = new Set(); });
+  (__supervisionSchedule.schedule || []).forEach(x => {
+    if(serverMap[x.dayOfWeek]) serverMap[x.dayOfWeek].add(x.teacherId);
+  });
+  for(const day of SUPERVISION_DAYS){
+    const dSet = __supervisionDraftSchedule[day.dow] || new Set();
+    const sSet = serverMap[day.dow] || new Set();
+    if(dSet.size !== sSet.size) return true;
+    for(const id of dSet){
+      if(!sSet.has(id)) return true;
+    }
+  }
+  return false;
+}
+
+function __supervisionTogglePickerSelect(dow, teacherId, isChecked){
+  if(typeof __supervisionPickerSelected === 'undefined') return;
+  if(!__supervisionPickerSelected[dow]) __supervisionPickerSelected[dow] = new Set();
+  if(isChecked) __supervisionPickerSelected[dow].add(teacherId);
+  else __supervisionPickerSelected[dow].delete(teacherId);
+}
 const SUPERVISION_MAX_ATTEMPTS = 3; // حد أقصى لمحاولات إعادة التحميل التلقائية لكل تحميل صفحة — يمنع أي حلقة لا نهائية
 
 async function __loadSupervisionToday(force){
@@ -999,16 +1048,34 @@ async function __saveSupervisionSchedule(){
     method:'PUT', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ school:getActiveSchool(), schedule }),
   });
-  if(!r.ok){ alert('تعذر حفظ جدول الإشراف'); return; }
+  if(!r.ok){
+    let msg = 'تعذر حفظ جدول الإشراف';
+    try{
+      const err = await r.json();
+      if(err && err.error === 'invalid_teacher') msg = 'تعذر الحفظ: إحدى المشرفات المحددات غير مسجلة كمعلمة نشطة في النظام';
+      else if(err && err.error === 'forbidden') msg = 'ليست لديك صلاحية حفظ جدول الإشراف';
+    }catch(_){}
+    alert(msg);
+    return;
+  }
   __supervisionSchedule = await r.json();
   __supervisionDraftSchedule = null; // إعادة بناء المسودة من نسخة الخادم المحفوظة فعليًا
+  if(typeof __clearSupervisionDraftStorage === 'function') __clearSupervisionDraftStorage();
   __supervisionAddOpenDay = null;
+  if(typeof __supervisionPickerSelected !== 'undefined') __supervisionPickerSelected = {};
+  if(typeof __loadSupervisionSchedule === 'function') await __loadSupervisionSchedule(true);
+  if(typeof __loadSupervisionToday === 'function') await __loadSupervisionToday(true);
   alert('تم حفظ جدول الإشراف ✅');
   renderApp();
 }
 // يبني مسودة العمل (يوم -> مجموعة معرفات المعلمات) من آخر جدول محمّل من الخادم؛ لا يعيد البناء إذا كانت المسودة موجودة أصلًا حتى لا تُفقد تعديلات لم تُحفظ بعد
 function __ensureSupervisionDraft(){
   if(__supervisionDraftSchedule) return;
+  const persisted = (typeof __loadPersistedSupervisionDraft === 'function') ? __loadPersistedSupervisionDraft() : null;
+  if(persisted){
+    __supervisionDraftSchedule = persisted;
+    return;
+  }
   __supervisionDraftSchedule = {};
   SUPERVISION_DAYS.forEach(day => { __supervisionDraftSchedule[day.dow] = new Set(); });
   (__supervisionSchedule && __supervisionSchedule.schedule || []).forEach(x => {
@@ -1016,19 +1083,34 @@ function __ensureSupervisionDraft(){
   });
 }
 function __supervisionToggleAddPicker(dow){
+  __ensureSupervisionDraft();
   __supervisionAddOpenDay = (__supervisionAddOpenDay === dow) ? null : dow;
+  if(__supervisionAddOpenDay === null && typeof __supervisionPickerSelected !== 'undefined' && __supervisionPickerSelected[dow]){
+    delete __supervisionPickerSelected[dow];
+  }
   renderApp();
 }
 function __supervisionAddSelected(dow){
   __ensureSupervisionDraft();
-  const boxes = document.querySelectorAll(`[data-supervision-picker="${dow}"] input:checked`);
-  boxes.forEach(input => { __supervisionDraftSchedule[dow].add(input.value); });
+  if(!__supervisionDraftSchedule[dow]) __supervisionDraftSchedule[dow] = new Set();
+  if(typeof __supervisionPickerSelected !== 'undefined' && __supervisionPickerSelected[dow]){
+    __supervisionPickerSelected[dow].forEach(id => __supervisionDraftSchedule[dow].add(id));
+    delete __supervisionPickerSelected[dow];
+  }
+  if(typeof document !== 'undefined' && typeof document.querySelectorAll === 'function'){
+    const boxes = document.querySelectorAll(`[data-supervision-picker="${dow}"] input:checked`);
+    boxes.forEach(input => { __supervisionDraftSchedule[dow].add(input.value); });
+  }
   __supervisionAddOpenDay = null;
+  if(typeof __persistSupervisionDraft === 'function') __persistSupervisionDraft();
   renderApp();
 }
 function __supervisionRemoveTeacher(dow, teacherId){
   __ensureSupervisionDraft();
-  __supervisionDraftSchedule[dow].delete(teacherId);
+  if(__supervisionDraftSchedule[dow]){
+    __supervisionDraftSchedule[dow].delete(teacherId);
+    if(typeof __persistSupervisionDraft === 'function') __persistSupervisionDraft();
+  }
   renderApp();
 }
 async function __checkInSupervision(){
@@ -1083,9 +1165,7 @@ async function __api(method, path, body){
 }
 function __handleAuthError(resp){
   if(resp && resp.status === 401){
-    __sessionExpired = true;
     __sessionUser = null; __mirrorClear();
-    try{ __saveGuardNotify(getActiveSchool(), { ok:false, err:'401' }); }catch(e){}
     if(location.hash !== '#/login') location.hash = '#/login';
   }
 }
@@ -1093,7 +1173,7 @@ async function __restoreSession(){
   if(!__serverEnabled()) return false;
   try{
     const r = await __api('GET', 'me');
-    if(r.status === 200 && r.j && r.j.user){ __sessionExpired = false; __sessionUser = r.j.user; __mirrorSet(r.j.user); return true; }
+    if(r.status === 200 && r.j && r.j.user){ __sessionUser = r.j.user; __mirrorSet(r.j.user); return true; }
     __handleAuthError(r);
   }catch(e){}
   return false;
@@ -1124,7 +1204,7 @@ async function __putSchoolSettings(school, data){
 }
 
 /* ============ مزامنة الخادم (جلسة آمنة — لا SYNC_KEY) ============ */
-function __syncEnabled(){ return !DEMO_MODE && location.protocol.indexOf('http') === 0 && !__sessionExpired; }
+function __syncEnabled(){ return !DEMO_MODE && location.protocol.indexOf('http') === 0; }
 function __syncTS(obj){ return (obj && typeof obj === 'object' && obj._ts) || 0; }
 /* مقارنة عميقة ثابتة الرتابة: نرتّب مفاتيح الكائنات قبل التسلسل، فتعطي نتيجة
    صحيحة حتى لو اختلف ترتيب المفاتيح بين استججابة الخادم ونسخة localStorage.
@@ -1215,7 +1295,6 @@ function __uiToast(txt, isErr){
   }catch(e){}
 }
 function __syncSchedule(school, ms){
-  if(__sessionExpired) return; // لا جدولة أثناء انتهاء الجلسة
   if(!__syncEnabled()) return;
   // نعلن الدفعة معلّقة بمهلة تتجاوز زمن الجدولة، فيمنع السحب الدوري
   // (كل 5 دقائق) من الكتابة فوق اللوحة قبل أن تُرفع تعديلاتها. تُقرأ في syncPullAll.
@@ -1250,21 +1329,71 @@ function eByCurrentUsers(entry){
 // تبقى محتسبة تلقائياً. علامة __LEGACY_ABS تحفظ حالة السجل القديم إذا أُعيد حفظه.
 // رقم عشريّ واحد موحّد في كل البطاقات (بنين/بنات، الفصل، الطالب، الرسوم والتقارير).
 const __LEGACY_ABS = '__legacy_abs__';
+// تأكيد إداري: غياب يسجّله المدير/الوكيلة/وكيلة الشؤون يُحتسب مباشرة دون انتظار معلّمة ثانية
+const __MGR_ABS = '__mgr_abs__';
+function __cleanClerkId(c){
+  return c != null ? String(c).trim() : '';
+}
 function __attRealClerks(rec){
+  var clean = typeof __cleanClerkId === 'function' ? __cleanClerkId : function(c){ return c != null ? String(c).trim() : ''; };
+  var leg = typeof __LEGACY_ABS !== 'undefined' ? __LEGACY_ABS : '__legacy_abs__';
+  var mgr = typeof __MGR_ABS !== 'undefined' ? __MGR_ABS : '__mgr_abs__';
   if(!rec || !Array.isArray(rec.absClerks)) return [];
-  return rec.absClerks.filter(x => x && x !== __LEGACY_ABS);
+  const set = new Set();
+  rec.absClerks.forEach(c => {
+    const s = clean(c);
+    if(s && s !== leg && s !== mgr) set.add(s);
+  });
+  return Array.from(set);
 }
 function __attIsAbsent(rec){
   if(!rec || rec.status !== 'ABSENT') return false;
   return true;
 }
-// غياب «معلّق»: سجّله معلم واحد فقط ولم يؤكده معلم ثانٍ بعد — يُسجَّل ويُحفظ ويُحتسب في
-// العداد فوراً، والشارة تنبيه للمعلم الثاني فقط ولا تُخفي الغياب من الأرقام.
+// غياب «معلّق»: سجّلته معلمة واحدة فقط ولم تؤكده معلمة ثانية بعد — يُسجَّل ويُحفظ ويُحتسب في
+// العداد فوراً، والشارة تنبيه للمعلمة الثانية فقط ولا تُخفي الغياب من الأرقام.
 function __attPendingConfirm(rec){
+  var clean = typeof __cleanClerkId === 'function' ? __cleanClerkId : function(c){ return c != null ? String(c).trim() : ''; };
+  var leg = typeof __LEGACY_ABS !== 'undefined' ? __LEGACY_ABS : '__legacy_abs__';
+  var mgr = typeof __MGR_ABS !== 'undefined' ? __MGR_ABS : '__mgr_abs__';
   if(!rec || rec.status !== 'ABSENT') return false;
   if(!Array.isArray(rec.absClerks)) return false;   // قديم بلا قائمة = مؤكد
-  if(rec.absClerks.indexOf(__LEGACY_ABS) !== -1) return false;
+  const clerks = rec.absClerks.map(clean);
+  if(clerks.indexOf(leg) !== -1) return false;
+  if(clerks.indexOf(mgr) !== -1) return false;
   return __attRealClerks(rec).length < 2;
+}
+// قابل للتصحيح بحضور أحدث: تصحيح صريح من المعلمة صاحبة التسجيل أو من الإدارة المعتمدة
+function __attOverridable(rec, present){
+  var clean = typeof __cleanClerkId === 'function' ? __cleanClerkId : function(c){ return c != null ? String(c).trim() : ''; };
+  var leg = typeof __LEGACY_ABS !== 'undefined' ? __LEGACY_ABS : '__legacy_abs__';
+  var mgr = typeof __MGR_ABS !== 'undefined' ? __MGR_ABS : '__mgr_abs__';
+  if(!rec || rec.status !== 'ABSENT') return false;
+  const clerks = (Array.isArray(rec.absClerks) ? rec.absClerks : []).map(clean).filter(Boolean);
+  const hasLegacy = clerks.includes(leg) || !Array.isArray(rec.absClerks);
+  const hasMgr = clerks.includes(mgr);
+
+  const u = typeof currentUser === 'function' ? currentUser() : null;
+  const isAdmin = (typeof canRecordPastAttendance === 'function' && canRecordPastAttendance(u)) || (present && present._byAdmin === true);
+  if(isAdmin) return true; // الإدارة تملك صلاحية تصحيح وفك أي غياب
+
+  if(hasLegacy || hasMgr) return false; // السجلات القديمة أو المعتمدة إدارياً لا يمسها إلا الإدارة
+
+  // إذا كان مؤكداً من معلمتين اثنتين، لا تلغيه معلمة واحدة منفردة:
+  const realClerks = new Set(clerks.filter(c => c !== leg && c !== mgr));
+  if(realClerks.size >= 2) return false;
+
+  const presentBy = present && present.createdBy != null ? clean(present.createdBy) : (u && u.id != null ? clean(u.id) : '');
+  const absentBy = rec.createdBy != null ? clean(rec.createdBy) : (clerks.length === 1 ? clerks[0] : '');
+
+  // إذا لم يتم تحديد المستخدم (بيئة اختبارية بدون جلسة ومؤكد واحد):
+  if(!presentBy && !u && realClerks.size <= 1) return true;
+
+  // المعلمة العادية: لا تلغي الغياب إلا إذا كانت هي صاحبته أو إحدى مؤكداته في absClerks
+  const isAuthor = (presentBy && (presentBy === absentBy || clerks.includes(presentBy)));
+  if(!isAuthor) return false;
+
+  return true;
 }
 // الحالة الفعلية للسجل: أي سجل غياب يُحسب غائباً فوراً، وما دون ذلك يُحسب ما سُجّل فيه
 // (متأخر/حاضر). مصدر واحد يُستخدم في العدّ والعرض ليطابق النسبة دائماً.
@@ -1273,11 +1402,12 @@ function __attEffStatus(rec){
   if(__attIsAbsent(rec)) return 'ABSENT';
   return rec.status === 'LATE' ? 'LATE' : 'PRESENT';
 }
-// دمج سجلّي حضور لنفس الطالب/اليوم بنفس سياسة الخادم: الغائب/المتأخر يفوز على الحاضر
+// دمج سجلّي حضور لنفس الطالبة/اليوم بنفس سياسة الخادم: الغائب/المتأخر يفوز على الحاضر
 // مهما اختلف الزمن، و«القبر» (deleted) يفوز دائماً، ثم الأعلى _t يفوز.
-// عند الدمج تُدمج قائمة مؤكِّدي الغياب absClerks (اتحاد) بدل استبدالها — فلا تضيع
-// تأكيدات معلّمين تسجّلوا من أجهزة مختلفة لنفس الطالب/اليوم.
+// عند الدمج تُدمج قائمة مؤكِّدات الغياب absClerks (اتحاد) بدل استبدالها — فلا تضيع
+// تأكيدات معلّمات تسجّلن من أجهزة مختلفة لنفس الطالبة/اليوم.
 function __attWinner(a, b){
+  var clean = typeof __cleanClerkId === 'function' ? __cleanClerkId : function(c){ return c != null ? String(c).trim() : ''; };
   if(!a) return b;
   if(!b) return a;
   if(!!a.deleted !== !!b.deleted) return a.deleted ? a : b;
@@ -1285,12 +1415,12 @@ function __attWinner(a, b){
   const infB = (b.status === 'ABSENT' || b.status === 'LATE') ? 1 : 0;
   let win;
   if(infA !== infB){
-    // استثناء الإلغاء الصريح: الحاضرُ الأحدث زمناً (تصحيح صريح من المعلم صاحب التسجيل أو
-    // من المدير/الوكيل المُخوّل) يهزم الغيابَ «المعلَّق» الأقدم (سجّله معلم واحد فقط).
-    // الغيابُ المؤكَّد (مؤكِّدان فعليان أو سجلٌ قديم) يبقى يفوز على الحاضر مهما اختلف الزمن.
+    // استثناء الإلغاء الصريح: الحاضرُ الأحدث زمناً (تصحيح صريح من صاحبة التسجيل أو الإدارة)
+    // يهزم الغيابَ «المعلَّق» الأقدم (سجّلته معلمة واحدة فقط).
+    // الغيابُ المؤكَّد (مؤكِّدتان فعليتان أو سجلٌ قديم) يبقى يفوز على الحاضر مهما اختلف الزمن.
     const absentSide = infA === 1 ? a : b;
     const presentSide = absentSide === a ? b : a;
-    if(__attPendingConfirm(absentSide) && (typeof presentSide._t === 'number') && (typeof absentSide._t === 'number') && presentSide._t > absentSide._t) win = presentSide;
+    if(__attOverridable(absentSide, presentSide) && (typeof presentSide._t === 'number') && (typeof absentSide._t === 'number') && presentSide._t > absentSide._t) win = presentSide;
     else win = infA > infB ? a : b;
   } else win = a;
   if(win === a && infA === infB){
@@ -1298,12 +1428,28 @@ function __attWinner(a, b){
     const tb = (typeof b._t === 'number') ? b._t : 0;
     if(tb > ta) win = b;
   }
+  if(win && win.status === 'LATE'){
+    if(!win.lateMinutes && (a.lateMinutes || b.lateMinutes)){
+      win.lateMinutes = a.lateMinutes || b.lateMinutes;
+    }
+  }
   if(win && win.status === 'ABSENT' && (Array.isArray(a.absClerks) || Array.isArray(b.absClerks))){
+    const clerkSet = new Set();
     const clerks = [];
     [a, b].forEach(r => {
       if(!r || r.status !== 'ABSENT') return;
-      if(Array.isArray(r.absClerks)) r.absClerks.forEach(c => { if(c && clerks.indexOf(c) === -1) clerks.push(c); });
-      else if(clerks.indexOf(__LEGACY_ABS) === -1) clerks.push(__LEGACY_ABS);
+      if(Array.isArray(r.absClerks)){
+        r.absClerks.forEach(c => {
+          const s = clean(c);
+          if(s && !clerkSet.has(s)){
+            clerkSet.add(s);
+            clerks.push(s);
+          }
+        });
+      } else if(!clerkSet.has(__LEGACY_ABS)){
+        clerkSet.add(__LEGACY_ABS);
+        clerks.push(__LEGACY_ABS);
+      }
     });
     const merged = Object.assign({}, win);
     merged.absClerks = clerks;
@@ -1502,7 +1648,6 @@ function mergeClassesLocal(lArr, sArr){
   return out;
 }
 async function __syncPush(school){
-  if(__sessionExpired){ __syncLogAdd({ ev:'push-skipped-expired', school }); return { ok:false, skipped:true, err:'401' }; }
   if(!__syncEnabled()) return { ok:false, skipped:true };
   const key = 'nibras_'+school+'_db_v1';
   const pendKey = 'nibras_'+school+'_pending_v1';
@@ -1563,8 +1708,8 @@ let raw = null;
     try{
       const mresp = await fetch(SYNC_API + school);
       if(mresp.status === 401){
-        // انتهت الجلسة قبل الرفع: __handleAuthError يضع __sessionExpired=true ويوقف syncSchedule/syncPullAll.
-        // البيانات تبقى في التخزين (pending key) وتعود بعد نجاح الدخول (handleLogin يصفّر flag ويُرسل pending once).
+        // انتهت الجلسة قبل الرفع: لا نبتلع الصمت ولا نُبقي لافتة «جارٍ الحفظ» معلّقة —
+        // نُبلّغ حارس الحفظ بسبب واضح، وتبقى البيانات في التخزين لتعود بعد الدخول.
         __handleAuthError(mresp);
         st.lastFail = Date.now();
         try{ __syncLogAdd({ ev:'push-401', school, ts:__syncTS(obj) }); }catch(e){}
@@ -1823,23 +1968,23 @@ let raw = null;
     // نافذة قصيرة بين دمج الخادم والرفع: إن كُتب تعديل جديد أثناءها فالدفعة الحالية
     // صارت قديمة — نُلغيها ونُعيد الجدولة بدل رفع نسخةٍ تمحو الجديد. لا نجاح كاذب:
     // التخزين هو مصدر الحقيقة، ومنه يبدأ الرفع التالي فوراً.
-      // تم إزالة فحص __snapRaw: كان يُلغي الرفع عندما تُعدّل __syncPull
-  // التخزين المحلي أثناء الرفع (سباق كاذب)، فتُفقد سجلات الحضور/الغياب.
-  // الخادم يدمج البيانات (mergeAttendance) فلا ضرورة للفحص here.
-    const sendObj = Object.assign({}, obj);
-    delete sendObj.data;
+    try{
+      if(localStorage.getItem(key) !== __snapRaw){
+        __syncLogAdd({ ev:'push-stale-retry', school, ts:__syncTS(obj) });
+        st.dirty = true;
+        return { ok:false, stale:true, dirty:true };
+      }
+    }catch(e){}
     let attempt = 0;
     let lastErr = '';
     const respOf = await (async () => {
       for(; attempt < 3; attempt++){
         let resp = null;
-        const bodyText = JSON.stringify({ ts: __syncTS(obj) || Date.now(), baseTs: __pushBaseTs, data: sendObj });
-        if(bodyText.length > __PUSH_MAX_BYTES){ lastErr = 'client-too-large:' + Math.round(bodyText.length / 1048576) + 'MB'; break; }
         try{
           resp = await fetch(SYNC_API + school, {
             method:'PUT',
             headers:{ 'Content-Type':'application/json' },
-            body: bodyText
+            body: JSON.stringify({ ts: __syncTS(obj) || Date.now(), baseTs: __pushBaseTs, data: obj })
           });
         }catch(e){ resp = null; lastErr = 'network:' + ((e && e.message) || e); }
         if(!resp){ await new Promise(res => setTimeout(res, 1000 * (attempt + 1))); continue; }
@@ -1848,7 +1993,6 @@ let raw = null;
           try{ lastErr = resp.status + ':' + (await resp.text()).slice(0, 160); }
           catch(e){ lastErr = String(resp.status); }
         }
-        if(resp.status === 413) break;
         if(resp.status === 401){ lastErr = '401'; __handleAuthError(resp); return null; }
         if(resp.status === 403){
           // الحساب محجوب (بانتظار تغيير كلمة المرور مثلاً). نسجّل السبب لنعرف
@@ -1952,7 +2096,6 @@ let raw = null;
 /* استئناف الرفع بعد توقّفه بسقف المحاولات: تصفير العدّ ثم جدولة فورية.
    يُستدعى عند عودة الشبكة وعند استعادة التركيز، فالمستخدم لا يبقى عاطلاً على تعديلاته. */
 function __syncResumeAttempts(){
-  if(__sessionExpired) return; // لا إعادة محاولة أثناء انتهاء الجلسة
   for(const s of Object.keys(__syncTimers)){
     const st = __pushState(s);
     if(st && st.attempts >= __PUSH_MAX_ATTEMPTS){
@@ -1965,8 +2108,8 @@ function __syncResumeAttempts(){
 try{
   if(!window.__syncResumeHook){
     window.__syncResumeHook = true;
-    window.addEventListener('online', ()=>{ try{ if(!__sessionExpired) __syncResumeAttempts(); }catch(e){} });
-    window.addEventListener('focus', ()=>{ try{ if(!__sessionExpired) __syncResumeAttempts(); }catch(e){} });
+    window.addEventListener('online', ()=>{ try{ __syncResumeAttempts(); }catch(e){} });
+    window.addEventListener('focus', ()=>{ try{ __syncResumeAttempts(); }catch(e){} });
   }
 }catch(e){}
 function __syncPullPaused(){
@@ -2233,18 +2376,6 @@ async function __syncPull(school){
       if(Array.isArray(local.notes)){
         merged.notes = NRC_mergeNotes(Array.isArray(merged.notes) ? merged.notes : [], local.notes);
       }
-      // نجم الأسبوع: نحفظ النسخة الأحدث (حسب setAt) — لا تُمحى عند Synchronization
-      if(local.starOfWeek && (!merged.starOfWeek || (local.starOfWeek.setAt || 0) > (merged.starOfWeek.setAt || 0))){
-        merged.starOfWeek = local.starOfWeek;
-      }
-      if(Array.isArray(local.starOfWeekHistory)){
-        const mergedHist = Array.isArray(merged.starOfWeekHistory) ? merged.starOfWeekHistory.slice() : [];
-        const seenIds = new Set(mergedHist.map(h => h.setAt));
-        for(const h of local.starOfWeekHistory){
-          if(!seenIds.has(h.setAt)){ mergedHist.push(h); seenIds.add(h.setAt); }
-        }
-        merged.starOfWeekHistory = mergedHist;
-      }
       // تكليفات/نشاطات محلية غير مرفوعة بعد: نضمن بقاءها (لا تُمسح عند أخذ نسخة الخادم)
       const betterItemP = (a, b) => {
         if(!a) return b;
@@ -2267,7 +2398,7 @@ async function __syncPull(school){
         return Array.from(m.values());
       };
       if(Array.isArray(local.assignments)) merged.assignments = mergeByIdBetterP(merged.assignments, local.assignments);
-      if(Array.isArray(local.activities)) merged.activities = mergeByIdBetterP(merged.activities, local.activities);
+      if(Array.isArray(local.activities) && local.activities.length > 0){ if(!Array.isArray(merged.activities)) merged.activities = []; merged.activities = mergeByIdBetterP(merged.activities, local.activities); }
       const unionMsgsP = (srvArr, locArr, merge) => {
         const m = new Map();
         for(const x of (Array.isArray(srvArr) ? srvArr : [])) if(x && x.id != null) m.set(x.id, x);
@@ -2393,7 +2524,6 @@ async function __syncPull(school){
 }
 async function syncPullAll(){
   if(!__serverEnabled()) return;
-  if(__sessionExpired){ __syncLogAdd({ ev:'pull-skipped-expired' }); return; }
   const user = currentUser();
   if(!user) return;
   const schools = [user.school || 'GIRLS'];
@@ -2407,8 +2537,8 @@ async function syncPullAll(){
   }
   await Promise.all(schools.map(s => __syncPull(s)));
   await Promise.all(schools.filter(Boolean).map(s => __getSchoolSettings(s)));
+  try { await __activitiesLoad(getActiveSchool()); } catch(e) {}
   try { await __starOfWeekLoad(getActiveSchool()); } catch(e) {}
-  try { await __attendanceLoad(getActiveSchool()); } catch(e) {}
   // عرض الإشعارات الجديدة فور وصولها دون انتظار تحديث يدوي للصفحة
   // (السحب الدوري يجلب الرسائل إلى التخزين، لكن بدون إعادة الرسم لا تظهر للوكيل/الموجهة/المدير)
   const key = 'nibras_'+(user.school||'GIRLS')+'_db_v1';
@@ -2464,7 +2594,6 @@ async function __refreshSchool(school){
   try{ __rawBefore = localStorage.getItem(__keyR); }catch(e){}
   try{
     const resp = await fetch(SYNC_API + school);
-    if(resp.status === 401){ __handleAuthError(resp); return; }
     if(!resp.ok) return;
     const j = await resp.json();
     if(j && j.data){
@@ -2504,6 +2633,7 @@ async function __refreshSchool(school){
         const out = JSON.parse(JSON.stringify(j.data));
         if(!Array.isArray(out.assignments) && Array.isArray(local.assignments)) out.assignments = [];
         if(Array.isArray(out.assignments)) out.assignments = mergeArr(out.assignments, local.assignments);
+        if(!Array.isArray(out.activities) && Array.isArray(local.activities)) out.activities = [];
         if(Array.isArray(out.activities)) out.activities = mergeArr(out.activities, local.activities);
         if(Array.isArray(out.notes) || Array.isArray(local.notes)){
           out.notes = NRC_mergeNotes(Array.isArray(out.notes) ? out.notes : [], Array.isArray(local.notes) ? local.notes : []);
@@ -2802,10 +2932,18 @@ function NRC_noteBelongsToOther(n, me){
    النقاط التلقائية من الغياب (بادئتها طولية بلا _auto) والتحويلات/تكليفات تُدار من شاشاتها
    الخاصة — لا تحذف كملاحظات إلا نقاط الإضافة اليدوية. */
 function NRC_deletableNote(n, me){
-  if(!me) return false;
+  if(!me || !n || n.deleted) return false;
   if(me.role === 'ADMIN') return true;
-  if(me.role !== 'TEACHER') return false;
-  return !!n && n.createdBy === me.id;
+  const owner = n.createdBy != null ? String(n.createdBy).trim() : '';
+  const myId = me.id != null ? String(me.id).trim() : '';
+  return !!owner && !!myId && owner === myId;
+}
+function NRC_editableNote(n, me){
+  if(!me || !n || n.deleted) return false;
+  if(me.role === 'ADMIN') return true;
+  const owner = n.createdBy != null ? String(n.createdBy).trim() : '';
+  const myId = me.id != null ? String(me.id).trim() : '';
+  return !!owner && !!myId && owner === myId;
 }
 // خصم نقاط تلقائي حسب حالة الحضور (يتزايد مع دقائق التأخر)
 function attendancePoints(status, lateMins){
@@ -3122,8 +3260,8 @@ function loadDB(){
     let dupNote = false;
     d.notes.forEach(n => {
       if(!n) return;
-      const kid = (n.id != null) ? ('id:' + n.id) : null;
-      const kbatch = (n.batchId != null) ? ('batch:' + n.batchId) : null;
+      const kid = (n.id != null) ? ('id:' + String(n.id)) : null;
+      const kbatch = (n.batchId != null) ? ('batch:' + String(n.batchId) + (n.studentId != null ? ('|' + String(n.studentId)) : '')) : null;
       if(!kid && !kbatch){ uniqNotes.push(n); return; }
       if((kid && seenNoteKeys.has(kid)) || (kbatch && seenNoteKeys.has(kbatch))){ dupNote = true; return; }
       if(kid) seenNoteKeys.add(kid);
@@ -3297,7 +3435,8 @@ function getClassesSorted(){
   let classes = d.classes.filter(c => !c.deleted);
   // غير الشموليين (معلم فقط) يرون الفصول المسندة إليهم؛ المدير/الوكيل/المرشدة/الإداري يرون الكل
   if(user && !seesAllClasses(user)){
-    classes = classes.filter(c => (c.teacherIds||[]).includes(user.id));
+    const uidStr = String(user.id != null ? user.id : '').trim();
+    classes = classes.filter(c => (c.teacherIds||[]).some(tid => String(tid != null ? tid : '').trim() === uidStr));
   }
   return classes.slice().sort((a,b) => {
     const ga = gradeById(a.gradeId), gb = gradeById(b.gradeId);
@@ -3315,6 +3454,15 @@ function getVisibleStudents(){
   return students.sort((a,b) => a.fullName.localeCompare(b.fullName,'ar'));
 }
 function classLabel(c){ const g = gradeById(c.gradeId); return `${g?g.name:'—'} - ${c.name}`; }
+function defaultStudentClassForGrade(gradeId, data){
+  const classes = (data && Array.isArray(data.classes) ? data.classes : []).filter(c => c && !c.deleted && String(c.gradeId) === String(gradeId));
+  classes.sort((a,b) => {
+    const aDefault = String(a.name || '').trim() === 'أ' ? 0 : 1;
+    const bDefault = String(b.name || '').trim() === 'أ' ? 0 : 1;
+    return (aDefault - bDefault) || String(a.name || '').localeCompare(String(b.name || ''), 'ar');
+  });
+  return classes[0] || null;
+}
 
 /* ============ التوجيه (Router) ============ */
 function getUserSchool(){
@@ -3526,13 +3674,6 @@ function setupPasswordToggles(){
 }
 window.addEventListener('DOMContentLoaded', async () => {
   try{
-    /* 1) ارسم الواجهة فوراً قبل أي انتظار شبكة: خادم Render البارد أو الشبكة
-       البطيئة ليسا تعطّلاً. سابقاً كان renderApp/الإقلاع ينتظران __restoreSession
-       وsyncPullAll (أربع طلبات متتالية بلا مهلة) فكان حارس الإقلاع (7 ثوانٍ)
-       يظنّ التطبيق «تعطّل قبل تسجيل السكربت» ويطبع «لا يوجد نص خطأ» بلا سبب. */
-    try{ renderApp(); }catch(__firstRenderErr){ try{ console.error('[boot first render]', __firstRenderErr); }catch(_){} }
-    /* 2) السكربت سجّل والواجهة ظهرت: أوقف حارس الإقلاع قبل الشبكة. */
-    window.__nibrasBooted = true;
     if(__serverEnabled()){
       await __restoreSession();
       await syncPullAll();
@@ -3550,9 +3691,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     if(!window.__thanksTimer) window.__thanksTimer = setInterval(() => { try{ __thanksMaybeShow(); }catch(e){} }, 15000);
     setupPasswordToggles();
     window.__nibrasBooted = true;
-    /* إن كان حارس الإقلاع قد أضاف صندوق الخطأ (نسخة قديمة/بطء سابق) نزيله الآن
-       بعد نجاح الإقلاع، حتى لا يبقى على الشاشة خطأ لا وجود له. */
-    try{ var __bb = document.getElementById('nibrasBootErrorBox'); if(__bb && __bb.parentNode) __bb.parentNode.removeChild(__bb); }catch(_){}
   }catch(__bootErr){
     const __app = document.getElementById('app');
     if(__app){
@@ -3636,19 +3774,11 @@ async function handleLogin(){
   try{
     const res = await login(email, password);
     if(res && res.ok){
-      __sessionExpired = false;
       if(__serverEnabled()){
         await syncPullAll();
         const u = currentUser();
         const schools = u && u.role === 'ADMIN' ? ['GIRLS'] : [u && u.school];
         await Promise.all(schools.filter(Boolean).map(s => __getSchoolSettings(s)));
-        // بعد إعادة الدخول، أرسل pending data (إن وجد) مرة واحدة
-        schools.filter(Boolean).forEach(s => {
-          try{
-            const pend = localStorage.getItem('nibras_' + s + '_pending_v1');
-            if(pend){ __syncSchedule(s, 0); }
-          }catch(e){}
-        });
       }
       location.hash = '#/';
       renderApp();
@@ -4118,6 +4248,9 @@ function renderStudentLeaders(){
   const medals = ['🥇','🥈','🥉'];
   const stageGroups = [
     { tab:'myclass', label:'فصلي', min:-1, max:-1 },
+    { tab:'pri', label:'الابتدائي', min:-1, max:5 },
+    { tab:'mid', label:'المتوسط', min:6, max:8 },
+    { tab:'sec', label:'الثانوي', min:9, max:11 },
   ];
   const renderStage = (g, showClass) => {
     let studs;
@@ -4162,6 +4295,18 @@ function renderStudentLeaders(){
     <div class="card" style="padding:16px;border-right:4px solid #2563eb">
       <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#2563eb">🏫 فصلي</div>
       ${renderStage(stageGroups[0], false)}
+    </div>
+    <div class="card" style="padding:16px;border-right:4px solid #16a34a">
+      <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#16a34a">🎓 الابتدائي</div>
+      ${renderStage(stageGroups[1], true)}
+    </div>
+    <div class="card" style="padding:16px;border-right:4px solid #f59e0b">
+      <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#f59e0b">🎓 المتوسط</div>
+      ${renderStage(stageGroups[2], true)}
+    </div>
+    <div class="card" style="padding:16px;border-right:4px solid #8b5cf6">
+      <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#8b5cf6">🎓 الثانوي</div>
+      ${renderStage(stageGroups[3], true)}
     </div>
   </div>`;
 }
@@ -4230,8 +4375,17 @@ function enterSchool(school){
   const d = loadDB();
   const sessionId = localStorage.getItem(LOCAL_SESSION_KEY);
   ensureUserInDB(school, sessionId);
-  // لا إنشاء تلقائي للصفوف والفصول عند دخول جهاز فارغ: البيانات تُسحب من الخادم،
-  // وإنشاء الصفوف الناقصة إجراء إداري صريح فقط (createMissingStageClasses).
+  if(d.classes.length === 0 && d.grades.length === 0 && d.students.length === 0){
+    stages.forEach(stage => {
+      let grade = d.grades.find(g => g.name === stage.name);
+      if(!grade){ grade = { id:stage.id, name:stage.name, order:stage.order }; d.grades.push(grade); }
+      if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ')){
+        d.classes.push({ id:__stageClassId(grade.id), gradeId:grade.id, name:'أ', campus:school, capacity:null, teacherIds:[] });
+      }
+    });
+    saveDB(d);
+    ensureUserInDB(school, sessionId);
+  }
   location.hash = '#/';
   renderApp();
 }
@@ -4245,10 +4399,10 @@ function renderAbout(){
     <h2>ℹ️ حول التطبيق</h2>
     <p style="margin:4px 0"><b>نظام نبراس لإدارة المدرسة</b></p>
     <p style="margin:4px 0">المدير: <b>ناصر عبيد العتيبي</b> — مدير المدارس السعودية في إسلام أباد</p>
-
+    <p style="margin:4px 0">البريد الإلكتروني: <b>nassser8@gmail.com</b></p>
     <hr>
     <p style="font-size:13px;color:#6b7280;line-height:1.7">جميع الحقوق محفوظة © 2026 ناصر العتيبي.<br>
-  </p>
+    هذا التطبيق وقف لله تعالى، ولا يجوز بيعه دون إذن كتابي.</p>
     <div class="actions" style="margin-top:12px">
       <button class="btn-primary" onclick="location.hash='#/'">عودة للرئيسية</button>
       <button class="btn-secondary" onclick="doInstallApp()">📲 إضافة إلى الشاشة الرئيسية</button>
@@ -4318,7 +4472,7 @@ function renderLayout(user, hash){
     { title:'الإدارة', items:[
       { href:'#/students', key:'students', label:tl('الطالبات'), icon:'👥' },
       { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
-      { href:'#/supervision', key:'supervision', label:'الإشراف اليومي', icon:'🛡️' },
+      { href:'#/supervision', key:'supervision', label:'🛡️ الإشراف اليومي', icon:'🛡️' },
     ]},
     { title:'المتابعة', items:[
       { href:'#/attendance', key:'attendance', label:'الحضور والغياب', icon:'✓' },
@@ -4339,7 +4493,7 @@ function renderLayout(user, hash){
       (user.role === 'ADMIN' || user.role === 'AGENT') ? { href:'#/admins', key:'admins', label:'الإداريون', icon:'🛡' } : null,
       { href:'#/students', key:'students', label:tl('الطالبات'), icon:'👥' },
       { href:'#/classes', key:'classes', label:'الفصول', icon:'🏫' },
-      (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT') ? { href:'#/supervision', key:'supervision', label:'الإشراف اليومي', icon:'🛡️' } : null,
+      (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT') ? { href:'#/supervision', key:'supervision', label:'🛡️ الإشراف اليومي', icon:'🛡️' } : null,
     ]},
     { title:'المتابعة', items:[
       { href:'#/attendance', key:'attendance', label:'الحضور والغياب', icon:'✓' },
@@ -4352,8 +4506,8 @@ function renderLayout(user, hash){
       (user.role !== 'STUDENT') ? { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉', badge: user.role === 'AGENT' ? pendingPartRequests() : 0 } : null,
       { href:'#/memo', key:'memo', label:'المفكرة والتذكير', icon:'📒' },
       { href:'#/daily-msg', key:'daily-msg', label:'رسالة اليوم', icon:'📢' },
-       { href:'#/star-of-week', key:'star-of-week', label:'نجمة الأسبوع', icon:'⭐' },
-      (user.role === 'ADMIN') ? { href:'#/thanks', key:'thanks', label:'بطاقة شكر', icon:'🌸' } : null,
+      { href:'#/star-of-week', key:'star-of-week', label:'نجمة الأسبوع', icon:'⭐' },
+      (user.role === 'ADMIN') ? { href:'#/thanks', key:'thanks', label:'🌸 بطاقة شكر', icon:'🌸' } : null,
       { href:'#/maintenance', key:'maintenance', label:'الصيانة', icon:'🔧' },
       (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR') ? { href:'#/guide-msgs', key:'guide-msgs', label:'رسائل المعلمين', icon:'💬', badge: msgMonitorBadge(user) } : null,
     ]},
@@ -4381,7 +4535,7 @@ function renderLayout(user, hash){
       <div class="msg-static">${escapeHtml(msgMarquee)}</div>
       ${senderFirstName ? `<div class="msg-sender">— ${escapeHtml(senderFirstName)}</div>` : ''}
     </div>`;
-  // نجمة الأسبوع — يختارها الموجه الطلابي (كتابة يدوية)
+  // نجمة الأسبوع — تختارها الموجهة الطلابية (كتابة يدوية)
   const starOfWeek = getStarOfWeek();
   const starName = starOfWeek ? (starOfWeek.name || '') : '';
   const starAvatar = starName ? starName.charAt(0) : '⭐';
@@ -4401,7 +4555,7 @@ function renderLayout(user, hash){
         <div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.85);margin-top:2px;position:relative;z-index:1;">طالبة متميزة ومتفوقة ومثابرة</div>
         ${starOfWeek && starOfWeek.className ? `<div style="font-size:11px;color:rgba(255,255,255,.8);margin-top:2px;position:relative;z-index:1;">${escapeHtml(starOfWeek.className)}</div>` : ''}
       ` : `
-        <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:64px;height:64px;margin:0 auto 4px;display:block;opacity:.4;position:relative;z-index:1;" />
+        <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:56px;height:56px;margin:0 auto 4px;display:block;opacity:.4;position:relative;z-index:1;" />
         <div style="font-size:11px;color:rgba(255,255,255,.6);position:relative;z-index:1;">لم تُحدد بعد</div>
       `}
       ${canSetStar ? `<a href="#/star-of-week" style="display:inline-block;margin-top:4px;padding:2px 8px;font-size:10px;border-radius:4px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-weight:700;text-decoration:none;position:relative;z-index:1;">✏️ ${starName ? 'تغيير' : 'تعيين'}</a>` : ''}
@@ -4441,7 +4595,7 @@ function renderLayout(user, hash){
   else if(page === 'guide-msgs' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR')) pageHtml = renderGuideMsgs();
   else if(page === 'settings') pageHtml = renderSettings();
   else if(page === 'daily-msg') pageHtml = renderDailyMsg();
-   else if(page === 'star-of-week') pageHtml = renderStarOfWeek();
+  else if(page === 'star-of-week') pageHtml = renderStarOfWeek();
   else if(page === 'backup' && user.role === 'ADMIN') pageHtml = renderBackup();
   else if(page === 'thanks' && user.role === 'ADMIN') pageHtml = renderThanksCard();
   else if(page === 'supervision' && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT')) pageHtml = renderSupervisionAdmin();
@@ -5418,17 +5572,6 @@ function renderStudentDashboard(){
       }).join('')}
     </div>
   </div>
-  <div class="card mb" style="margin-top:12px;">
-    <div style="font-weight:700;margin-bottom:8px;">🔗 روابط مفيدة</div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;">
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openSchoolCalendar()" title="التقويم الدراسي 1448-1449هـ">🗓️ التقويم الدراسي</button>
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEduLinks()" title="بوابة الروابط التعليمية">📚 روابط تعليمية</button>
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('📅 تقويم Google', 'https://calendar.google.com/calendar/embed?src=ar.sa%23holiday%40group.v.calendar.google.com&ctz=Asia/Riyadh')" title="Google Calendar">📅 تقويم</button>
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🕌 مواقيت الصلاة', 'https://www.islamicfinder.org/prayer-widget/')" title="IslamicFinder">🕌 مواقيت الصلاة</button>
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://www.bing.com/translator')" title="Bing Translator">🌐 مترجم</button>
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="const _s=loadDB().students.find(x=>x.id===currentUser()?.id); if(_s && _s.classId) viewClassSchedule(_s.classId); else alert('غير مسند لفصل')" title="عرض جدول فصلي (أسبوع)">👁 جدول</button>
-    </div>
-  </div>
   </div>`;
 }
 function renderStudentAssignments(){
@@ -5572,7 +5715,7 @@ function renderDashboard(){
   // مختلفان: 93 من الجدول مقابل 57 من الفصول المسندة، و57 هو الصحيح).
   const myStudentsCount = isTeacher ? [...new Set(d.students.filter(s => s.active && s.classId && (d.classes.find(c => c.id === s.classId && (c.teacherIds||[]).includes(user.id)))).map(s => s.id))].length : 0;
   const myClassIds = isTeacher ? d.classes.filter(c => (c.teacherIds || []).includes(user.id)).map(c => c.id) : [];
-  const myAssignments = isTeacher ? (d.assignments||[]).filter(a => !(a && a.deleted) && (myClassIds.includes(a.classId) || a.teacherId === user.id || (Array.isArray(a.teacherIds) && a.teacherIds.some(x => String(x) === String(user.id))))).sort((a,b) => (b.created||0)-(a.created||0)) : [];
+  const myAssignments = isTeacher ? (d.assignments||[]).filter(a => !(a && a.deleted) && isAssignmentForTeacher(a, user.id)).sort((a,b) => (b.created||0)-(a.created||0)) : [];
   // العداد الذكي: حالة المعلمة وحصتها الحالية/القادمة بحسب جدولها وأوقات القسم الرسمية
   const myLessonCard = isTeacher ? lessonCard(user, d, { key: 'self:' + user.id }) : '';
   const tpct = tDayAtt && (tDayAtt.present+tDayAtt.late) ? Math.round((tDayAtt.present+tDayAtt.late)/(tDayAtt.present+tDayAtt.absent+tDayAtt.late)*100) : null;
@@ -5971,7 +6114,7 @@ function renderDashboard(){
         ${groups.map((g,i) => `<button class="dash-tab ${i===0?'active':''}" data-act="${g.key}" onclick="switchActTab('${g.key}')">${g.school}</button>`).join('')}
       </div>
       ${groups.map(g => `<div class="act-pane" data-act="${g.key}" style="${g.key==='ALL'?'':'display:none'}">${actTab(g)}</div>`).join('')}`}
-
+      <p class="muted small" style="margin:10px 0 0">يُحتسب من دخل حسابَه لأول مرة (فعّل حسابه) — وليس مجرد إنشاء الحساب. اضغط على الرقم أو الدائرة لعرض الأسماء.</p>
     </div>`;
   })();
 
@@ -5980,6 +6123,7 @@ function renderDashboard(){
   const medals = ['🥇','🥈','🥉'];
   const classLabelOf = s => { const c = s.classId ? classById(s.classId) : null; return c ? classLabel(c) : '—'; };
   const stageGroups = [
+    { tab:'pri', label:'ابتدائي', min:-1, max:5 },
     { tab:'mid', label:'متوسط', min:6, max:8 },
     { tab:'sec', label:'ثانوي', min:9, max:11 },
   ];
@@ -6138,17 +6282,6 @@ function renderDashboard(){
   <div class="grid grid-6">${myClassCards}</div>
   ` : ''}
   ${activationPanel}
-  <div class="card mb" style="margin-top:12px;">
-    <div style="font-weight:700;margin-bottom:8px;">🔗 روابط مفيدة</div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;">
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openSchoolCalendar()" title="التقويم الدراسي 1448-1449هـ">🗓️ التقويم الدراسي</button>
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEduLinks()" title="بوابة الروابط التعليمية">📚 روابط تعليمية</button>
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('📅 تقويم Google', 'https://calendar.google.com/calendar/embed?src=ar.sa%23holiday%40group.v.calendar.google.com&ctz=Asia/Riyadh')" title="Google Calendar">📅 تقويم</button>
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🕌 مواقيت الصلاة', 'https://www.islamicfinder.org/prayer-widget/')" title="IslamicFinder">🕌 مواقيت الصلاة</button>
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://www.bing.com/translator')" title="Bing Translator">🌐 مترجم</button>
-      <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="const _s=loadDB().students.find(x=>x.id===currentUser()?.id); if(_s && _s.classId) viewClassSchedule(_s.classId); else alert('غير مسند لفصل')" title="عرض جدول فصلي (أسبوع)">👁 جدول</button>
-    </div>
-  </div>
   `;
 }
 
@@ -6156,7 +6289,7 @@ function renderDashboard(){
 function renderTeacherRecent(d, user){
   if(!user || user.role !== 'TEACHER') return '';
   const items = {
-    assignments: (d.assignments||[]).filter(a => !(a && a.deleted) && (a.teacherId === user.id || (Array.isArray(a.teacherIds) && a.teacherIds.some(x => String(x) === String(user.id)))))
+    assignments: (d.assignments||[]).filter(a => !(a && a.deleted) && isAssignmentForTeacher(a, user.id))
       .sort((a,b) => (b.created||0) - (a.created||0)).slice(0,3),
     transfers: (d.transfers||[]).filter(t => !(t && t.deleted) && t.createdBy === user.id)
       .sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,3),
@@ -6295,6 +6428,7 @@ function renderPointsSection(){
 /* ============ لوحة الأوائل: أعلى المعلمين + أعلى طالب في كل مرحلة (للمدير) ============ */
 function renderStageLeaders(d){
   const stageGroups = [
+    { label:'🎓 الابتدائي', min:-1, max:5 },
     { label:'🎓 المتوسط', min:6, max:8 },
     { label:'🎓 الثانوي', min:9, max:11 },
   ];
@@ -8441,7 +8575,7 @@ function renderStudents(){
   const isTeacher = user?.role === 'TEACHER';
   const canManage = isManager(user);
   const students = getVisibleStudents();
-  const classes = getClassesSorted();
+  const grades = (Array.isArray(d.grades) ? d.grades : []).filter(g => g && !g.deleted).slice().sort((a,b) => (Number(a.order) || 0) - (Number(b.order) || 0) || String(a.name || '').localeCompare(String(b.name || ''), 'ar'));
 
   return `
   <div class="header-row">
@@ -8454,12 +8588,16 @@ function renderStudents(){
     </div>
   </div>
   <div id="studentForm" class="card form-grid-3" style="display:none">
-    <input id="sFullName" class="input" placeholder="الاسم الكامل" data-tip="أدخل الاسم الكامل للطالب كما سيظهر في كشوف الحضور والتقارير" />
-    <input id="sStudentNo" class="input" placeholder="الرقم الأكاديمي" data-tip="رقم قيد الطالب أو رقمه الأكاديمي — يُستخدم للبحث في القائمة والتفريق بين الطالبات" />
-    <select id="sClassId" class="input" data-tip="اختر الفصل الذي سينضم إليه الطالب، أو اتركه بدون فصل ليُسند لاحقًا"><option value="">بدون فصل</option>${classes.map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
-    <input id="sGuardianPhone" class="input" placeholder="رقم ولي الأمر (جوال)" data-tip="رقم موبايل ولي أمر الطالبة" />
-    ${__serverEnabled() ? '<input id="sUsername" class="input" placeholder="اسم المستخدم (يُولّد تلقائياً إن فُرغ)" data-tip="اسم المستخدم الذي سيدخل به الطالب — يمكن توليده تلقائياً من الاسم" />' : ''}
-    ${__serverEnabled() ? '<input id="sPassword" class="input" type="password" placeholder="الرقم السري للطالب" data-tip="كلمة مرور الطالب — يستطيع تغييرها لاحقاً" />' : ''}
+    <input id="sFullName" class="input" placeholder="اسم الطالبة الرباعي" data-tip="أدخل الاسم الرباعي للطالبة" oninput="suggestStudentUsernameField(false)" />
+    <input id="sStudentNo" class="input" placeholder="الرقم الأكاديمي" data-tip="رقم قيد الطالبة أو رقمها الأكاديمي" />
+    <select id="sGradeId" class="input" data-tip="اختر الصف الدراسي؛ سيُسند الفصل الافتراضي للطالبة تلقائياً"><option value="">اختر الصف الدراسي</option>${grades.map(g=>`<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}</option>`).join('')}</select>
+    <input id="sGuardianPhone" class="input" inputmode="tel" placeholder="رقم الجوال (اختياري)" data-tip="رقم جوال الطالبة أو ولي أمرها — اختياري" />
+    <input id="sEmail" class="input" type="email" placeholder="البريد الإلكتروني (اختياري)" data-tip="البريد الإلكتروني للطالبة أو ولي أمرها — اختياري" style="direction:ltr" />
+    <div style="display:flex;gap:6px;align-items:stretch">
+      <input id="sUsername" class="input" placeholder="اسم المستخدم" data-tip="اسم الدخول — يُقترح تلقائياً ويمكن تعديله" oninput="this.dataset.manual='1'" style="flex:1;min-width:0" />
+      <button type="button" class="btn-secondary" onclick="suggestStudentUsernameField(true)" style="white-space:nowrap">💡 اقتراح</button>
+    </div>
+    <input id="sPassword" class="input" type="password" placeholder="كلمة المرور (8 أحرف فأكثر)" data-tip="كلمة مرور الطالبة — 8 أحرف على الأقل وتتضمن حرفاً إنجليزياً" />
     <button class="btn-primary" onclick="addStudent()">حفظ</button>
   </div>
   <div id="studentCredsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
@@ -8559,6 +8697,36 @@ function generateUsername(fullName){
   const clean = (base || 'user').replace(/[^a-z0-9\u0600-\u06FF]/g, '') || 'user';
   return clean + Math.floor(Math.random()*900+100);
 }
+const STUDENT_USERNAME_AR2LAT = {
+  'ا':'a','أ':'a','إ':'a','آ':'a','ٱ':'a','ب':'b','ت':'t','ث':'th','ج':'j','ح':'h','خ':'kh',
+  'د':'d','ذ':'dh','ر':'r','ز':'z','س':'s','ش':'sh','ص':'s','ض':'d','ط':'t','ظ':'z',
+  'ع':'a','غ':'gh','ف':'f','ق':'q','ك':'k','ل':'l','م':'m','ن':'n','ه':'h','و':'w','ي':'y',
+  'ة':'h','ى':'a','ء':'','ؤ':'w','ئ':'y'
+};
+function studentUsernameBase(fullName){
+  let out = '';
+  for (const ch of String(fullName || '').replace(/[\u064B-\u0652\u0670\u0640]/g, '')) {
+    if (STUDENT_USERNAME_AR2LAT[ch] !== undefined) out += STUDENT_USERNAME_AR2LAT[ch];
+    else if (/[a-zA-Z0-9]/.test(ch)) out += ch.toLowerCase();
+  }
+  return (out || 'student').replace(/[^a-z0-9]/g, '').slice(0, 24) || 'student';
+}
+function suggestStudentUsernameField(force){
+  const nameEl = document.getElementById('sFullName');
+  const usernameEl = document.getElementById('sUsername');
+  if (!nameEl || !usernameEl || (!force && usernameEl.dataset.manual === '1')) return;
+  const name = nameEl.value.trim();
+  if (!name) { if (force) usernameEl.value = ''; return; }
+  const base = studentUsernameBase(name);
+  const used = new Set((loadDB().users || []).map(u => String(u && u.username || '').trim().toLowerCase()).filter(Boolean));
+  let candidate = base, i = 1;
+  while (used.has(candidate.toLowerCase())) {
+    const suffix = String(i++);
+    candidate = base.slice(0, Math.max(1, 24 - suffix.length)) + suffix;
+  }
+  usernameEl.value = candidate;
+  usernameEl.dataset.manual = '0';
+}
 async function setStudentCreds(studentId, studentName){
   const box = document.getElementById('studentCredsModal');
   if(!box) return;
@@ -8612,50 +8780,72 @@ async function resetStudentPassword(studentId, studentName){
 async function addStudent(){
   const fullName = document.getElementById('sFullName').value.trim();
   const studentNo = document.getElementById('sStudentNo').value.trim();
-  const classId = document.getElementById('sClassId').value || null;
+  const gradeId = document.getElementById('sGradeId').value || null;
   const sUsernameEl = document.getElementById('sUsername');
   const sPasswordEl = document.getElementById('sPassword');
   const inputUsername = sUsernameEl ? sUsernameEl.value.trim() : '';
-  const inputPassword = sPasswordEl ? sPasswordEl.value.trim() : '';
+  const inputPassword = sPasswordEl ? sPasswordEl.value : '';
   const guardianPhoneEl = document.getElementById('sGuardianPhone');
   const guardianPhone = guardianPhoneEl ? guardianPhoneEl.value.trim().replace(/\D/g,'') : '';
-  if(!fullName || !studentNo){ alert('الاسم والرقم الأكاديمي مطلوبان'); return; }
-  if(__serverEnabled() && !inputPassword){ alert('ضع الرقم السري للطالب'); return; }
+  const emailEl = document.getElementById('sEmail');
+  const email = emailEl ? emailEl.value.trim().toLowerCase() : '';
+  if(!fullName || !studentNo || !gradeId){ alert('اسم الطالبة والرقم الأكاديمي والصف الدراسي مطلوبة'); return; }
+  if(__serverEnabled() && !inputUsername){ alert('اسم المستخدم مطلوب؛ استخدم زر الاقتراح أو أدخله يدوياً'); return; }
+  if(__serverEnabled() && !/^(?=.*[A-Za-z])[A-Za-z0-9@#$%^&*!._\-+=]{8,}$/.test(inputPassword)){ alert('كلمة المرور يجب أن تكون 8 أحرف على الأقل وتتضمن حرفاً إنجليزياً'); return; }
+  if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ alert('صيغة البريد الإلكتروني غير صحيحة'); return; }
   const d = loadDB();
   if(d.students.some(s => s.studentNo === studentNo && s.active)){ alert('الرقم الأكاديمي مستخدم مسبقًا'); return; }
+  const grade = (d.grades || []).find(g => g && String(g.id) === String(gradeId));
+  if(!grade){ alert('الصف الدراسي المحدد غير موجود'); return; }
+  const assignedClass = defaultStudentClassForGrade(gradeId, d);
+  if(!assignedClass){ alert('لا يوجد فصل مرتبط بهذا الصف؛ أنشئ فصلاً للصف أولاً'); return; }
+  const classId = assignedClass.id;
   const newId = uid();
-  if(__serverEnabled() && !inputUsername){ alert('اسم المستخدم مطلوب'); return; }
-  const username = inputUsername;
+  const username = inputUsername || suggestLocalStudentUsername(fullName, d);
   let createdStudent = null;
-  if(__serverEnabled() && inputPassword){
+  if(__serverEnabled()){
     const r = await __api('POST', 'admin/create-student', {
-      name: fullName, studentNo, classId, username, password: inputPassword,
-      studentId: newId, school: getActiveSchool(),
-      guardianPhone: guardianPhone,
+      name: fullName, studentNo, gradeId, classId, username, password: inputPassword,
+      email: email || null, studentId: newId, school: getActiveSchool(), guardianPhone: guardianPhone,
     });
     if(!r || r.status !== 201 || !r.j || !r.j.ok){
-      alert(r?.j?.error === 'username_exists' ? 'اسم المستخدم مستخدم مسبقًا' : 'تعذر إنشاء حساب الطالب');
+      const messages = {
+        username_exists: 'اسم المستخدم مستخدم مسبقًا',
+        duplicate_student: 'معرّف الطالبة مستخدم مسبقًا',
+        student_number_exists: 'الرقم الأكاديمي مستخدم مسبقًا',
+        weak_password: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل وتتضمن حرفاً إنجليزياً',
+        invalid_email: 'صيغة البريد الإلكتروني غير صحيحة',
+        grade_not_found: 'الصف الدراسي غير موجود',
+        class_not_found: 'لا يوجد فصل مرتبط بالصف المحدد',
+      };
+      alert(messages[r?.j?.error] || ('تعذر إنشاء حساب الطالبة: ' + (r?.j?.error || 'خطأ')));
       return;
     }
     createdStudent = r.j.student || {
-      id: r.j.id, fullName: r.j.name, studentNo, classId,
-      guardianName: '', guardianPhone: guardianPhone, active: true, joinedAt: Date.now(),
+      id: r.j.id, fullName: r.j.name, studentNo, gradeId, classId,
+      guardianName: '', guardianPhone, email: email || null, active: true, joinedAt: Date.now(),
     };
-    // لا تكتب فوق رقم ولي الأمر المدخل محلياً إن كان الخادم أرجع قيم فارغة
     if(guardianPhone && (!createdStudent.guardianPhone || !String(createdStudent.guardianPhone).replace(/\D/g,''))){
       createdStudent.guardianPhone = guardianPhone;
     }
     if(guardianPhone) createdStudent.guardianPhoneAt = Date.now();
   }
-  d.students.push(createdStudent || { id:newId, fullName, studentNo, classId, guardianName:'', guardianPhone: guardianPhone, guardianPhoneAt: Date.now(), active:true, joinedAt: Date.now() });
+  d.students.push(createdStudent || { id:newId, fullName, studentNo, gradeId, classId, guardianName:'', guardianPhone, email: email || null, guardianPhoneAt: guardianPhone ? Date.now() : undefined, active:true, joinedAt: Date.now() });
   if(__serverEnabled()){
     if(!Array.isArray(d.users)) d.users = [];
-    d.users.push({ id:newId, school:getActiveSchool(), name:fullName, username, role:'STUDENT', active:true, firstLogin:false, granted:true });
+    d.users.push({ id:newId, school:getActiveSchool(), name:fullName, username, email:email || null, role:'STUDENT', active:true, firstLogin:false, granted:true });
   }
   saveDB(d);
   renderApp();
   if(__serverEnabled()) await __refreshSchool(getActiveSchool());
-  if(__serverEnabled()) __syncSchedule(getActiveSchool(), 0); // دفع فوري لضمان انتشار رقم ولي الأمر
+  if(__serverEnabled()) __syncSchedule(getActiveSchool(), 0);
+}
+function suggestLocalStudentUsername(fullName, data){
+  const base = studentUsernameBase(fullName);
+  const used = new Set((data && Array.isArray(data.users) ? data.users : []).map(u => String(u && u.username || '').trim().toLowerCase()).filter(Boolean));
+  let candidate = base, i = 1;
+  while(used.has(candidate.toLowerCase())) { const suffix = String(i++); candidate = base.slice(0, Math.max(1, 24 - suffix.length)) + suffix; }
+  return candidate;
 }
 async function deleteStudent(id){
   const s = studentById(id);
@@ -8829,7 +9019,7 @@ function importStudents(evt){
 }
 
 /* ============ الحضور ============ */
-let attendanceState = { classId:null, date: todayStr(), draft:{}, absenceType:{}, sLateType:{}, sLateMin:{}, tDraft:{}, tLateType:{}, tLateMin:{}, absencePrompted:false };
+let attendanceState = { classId:null, date: typeof todayStr === 'function' ? todayStr() : __navDate, userExplicitDate:false, draft:{}, absenceType:{}, sLateType:{}, sLateMin:{}, tDraft:{}, tLateType:{}, tLateMin:{}, absencePrompted:false };
 /* كشف الكادر: «المعلمون» و«الكادر الإداري» كشفان منفصلان لا خيار واحد مختلط.
    المعلمة (TEACHER) وحدها في كشف المعلمات، وبقية الأدوار (المدير/الوكيل/الموجهة
    الطلابية/المساعدة الإدارية/وكيلة الشؤون المدرسية) في كشف الكادر الإداري. */
@@ -8842,16 +9032,11 @@ function staffSheetMembers(d, sheetId){
 function staffSheetEmptyMsg(sheetId){ return sheetId === 'ADMIN_STAFF' ? 'لا يوجد كادر إداري بعد' : tl('لا يوجد معلمون بعد'); }
 function renderAttendance(){
   const d = loadDB();
-  // Use cached attendance from server if available
-  const __attCache = __attendanceCache[getActiveSchool()];
-  if(__attCache && Array.isArray(__attCache) && __attCache.length > (d.attendance||[]).length){
-    d.attendance = __attCache.slice();
-  }
   const classes = getClassesSorted();
-  // Load attendance from server in background
-  __attendanceRefreshRender(getActiveSchool());
-  // الوكيل والمدير بإمكانهما تسجيل الغياب/التأخر لأيام سابقة — فقط نضمن وجود تاريخ افتراضي صالح (اليوم إن لم يُحدَّد بعد)
-  if(!attendanceState.date) attendanceState.date = todayStr();
+  // ضبط التاريخ الافتراضي: نعتمد اليوم (todayStr) كافتراضي عند الدخول، مع احترام التاريخ المختار صراحة
+  if(!attendanceState.userExplicitDate || !attendanceState.date){
+    attendanceState.date = todayStr();
+  }
   // السماح بعرض أيام سابقة للمراجعة (بما في ذلك غير المديرة)؛ الحفظ يُؤكَّد/يُمنع في saveAttendance
   const allowPastDates = canRecordPastAttendance(currentUser());
   const isStaff0 = canManageTeachers(currentUser()) && isStaffSheet(attendanceState.classId);
@@ -8896,7 +9081,7 @@ function renderAttendance(){
     const me = currentUser();
     const savedAbsent = students.filter(s => {
       const rec = d.attendance.find(a => a.studentId === s.id && a.date === attendanceState.date);
-      return rec && rec.status === 'ABSENT' && rec.createdBy !== (me && me.id);
+      return rec && rec.status === 'ABSENT' && __cleanClerkId(rec.createdBy) !== __cleanClerkId(me && me.id);
     });
     if(savedAbsent.length > 0){
       attendanceState.absencePrompted = true;
@@ -8966,7 +9151,7 @@ function renderAttendance(){
     </div>
     <div>
       <label class="small" style="display:block;font-weight:600;margin-bottom:4px">التاريخ</label>
-      <input type="date" class="input" value="${attendanceState.date}" onchange="__setNavDate(this.value);" data-tip="تاريخ اليوم الذي تُسجَّل له الحضور — يُسمح بالتسجيل لأيام الدراسة (الاثنين إلى الجمعة) فقط" />
+      <input type="date" class="input" value="${attendanceState.date}" onchange="attendanceState.userExplicitDate=true; attendanceState.date=this.value; attendanceState.draft={}; attendanceState.absenceType={}; attendanceState.sLateType={}; attendanceState.sLateMin={}; attendanceState.tDraft={}; attendanceState.tLateType={}; attendanceState.tLateMin={}; attendanceState.absencePrompted=false; __setNavDate(this.value); rerenderAttendance();" data-tip="تاريخ اليوم الذي تُسجَّل له الحضور — يُسمح بالتسجيل لأيام الدراسة (الاثنين إلى الجمعة) فقط" />
     </div>
     <button class="btn-secondary" onclick="markAllPresent()">☑ الجميع حاضر</button>
     <div style="flex:1"></div>
@@ -9169,7 +9354,7 @@ function markAllPresent(){
   document.querySelectorAll('#attTableBody input[type="radio"]').forEach(inp => { if(inp.dataset.status === 'PRESENT') inp.checked = true; });
   refreshAttendanceSummary();
 }
-async function saveAttendance(){
+function saveAttendance(){
   const d = loadDB();
   if(attendanceState.date < todayStr() && !canRecordPastAttendance(currentUser())){
     alert('لا يمكن تسجيل حضور لتاريخ سابق — الصلاحية مقصورة على الإدارة');
@@ -9184,119 +9369,154 @@ async function saveAttendance(){
   }
   if(saveAttendance._busy) return;   // منع الإرسال المكرر بالنقر المتتابع
   saveAttendance._busy = true;
-  let lateCount = 0, latePoints = 0;
-  Object.entries(attendanceState.draft).forEach(([studentId, status]) => {
-    let rec = d.attendance.find(a => a.studentId === studentId && a.date === attendanceState.date);
-    const realClassId = studentById(studentId)?.classId || attendanceState.classId;
-    const at = (status === 'ABSENT' && attendanceState.absenceType && attendanceState.absenceType[studentId]) || undefined;
-    let lateMins = 0;
-    const st = d.students.find(x => x.id === studentId);
-    if(st){
-      st.lateMinutes = st.lateMinutes || {};
-      st.lateType = st.lateType || {};
+  try {
+    const curUser = currentUser();
+    const meStr = curUser && curUser.id != null ? String(curUser.id).trim() : '';
+    const isAdmin = curUser ? (['ADMIN', 'AGENT', 'SCHOOL_AGENT'].includes(curUser.role) || (typeof canRecordPastAttendance === 'function' && canRecordPastAttendance(curUser))) : false;
+
+    let lateCount = 0, latePoints = 0;
+    Object.entries(attendanceState.draft).forEach(([studentId, status]) => {
+      let rec = d.attendance.find(a => a.studentId === studentId && a.date === attendanceState.date);
+      const realClassId = studentById(studentId)?.classId || attendanceState.classId;
+      const at = (status === 'ABSENT' && attendanceState.absenceType && attendanceState.absenceType[studentId]) || undefined;
+      let lateMins = 0;
+      const st = d.students.find(x => x.id === studentId);
+      if(st){
+        st.lateMinutes = st.lateMinutes || {};
+        st.lateType = st.lateType || {};
+        const date = attendanceState.date;
+        if(status === 'LATE'){
+          const minsEl = document.getElementById('stLatMin-' + studentId);
+          const mins = parseInt((minsEl && minsEl.value) || '0', 10);
+          lateMins = isNaN(mins) || mins < 0 ? 0 : mins;
+          st.lateMinutes[date] = lateMins;
+          const typeEl = document.getElementById('stLatType-' + studentId);
+          const stType = typeEl && typeEl.value ? typeEl.value : (attendanceState.sLateType && attendanceState.sLateType[studentId]);
+          st.lateType[date] = (stType === 'MORNING' || stType === 'CLASS' || stType === 'EARLY_LEAVE') ? stType : 'MORNING';
+          lateCount++; latePoints += attendancePoints('LATE', lateMins);
+        }
+        else { delete st.lateMinutes[date]; delete st.lateType[date]; }
+      }
+      const attObj = { id:uid(), studentId, classId:realClassId, date:attendanceState.date, status, absenceType: at, createdBy: meStr || curUser?.id, _t: Date.now() };
+      if(isAdmin) attObj._byAdmin = true;
+      if(status === 'LATE' && lateMins > 0) attObj.lateMinutes = lateMins;
+
+      if(rec){
+        // إذا كان السجل غياباً ويراد تحويله إلى حاضر/متأخر: التحقق الصارم من الصلاحية
+        if(rec.status === 'ABSENT' && status !== 'ABSENT'){
+          const canOverride = __attOverridable(rec, { createdBy: meStr, _byAdmin: isAdmin });
+          if(!canOverride){
+            // الغياب محمي: لا يجوز لمعلمة أخرى إلغاء غياب حصة سابقة بمجرد حفظ الكشف
+            return;
+          }
+        }
+
+        const __lateSame = status !== 'LATE' || (rec.lateMinutes || 0) === lateMins;
+        const __changed = !(rec.status === status && __lateSame && (rec.absenceType || undefined) === (at || undefined));
+
+        // قائمة مؤكدات الغياب مع توحيد المعرفات كنصوص Set لمنع التكرار الوهمي
+        let clerkSet = new Set();
+        if(Array.isArray(rec.absClerks)){
+          rec.absClerks.forEach(c => {
+            const s = __cleanClerkId(c);
+            if(s) clerkSet.add(s);
+          });
+        } else if(rec.status === 'ABSENT'){
+          clerkSet.add(__LEGACY_ABS);
+        }
+
+        if(status === 'ABSENT'){
+          if(meStr) clerkSet.add(meStr);
+          if(isAdmin) clerkSet.add(__MGR_ABS);
+        } else {
+          // تصحيح صريح مصرح به: إزالة المعلمة الحالية من المؤكدات
+          if(isAdmin){
+            clerkSet.clear();
+          } else if(meStr){
+            clerkSet.delete(meStr);
+          }
+        }
+
+        rec.status = status;
+        rec.classId = realClassId;
+        rec.absenceType = at;
+        rec.absClerks = Array.from(clerkSet);
+        if(isAdmin) rec._byAdmin = true;
+        if(__changed) rec._t = Date.now();
+        rec.createdBy = meStr || rec.createdBy;
+        if(status === 'LATE' && lateMins > 0) rec.lateMinutes = lateMins; else delete rec.lateMinutes;
+      }
+      else {
+        if(status === 'ABSENT'){
+          const clerks = [];
+          if(meStr) clerks.push(meStr);
+          if(isAdmin) clerks.push(__MGR_ABS);
+          attObj.absClerks = clerks;
+        } else {
+          attObj.absClerks = [];
+        }
+        d.attendance.push(attObj);
+      }
+    });
+    Object.entries(attendanceState.tDraft || {}).forEach(([teacherId, status]) => {
+      const u = d.users.find(x => x.id === teacherId);
+      if(!u) return;
+      u.absences = u.absences || [];
+      u.markedLate = u.markedLate || [];
+      u.lateMinutes = u.lateMinutes || {};
+      u.lateType = u.lateType || {};
+      const attBefore = __attSig(u);
       const date = attendanceState.date;
-      if(status === 'LATE'){
-        const minsEl = document.getElementById('stLatMin-' + studentId);
+      if(status === 'ABSENT'){ if(!u.absences.includes(date)) u.absences.push(date); u.markedLate = u.markedLate.filter(x => x !== date); delete u.lateMinutes[date]; delete u.lateType[date]; }
+      else if(status === 'LATE'){
+        if(!u.markedLate.includes(date)) u.markedLate.push(date);
+        u.absences = u.absences.filter(x => x !== date);
+        const minsEl = document.getElementById('latMin-' + teacherId);
         const mins = parseInt((minsEl && minsEl.value) || '0', 10);
-        lateMins = isNaN(mins) || mins < 0 ? 0 : mins;
-        st.lateMinutes[date] = lateMins;
-        const typeEl = document.getElementById('stLatType-' + studentId);
-        const stType = typeEl && typeEl.value ? typeEl.value : (attendanceState.sLateType && attendanceState.sLateType[studentId]);
-        st.lateType[date] = (stType === 'MORNING' || stType === 'CLASS' || stType === 'EARLY_LEAVE') ? stType : 'MORNING';
-        lateCount++; latePoints += attendancePoints('LATE', lateMins);
+        u.lateMinutes[date] = isNaN(mins) || mins < 0 ? 0 : mins;
+        const typeEl = document.getElementById('latType-' + teacherId);
+        const tType = typeEl && typeEl.value ? typeEl.value : (attendanceState.tLateType && attendanceState.tLateType[teacherId]);
+        u.lateType[date] = (tType === 'MORNING' || tType === 'CLASS' || tType === 'EARLY_LEAVE') ? tType : 'MORNING';
       }
-      else { delete st.lateMinutes[date]; delete st.lateType[date]; }
-    }
-    const attObj = { id:uid(), studentId, classId:realClassId, date:attendanceState.date, status, absenceType: at, createdBy: currentUser()?.id, _t: Date.now() };
-    if(status === 'LATE' && lateMins > 0) attObj.lateMinutes = lateMins;
-    const me = currentUser()?.id;
-    if(rec){
-      // قائمة مؤكِّدي الغياب: تُجمَّع عند كل حفظ (اتحاد) — الغياب لا يُحتسب إلا إذا سجّله
-      // معلّمان مختلفان في حصّتين مختلفتين (≥2 مؤكِّد فعلي)، أو سجل قديم (قبل القاعدة).
-      let clerks = Array.isArray(rec.absClerks) ? rec.absClerks.slice() : [];
-      if(status === 'ABSENT'){
-        // سجل قديم بلا قائمة (غياب سُجّل قبل القاعدة): نضع شارة الحفظ مسبقاً ليستمر احتسابه
-        if(!Array.isArray(rec.absClerks)){ clerks = rec.status === 'ABSENT' ? [__LEGACY_ABS] : []; }
-        if(me && clerks.indexOf(me) === -1) clerks.push(me);
-      } else {
-        // حاضر/متأخر من هذا المعلم: نزيل تأكيده وشارة القديم — تصحيح صريح يلغي هذا الغياب
-        clerks = clerks.filter(c => c !== me && c !== __LEGACY_ABS);
-      }
-      rec.status = status; rec.classId = realClassId; rec.absenceType = at; rec.absClerks = clerks; rec._t = Date.now(); rec.createdBy = me || rec.createdBy;
-      if(status === 'LATE' && lateMins > 0) rec.lateMinutes = lateMins; else delete rec.lateMinutes;
-    }
-    else {
-      if(status === 'ABSENT' && me) attObj.absClerks = [me]; else attObj.absClerks = [];
-      d.attendance.push(attObj);
-    }
-  });
-  Object.entries(attendanceState.tDraft || {}).forEach(([teacherId, status]) => {
-    const u = d.users.find(x => x.id === teacherId);
-    if(!u) return;
-    u.absences = u.absences || [];
-    u.markedLate = u.markedLate || [];
-    u.lateMinutes = u.lateMinutes || {};
-    u.lateType = u.lateType || {};
-    const attBefore = __attSig(u);
-    const date = attendanceState.date;
-    if(status === 'ABSENT'){ if(!u.absences.includes(date)) u.absences.push(date); u.markedLate = u.markedLate.filter(x => x !== date); delete u.lateMinutes[date]; delete u.lateType[date]; }
-    else if(status === 'LATE'){
-      if(!u.markedLate.includes(date)) u.markedLate.push(date);
-      u.absences = u.absences.filter(x => x !== date);
-      const minsEl = document.getElementById('latMin-' + teacherId);
-      const mins = parseInt((minsEl && minsEl.value) || '0', 10);
-      u.lateMinutes[date] = isNaN(mins) || mins < 0 ? 0 : mins;
-      const typeEl = document.getElementById('latType-' + teacherId);
-      const tType = typeEl && typeEl.value ? typeEl.value : (attendanceState.tLateType && attendanceState.tLateType[teacherId]);
-      u.lateType[date] = (tType === 'MORNING' || tType === 'CLASS' || tType === 'EARLY_LEAVE') ? tType : 'MORNING';
-    }
-    else { u.absences = u.absences.filter(x => x !== date); u.markedLate = u.markedLate.filter(x => x !== date); delete u.lateMinutes[date]; delete u.lateType[date]; }
-    if(__attSig(u) !== attBefore) __attTouch(u);
-  });
-  d._ts = Date.now();
-  saveDB(d);
-  // حفظ مستقل (لا يُمحى عند Synchronization)
-  try { localStorage.setItem('nibras_attendance_' + getActiveSchool(), JSON.stringify(d.attendance)); } catch(e){}
-  // موثوقية الحفظ: نرفع عبر __syncPush (دمج/تصادم/أمان) بدل fetch خام، ولا نُعلن
-  // النجاح إلا بعد تأكيد الخادم عبر __saveGuardWatch. أُزيل الاعتماد على جدولة
-  // ثابتة (4000ms) كانت سبب «أول حفظ يضيع ثم ينجح بعد ثوانٍ».
-  const schoolNow = getActiveSchool();
-  const willSync = __serverEnabled() && __syncEnabled() && schoolNow;
-  if(willSync){
-    __saveGuardWatch(schoolNow, 'attendance', __saveGuardOutcome);
-    __noteSaveBanner('🔵 جارٍ حفظ الحضور على الخادم...', false);
-    __refreshSaveStatus();
-    __syncSchedule(schoolNow, 0);
-    // حفظ فوري في الخادم (API مخصص)
-    try {
-      const resp = await fetch('/api/attendance/' + schoolNow, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ attendance: d.attendance }) });
-      if(!resp.ok) console.warn('[saveAttendance] server returned', resp.status);
-      else { __attendanceCache[schoolNow] = d.attendance.slice(); }
-    } catch(e) { console.warn('[saveAttendance save to server]', e); }
-    // حفظ فوري في الخادم (sync)
-    try { await __syncPush(schoolNow); } catch(e) { console.warn('[saveAttendance push]', e); }
-  }
-  attendanceState.draft = {};
-  attendanceState.absenceType = {};
-  attendanceState.sLateMin = {};
-  attendanceState.sLateType = {};
-  attendanceState.tDraft = {};
-  attendanceState.tLateMin = {};
-  attendanceState.tLateType = {};
-  const msg = document.getElementById('attSaveMsg');
-  if(msg){
-    let txt;
+      else { u.absences = u.absences.filter(x => x !== date); u.markedLate = u.markedLate.filter(x => x !== date); delete u.lateMinutes[date]; delete u.lateType[date]; }
+      if(__attSig(u) !== attBefore) __attTouch(u);
+    });
+    d._ts = Date.now();
+    saveDB(d);
+    // موثوقية الحفظ: نرفع عبر __syncPush (دمج/تصادم/أمان) بدل fetch خام، ولا نُعلن
+    // النجاح إلا بعد تأكيد الخادم عبر __saveGuardWatch. أُزيل الاعتماد على جدولة
+    // ثابتة (4000ms) كانت سبب «أول حفظ يضيع ثم ينجح بعد ثوانٍ».
+    const schoolNow = getActiveSchool();
+    const willSync = __serverEnabled() && __syncEnabled() && schoolNow;
     if(willSync){
-      txt = '⏳ جارٍ حفظ الحضور على الخادم...';
-      msg.style.color = '#1d4ed8';
-    } else {
-      txt = 'تم حفظ الحضور على هذا الجهاز';
-      if(lateCount > 0) txt += ' — تأخر ' + lateCount + ' طالب (خصم ' + latePoints + ' نقطة)';
-      msg.style.color = lateCount > 0 ? '#dc2626' : '#16a34a';
+      __saveGuardWatch(schoolNow, 'attendance', __saveGuardOutcome);
+      __noteSaveBanner('🔵 جارٍ حفظ الحضور على الخادم...', false);
+      __refreshSaveStatus();
+      __syncSchedule(schoolNow, 0);
     }
-    msg.textContent = txt;
+    attendanceState.draft = {};
+    attendanceState.absenceType = {};
+    attendanceState.sLateMin = {};
+    attendanceState.sLateType = {};
+    attendanceState.tDraft = {};
+    attendanceState.tLateMin = {};
+    attendanceState.tLateType = {};
+    const msg = document.getElementById('attSaveMsg');
+    if(msg){
+      let txt;
+      if(willSync){
+        txt = '⏳ جارٍ حفظ الحضور على الخادم...';
+        msg.style.color = '#1d4ed8';
+      } else {
+        txt = 'تم حفظ الحضور على هذا الجهاز';
+        if(lateCount > 0) txt += ' — تأخر ' + lateCount + ' طالب (خصم ' + latePoints + ' نقطة)';
+        msg.style.color = lateCount > 0 ? '#dc2626' : '#16a34a';
+      }
+      msg.textContent = txt;
+    }
+  } finally {
+    saveAttendance._busy = false;
   }
-  saveAttendance._busy = false;
 }
 
 /* ============ الملاحظات ============ */
@@ -9321,6 +9541,7 @@ function renderNotes(){
       const s = studentById(n.studentId); const by = userById(n.createdBy);
       const pts = n.points ?? notePoints(n.type, n.category);
       const canDel = NRC_deletableNote(n, me);
+      const canEdit = typeof NRC_editableNote === 'function' ? NRC_editableNote(n, me) : false;
       const byName = by?.name || n.createdByName || '—';
       const byRole = n.createdByRole || by?.role || '';
       return `<tr>
@@ -9331,7 +9552,7 @@ function renderNotes(){
         <td>${escapeHtml(byName)}${byRole ? ' <span class="muted small">(' + escapeHtml(byRole) + ')</span>' : ''}</td>
         <td class="muted small">${new Date(n.createdAt).toLocaleDateString('ar-SA')}</td>
         <td style="font-weight:700;color:${pts>=0?'#16a34a':'#dc2626'}">${pts>0?'+':''}${pts}</td>
-        <td>${canDel ? `<button class="del-btn" onclick="deleteNote('${n.id}')" title="حذف النقطة (عند الخطأ)">🗑</button>` : (isStudent ? '<span class="muted" style="font-size:11px">—</span>' : `<span class="muted" style="font-size:11px" title="يمكن لحاملة النقطة حذفها (أو المدير)">—</span>`)}</td>
+        <td>${canEdit ? `<button class="del-btn" onclick="openEditNote('${n.id}')" title="تعديل الملاحظة" style="color:#2563eb;margin-left:4px">✏️</button>` : ''}${canDel ? `<button class="del-btn" onclick="deleteNote('${n.id}')" title="حذف النقطة (عند الخطأ)">🗑</button>` : (!canEdit ? (isStudent ? '<span class="muted" style="font-size:11px">—</span>' : `<span class="muted" style="font-size:11px" title="يمكن لحاملة النقطة تعديلها أو حذفها (أو المدير)">—</span>`) : '')}</td>
       </tr>`;
     }).join('');
   // ===== استرداد ملاحظة قديمة بلا مالك =====
@@ -9531,21 +9752,15 @@ const __SAVE_REASON = {
   wipe:      'رفض الخادم الكتابة لحماية البيانات (409).',
   rate:      'ضغط كبير على الخادم — أعيدي المحاولة بعد لحظات (429).',
   server:    'خطأ في الخادم (500) — أعيدي المحاولة.',
-  tooLarge:  'حجم البيانات أكبر من حد الخادم (413) — لن تُعاد المحاولة تلقائياً.',
-  notFound:  'المسار غير موجود على الخادم (404).',
-  noResponse:'لم يصل ردّ من الخادم (لا رمز خطأ).',
-  unknown:   'رد الخادم لم يُصنَّف — التفاصيل التقنية أدناه.'
+  unknown:   'سبب غير معروف.'
 };
 function __saveReasonText(err){
   const e = String(err || '');
   if(!e) return '';
   if(e.indexOf('network:') === 0) return __SAVE_REASON.network;
-  if(e.indexOf('client-too-large') === 0) return __SAVE_REASON.tooLarge;
   if(e.indexOf('403') === 0 || e.indexOf('forbidden') !== -1) return __SAVE_REASON.forbidden;
   if(e.indexOf('401') === 0) return __SAVE_REASON.session;
   if(e.indexOf('409') === 0 || e.indexOf('wipe') !== -1) return __SAVE_REASON.wipe;
-  if(e.indexOf('413') === 0) return __SAVE_REASON.tooLarge;
-  if(e.indexOf('404') === 0) return __SAVE_REASON.notFound;
   if(e.indexOf('429') === 0) return __SAVE_REASON.rate;
   if(e.indexOf('400') === 0) return __SAVE_REASON.bad;
   if(/^5\d\d/.test(e)) return __SAVE_REASON.server;
@@ -9599,12 +9814,10 @@ function __saveGuardPanel(opts){
     }
     if(!opts || opts.show === false){ __saveGuardPanelEl.style.display = 'none'; return; }
     const reason = opts.reason ? '<div style="margin:6px 0;font-size:12.5px;color:#b91c1c;font-weight:700">سبب الفشل: ' + escapeHtml(opts.reason) + '</div>' : '';
-    const detail = opts.detail ? '<div style="margin:4px 0;font-size:11px;color:#6b7280;direction:ltr;text-align:left;word-break:break-all">التفاصيل التقنية: ' + escapeHtml(opts.detail) + (opts.url ? ' | ' + escapeHtml(opts.url) : '') + '</div>' : '';
     __saveGuardPanelEl._text = opts.text || '';
     __saveGuardPanelEl.innerHTML =
       '<div style="font-size:14.5px;font-weight:800;color:#b91c1c;line-height:1.85">' + escapeHtml(opts.message || '⚠️ لم يتم حفظ البيانات على الخادم.') + '</div>' +
       reason +
-      detail +
       '<div style="font-size:12px;color:#6b7280;margin-top:6px">ما كتبته محفوظ على هذا الجهاز ولم يضع.</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
         '<button class="btn-primary" onclick="__saveGuardRetry(\'' + escapeHtml(opts.kind || '') + '\')">🔄 إعادة المحاولة</button>' +
@@ -9651,16 +9864,14 @@ function __saveGuardOutcome(res, kind){
     try{ renderApp(); }catch(e){}
     try{ setTimeout(__refreshSaveStatus, 0); }catch(e){}
   } else {
-    const rawErr = String((res && res.err) || '');
-    const reason = __saveReasonText(rawErr) || __SAVE_REASON.noResponse;
-    const detail = rawErr.slice(0, 300);
+    const reason = __saveReasonText(res && res.err);
     const dr = __draftGet(kind) || {};
     const text = (kind === 'note')
       ? (dr.description || '')
       : ((dr.title || '') + (dr.desc ? ('\n' + dr.desc) : ''));
     __saveGuardPanel({
       message: '⚠️ لم يتم حفظ البيانات على الخادم. احتفظنا بالبيانات محليًا إن أمكن. يرجى إعادة المحاولة والتأكد من نجاح الحفظ.',
-      reason, detail, kind, text
+      reason, kind, text
     });
     __refreshSaveStatus();
   }
@@ -9837,7 +10048,7 @@ function deleteNote(id){
   if(!n){ alert('الملاحظة غير موجودة (ربما حُذفت بالفعل).'); return; }
   if(n.deleted){ alert('هذه النقطة محذوفة بالفعل.'); return; }
   // الصلاحية: المعلمة تحذف ما أضافته هي فقط، والمدير يحذف أي نقطة.
-  const canDel = me && (me.role === 'ADMIN' || n.createdBy === me.id);
+  const canDel = NRC_deletableNote(n, me);
   if(!canDel){ alert('يمكنك حذف النقاط التي أضفتها أنت فقط — النقاط السلبية من الغياب/التحويلات تُدار من شاشاتها الخاصة.'); return; }
   const pts = n.points ?? notePoints(n.type, n.category);
   if(!confirm('هل تحذف هذه النقطة (' + (pts>0?'+':'') + pts + ')؟' + (d.students.find(s => s && s.id === n.studentId) ? ' من رصيد ' + d.students.find(s => s && s.id === n.studentId).fullName + '.' : '') + '\n\nسيُزال تأثيرها من رصيد الطالبة على كل الأجهزة.')) return;
@@ -9852,6 +10063,68 @@ function deleteNote(id){
   __saveGuardWatch(getActiveSchool(), 'note-del', __saveGuardOutcome);
   __noteSaveBanner('🔵 جارٍ حفظ الحذف على الخادم...', false);
   __refreshSaveStatus();
+  try{ if(typeof __syncSchedule === 'function') __syncSchedule(getActiveSchool(), 0); }catch(e){}
+  renderApp();
+}
+
+function openEditNote(id){
+  const d = loadDB();
+  const me = currentUser();
+  const n = (d.notes || []).find(x => x && x.id === id);
+  if(!n || n.deleted){ alert('الملاحظة غير موجودة (ربما حُذفت بالفعل).'); return; }
+  if(!NRC_editableNote(n, me)){ alert('يمكنك تعديل الملاحظات التي أضفتيها أنتِ فقط.'); return; }
+  const s = studentById(n.studentId);
+  const sName = s ? s.fullName : (n.studentName || '—');
+  const existing = document.getElementById('editNoteModal');
+  if(existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'editNoteModal';
+  overlay.innerHTML = `
+    <div class="modal-card" style="max-width:500px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0;font-size:17px;font-weight:700">✏️ تعديل الملاحظة</h3>
+        <button class="modal-close" onclick="closeEditNoteModal()">&times;</button>
+      </div>
+      <div style="margin-bottom:12px">
+        <label class="muted small">الطالبة:</label>
+        <div style="font-weight:700;font-size:15px;margin-top:2px">${escapeHtml(sName)}</div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label class="muted small">فئة الملاحظة:</label>
+        <input id="editNoteCategory" class="input" style="width:100%;margin-top:4px" value="${escapeHtml(n.category || '')}" />
+      </div>
+      <div style="margin-bottom:16px">
+        <label class="muted small">الوصف / التعليق:</label>
+        <textarea id="editNoteDescription" class="input" rows="3" style="width:100%;margin-top:4px" placeholder="اكتبي تعليقك...">${escapeHtml(n.description || '')}</textarea>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn-secondary" onclick="closeEditNoteModal()">إلغاء</button>
+        <button class="btn-primary" onclick="saveEditNote('${n.id}')">حفظ التعديل</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function closeEditNoteModal(){
+  const el = document.getElementById('editNoteModal');
+  if(el) el.remove();
+}
+function saveEditNote(id){
+  const d = loadDB();
+  const me = currentUser();
+  const n = (d.notes || []).find(x => x && x.id === id);
+  if(!n || n.deleted){ alert('الملاحظة غير موجودة (ربما حُذفت بالفعل).'); return; }
+  if(!NRC_editableNote(n, me)){ alert('يمكنك تعديل الملاحظات التي أضفتيها أنتِ فقط.'); return; }
+  const catEl = document.getElementById('editNoteCategory');
+  const descEl = document.getElementById('editNoteDescription');
+  const newCat = catEl ? catEl.value.trim() : n.category;
+  const newDesc = descEl ? descEl.value.trim() : n.description;
+  if(!newCat){ alert('يرجى كتابة أو تحديد فئة الملاحظة'); return; }
+  n.category = newCat;
+  n.description = newDesc;
+  n.updatedAt = new Date().toISOString();
+  saveDB(d);
+  closeEditNoteModal();
   try{ if(typeof __syncSchedule === 'function') __syncSchedule(getActiveSchool(), 0); }catch(e){}
   renderApp();
 }
@@ -10011,7 +10284,9 @@ function addTransfer(){
     reason = freeVal;
   }
   const d = loadDB();
-  const tr = { id:uid(), studentIds:ids, studentId:ids[0], target, priority, reason, status:'PENDING', createdBy: currentUser().id, createdAt: new Date().toISOString() };
+  const curU = currentUser();
+  const myUid = curU && curU.id != null ? String(curU.id) : null;
+  const tr = { id:uid(), studentIds:ids, studentId:ids[0], target, priority, reason, status:'PENDING', createdBy: myUid, createdAt: new Date().toISOString() };
   d.transfers.push(tr);
   // خصم نقاط تلقائي حسب سبب التحويل (عند التحويل للوكيل أو المدير أو الموجه الطلابي) — لكل طالب مخصومة
   const ded = transferDeductionMap[reason] != null ? transferDeductionMap[reason] : -3;
@@ -10020,12 +10295,13 @@ function addTransfer(){
     ids.forEach(sid => {
       const stRec = (d.students || []).find(s => s && s.id === sid);
       const me = currentUser();
-      d.notes.push({ id:uid(), studentId:sid, studentNo: stRec && stRec.studentNo != null ? String(stRec.studentNo) : '', studentName: stRec ? (stRec.fullName || stRec.name || '') : '', type:'NEGATIVE', category: reason, description: 'تحويل إلى ' + targetLabel(target) + ' (خصم تلقائي)', points: ded, createdBy: currentUser().id, createdByName: me ? me.name : '', createdByRole: me ? me.role : '', createdAt: new Date().toISOString(), transferId: tr.id, batchId: tr.id });
+      d.notes.push({ id:uid(), studentId:sid, studentNo: stRec && stRec.studentNo != null ? String(stRec.studentNo) : '', studentName: stRec ? (stRec.fullName || stRec.name || '') : '', type:'NEGATIVE', category: reason, description: 'تحويل إلى ' + targetLabel(target) + ' (خصم تلقائي)', points: ded, createdBy: myUid, createdByName: me ? me.name : '', createdByRole: me ? me.role : '', createdAt: new Date().toISOString(), transferId: tr.id, batchId: tr.id });
     });
   }
   saveDB(d);
   notifyTransferReceivers(d, tr);
   NRC_notifyTransferServer(tr, ids.map(sid => { const s = studentById(sid); return s ? s.fullName : 'طالب/طالبة'; }).join('، '));
+  try{ if(typeof __syncSchedule === 'function') __syncSchedule(getActiveSchool(), 0); }catch(e){}
   renderApp();
 }
 /* إشعار التحويل عبر الخادم: المستلِم يُقرأ من جدول الحسابات لا من ذاكرة الجهاز.
@@ -10082,7 +10358,7 @@ function adminSeesTransferMsg(m){
    والمعلمة ترى ما أرسلته هي فقط.
    القاعدة نفسها على الخادم (transfers-privacy.js)؛ وهذا خط ثانٍ بعده. */
 function transferForMe(t){
-  const u = currentUser();
+  const u = typeof currentUser === 'function' ? currentUser() : null;
   if(!u || !t) return false;
   if(u.role === 'ADMIN' || u.role === 'AGENT' || u.role === 'COUNSELOR') return true;
   const owner = t.createdBy == null ? '' : String(t.createdBy).trim();
@@ -10172,57 +10448,35 @@ function __classAccent(g){
   if (order < 0) return '#a78bfa'; // التمهيدي
   return palette[order % palette.length];
 }
-/* إنشاء الصفوف الناقصة إجراء إداري صريح فقط (زر في صفحة الفصول)، ولا يُستدعى عند فتح الصفحة. */
-function __missingStageNames(d){
-  const out = [];
-  stages.forEach(stage => {
-    const grade = d.grades.find(g => g.name === stage.name);
-    const gid = grade ? grade.id : stage.id;
-    const __clsId = __stageClassId(gid);
-    const hasRecord = d.classes.some(c => c.id === __clsId);
-    const isBlocked = (Array.isArray(d._blockedClasses) ? d._blockedClasses : []).includes(__clsId);
-    if(!d.classes.some(c => c.gradeId===gid && c.name==='أ' && !c.deleted) && !hasRecord && !isBlocked) out.push(stage.name);
-  });
-  return out;
-}
-function createMissingStageClasses(){
-  const user = currentUser();
-  if(!isManager(user)) return;
-  const d = loadDB();
-  const campus = getActiveSchool();
-  let added = 0;
-  const addedNames = [];
-  stages.forEach(stage => {
-    let grade = d.grades.find(g => g.name === stage.name);
-    if(!grade){ grade = { id:stage.id, name:stage.name, order:stage.order }; d.grades.push(grade); }
-    const __clsId = __stageClassId(grade.id);
-    // فصل محذوف عمداً يحمل id موجوداً أو مُحجوباً في _blockedClasses لا يُعاد إنتاجه:
-    // الخادم يرفض أي إحياء بنفس المعرّف (mergeClasses يتجاهل ما في tomb) فتدور الحلقة
-    // بلا نهاية، وكل دورة تُسقط teacherIds التي أُضيفت بينها. الشرط مكتوب هنا بلا متغيّر
-    // خارجي حتى يبقى آلياً (extractAutoRepairBlock في الاختبارات ينفّذه في سياق معزول).
-    const hasRecord = d.classes.some(c => c.id === __clsId);
-    const isBlocked = (Array.isArray(d._blockedClasses) ? d._blockedClasses : []).includes(__clsId);
-    if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ' && !c.deleted) && !hasRecord && !isBlocked){
-      d.classes.push({ id:__stageClassId(grade.id), gradeId:grade.id, name:'أ', campus, capacity:null, teacherIds:[] });
-      added++;
-      addedNames.push(stage.name);
-    }
-  });
-  if(added > 0){ saveDB(d); __uiToast('تمت إضافة ' + added + ' صف ناقص (' + addedNames.join('، ') + ')'); }
-  else __uiToast('لا توجد صفوف ناقصة');
-  renderApp();
-}
 function renderClasses(){
   const d = loadDB();
   const user = currentUser();
   const isAdmin = user?.role === 'ADMIN';
   const canManage = isManager(user);
   const canAssign = canManageTeachers(user);
-  // لا يُكتب شيء عند فتح الصفحة: إنشاء الصفوف الناقصة إجراء إداري صريح (زر أدناه).
+  // إصلاح تلقائي: إكمال الصفوف الناقصة (المتوسط والثانوي) عند الحاجة
   let addedMsg = '';
   if(canManage){
-    const __missing = __missingStageNames(d);
-    if(__missing.length) addedMsg = `<div class="card mb" style="color:#b45309;font-weight:600">يوجد ${__missing.length} صف ناقص (${__missing.join('، ')}) — <button class="btn-secondary" onclick="createMissingStageClasses()">إنشاء الصفوف الناقصة</button></div>`;
+    const campus = getActiveSchool();
+    let added = 0;
+    const addedNames = [];
+    stages.forEach(stage => {
+      let grade = d.grades.find(g => g.name === stage.name);
+      if(!grade){ grade = { id:stage.id, name:stage.name, order:stage.order }; d.grades.push(grade); }
+      const __clsId = __stageClassId(grade.id);
+      // فصل محذوف عمداً يحمل id موجوداً أو مُحجوباً في _blockedClasses لا يُعاد إنتاجه:
+      // الخادم يرفض أي إحياء بنفس المعرّف (mergeClasses يتجاهل ما في tomb) فتدور الحلقة
+      // بلا نهاية، وكل دورة تُسقط teacherIds التي أُضيفت بينها. الشرط مكتوب هنا بلا متغيّر
+      // خارجي حتى يبقى آلياً (extractAutoRepairBlock في الاختبارات ينفّذه في سياق معزول).
+      const hasRecord = d.classes.some(c => c.id === __clsId);
+      const isBlocked = (Array.isArray(d._blockedClasses) ? d._blockedClasses : []).includes(__clsId);
+      if(!d.classes.some(c => c.gradeId===grade.id && c.name==='أ' && !c.deleted) && !hasRecord && !isBlocked){
+        d.classes.push({ id:__stageClassId(grade.id), gradeId:grade.id, name:'أ', campus, capacity:null, teacherIds:[] });
+        added++;
+        addedNames.push(stage.name);
+      }
+    });
+    if(added > 0){ saveDB(d); addedMsg = `<div class="card mb" style="color:#16a34a;font-weight:600">تمت إضافة ${added} صف ناقص (${addedNames.join('، ')}) بنجاح</div>`; }
   }
   const classes = getClassesSorted();
   const grades = d.grades.slice().sort((a,b)=>a.order-b.order);
@@ -10266,10 +10520,7 @@ function renderClasses(){
         </div>
         <div class="ccard-teachers">${canAssign ? teacherAssign(c.id, c.teacherIds||[]) : `${teachersOf.length ? `<div class="ccard-tchips">${teachersOf.map(n=>`<span class="ccard-tchip" title="${escapeHtml(n)}">${escapeHtml(n)}</span>`).join('')}</div>` : '<span class="ccard-tlist">لم يُسند معلم بعد</span>'}`}</div>
         <div id="classStudents-${c.id}" class="ccard-students" style="display:none">${studentsHtml}</div>
-        <div class="ccard-actions">
-          <button class="del-btn" onclick="viewClassSchedule('${c.id}')" title="عرض جدول حصص الفصل">👁 جدول</button>
-          ${isAdmin ? `<button class="del-btn" onclick="deleteClass('${c.id}')">🗑 حذف</button>` : ''}
-        </div>
+        ${isAdmin ? `<div class="ccard-actions"><button class="del-btn" onclick="deleteClass('${c.id}')">🗑 حذف</button></div>` : ''}
       </div>`;
     }).join('');
 
@@ -10319,336 +10570,6 @@ function deleteClass(id){
   saveDB(d);
   renderApp();
 }
-function openEmbeddedViewer(title, url){
-  // Check if the site blocks iframe (X-Frame-Options)
-  // Google Translate blocks iframe (X-Frame-Options: SAMEORIGIN).
-  // Bing Translator allows iframe (Google Translate blocks with SAMEORIGIN).
-  // If URL is Google Translate, use Bing Translator instead.
-  if (url.includes('translate.google.com')) {
-    url = 'https://www.bing.com/translator';
-  }
-  const blockedSites = [];
-  const isBlocked = false;
-  
-  let bodyHtml = '';
-  if (isBlocked) {
-    bodyHtml = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px 20px;background:#f1f5f9;border-radius:8px;min-height:40vh;">
-      <div style="font-size:48px;">🚫</div>
-      <div style="font-size:16px;font-weight:700;color:#1e3a8a;">${escapeHtml(title)}</div>
-      <div style="font-size:13px;color:#64748b;text-align:center;max-width:400px;">
-        هذا الموقع يمنع عرضه داخل نبراس (X-Frame-Options).<br>
-        يمكنك فتحه في تبويب جديد.
-      </div>
-      <a class="btn-primary" style="text-decoration:none;padding:10px 20px;font-size:14px;margin-top:8px;" href="${url}" target="_blank" rel="noopener">🔗 فتح في تبويب جديد</a>
-    </div>`;
-  } else {
-    bodyHtml = `<div style="flex:1;overflow:auto;border-radius:8px;background:#f1f5f9;min-height:60vh;position:relative;">
-      <iframe src="${url}" style="width:100%;height:100%;min-height:60vh;border:none;" title="${escapeHtml(title)}" onload="this.style.display='block'" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"></iframe>
-      <div style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px 20px;min-height:40vh;">
-        <div style="font-size:48px;">🚫</div>
-        <div style="font-size:13px;color:#64748b;text-align:center;">إذا لم يظهر المحتوى، <a href="${url}" target="_blank" rel="noopener" style="color:#2563eb;">افتحه في تبويب جديد</a>.</div>
-      </div>
-    </div>`;
-  }
-  
-  const html = `<div class="modal-overlay" onclick="if(event.target===this) closeEmbeddedViewer()">
-    <div class="modal-box" style="max-width:96vw;width:96vw;height:90vh;display:flex;flex-direction:column;">
-      <div class="modal-head">
-        <h3>${escapeHtml(title)}</h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <a class="btn-secondary" style="padding:4px 10px;font-size:13px;text-decoration:none;" href="${url}" target="_blank" rel="noopener" title="فتح في تبويب جديد">🔗 فتح</a>
-          <button class="modal-close" onclick="closeEmbeddedViewer()">✕</button>
-        </div>
-      </div>
-      ${bodyHtml}
-    </div>
-  </div>`;
-  const old = document.querySelector('.modal-overlay'); if (old) old.remove();
-  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
-}
-function closeEmbeddedViewer(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
-
-/* ============ نجمة الأسبوع ============ */
-const __starOfWeekCache = {};
-const __attendanceCache = {};
-async function __attendanceLoad(school){
-  if(!__serverEnabled()) return null;
-  school = school || getActiveSchool();
-  try{
-    const resp = await fetch('/api/attendance/' + school);
-    if(!resp.ok) return null;
-    const j = await resp.json();
-    if(j && j.ok && Array.isArray(j.attendance)){
-      __attendanceCache[school] = j.attendance;
-      try { localStorage.setItem('nibras_attendance_' + school, JSON.stringify(j.attendance)); } catch(e){}
-      return j.attendance;
-    }
-  }catch(e){ console.warn('[attendance load]', e); }
-  return null;
-}
-/* تحديث الحضور من الخادم دون حلقة إعادة رسم: لا يُعاد رسم الصفحة إلا إذا تغيّر محتوى الحضور
-   فعلاً، ولا يُرسل طلب جديد أثناء طلب قائم أو خلال 3 ثوانٍ من آخر طلب. */
-const __attRefresh = { inflight: false, at: 0, sig: null };
-function __attendanceSigOf(arr){
-  const s = arr.map(r => r ? [r.id, r.status, r._t, r.studentId, r.date].join('~') : '').join('|');
-  let h = 0;
-  for(let i = 0; i < s.length; i++){ h = (h * 31 + s.charCodeAt(i)) | 0; }
-  return arr.length + ':' + h;
-}
-function __attendanceRefreshRender(school){
-  const now = Date.now();
-  if(__attRefresh.inflight || now - __attRefresh.at < 3000) return;
-  __attRefresh.inflight = true;
-  __attRefresh.at = now;
-  __attendanceLoad(school).then(arr => {
-    __attRefresh.inflight = false;
-    if(!arr) return;
-    const sig = __attendanceSigOf(arr);
-    if(sig === __attRefresh.sig) return;
-    __attRefresh.sig = sig;
-    if((location.hash || '').indexOf('#/attendance') === 0) renderApp();
-  }).catch(() => { __attRefresh.inflight = false; });
-}
-async function __starOfWeekLoad(school){
-  if(!__serverEnabled()) return null;
-  school = school || getActiveSchool();
-  try{
-    const resp = await fetch('/api/star-of-week/' + school);
-    if(!resp.ok) return null;
-    const j = await resp.json();
-    if(j && j.ok && j.star){
-      __starOfWeekCache[school] = j.star;
-      try { localStorage.setItem('nibras_starOfWeek_' + school, JSON.stringify(j.star)); } catch(e){}
-      if(Array.isArray(j.history)) { try { localStorage.setItem('nibras_starOfWeekHistory_' + school, JSON.stringify(j.history)); } catch(e){} }
-      return j.star;
-    }
-  }catch(e){ console.warn('[starOfWeek load]', e); }
-  return null;
-}
-function getStarOfWeek(){
-  try {
-    const school = getActiveSchool();
-    if(__starOfWeekCache[school] && __starOfWeekCache[school].name) return __starOfWeekCache[school];
-    const raw = localStorage.getItem('nibras_starOfWeek_' + school);
-    if(raw){ try { const o = JSON.parse(raw); if(o && o.name) return o; }catch(e){} }
-    const d = loadDB();
-    return (d && d.starOfWeek) ? d.starOfWeek : null;
-  } catch(e){ return null; }
-}
-function setStarOfWeekPrompt(){
-  const cur = getStarOfWeek();
-  const name = prompt('اسم نجمة الأسبوع:', cur ? (cur.name || '') : '');
-  if(name === null) return;
-  const trimmed = String(name).trim();
-  if(!trimmed){ alert('الاسم مطلوب'); return; }
-  const d = loadDB();
-  d.starOfWeek = { name: trimmed, setBy: (currentUser()||{}).name || (currentUser()||{}).username || '', setAt: Date.now() };
-  saveDB(d);
-  renderApp();
-  alert('تم تعيين "' + trimmed + '" كنجمة الأسبوع ⭐');
-}
-function clearStarOfWeek(){
-  const d = loadDB();
-  delete d.starOfWeek;
-  saveDB(d);
-  renderApp();
-}
-let starPhotoBase64 = null;
-function previewStarPhoto(input){
-  const file = input.files[0];
-  if(!file) return;
-  if(file.size > 2*1024*1024){ alert('الحجم الأقصى 2 ميجا'); return; }
-  const reader = new FileReader();
-  reader.onload = e => {
-    starPhotoBase64 = e.target.result;
-    const preview = document.getElementById('starPhotoPreview');
-    const hint = document.getElementById('starPhotoHint');
-    if(preview){ preview.src = starPhotoBase64; preview.style.display = ''; }
-    if(hint) hint.style.display = 'none';
-  };
-  reader.readAsDataURL(file);
-}
-async function saveStarOfWeek(){
-  const name = (document.getElementById('starNameInput')||{}).value || '';
-  const className = (document.getElementById('starClassInput')||{}).value || '';
-  const week = (document.getElementById('starWeekInput')||{}).value || '';
-  const reason = (document.getElementById('starReasonInput')||{}).value || '';
-  const trimmed = String(name).trim();
-  if(!trimmed){ alert('اسم الطالب مطلوب'); return; }
-  const d = loadDB();
-  // Move current to history
-  if(d.starOfWeek && d.starOfWeek.name){
-    if(!Array.isArray(d.starOfWeekHistory)) d.starOfWeekHistory = [];
-    d.starOfWeekHistory.push(Object.assign({}, d.starOfWeek));
-  }
-  d.starOfWeek = {
-    name: trimmed,
-    className: String(className).trim(),
-    week: String(week).trim(),
-    reason: String(reason).trim(),
-    photo: starPhotoBase64 || (d.starOfWeek ? d.starOfWeek.photo : null),
-    setBy: (currentUser()||{}).name || (currentUser()||{}).username || '',
-    setAt: Date.now(),
-  };
-  starPhotoBase64 = null;
-  saveDB(d);
-  // حفظ مستقل (لا يُمحى عند Synchronization)
-  try { localStorage.setItem('nibras_starOfWeek_' + getActiveSchool(), JSON.stringify(d.starOfWeek)); } catch(e){}
-  try { localStorage.setItem('nibras_starOfWeekHistory_' + getActiveSchool(), JSON.stringify(d.starOfWeekHistory)); } catch(e){}
-  // حفظ في الخادم (API مخصص) للتزامن بين الأجهزة
-  try {
-    const school = getActiveSchool();
-    const resp = await fetch('/api/star-of-week/' + school, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ star: d.starOfWeek, history: d.starOfWeekHistory }) });
-    if(resp.ok){ __starOfWeekCache[school] = d.starOfWeek; }
-    else { console.warn('[starOfWeek save] server returned', resp.status); }
-  } catch(e) { console.warn('[starOfWeek save to server]', e); }
-  __syncSchedule(getActiveSchool(), 0);
-  renderApp();
-  alert('تم اعتماد "' + trimmed + '" كنجمة الأسبوع ⭐');
-}
-async function clearStarOfWeekConfirm(){
-  if(!confirm('إلغاء نجم الأسبوع الحالي؟ (سيُحفظ في السجل)')) return;
-  const d = loadDB();
-  if(d.starOfWeek && d.starOfWeek.name){
-    if(!Array.isArray(d.starOfWeekHistory)) d.starOfWeekHistory = [];
-    d.starOfWeekHistory.push(Object.assign({}, d.starOfWeek));
-  }
-  delete d.starOfWeek;
-  saveDB(d);
-  try { localStorage.removeItem('nibras_starOfWeek_' + getActiveSchool()); } catch(e){}
-  try { localStorage.setItem('nibras_starOfWeekHistory_' + getActiveSchool(), JSON.stringify(d.starOfWeekHistory)); } catch(e){}
-  // حذف من الخادم
-  try {
-    const school = getActiveSchool();
-    const resp = await fetch('/api/star-of-week/' + school, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ star: null, history: d.starOfWeekHistory }) });
-    if(resp.ok){ delete __starOfWeekCache[school]; }
-  } catch(e) { console.warn('[starOfWeek delete from server]', e); }
-  __syncSchedule(getActiveSchool(), 0);
-  renderApp();
-  alert('تم إلغاء نجم الأسبوع');
-}
-
-function openSchoolCalendar(){
-  const pdfUrl = 'school-calendar-1448.pdf';
-  const html = `<div class="modal-overlay" onclick="if(event.target===this) closeSchoolCalendar()">
-    <div class="modal-box" style="max-width:96vw;width:96vw;height:90vh;display:flex;flex-direction:column;">
-      <div class="modal-head">
-        <h3>🗓️ التقويم الدراسي 1448–1449هـ</h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <a class="btn-secondary" style="padding:4px 10px;font-size:13px;text-decoration:none;" href="${pdfUrl}" target="_blank" rel="noopener" title="فتح في تبويب جديد">🔗 فتح</a>
-          <a class="btn-secondary" style="padding:4px 10px;font-size:13px;text-decoration:none;" href="${pdfUrl}" download title="تنزيل PDF">⬇️ تنزيل</a>
-          <button class="btn-secondary" style="padding:4px 10px;font-size:13px" onclick="printSchoolCalendar()" title="طباعة">🖨 طباعة</button>
-          <button class="modal-close" onclick="closeSchoolCalendar()">✕</button>
-        </div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px 20px;background:#f1f5f9;border-radius:8px;min-height:30vh;">
-        <div style="font-size:48px;">🗓️</div>
-        <div style="font-size:16px;font-weight:700;color:#1e3a8a;">التقويم الدراسي 1448–1449هـ</div>
-        <div style="font-size:13px;color:#64748b;text-align:center;">الملف: تقويم إسلام آباد 1448هـ.pdf (3 صفحات)</div>
-        <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:8px;">
-          <a class="btn-primary" style="text-decoration:none;padding:10px 20px;font-size:14px;" href="${pdfUrl}" target="_blank" rel="noopener">🔗 فتح</a>
-          <a class="btn-secondary" style="text-decoration:none;padding:10px 20px;font-size:14px;" href="${pdfUrl}" download>⬇️ تنزيل</a>
-          <button class="btn-secondary" style="padding:10px 20px;font-size:14px" onclick="printSchoolCalendar()">🖨 طباعة</button>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px;border-top:1px dashed #cbd5e1;padding-top:12px;">
-          <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('📅 تقويم Google', 'https://calendar.google.com/calendar/embed?src=ar.sa%23holiday%40group.v.calendar.google.com&ctz=Asia/Riyadh')" title="Google Calendar">📅 تقويم</button>
-          <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🕌 مواقيت الصلاة', 'https://www.islamicfinder.org/prayer-widget/')" title="IslamicFinder">🕌 مواقيت الصلاة</button>
-          <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://www.bing.com/translator')" title="Bing Translator">🌐 مترجم</button>
-        </div>
-      </div>
-    </div>
-  </div>`;
-  const old = document.querySelector('.modal-overlay'); if (old) old.remove();
-  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
-}
-function closeSchoolCalendar(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
-function printSchoolCalendar(){
-  const iframe = document.querySelector('.modal-overlay iframe');
-  if (iframe && iframe.contentWindow) {
-    try { iframe.contentWindow.print(); return; } catch(e) { /* fallback */ }
-  }
-  const w = window.open('school-calendar-1448.pdf', '_blank');
-  if(!w){ alert('يرجى السماح بالنوافذ المنبثقة'); return; }
-}
-
-let __lastClassScheduleHTML = '';
-function viewClassSchedule(classId){
-  try {
-  const d = loadDB();
-  const c = d.classes.find(x => x.id === classId);
-  if(!c){ alert('الفصل غير موجود'); return; }
-  const g = gradeById(c.gradeId);
-  const sched = {};
-  TIMETABLE_DAYS.forEach(day => { sched[day.key] = {}; });
-  for (const tid of Object.keys(d.timetable || {})) {
-    let t = (d.users || []).find(u => u.id === tid);
-    if (!t) t = (d.users || []).find(u => String(u.id).toLowerCase() === String(tid).toLowerCase());
-    if (!t) t = (d.users || []).find(u => String(u.username||'').toLowerCase() === String(tid).toLowerCase() || String(u.email||'').toLowerCase() === String(tid).toLowerCase());
-    let tname = t ? (t.name || t.fullName || t.displayName || '') : '';
-    if (!tname || !tname.trim()) {
-      if (c && Array.isArray(c.teacherIds)) {
-        for (const ctid of c.teacherIds) {
-          const ct = (d.users || []).find(u => u.id === ctid);
-          if (ct && (ct.name || ct.fullName)) { t = ct; tname = ct.name || ct.fullName || ''; break; }
-        }
-      }
-    }
-    if (!tname || !tname.trim()) {
-      console.warn('[viewClassSchedule] Missing teacher name for tid:', tid, 'class:', classId, 'user found:', !!t, 'users count:', (d.users||[]).length);
-    }
-    TIMETABLE_DAYS.forEach(day => {
-      const cells = ((d.timetable[tid] || {})[day.key]) || {};
-      for (const [p, cell] of Object.entries(cells)) {
-        if (cell && !cell._del && cell.classId === classId) {
-          if (!tname || !tname.trim()) {
-            tname = cell.teacher || cell.teacherName || cell.teacherId || tid;
-          }
-          sched[day.key][p] = { subject: cell.subject || '—', teacher: tname };
-        }
-      }
-    });
-  }
-  const dayColors = ['#eef6ff','#f0fdf4','#fefce8','#fdf2f8','#f5f3ff'];
-  const rows = TIMETABLE_PERIOD_NAMES.map((name, i) => {
-    const p = i + 1;
-    const rowBg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
-    const cells = TIMETABLE_DAYS.map((day, di) => {
-      const info = sched[day.key][p];
-      const cellBg = info ? dayColors[di] : rowBg;
-      return `<td style="padding:6px;text-align:center;font-size:12px;border:1px solid #e2e8f0;background:${cellBg};">${info ? escapeHtml(info.subject) + '<br><span class="muted small">' + escapeHtml(String(info.teacher).trim().split(/\s+/).filter(Boolean).slice(0,2).join(' ')) + '</span>' : '<span class="muted">—</span>'}</td>`;
-    }).join('');
-    return `<tr style="background:${rowBg};"><td style="padding:6px;font-weight:700;font-size:12px;border:1px solid #e2e8f0;background:#e2e8f0;">${name}</td>${cells}</tr>`;
-  }).join('');
-  const title = '🗓 جدول حصص ' + (g?g.name:'') + ' — ' + c.name + ' (أسبوع كامل)';
-  __lastClassScheduleHTML = '<h2 style="text-align:center;">' + escapeHtml(title) + '</h2><table><thead><tr><th>الحصة</th>' + TIMETABLE_DAYS.map(d=>'<th>'+d.label+'</th>').join('') + '</tr></thead><tbody>' + rows.replace(/style="[^"]*"/g,'') + '</tbody></table>';
-  const html = `<div class="modal-overlay" onclick="if(event.target===this) closeClassSchedule()">
-    <div class="modal-box" style="max-width:960px;width:96vw;">
-      <div class="modal-head"><h3>🎓 ${escapeHtml(title)} 📅</h3><div style="display:flex;gap:8px;"><button class="btn-secondary" style="padding:4px 10px;font-size:13px" onclick="printClassSchedule()">🖨 طباعة</button><button class="modal-close" onclick="closeClassSchedule()">✕</button></div></div>
-      <div style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;">
-          <thead><tr><th style="padding:6px;border:1px solid #cbd5e1;background:#1e3a8a;color:#fff;">الحصة</th>${TIMETABLE_DAYS.map((d,di)=>`<th style="padding:6px;border:1px solid #cbd5e1;background:${['#2563eb','#0891b2','#059669','#d97706','#7c3aed'][di]};color:#fff;">${d.label}</th>`).join('')}</tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    </div>
-  </div>`;
-  const old = document.querySelector('.modal-overlay'); if (old) old.remove();
-  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
-  } catch(e) { console.error('[viewClassSchedule] Error:', e); alert('خطأ في عرض الجدول: ' + e.message); }
-}
-function closeClassSchedule(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
-function printClassSchedule(){
-  if(!__lastClassScheduleHTML){ alert('لا يوجد جدول للطباعة'); return; }
-  const w = window.open('', '_blank', 'width=900,height=700');
-  if(!w){ alert('يرجى السماح بالنوافذ المنبثقة للطباعة'); return; }
-  w.document.write('<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>جدول حصص</title><style>body{font-family:Tahoma,Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #333;padding:6px;text-align:center;font-size:12px;} th{background:#eee;} @media print{ button{display:none;} }</style></head><body>');
-  w.document.write(__lastClassScheduleHTML);
-  w.document.write('</body></html>');
-  w.document.close();
-  w.focus();
-  setTimeout(() => { w.print(); }, 300);
-}
-
 function addTeacherToClass(classId){
   if(!canManageTeachers(currentUser())) return;
   const sel = document.getElementById('tSel-'+classId);
@@ -11376,7 +11297,7 @@ function buildTeacherDetail(type, teacherId){
     rows = list.length ? list.map(t => { const ss = studentIdsOf(t).map(id => d.students.find(x => x.id === id)).filter(Boolean); const nm = ss.length ? ss.map(s => s.fullName).join('، ') : '—'; const fc = d.classes.find(x => x.id === t.fromClassId); const tc = d.classes.find(x => x.id === t.toClassId); return dlRow(`${escapeHtml(nm)}`, `${classLabel(fc)} ← ${classLabel(tc)} · ${stMap[t.status] || t.status} · ${fmtTime(t.createdAt)}`); }).join('') : DL_EMPTY;
   } else if(type === 'ASSIGNMENTS'){
     title = 'التكليفات التي أنشأتها';
-    const list = (d.assignments || []).filter(a => !(a && a.deleted) && (a.teacherId === teacherId || (Array.isArray(a.teacherIds) && a.teacherIds.some(x => String(x) === String(teacherId))))).sort((a,b) => (b.created||0) - (a.created||0));
+    const list = (d.assignments || []).filter(a => !(a && a.deleted) && isAssignmentForTeacher(a, teacherId)).sort((a,b) => (b.created||0) - (a.created||0));
     rows = list.length ? list.map(a => { const c = d.classes.find(x => x.id === a.classId); return dlRow(`${escapeHtml(a.title || a.subject || 'تكليف')}`, `${a.subject ? escapeHtml(a.subject) + ' · ' : ''}${c ? escapeHtml(classLabel(c)) : '—'}${a.date ? ' · تسليم: ' + fmtDateOnly(a.date) : ''}${a.type ? ' · ' + escapeHtml(a.type) : ''}${a.created ? ' · أنشئ: ' + fmtTime(a.created) : ''}`); }).join('') : DL_EMPTY;
   } else if(type === 'SUPERVISION'){
     title = 'موعد الإشراف (الأسبوعي)';
@@ -11436,7 +11357,7 @@ function renderTeacherPage(teacherId){
   // أعمال المعلمة: تحويلات وتكليفات وملاحظات أنشأتها هي — المالك من الحقل
   // (createdBy/teacherId) لا من اسم الجلسة، فلا يُنسب عمل زميلة إليها.
   const teacherTransfers = (d.transfers||[]).filter(t => !(t && t.deleted) && t.createdBy === user.id);
-  const teacherAssignments = (d.assignments||[]).filter(a => !(a && a.deleted) && (a.teacherId === user.id || (Array.isArray(a.teacherIds) && a.teacherIds.some(x => String(x) === String(user.id)))));
+  const teacherAssignments = (d.assignments||[]).filter(a => !(a && a.deleted) && isAssignmentForTeacher(a, user.id));
   const teacherNotes = (d.notes||[]).filter(n => !(n && n.deleted) && n.createdBy === user.id);
   // موعد الإشراف: مصدره الخادم — يُطلب مرة واحدة ثم يُعاد الرسم عند وصوله
   const supSched = (__supervisionSchedule && Array.isArray(__supervisionSchedule.schedule)) ? __supervisionSchedule.schedule : null;
@@ -11646,6 +11567,7 @@ function saveCustomActName(name){
 }
 let activityEditId = null;
 let autoOpenActivityForm = false;
+let activityFormOpen = false;
 
 /* ============ جدول الحصص (المعلم) ============ */
 const TIMETABLE_DAYS = [
@@ -11673,10 +11595,17 @@ function renderSupervisionAdmin(){
   const db = loadDB();
   const teachers = (db.users || []).filter(u => u.role === 'TEACHER' && u.active !== false);
   __ensureSupervisionDraft();
+  const isDirty = (typeof __isSupervisionDraftDirty === 'function') ? __isSupervisionDraftDirty() : false;
   const currentRole = (currentUser() || {}).role;
   const canRecord = currentRole === 'ADMIN' || currentRole === 'AGENT' || currentRole === 'SCHOOL_AGENT';
   const canEditSchedule = currentRole === 'ADMIN'; // تعديل الجدول الأسبوعي للمدير فقط؛ الوكيل/الوكيلة يسجّل من أدى الإشراف فقط
-  const teacherName = (id) => { const t = teachers.find(x => x.id === id); return t ? (t.name || t.username || t.id) : id; };
+  const teacherName = (id) => {
+    const t = teachers.find(x => x.id === id);
+    if(t && (t.name || t.username)) return (t.name || t.username);
+    const serverItem = (__supervisionSchedule && __supervisionSchedule.schedule || []).find(x => x.teacherId === id);
+    if(serverItem && serverItem.name) return serverItem.name;
+    return id;
+  };
   const days = SUPERVISION_DAYS.map(day => {
     const assignedIds = [...__supervisionDraftSchedule[day.dow]];
     const assignedList = assignedIds
@@ -11690,26 +11619,29 @@ function renderSupervisionAdmin(){
       ${canEditSchedule ? `<button type="button" class="btn-secondary" onclick="__supervisionToggleAddPicker(${day.dow})">${pickerOpen ? '✕ إغلاق' : '+ إضافة مشرفة'}</button>` : ''}
       ${pickerOpen && canEditSchedule ? `
         <div class="grid-2" data-supervision-picker="${day.dow}" style="margin-top:8px">
-          ${available.length ? available.map(t => `<label class="check-row"><input type="checkbox" value="${t.id}"> ${escapeHtml(t.name || t.username || t.id)}</label>`).join('') : '<p class="muted">تمت إضافة جميع المعلمات لهذا اليوم</p>'}
+          ${available.length ? available.map(t => {
+            const isChecked = typeof __supervisionPickerSelected !== 'undefined' && __supervisionPickerSelected[day.dow] && __supervisionPickerSelected[day.dow].has(t.id);
+            return `<label class="check-row"><input type="checkbox" value="${t.id}" ${isChecked ? 'checked' : ''} onchange="__supervisionTogglePickerSelect(${day.dow},'${t.id}',this.checked)"> ${escapeHtml(t.name || t.username || t.id)}</label>`;
+          }).join('') : '<p class="muted">تمت إضافة جميع المعلمات لهذا اليوم</p>'}
         </div>
         ${available.length ? `<button type="button" class="btn-primary" style="margin-top:8px" onclick="__supervisionAddSelected(${day.dow})">إضافة المحددات</button>` : ''}
       ` : ''}
       <ul style="margin:10px 0 0;padding-inline-start:18px">
-        ${assignedList.length ? assignedList.map(x => `<li style="padding:4px 0">${escapeHtml(x.name)} ${canEditSchedule ? `<button type="button" class="btn-secondary" style="padding:2px 8px;font-size:12px;margin-inline-start:6px" onclick="__supervisionRemoveTeacher(${day.dow},'${x.id}')">حذف</button>` : ''}</li>`).join('') : '<li class="muted">لا توجد مشرفات مكلفات بعد</li>'}
+        ${assignedList.length ? assignedList.map(x => `<li style="padding:4px 0">${escapeHtml(String(x.name).trim().split(/\s+/).filter(Boolean).slice(0,2).join(' '))} ${canEditSchedule ? `<button type="button" class="btn-secondary" style="padding:2px 8px;font-size:12px;margin-inline-start:6px" onclick="__supervisionRemoveTeacher(${day.dow},'${x.id}')">حذف</button>` : ''}</li>`).join('') : '<li class="muted">لا توجد مشرفات مكلفات بعد</li>'}
       </ul>
     </div>`;
   }).join('');
   const today = __supervisionToday;
   const todayRows = today && today.assigned ? today.assigned : [];
-  const todayBlock = `<div class="panel"><h3>🛡️ مشرفو اليوم – ${escapeHtml((SUPERVISION_DAYS.find(x=>x.dow===today?.dayOfWeek)||{}).label || 'لا يوجد إشراف')}</h3>
+  const todayBlock = `<div class="panel"><h3>🛡️ مشرفات اليوم – ${escapeHtml((SUPERVISION_DAYS.find(x=>x.dow===today?.dayOfWeek)||{}).label || 'لا يوجد إشراف')}</h3>
     ${todayRows.length ? todayRows.map(x => `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #eee;flex-wrap:wrap">${x.checkedInAt ? '🟢 باشرت الإشراف' : '🟡 لم تسجل المباشرة'} — <b>${escapeHtml(x.name || x.teacherId)}</b>${x.checkedInAt ? ` <span class="muted">${escapeHtml(x.checkedInAt)}</span>` : ''}
       ${canRecord ? (x.checkedInAt
         ? `<button type="button" class="btn-secondary" style="padding:2px 10px;font-size:12px;margin-inline-start:auto" onclick="__recordSupervision('${x.teacherId}',false)">إلغاء (لم تؤده)</button>`
         : `<button type="button" class="btn-primary" style="padding:2px 10px;font-size:12px;margin-inline-start:auto" onclick="__recordSupervision('${x.teacherId}',true)">أدت الإشراف</button>`) : ''}
-    </div>`).join('') : '<p class="muted">لا يوجد مشرفون اليوم</p>'}</div>`;
+    </div>`).join('') : '<p class="muted">لا توجد مشرفات اليوم</p>'}</div>`;
   const history = __supervisionHistory && __supervisionHistory.history;
-   const historyBlock = '';
-  return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">جدول أسبوعي ثابت يتكرر تلقائيًا من الاثنين إلى الجمعة.</p>${canEditSchedule ? '<button class="btn-primary" onclick="__saveSupervisionSchedule()">حفظ جدول الإشراف</button>' : ''}</section>${todayBlock}${days}${historyBlock}`;
+  const historyBlock = '';
+  return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">جدول أسبوعي ثابت يتكرر تلقائيًا من الاثنين إلى الجمعة.</p>${canEditSchedule ? `<div style="display:flex;align-items:center;gap:12px;margin-top:10px"><button class="btn-primary" onclick="__saveSupervisionSchedule()">💾 حفظ جدول الإشراف</button>${isDirty ? '<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:5px 12px;border-radius:6px;font-weight:700">⚠️ توجد تعديلات غير محفوظة في الجدول</span>' : ''}</div>` : ''}</section>${todayBlock}${days}${historyBlock}`;
 }
 
 /* ===== جدول الإشراف اليومي الأسبوعي (مصدره الخادم) ===== */
@@ -12463,7 +12395,6 @@ function renderTimetable(){
       return `<div class="header-row"><h1 class="page-title">🗓 جدولي</h1></div>
       <div class="card" style="background:#fef3c7"><p class="muted" style="margin:0">⚠️ أنت غير مسند لأي فصل بعد.</p></div>`;
     }
-    const __viewFullBtn = `<button class="btn-secondary" style="padding:4px 10px;font-size:13px" onclick="viewClassSchedule('${myClassId}')" title="عرض جدول فصلي (أسبوع كامل)">👁 جدول</button>`;
     const rows = TIMETABLE_PERIOD_NAMES.map((name, i) => {
       const p = i + 1;
       const cell = merged[p];
@@ -12485,10 +12416,7 @@ function renderTimetable(){
     return `
     <div class="header-row">
       <h1 class="page-title">🗓 جدولي — ${escapeHtml(clsLabel)}</h1>
-      <div style="display:flex;gap:8px;">
-        ${__viewFullBtn}
-        <a href="#/" class="btn-secondary" style="text-decoration:none">← العودة</a>
-      </div>
+      <a href="#/" class="btn-secondary" style="text-decoration:none">← العودة</a>
     </div>
     <div class="tt-tabs">${tabs}</div>
     <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px">${rows}</div>`;
@@ -12959,7 +12887,7 @@ function deleteAssignment(aid){
   const a = (d.assignments||[]).find(x => x.id === aid);
   if(!a) return;
   // صلاحية: المعلم هو من أنشأ التكليف (أو مدير/وكيل)
-  if(user.role !== 'ADMIN' && user.role !== 'AGENT' && user.role !== 'SCHOOL_AGENT' && user.role !== 'ADMINISTRATIVE' && a.teacherId !== user.id && !(Array.isArray(a.teacherIds) && a.teacherIds.some(x => String(x) === String(user.id)))){
+  if(!canManageAllAssignments(user) && !isAssignmentForTeacher(a, user.id)){
     alert('لا يمكنك حذف هذا التكليف — أنشأه معلم آخر');
     return;
   }
@@ -13000,13 +12928,18 @@ function saveAssignment(){
   const date = (document.getElementById('assDate')||{}).value||'';
   const { classId, subject, type, teacherId, teacherIds } = __resolveAssignmentInput(params, d, user);
   if(!title){ alert('اكتب عنوان التكليف'); return; }
-  if(canManageAllAssignments(user) && !teacherIds.length){ alert('حدد معلمة واحدة على الأقل'); return; }
-  const nav = () => { location.hash = canManageAllAssignments(user) ? '#/assignments?step=list&cid=' + classId : '#/assignments?step=type&cid=' + classId + '&sub=' + encodeURIComponent(subject); };
+  if(canManageAllAssignments(user) && !teacherIds.length){ alert('حدد معلمة واحدة على الأقل لإسناد التكليف إليها'); return; }
+  const nav = () => {
+    location.hash = canManageAllAssignments(user)
+      ? '#/assignments?step=list&cid=' + classId
+      : '#/assignments?step=type&cid=' + classId + '&sub=' + encodeURIComponent(subject);
+  };
   if(savingAssignment) return;
   savingAssignment = true;
   try {
     d.assignments = d.assignments || [];
     const clsStudents = (d.students||[]).filter(s => s.active && s.classId === classId).map(s => s.id);
+    // منع التكرار عند إعادة الإرسال بعد فشل: نفس معرّف التكليف من المسودة المحلية
     const priorDraft = __draftGet('assignment') || {};
     const aid = priorDraft.aid || uid();
     let a = (d.assignments||[]).find(x => x && x.id === aid);
@@ -13024,6 +12957,7 @@ function saveAssignment(){
     try{ __markAssignUnpushed(getActiveSchool(), [aid]); }catch(e){}
     // بلا خادم: نحفظ محلياً وننتقل (لا يوجد تأكيد ممكن)
     if(!__serverEnabled() || !__syncEnabled()){ __draftClear('assignment'); nav(); return; }
+    // لا انتقال ولا نجاح قبل تأكيد الخادم: المراقب ينقل عند النجاح، ويُبقي النموذج عند الفشل.
     __saveGuardWatch(getActiveSchool(), 'assignment', (res, kind)=>{
       __saveGuardOutcome(res, kind);
       if(res && res.ok){ try{ __draftClear('assignment'); }catch(e){} nav(); }
@@ -13036,10 +12970,127 @@ function saveAssignment(){
   }
 }
 
+const __activitiesCache = {};
+const __activitiesLoading = {};
+const __activitiesLastFetch = {};
+const ACTIVITIES_CACHE_TTL_MS = 15000;
+
+async function __activitiesLoad(school, force = false){
+  school = school || getActiveSchool();
+  if(!school){
+    const empty = [];
+    empty.changed = false;
+    empty.ok = false;
+    return empty;
+  }
+  if(!__serverEnabled()){
+    const cached = (__activitiesCache[school] || []).slice();
+    cached.changed = false;
+    cached.ok = false;
+    return cached;
+  }
+
+  // In-flight guard: منع تكرار الطلبات المتزامنة لنفس المدرسة
+  if(__activitiesLoading[school]){
+    const cached = (__activitiesCache[school] || []).slice();
+    cached.changed = false;
+    cached.ok = true;
+    cached.inFlight = true;
+    return cached;
+  }
+
+  // Cache TTL check: منع إعادة الجلب دون حاجة
+  const now = Date.now();
+  if(!force && __activitiesLastFetch[school] && (now - __activitiesLastFetch[school] < ACTIVITIES_CACHE_TTL_MS)){
+    const cached = (__activitiesCache[school] || []).slice();
+    cached.changed = false;
+    cached.ok = true;
+    cached.fromCache = true;
+    return cached;
+  }
+
+  __activitiesLoading[school] = true;
+  try{
+    const resp = await fetch('/api/activities/' + encodeURIComponent(school));
+    if(!resp.ok){
+      const cached = (__activitiesCache[school] || []).slice();
+      cached.changed = false;
+      cached.ok = false;
+      return cached;
+    }
+    const j = await resp.json();
+    if(j && j.ok && Array.isArray(j.activities)){
+      __activitiesLastFetch[school] = Date.now();
+      const d = loadDB();
+      const localRaw = (function(){
+        try {
+          const raw = localStorage.getItem('nibras_activities_' + school);
+          if(raw){ const o = JSON.parse(raw); if(Array.isArray(o)) return o; }
+        } catch(_){}
+        return Array.isArray(d?.activities) ? d.activities : [];
+      })();
+
+      let merged = [];
+      if(j.activities.length > 0){
+        // دمج آمن يمنع التكرار وفقدان أي تعديل أحدث
+        const srvMap = new Map(j.activities.map(a => [a.id, a]));
+        for(const la of localRaw){
+          if(!la || !la.id) continue;
+          const sa = srvMap.get(la.id);
+          if(sa){
+            const va = (typeof la._v === 'number') ? la._v : 0;
+            const vb = (typeof sa._v === 'number') ? sa._v : 0;
+            merged.push(va > vb ? la : sa);
+            srvMap.delete(la.id);
+          } else {
+            merged.push(la);
+          }
+        }
+        for(const sa of srvMap.values()) merged.push(sa);
+      } else {
+        // حماية: منع مسح الأنشطة المحلية عند وصول استجابة فارغة غير موثوقة
+        if(localRaw.length > 0){
+          merged = localRaw.slice();
+        } else {
+          merged = [];
+        }
+      }
+
+      const prevSerialized = JSON.stringify(__activitiesCache[school] || []);
+      const nextSerialized = JSON.stringify(merged);
+      const changed = prevSerialized !== nextSerialized;
+
+      __activitiesCache[school] = merged.slice();
+      try { localStorage.setItem('nibras_activities_' + school, JSON.stringify(merged)); } catch(e){}
+      if(d && changed){
+        d.activities = merged.slice();
+        saveDB(d);
+      }
+      const res = merged.slice();
+      res.changed = changed;
+      res.ok = true;
+      return res;
+    }
+  }catch(e){
+    console.warn('[activities load]', e);
+  }finally{
+    __activitiesLoading[school] = false;
+  }
+  const fallback = (__activitiesCache[school] || []).slice();
+  fallback.changed = false;
+  fallback.ok = false;
+  return fallback;
+}
 function renderActivities(){
   const d = loadDB();
   const isAdm = canManageActivities(currentUser());
-  const acts = (d.activities || []).slice();
+  const acts = (function(){ const school = getActiveSchool(); if(__activitiesCache[school] && Array.isArray(__activitiesCache[school]) && __activitiesCache[school].length > 0) return __activitiesCache[school].slice(); try{ const raw = localStorage.getItem('nibras_activities_' + school); if(raw){ const o = JSON.parse(raw); if(Array.isArray(o) && o.length > 0) return o.slice(); } }catch(e){} return (d.activities || []).slice(); })();
+  // Load from server in background مع منع الحلقة المفرغة وحماية النموذج أثناء الفتح
+  __activitiesLoad(getActiveSchool()).then((res) => {
+    if(!res || !res.changed) return;
+    if(activityFormOpen) return;
+    if((location.hash || '').indexOf('#/activities') === 0) renderApp();
+  });
   const today = todayStr();
   const upcoming = acts.filter(a => a.date >= today).sort((a,b) => a.date.localeCompare(b.date));
   const past = acts.filter(a => a.date < today).sort((a,b) => b.date.localeCompare(a.date));
@@ -13062,7 +13113,8 @@ function renderActivities(){
   };
   const typeOpts = activityTypes.map(t => `<option value="${t.value}">${t.icon} ${t.label}</option>`).join('')
     + (loadCustomActNames(getActiveSchool()).length ? `<optgroup label="— أسماء «أخرى» المحفوظة">${loadCustomActNames(getActiveSchool()).map(n => `<option value="OTHER::${escapeHtml(n)}">🎉 ${escapeHtml(n)}</option>`).join('')}</optgroup>` : '');
-  const openForm = autoOpenActivityForm; autoOpenActivityForm = false;
+  if(autoOpenActivityForm){ activityFormOpen = true; autoOpenActivityForm = false; }
+  const openForm = activityFormOpen;
   return `
   <div class="header-row"><h1 class="page-title">🎉 الأنشطة والفعاليات</h1>${isAdm ? '<button class="btn-primary" onclick="openActivityForm()">+ إضافة نشاط</button>' : ''}</div>
   ${isAdm ? `<div id="activityForm" class="card mb" style="display:${openForm ? '' : 'none'}">
@@ -13116,20 +13168,23 @@ function actTypeChanged(){
 }
 function openActivityForm(){
   activityEditId = null;
+  activityFormOpen = true;
   const f = document.getElementById('activityForm');
   if(f){ f.style.display=''; f.scrollIntoView({behavior:'smooth'}); }
 }
 function closeActivityForm(){
   activityEditId = null;
-  document.getElementById('activityForm').style.display = 'none';
-  document.getElementById('actType').value = '';
-  document.getElementById('actName').value = '';
-  document.getElementById('actDate').value = '';
-  document.getElementById('actDesc').value = '';
+  activityFormOpen = false;
+  const f = document.getElementById('activityForm');
+  if(f) f.style.display = 'none';
+  const typeEl = document.getElementById('actType'); if(typeEl) typeEl.value = '';
+  const nameEl = document.getElementById('actName'); if(nameEl) nameEl.value = '';
+  const dateEl = document.getElementById('actDate'); if(dateEl) dateEl.value = '';
+  const descEl = document.getElementById('actDesc'); if(descEl) descEl.value = '';
   const hint = document.getElementById('actOtherHint');
   if(hint) hint.style.display = 'none';
 }
-function saveActivity(){
+async function saveActivity(){
   const type = document.getElementById('actType').value;
   const name = document.getElementById('actName').value.trim();
   const date = document.getElementById('actDate').value;
@@ -13148,9 +13203,23 @@ function saveActivity(){
   }
   d._ts = Date.now();
   saveDB(d);
+  try { localStorage.setItem('nibras_activities_' + getActiveSchool(), JSON.stringify(d.activities)); } catch(e){}
+  // حفظ في الخادم (API مخصص) للتزامن بين الأجهزة
+  try {
+    const school = getActiveSchool();
+    const resp = await fetch('/api/activities/' + school, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ activities: d.activities }) });
+    if(resp.ok){
+      __activitiesCache[school] = d.activities.slice();
+      __activitiesLastFetch[school] = Date.now();
+    } else {
+      console.warn('[activities save] server returned', resp.status);
+    }
+  } catch(e) { console.warn('[activities save to server]', e); }
   __syncSchedule(getActiveSchool(), 0);
   if(type === 'OTHER') saveCustomActName(name);
   activityEditId = null;
+  activityFormOpen = false;
+  __activitiesLastFetch[getActiveSchool()] = Date.now();
   renderApp();
 }
 function editActivity(id){
@@ -13158,6 +13227,7 @@ function editActivity(id){
   const a = (d.activities||[]).find(x => x.id === id);
   if(!a) return;
   activityEditId = id;
+  activityFormOpen = true;
   const f = document.getElementById('activityForm');
   if(f) f.style.display = '';
   document.getElementById('actType').value = a.type;
@@ -13166,18 +13236,30 @@ function editActivity(id){
   document.getElementById('actDesc').value = a.description || '';
   if(f) f.scrollIntoView({behavior:'smooth'});
 }
-function deleteActivity(id){
+async function deleteActivity(id){
   const d = loadDB();
   if(!(d.activities||[]).some(x => x.id === id)) return;
   if(!confirm('حذف هذا النشاط؟')) return;
   d.activities = (d.activities||[]).filter(x => x.id !== id);
   d._ts = Date.now();
   saveDB(d);
+  try { localStorage.setItem('nibras_activities_' + getActiveSchool(), JSON.stringify(d.activities)); } catch(e){}
+  try {
+    const school = getActiveSchool();
+    const resp = await fetch('/api/activities/' + school, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ activities: d.activities }) });
+    if(resp.ok){
+      __activitiesCache[school] = d.activities.slice();
+      __activitiesLastFetch[school] = Date.now();
+    }
+  } catch(e) { console.warn('[activities delete from server]', e); }
+  activityFormOpen = false;
+  __activitiesLastFetch[getActiveSchool()] = Date.now();
   __syncSchedule(getActiveSchool(), 0);
   renderApp();
 }
 function goActivitiesAdd(){
   autoOpenActivityForm = true;
+  activityFormOpen = true;
   location.hash = '#/activities';
   renderApp();
 }
@@ -14819,175 +14901,228 @@ function renderDailyMsg(){
   ${adminInboxCard}
   ${directMsgCard}`;
 }
-function starBadgeSvg(photoUrl, size){
-  const s = size || 160;
-  const r = s * 0.38; // circle radius
-  const cx = s / 2;
-  const cy = s * 0.42;
-  const starSize = s * 0.18;
-  const bannerH = s * 0.22;
-  const bannerY = s * 0.78;
-  const laurelW = s * 0.12;
 
-  // Person silhouette path (scaled to fit in circle)
-  const personPath = `
-    M${cx},${cy - r*0.15}
-    C${cx - r*0.25},${cy - r*0.15} ${cx - r*0.35},${cy + r*0.05} ${cx - r*0.2},${cy + r*0.35}
-    L${cx - r*0.25},${cy + r*0.6}
-    L${cx + r*0.25},${cy + r*0.6}
-    L${cx + r*0.2},${cy + r*0.35}
-    C${cx + r*0.35},${cy + r*0.05} ${cx + r*0.25},${cy - r*0.15} ${cx},${cy - r*0.15}
-    Z
-  `;
+/* ============ نجمة الأسبوع ============ */
+const __starOfWeekCache = {};
+const __starOfWeekLoading = {};
+const __starOfWeekLastFetch = {};
+const STAR_CACHE_TTL_MS = 15000;
+let starDraft = null;
+let isStarFormDirty = false;
 
-  // Head circle
-  const headR = r * 0.22;
-  const headCy = cy - r * 0.35;
-
-  let centerContent = '';
-  if(photoUrl){
-    // Clip path for photo
-    centerContent = `
-      <defs>
-        <clipPath id="photoClip">
-          <circle cx="${cx}" cy="${cy}" r="${r * 0.85}" />
-        </clipPath>
-      </defs>
-      <image href="${photoUrl}" x="${cx - r*0.85}" y="${cy - r*0.85}" width="${r*1.7}" height="${r*1.7}" clip-path="url(#photoClip)" preserveAspectRatio="xMidYMid slice" />
-    `;
-  } else {
-    // Person silhouette
-    centerContent = `
-      <circle cx="${cx}" cy="${headCy}" r="${headR}" fill="#14532d" />
-      <path d="${personPath}" fill="#14532d" />
-    `;
+async function __starOfWeekLoad(school, force = false){
+  school = school || getActiveSchool();
+  if(!school) return { ok: false, changed: false };
+  if(!__serverEnabled()){
+    const cached = __starOfWeekCache[school] || null;
+    return { ok: false, changed: false, star: cached };
   }
 
-  // Laurel branch (left) - simplified
-  const laurelLeft = `
-    <g transform="translate(${cx - r - laurelW*0.5}, ${cy - r*0.3}) scale(${laurelW/20})">
-      <path d="M0,0 Q-5,-8 -2,-16 Q-8,-12 -4,-20 Q-10,-16 -6,-24" stroke="#14532d" stroke-width="1.5" fill="none" />
-      <ellipse cx="-3" cy="-6" rx="3" ry="2" fill="#16a34a" transform="rotate(-30,-3,-6)" />
-      <ellipse cx="-5" cy="-12" rx="3" ry="2" fill="#16a34a" transform="rotate(-40,-5,-12)" />
-      <ellipse cx="-7" cy="-18" rx="3" ry="2" fill="#16a34a" transform="rotate(-50,-7,-18)" />
-    </g>
-  `;
-  const laurelRight = `
-    <g transform="translate(${cx + r + laurelW*0.5}, ${cy - r*0.3}) scale(${-laurelW/20}, ${laurelW/20})">
-      <path d="M0,0 Q-5,-8 -2,-16 Q-8,-12 -4,-20 Q-10,-16 -6,-24" stroke="#14532d" stroke-width="1.5" fill="none" />
-      <ellipse cx="-3" cy="-6" rx="3" ry="2" fill="#16a34a" transform="rotate(-30,-3,-6)" />
-      <ellipse cx="-5" cy="-12" rx="3" ry="2" fill="#16a34a" transform="rotate(-40,-5,-12)" />
-      <ellipse cx="-7" cy="-18" rx="3" ry="2" fill="#16a34a" transform="rotate(-50,-7,-18)" />
-    </g>
-  `;
-
-  // Star on top
-  const starCx = cx;
-  const starCy = cy - r - starSize * 0.3;
-  const starPath = `
-    M${starCx},${starCy - starSize}
-    L${starCx + starSize*0.3},${starCy - starSize*0.3}
-    L${starCx + starSize},${starCy - starSize*0.1}
-    L${starCx + starSize*0.4},${starCy + starSize*0.2}
-    L${starCx + starSize*0.6},${starCy + starSize}
-    L${starCx},${starCy + starSize*0.5}
-    L${starCx - starSize*0.6},${starCy + starSize}
-    L${starCx - starSize*0.4},${starCy + starSize*0.2}
-    L${starCx - starSize},${starCy - starSize*0.1}
-    L${starCx - starSize*0.3},${starCy - starSize*0.3}
-    Z
-  `;
-
-  // Banner
-  const bannerW = s * 0.7;
-  const bannerX = cx - bannerW/2;
-  const bannerR = 6;
-
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s + bannerH*0.5}" viewBox="0 0 ${s} ${s + bannerH*0.5}" style="max-width:100%;height:auto;">
-      <!-- Golden circle frame -->
-      <circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="#f59e0b" stroke-width="${s*0.025}" />
-      <circle cx="${cx}" cy="${cy}" r="${r*0.88}" fill="#fffbeb" stroke="#fbbf24" stroke-width="${s*0.012}" />
-
-      <!-- Laurel branches -->
-      ${laurelLeft}
-      ${laurelRight}
-
-      <!-- Center content (photo or person) -->
-      ${centerContent}
-
-      <!-- Golden star on top -->
-      <path d="${starPath}" fill="#f59e0b" stroke="#d97706" stroke-width="1" />
-
-      <!-- Dark green banner -->
-      <rect x="${bannerX}" y="${bannerY}" width="${bannerW}" height="${bannerH}" rx="${bannerR}" fill="#14532d" />
-      <text x="${cx}" y="${bannerY + bannerH*0.62}" text-anchor="middle" font-family="Tahoma,Arial,sans-serif" font-size="${s*0.09}" font-weight="800" fill="#fff">نجمة الأسبوع</text>
-    </svg>
-  `;
-  return svg.trim();
-}
-
-function starOfWeekBadgeSvg(photoUrl, size){
-  const s = size || 200;
-  const scale = s / 320;
-  const goldGrad = 'starOfWeekGold';
-  const greenGrad = 'starOfWeekGreen';
-
-  // Center content: photo or person silhouette
-  let centerContent = '';
-  if(photoUrl){
-    centerContent = `
-      <defs>
-        <clipPath id="sowPhotoClip">
-          <circle cx="160" cy="165" r="36" />
-        </clipPath>
-      </defs>
-      <image href="${photoUrl}" x="124" y="129" width="72" height="72" clip-path="url(#sowPhotoClip)" preserveAspectRatio="xMidYMid slice" />
-    `;
-  } else {
-    centerContent = `
-      <circle cx="160" cy="165" r="36" fill="url(#${greenGrad})"/>
-      <path d="M92 262 Q98 207 160 207 Q222 207 228 262 Z" fill="url(#${greenGrad})"/>
-    `;
+  // In-flight guard: منع تكرار الطلبات المتزامنة
+  if(__starOfWeekLoading[school]){
+    const cached = __starOfWeekCache[school] || null;
+    return { ok: true, changed: false, inFlight: true, star: cached };
   }
 
-  // If photo, also keep the body silhouette behind? No, just show photo in circle
-  // But we need to hide the body path when photo is shown
-  const bodyPath = photoUrl ? '' : `<path d="M92 262 Q98 207 160 207 Q222 207 228 262 Z" fill="url(#${greenGrad})"/>`;
+  // Cache TTL check: منع الجلب المتكرر إذا لم تمر 15 ثانية (إلا إذا طُلب force)
+  const now = Date.now();
+  if(!force && __starOfWeekLastFetch[school] && (now - __starOfWeekLastFetch[school] < STAR_CACHE_TTL_MS)){
+    const cached = __starOfWeekCache[school] || null;
+    return { ok: true, changed: false, fromCache: true, star: cached };
+  }
 
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="${s}" height="${s}" style="max-width:100%;height:auto;">
-      <defs>
-        <linearGradient id="${goldGrad}" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#FFF0A6"/><stop offset="50%" stop-color="#E6B83F"/><stop offset="100%" stop-color="#B77A12"/>
-        </linearGradient>
-        <linearGradient id="${greenGrad}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#176344"/><stop offset="100%" stop-color="#063B29"/>
-        </linearGradient>
-        ${photoUrl ? '<clipPath id="sowPhotoClip"><circle cx="160" cy="165" r="36" /></clipPath>' : ''}
-      </defs>
-      <circle cx="160" cy="165" r="125" fill="#fff"/>
-      <circle cx="160" cy="165" r="125" fill="none" stroke="url(#${goldGrad})" stroke-width="9"/>
-      <path d="M160 18 L176 56 L217 59 L186 87 L195 127 L160 106 L125 127 L134 87 L103 59 L144 56 Z" fill="url(#${goldGrad})"/>
-      ${photoUrl ? `
-        <image href="${photoUrl}" x="124" y="129" width="72" height="72" clip-path="url(#sowPhotoClip)" preserveAspectRatio="xMidYMid slice" />
-      ` : `
-        <circle cx="160" cy="165" r="36" fill="url(#${greenGrad})"/>
-        <path d="M92 262 Q98 207 160 207 Q222 207 228 262 Z" fill="url(#${greenGrad})"/>
-      `}
-      <g fill="url(#${goldGrad})">
-        <path d="M62 248 Q22 180 56 118 Q38 180 76 238 Z"/>
-        <path d="M258 248 Q298 180 264 118 Q282 180 244 238 Z"/>
-        <ellipse cx="50" cy="168" rx="9" ry="20" transform="rotate(-35 50 168)"/>
-        <ellipse cx="58" cy="206" rx="9" ry="20" transform="rotate(-55 58 206)"/>
-        <ellipse cx="270" cy="168" rx="9" ry="20" transform="rotate(35 270 168)"/>
-        <ellipse cx="262" cy="206" rx="9" ry="20" transform="rotate(55 262 206)"/>
-      </g>
-    </svg>
-  `;
-  return svg.trim();
+  __starOfWeekLoading[school] = true;
+  try{
+    const resp = await fetch('/api/star-of-week/' + encodeURIComponent(school));
+    if(!resp.ok) return { ok: false, changed: false };
+    const j = await resp.json();
+    if(j && j.ok){
+      __starOfWeekLastFetch[school] = Date.now();
+      const prevStarSerialized = JSON.stringify(__starOfWeekCache[school] || null);
+      const incomingStar = (j.star && j.star.name) ? j.star : null;
+      const nextStarSerialized = JSON.stringify(incomingStar);
+      const starChanged = prevStarSerialized !== nextStarSerialized;
+
+      if(incomingStar){
+        __starOfWeekCache[school] = incomingStar;
+        try { localStorage.setItem('nibras_starOfWeek_' + school, JSON.stringify(incomingStar)); } catch(e){}
+        const d = loadDB();
+        if(d && d.starOfWeek?.name !== incomingStar.name){ d.starOfWeek = incomingStar; saveDB(d); }
+      } else {
+        // إذا كانت النجمة ملغاة (null) من الخادم: تفريغ الكاش ومسح localStorage وقاعدة البيانات المحلية
+        delete __starOfWeekCache[school];
+        try { localStorage.removeItem('nibras_starOfWeek_' + school); } catch(e){}
+        const d = loadDB();
+        if(d && d.starOfWeek){ delete d.starOfWeek; saveDB(d); }
+      }
+
+      // تحديث سجل النجمات السابقات دائماً حتى لو كانت النجمة الحالية ملغاة
+      let historyChanged = false;
+      if(Array.isArray(j.history)){
+        const prevHistSerialized = localStorage.getItem('nibras_starOfWeekHistory_' + school) || '[]';
+        const nextHistSerialized = JSON.stringify(j.history);
+        historyChanged = prevHistSerialized !== nextHistSerialized;
+        try { localStorage.setItem('nibras_starOfWeekHistory_' + school, nextHistSerialized); } catch(e){}
+        const d = loadDB();
+        if(d && historyChanged){ d.starOfWeekHistory = j.history; saveDB(d); }
+      }
+
+      const changed = starChanged || historyChanged;
+      return { ok: true, changed, star: incomingStar, history: j.history || [] };
+    }
+  }catch(e){
+    console.warn('[starOfWeek load]', e);
+  }finally{
+    __starOfWeekLoading[school] = false;
+  }
+  return { ok: false, changed: false };
 }
+function getStarOfWeek(){
+  try {
+    const school = getActiveSchool();
+    if(__starOfWeekCache[school] !== undefined) return __starOfWeekCache[school];
+    const raw = localStorage.getItem('nibras_starOfWeek_' + school);
+    if(raw){ try { const o = JSON.parse(raw); if(o && o.name) return o; }catch(e){} }
+    const d = loadDB();
+    return (d && d.starOfWeek && d.starOfWeek.name) ? d.starOfWeek : null;
+  } catch(e){ return null; }
+}
+function setStarOfWeekPrompt(){
+  const cur = getStarOfWeek();
+  const name = prompt('اسم نجمة الأسبوع:', cur ? (cur.name || '') : '');
+  if(name === null) return;
+  const trimmed = String(name).trim();
+  if(!trimmed){ alert('الاسم مطلوب'); return; }
+  const school = getActiveSchool();
+  const d = loadDB();
+  const newStar = { name: trimmed, setBy: (currentUser()||{}).name || (currentUser()||{}).username || '', setAt: Date.now() };
+  d.starOfWeek = newStar;
+  saveDB(d);
+  __starOfWeekCache[school] = newStar;
+  __starOfWeekLastFetch[school] = Date.now();
+  try { localStorage.setItem('nibras_starOfWeek_' + school, JSON.stringify(newStar)); } catch(e){}
+  fetch('/api/star-of-week/' + encodeURIComponent(school), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ star: newStar, history: d.starOfWeekHistory || [] })
+  }).catch(() => {});
+  __syncSchedule(school, 0);
+  renderApp();
+  alert('تم تعيين "' + trimmed + '" كنجمة الأسبوع ⭐');
+}
+function clearStarOfWeek(){
+  const school = getActiveSchool();
+  const d = loadDB();
+  delete d.starOfWeek;
+  saveDB(d);
+  delete __starOfWeekCache[school];
+  __starOfWeekLastFetch[school] = Date.now();
+  try { localStorage.removeItem('nibras_starOfWeek_' + school); } catch(e){}
+  fetch('/api/star-of-week/' + encodeURIComponent(school), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ star: null, history: d.starOfWeekHistory || [] })
+  }).catch(() => {});
+  __syncSchedule(school, 0);
+  renderApp();
+}
+let starPhotoBase64 = null;
+function previewStarPhoto(input){
+  const file = input.files[0];
+  if(!file) return;
+  if(file.size > 2*1024*1024){ alert('الحجم الأقصى 2 ميجا'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    starPhotoBase64 = e.target.result;
+    if(starDraft) starDraft.photo = starPhotoBase64;
+    const preview = document.getElementById('starPhotoPreview');
+    const hint = document.getElementById('starPhotoHint');
+    if(preview){ preview.src = starPhotoBase64; preview.style.display = ''; }
+    if(hint) hint.style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+async function saveStarOfWeek(){
+  const name = (starDraft && starDraft.name !== undefined) ? starDraft.name : ((document.getElementById('starNameInput')||{}).value || '');
+  const className = (starDraft && starDraft.className !== undefined) ? starDraft.className : ((document.getElementById('starClassInput')||{}).value || '');
+  const week = (starDraft && starDraft.week !== undefined) ? starDraft.week : ((document.getElementById('starWeekInput')||{}).value || '');
+  const reason = (starDraft && starDraft.reason !== undefined) ? starDraft.reason : ((document.getElementById('starReasonInput')||{}).value || '');
+  const trimmed = String(name).trim();
+  if(!trimmed){ alert('اسم الطالبة مطلوب'); return; }
+  const d = loadDB();
+  const school = getActiveSchool();
+  if(d.starOfWeek && d.starOfWeek.name){
+    if(!Array.isArray(d.starOfWeekHistory)) d.starOfWeekHistory = [];
+    d.starOfWeekHistory.push(Object.assign({}, d.starOfWeek));
+  }
+  const newStar = {
+    name: trimmed,
+    className: String(className).trim(),
+    week: String(week).trim(),
+    reason: String(reason).trim(),
+    photo: starPhotoBase64 || (starDraft && starDraft.photo) || (d.starOfWeek ? d.starOfWeek.photo : null),
+    setBy: (currentUser()||{}).name || (currentUser()||{}).username || '',
+    setAt: Date.now(),
+  };
+  d.starOfWeek = newStar;
+  starPhotoBase64 = null;
+  starDraft = null;
+  isStarFormDirty = false;
+  saveDB(d);
+  try { localStorage.setItem('nibras_starOfWeek_' + school, JSON.stringify(newStar)); } catch(e){}
+  try { localStorage.setItem('nibras_starOfWeekHistory_' + school, JSON.stringify(d.starOfWeekHistory)); } catch(e){}
+  __starOfWeekCache[school] = newStar;
+  __starOfWeekLastFetch[school] = Date.now();
 
+  try {
+    const resp = await fetch('/api/star-of-week/' + encodeURIComponent(school), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ star: newStar, history: d.starOfWeekHistory })
+    });
+    if(resp.ok){
+      __starOfWeekCache[school] = newStar;
+      __starOfWeekLastFetch[school] = Date.now();
+    } else {
+      console.warn('[starOfWeek save] server returned', resp.status);
+    }
+  } catch(e) { console.warn('[starOfWeek save to server]', e); }
+  __syncSchedule(school, 0);
+  renderApp();
+  alert('تم اعتماد "' + trimmed + '" كنجمة الأسبوع ⭐');
+}
+async function clearStarOfWeekConfirm(){
+  if(!confirm('إلغاء نجمة الأسبوع الحالية؟ (ستُحفظ في السجل)')) return;
+  const d = loadDB();
+  const school = getActiveSchool();
+  if(d.starOfWeek && d.starOfWeek.name){
+    if(!Array.isArray(d.starOfWeekHistory)) d.starOfWeekHistory = [];
+    d.starOfWeekHistory.push(Object.assign({}, d.starOfWeek));
+  }
+  delete d.starOfWeek;
+  starDraft = null;
+  isStarFormDirty = false;
+  saveDB(d);
+  try { localStorage.removeItem('nibras_starOfWeek_' + school); } catch(e){}
+  try { localStorage.setItem('nibras_starOfWeekHistory_' + school, JSON.stringify(d.starOfWeekHistory)); } catch(e){}
+  delete __starOfWeekCache[school];
+  __starOfWeekLastFetch[school] = Date.now();
+
+  try {
+    const resp = await fetch('/api/star-of-week/' + encodeURIComponent(school), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ star: null, history: d.starOfWeekHistory })
+    });
+    if(resp.ok){
+      delete __starOfWeekCache[school];
+      __starOfWeekLastFetch[school] = Date.now();
+    }
+  } catch(e) { console.warn('[starOfWeek delete from server]', e); }
+  __syncSchedule(school, 0);
+  renderApp();
+  alert('تم إلغاء نجمة الأسبوع');
+}
 function renderStarOfWeek(){
   const d = loadDB();
   const user = currentUser();
@@ -14998,8 +15133,12 @@ function renderStarOfWeek(){
 
   const currentStar = getStarOfWeek();
   const history = (function(){ try{ const raw = localStorage.getItem('nibras_starOfWeekHistory_' + getActiveSchool()); if(raw){ const o = JSON.parse(raw); if(Array.isArray(o)) return o; } }catch(e){} const d = loadDB(); return Array.isArray(d.starOfWeekHistory) ? d.starOfWeekHistory : []; })();
-  // Load from server in background
-  if(!window.__starLoadTriggered){ window.__starLoadTriggered = true; __starOfWeekLoad(getActiveSchool()).then(() => { window.__starLoadTriggered = false; renderApp(); }); }
+  // Load from server in background مع منع الحلقة المفرغة وحظر إعادة الرسم أثناء التحرير
+  __starOfWeekLoad(getActiveSchool()).then((res) => {
+    if(!res || !res.changed) return;
+    if(isStarFormDirty) return; // حظر إعادة الرسم إذا كان المستخدم يكتب حالياً
+    if((location.hash || '').indexOf('#/star-of-week') === 0) renderApp();
+  });
 
   const avatarOf = (name) => {
     if(!name) return '⭐';
@@ -15012,89 +15151,91 @@ function renderStarOfWeek(){
     catch(e){ return new Date(ts).toLocaleDateString(); }
   };
 
-  // Main card using StarOfWeekIcon.svg
   let mainCardHtml = '';
   if(currentStar && currentStar.name){
     const photoHtml = currentStar.photo
       ? `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:72px;height:72px;border-radius:50%;overflow:hidden;border:3px solid #f59e0b;box-shadow:0 2px 8px rgba(0,0,0,.2);">
            <img src="${escapeHtml(currentStar.photo)}" style="width:100%;height:100%;object-fit:cover;" />
          </div>`
-      : `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#176344,#063B29);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#fff;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.2);">
+      : `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#db2777,#9d174d);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#fff;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.2);">
            ${escapeHtml(avatarOf(currentStar.name))}
          </div>`;
     mainCardHtml = `
       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:24px;padding:0;box-shadow:0 10px 40px rgba(0,0,0,.08);overflow:hidden;margin-bottom:32px;">
-        <div style="height:8px;background:linear-gradient(90deg,#176344,#f59e0b,#176344);"></div>
+        <div style="height:8px;background:linear-gradient(90deg,#db2777,#f59e0b,#db2777);"></div>
         <div style="padding:32px 24px;text-align:center;">
           <div style="position:relative;display:inline-block;margin-bottom:20px;">
             <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:200px;height:200px;display:block;" />
             ${photoHtml}
           </div>
           <div style="display:inline-block;padding:6px 20px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border-radius:24px;font-size:13px;font-weight:800;margin-bottom:16px;box-shadow:0 3px 10px rgba(245,158,11,.3);letter-spacing:.5px;">🏆 نجمة الأسبوع</div>
-          <h2 style="font-size:28px;font-weight:900;color:#14532d;margin:0 0 4px;line-height:1.3;">${escapeHtml(currentStar.name)}</h2>
-        <div style="font-size:14px;font-weight:700;color:#24577A;margin-bottom:8px;">طالبة متميزة ومتفوقة ومثابرة</div>
-          ${currentStar.className ? `<div style="font-size:15px;color:#166534;font-weight:600;margin-bottom:4px;">${escapeHtml(currentStar.className)}</div>` : ''}
+          <h2 style="font-size:28px;font-weight:900;color:#831843;margin:0 0 4px;line-height:1.3;">${escapeHtml(currentStar.name)}</h2>
+          <div style="font-size:14px;font-weight:700;color:#9d174d;margin-bottom:8px;">طالبة متميزة ومتفوقة ومثابرة</div>
+          ${currentStar.className ? `<div style="font-size:15px;color:#be185d;font-weight:600;margin-bottom:4px;">${escapeHtml(currentStar.className)}</div>` : ''}
           <div style="width:60%;height:3px;background:linear-gradient(90deg,transparent,#D6B35D,transparent);margin:8px auto 12px;border-radius:2px;"></div>
           <div style="font-size:12px;color:#6b7280;margin-bottom:16px;">قسم ${sectionLabel} · ${escapeHtml(currentStar.week || 'الأسبوع الحالي')}</div>
-          ${currentStar.reason ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:14px 18px;margin:0 auto 16px;max-width:520px;font-size:14px;color:#14532d;line-height:1.7;text-align:right;">📝 ${escapeHtml(currentStar.reason)}</div>` : ''}
-          <div style="font-size:15px;font-weight:700;color:#16a34a;margin-top:8px;">🎉 مبروك! نفخر بتميزك</div>
-          ${currentStar.setBy ? `<div style="font-size:11px;color:#9ca3af;margin-top:12px;">عيّنه: ${escapeHtml(currentStar.setBy)} · ${fmtDate(currentStar.setAt)}</div>` : ''}
+          ${currentStar.reason ? `<div style="background:#fdf2f8;border:1px solid #fbcfe8;border-radius:14px;padding:14px 18px;margin:0 auto 16px;max-width:520px;font-size:14px;color:#831843;line-height:1.7;text-align:right;">📝 ${escapeHtml(currentStar.reason)}</div>` : ''}
+          <div style="font-size:15px;font-weight:700;color:#db2777;margin-top:8px;">🎉 مبارك! نفخر بتميزكِ</div>
+          ${currentStar.setBy ? `<div style="font-size:11px;color:#9ca3af;margin-top:12px;">عيّنتها: ${escapeHtml(currentStar.setBy)} · ${fmtDate(currentStar.setAt)}</div>` : ''}
         </div>
       </div>`;
   } else {
     mainCardHtml = `
       <div style="background:#fff;border:2px dashed #d1d5db;border-radius:24px;padding:64px 24px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,.04);margin-bottom:32px;">
         <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:160px;height:160px;opacity:.35;margin-bottom:16px;" />
-        <div style="font-size:20px;font-weight:700;color:#9ca3af;margin-bottom:6px;">لم يتم اختيار نجم للأسبوع بعد</div>
-        <div style="font-size:14px;color:#d1d5db;">${canManage ? 'استخدم لوحة التحكم أدناه لتعيين نجم الأسبوع' : 'سيتم الإعلان قريباً'}</div>
+        <div style="font-size:20px;font-weight:700;color:#9ca3af;margin-bottom:6px;">لم يتم اختيار نجمة للأسبوع بعد</div>
+        <div style="font-size:14px;color:#d1d5db;">${canManage ? 'استخدمي لوحة التحكم أدناه لتعيين نجمة الأسبوع' : 'سيتم الإعلان قريباً'}</div>
       </div>`;
   }
 
-  // Management panel
   let manageHtml = '';
   if(canManage){
+    const draftName = (starDraft && starDraft.name !== undefined) ? starDraft.name : (currentStar ? currentStar.name || '' : '');
+    const draftClass = (starDraft && starDraft.className !== undefined) ? starDraft.className : (currentStar ? currentStar.className || '' : '');
+    const draftWeek = (starDraft && starDraft.week !== undefined) ? starDraft.week : (currentStar ? currentStar.week || '' : '');
+    const draftReason = (starDraft && starDraft.reason !== undefined) ? starDraft.reason : (currentStar ? currentStar.reason || '' : '');
+    const currentPhoto = (starDraft && starDraft.photo) || (currentStar && currentStar.photo) || null;
     manageHtml = `
       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:24px;margin-bottom:32px;box-shadow:0 2px 8px rgba(0,0,0,.04);">
-        <div style="font-size:18px;font-weight:800;color:#1e3a8a;margin-bottom:20px;display:flex;align-items:center;gap:8px;">⚙️ لوحة تحكم نجم الأسبوع</div>
+        <div style="font-size:18px;font-weight:800;color:#831843;margin-bottom:20px;display:flex;align-items:center;gap:8px;">⚙️ لوحة تحكم نجمة الأسبوع</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
           <div>
-            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">اسم الطالب</label>
-            <input id="starNameInput" class="input" style="width:100%;padding:11px;font-size:14px;border-radius:10px;" placeholder="اسم الطالب كاملاً" value="${escapeHtml(currentStar ? currentStar.name || '' : '')}" />
+            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">اسم الطالبة</label>
+            <input id="starNameInput" class="input" style="width:100%;padding:11px;font-size:14px;border-radius:10px;" placeholder="اسم الطالبة كاملاً" value="${escapeHtml(draftName)}" oninput="starDraft = starDraft || {}; starDraft.name = this.value; isStarFormDirty = true;" onchange="starDraft = starDraft || {}; starDraft.name = this.value;" />
           </div>
           <div>
             <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">الصف والفصل</label>
-            <input id="starClassInput" class="input" style="width:100%;padding:11px;font-size:14px;border-radius:10px;" placeholder="مثال: الثالث الثانوي — الفصل أ" value="${escapeHtml(currentStar ? currentStar.className || '' : '')}" />
+            <input id="starClassInput" class="input" style="width:100%;padding:11px;font-size:14px;border-radius:10px;" placeholder="مثال: الثالث الثانوي — الفصل أ" value="${escapeHtml(draftClass)}" oninput="starDraft = starDraft || {}; starDraft.className = this.value; isStarFormDirty = true;" onchange="starDraft = starDraft || {}; starDraft.className = this.value;" />
           </div>
         </div>
         <div style="margin-bottom:14px;">
           <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">الأسبوع</label>
-          <input id="starWeekInput" class="input" style="width:100%;padding:11px;font-size:14px;border-radius:10px;" placeholder="مثال: الأسبوع 5" value="${escapeHtml(currentStar ? currentStar.week || '' : '')}" />
+          <input id="starWeekInput" class="input" style="width:100%;padding:11px;font-size:14px;border-radius:10px;" placeholder="مثال: الأسبوع 5" value="${escapeHtml(draftWeek)}" oninput="starDraft = starDraft || {}; starDraft.week = this.value; isStarFormDirty = true;" onchange="starDraft = starDraft || {}; starDraft.week = this.value;" />
         </div>
         <div style="margin-bottom:14px;">
           <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">سبب الاختيار</label>
-          <textarea id="starReasonInput" class="input" style="width:100%;min-height:70px;resize:vertical;padding:11px;font-size:14px;border-radius:10px;" placeholder="مثال: تميز أكاديمي وسلوك إيجابي">${escapeHtml(currentStar ? currentStar.reason || '' : '')}</textarea>
+          <textarea id="starReasonInput" class="input" style="width:100%;min-height:70px;resize:vertical;padding:11px;font-size:14px;border-radius:10px;" placeholder="مثال: تميز أكاديمي وسلوك إيجابي" oninput="starDraft = starDraft || {}; starDraft.reason = this.value; isStarFormDirty = true;" onchange="starDraft = starDraft || {}; starDraft.reason = this.value;">${escapeHtml(draftReason)}</textarea>
         </div>
         <div style="margin-bottom:14px;">
-          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">صورة الطالب (اختياري)</label>
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">صورة الطالبة (اختياري)</label>
           <div style="border:2px dashed #d1d5db;border-radius:12px;padding:16px;text-align:center;cursor:pointer;background:#f9fafb;" onclick="document.getElementById('starPhotoInput').click()" id="starPhotoUploadArea">
-            <div id="starPhotoHint" style="color:#6b7280;font-size:13px;">📷 اضغط لرفع صورة (JPG, PNG — حد أقصى 2 ميجا)</div>
-            ${currentStar && currentStar.photo ? `<img id="starPhotoPreview" src="${escapeHtml(currentStar.photo)}" style="max-width:100%;max-height:140px;border-radius:12px;margin-top:8px;" />` : `<img id="starPhotoPreview" style="display:none;max-width:100%;max-height:140px;border-radius:12px;margin-top:8px;" />`}
+            <div id="starPhotoHint" style="color:#6b7280;font-size:13px;">📷 اضغطي لرفع صورة (JPG, PNG — حد أقصى 2 ميجا)</div>
+            ${currentPhoto ? `<img id="starPhotoPreview" src="${escapeHtml(currentPhoto)}" style="max-width:100%;max-height:140px;border-radius:12px;margin-top:8px;" />` : `<img id="starPhotoPreview" style="display:none;max-width:100%;max-height:140px;border-radius:12px;margin-top:8px;" />`}
           </div>
           <input type="file" id="starPhotoInput" accept="image/*" style="display:none" onchange="previewStarPhoto(this)" />
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <button class="btn-primary" style="flex:1;min-width:140px;padding:12px;font-size:14px;font-weight:700;border-radius:10px;" onclick="saveStarOfWeek()">✅ اعتماد ونشر</button>
-          ${currentStar ? `<button class="btn-secondary" style="flex:1;min-width:140px;padding:12px;font-size:14px;font-weight:700;border-radius:10px;" onclick="clearStarOfWeekConfirm()">🗑 إلغاء النجم</button>` : ''}
+          ${currentStar ? `<button class="btn-secondary" style="flex:1;min-width:140px;padding:12px;font-size:14px;font-weight:700;border-radius:10px;" onclick="clearStarOfWeekConfirm()">🗑 إلغاء النجمة</button>` : ''}
         </div>
       </div>`;
   }
 
-  // History section
   let historyHtml = '';
   if(history.length > 0){
     historyHtml = `
       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,.04);">
-        <div style="font-size:18px;font-weight:800;color:#1e3a8a;margin-bottom:20px;display:flex;align-items:center;gap:8px;">📜 سجل النجوم السابقين</div>
+        <div style="font-size:18px;font-weight:800;color:#831843;margin-bottom:20px;display:flex;align-items:center;gap:8px;">📜 سجل النجمات السابقات</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;">
           ${history.slice().reverse().map(h => {
             const av = h.photo
@@ -15115,7 +15256,7 @@ function renderStarOfWeek(){
   return `
     <div style="max-width:960px;margin:0 auto;padding:16px 8px;">
       <div style="text-align:center;margin-bottom:32px;">
-        <h1 style="font-size:32px;font-weight:900;color:#1e3a8a;margin:0 0 6px;letter-spacing:-.5px;">⭐ نجوم نبراس</h1>
+        <h1 style="font-size:32px;font-weight:900;color:#831843;margin:0 0 6px;letter-spacing:-.5px;">⭐ نجمات نبراس</h1>
         <p style="font-size:15px;color:#64748b;margin:0;font-weight:500;">نحتفي بالتميز ونصنع الإبداع</p>
       </div>
       ${mainCardHtml}
@@ -15323,8 +15464,8 @@ function saveAnnouncement(){
 /* تسجيل Service Worker للتثبيت والعمل دون اتصال — يعمل فقط عبر http/https */
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   window.addEventListener('load', function(){
-    try{ __starOfWeekLoad(getActiveSchool()).then(() => { try{ renderApp(); }catch(e){} }); }catch(e){}
-     try{ __attendanceRefreshRender(getActiveSchool()); }catch(e){}
+    try{ __activitiesLoad(getActiveSchool()).then((res) => { if(res && res.changed) try{ renderApp(); }catch(e){} }); }catch(e){}
+    try{ __starOfWeekLoad(getActiveSchool()).then((res) => { if(res && res.changed) try{ renderApp(); }catch(e){} }); }catch(e){}
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.

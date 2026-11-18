@@ -419,9 +419,9 @@ function computePointsTotals(data, cutDate) {
 function canDeleteNote(note, session) {
   if (!session || !session.user_id) return false;
   if (session.role === 'ADMIN') return true;
-  if (session.role !== 'TEACHER') return false;
+  if (session.role !== 'TEACHER' && !OWNER_ROLES.has(session.role)) return false;
   const owner = noteOwnerId(note);
-  return !!owner && owner === String(session.user_id);
+  return !!owner && owner === String(session.user_id).trim();
 }
 
 /**

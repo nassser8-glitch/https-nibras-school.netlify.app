@@ -237,7 +237,7 @@ function securityHeaders(req, res, next) {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   res.setHeader('Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.open-meteo.com; frame-src 'self' https://*.sharepoint.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://calendar.google.com https://www.islamicfinder.org https://www.bing.com");
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.open-meteo.com; frame-src 'self' https://*.sharepoint.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com");
   if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
   next();
 }
@@ -815,7 +815,7 @@ app.post('/api/auth/forgot-password', (req, res) => {
     // البريد الافتراضي للأنظمة (مثل @nibras.local أو @school.local) غير قابل للاستلام الفعلي:
     // نعرض الرمز على الشاشة مباشرة بدل محاولة إرسال إلى عنوان غير موجود.
     const FAKE_DOMAINS = /@(nibras|school|local|example|test)(\.|$)/i;
-    if (FAKE_DOMAINS.test(u.email)) {
+    if (!u.email || FAKE_DOMAINS.test(String(u.email))) {
       return res.json({ ok: true, code, expiresInMin: 10, fallback: true, names });
     }
     // إرسال الرمز إلى بريد المستخدم عبر SMTP (nassser8@gmail.com). إن لم يُضبط البريد: نعرضه في الاستجابة (وضع التطوير).
@@ -876,13 +876,15 @@ app.post('/api/auth/admin/create-user', requireAuth, (req, res) => {
     const studentId = req.body && req.body.studentId;
     if (!name || !PASSWORD_RE.test(pw) || !validRoleFor(req.session, role))
       return res.status(400).json({ error: 'invalid', min: PASSWORD_MIN });
-    if (!isStudent && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+      return res.status(400).json({ error: 'invalid_email' });
+    if (!isStudent && !email)
       return res.status(400).json({ error: 'invalid_email' });
     const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
     const id = studentId || ('id_' + crypto.randomBytes(6).toString('hex'));
     const preferred = String(req.body && req.body.username || '').trim();
     const username = await db.generateUsername(name, preferred || (isStudent ? name.replace(/\s+/g, '') : email.split('@')[0]));
-    const finalEmail = isStudent ? (email || (username + '@nibras.school')) : email;
+    const finalEmail = isStudent ? (email || null) : email;
     await db.insertUser({ id, school, name, email: finalEmail, username, password_hash: hash, plain_password: pw, role, active: true, first_login: !isStudent, granted: true, data: {} });
     const created = await db.userById(id);
     await appendSchoolUser(school, sendUser(created, null, 'ADMIN'));
@@ -900,18 +902,23 @@ app.post('/api/auth/admin/create-student', requireAuth, (req, res) => {
     const id = String(req.body && req.body.studentId || '').trim();
     const name = String(req.body && req.body.name || '').trim();
     const studentNo = String(req.body && req.body.studentNo || '').trim();
+    const gradeId = String(req.body && req.body.gradeId || '').trim();
+    const classId = String(req.body && req.body.classId || '').trim() || null;
     const username = String(req.body && req.body.username || '').trim();
     const password = String(req.body && req.body.password || '');
-    const classId = String(req.body && req.body.classId || '').trim() || null;
+    const email = String(req.body && req.body.email || '').trim().toLowerCase() || null;
     const guardianPhone = String(req.body && req.body.guardianPhone || '').trim().replace(/\D/g,'');
-    if (!id || !name || !studentNo || !username || !PASSWORD_RE.test(password))
-      return res.status(400).json({ error: 'invalid', min: PASSWORD_MIN });
+    if (!id || !name || !studentNo || !gradeId || !username)
+      return res.status(400).json({ error: 'invalid' });
+    if (!PASSWORD_RE.test(password))
+      return res.status(400).json({ error: 'weak_password', min: PASSWORD_MIN });
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+      return res.status(400).json({ error: 'invalid_email' });
     const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const result = await db.createStudentAccountAndRecord({
-      id, school, name, username, password, passwordHash: hash,
-      email: username + '@nibras.school',
+      id, school, name, username, password, passwordHash: hash, email,
       student: {
-        fullName: name, studentNo, classId, guardianName: '', guardianPhone: guardianPhone || '',
+        fullName: name, studentNo, gradeId, classId, guardianName: '', guardianPhone: guardianPhone || '',
         guardianPhoneAt: guardianPhone ? Date.now() : undefined,
         active: true, joinedAt: Date.now(),
       },
@@ -927,6 +934,8 @@ app.post('/api/auth/admin/create-student', requireAuth, (req, res) => {
       return res.status(409).json({ error: 'duplicate_student' });
     if (error && error.code === 'student_number_exists')
       return res.status(409).json({ error: 'student_number_exists' });
+    if (error && (error.code === 'grade_not_found' || error.code === 'class_not_found'))
+      return res.status(400).json({ error: error.code });
     fail(res)(error);
   });
 });
@@ -1456,45 +1465,97 @@ function mergeAdminMsgs(prev, incoming) {
 // تُستبدل نسخة الخادم ABSENT بموجب المفتاح id فيختفي الغياب بعد إعادة الفتح.
 // هنا نحمي سجلّ الحضور: نُبقي السجلّ الأعلى زمناً (_t) عند تعارض (نفس الطالبة/التاريخ)،
 // وآخر-كتابة-يفوز عند قيام من يكتب فعلياً. السجلات بلا _t تُعامل كزمن 0.
-function mergeAttendance(prev, incoming) {
+function mergeAttendance(prev, incoming, session) {
   if (!Array.isArray(prev)) prev = [];
   if (!Array.isArray(incoming)) incoming = [];
   const keyOf = r => (r && typeof r === 'object' && r.id) ? r.id : '__anon:' + JSON.stringify(r);
   const tOf = r => (r && typeof r === 'object' && typeof r._t === 'number') ? r._t : 0;
-  // الغياب/التأخر «معلومات حاسمة» — لا يمحوها تسجيلُ حُضورٍ اعتيادي (افتراضي/خطأ) من معلمٍ آخر
-  // في الفصول المشتركة (عدة معلمين يفتحون نفس قائمة الطلاب). PRESENT أقل إفادة من ABSENT/LATE.
+  // الغياب/التأخر «معلومات حاسمة» — لا يمحوها تسجيلُ حُضورٍ اعتيادي (افتراضي/خطأ) من معلمة أخرى
   const inf = r => (r && typeof r === 'object' && (r.status === 'ABSENT' || r.status === 'LATE')) ? 1 : 0;
-  // الغيابُ «المعلَّق» (سجّله معلم واحد فقط — بانتظار معلمٍ ثانٍ): سجلٌّ افتراضي قابل للتصحيح
-  // من صاحبِ التسجيل أو مديرٍ مخوَّل — الحاضرُ الأحدث زمناً (إلغاءٌ صريح) يهزمه، فيُحفَظ
-  // الإلغاءُ حتى مع دمج أجهزة/معلمين (لا تُعاد الطالبةُ غائبةً بعد محاولة الحذف). أما
-  // الغيابُ المؤكَّد (مؤكِّدان فعليان أو سجلٌ قديم بشارة LEADY) فيبقى يفوز على الحاضر دائماً.
+
+  const LEGACY_ABS = '__legacy_abs__';
+  const MGR_ABS = '__mgr_abs__';
+  const cleanClerk = c => (c != null ? String(c).trim() : '');
+
   const clerkCount = r => {
     if (!r || typeof r !== 'object') return 0;
     if (!Array.isArray(r.absClerks)) return r.status === 'ABSENT' ? 1 : 0; // قديم بلا قائمة = مؤكد
-    return r.absClerks.filter(c => c && c !== LEGACY_ABS).length;
+    const set = new Set();
+    for (const c of r.absClerks) {
+      const s = cleanClerk(c);
+      if (s && s !== LEGACY_ABS && s !== MGR_ABS) set.add(s);
+    }
+    return set.size;
   };
-  const __attIsPending = r => !!(r && typeof r === 'object' && r.status === 'ABSENT'
-    && Array.isArray(r.absClerks) && r.absClerks.indexOf(LEGACY_ABS) === -1 && clerkCount(r) < 2);
-  // اختيار السجل الفائز: الغائب/المتأخر على الحاضر مهما تقدم زمنه، وإلا الأعلى _t
+
+  const isPrivilegedRole = role => role === 'ADMIN' || role === 'AGENT' || role === 'SCHOOL_AGENT';
+
+  const canOverrideAbsence = (present, absent) => {
+    if (!absent || absent.status !== 'ABSENT') return true;
+    const clerks = (Array.isArray(absent.absClerks) ? absent.absClerks : []).map(cleanClerk).filter(Boolean);
+    const hasLegacy = clerks.includes(LEGACY_ABS) || !Array.isArray(absent.absClerks);
+    const hasMgr = clerks.includes(MGR_ABS);
+
+    const presentBy = cleanClerk(present && present.createdBy);
+    const absentBy = cleanClerk(absent && absent.createdBy);
+    const sessionBy = (session && session.user_id != null) ? cleanClerk(session.user_id) : '';
+    const sessionRole = session && session.role ? String(session.role) : '';
+    const isSessionAdmin = isPrivilegedRole(sessionRole);
+    const isPresentAdmin = (present && present._byAdmin === true) || isSessionAdmin;
+
+    // 1) الإدارة المعتمدة (ADMIN, AGENT, SCHOOL_AGENT) تملك الصلاحية الإدارية لفك وتعديل أي غياب:
+    if (isPresentAdmin) return true;
+
+    // 2) السجلات القديمة المستوردة أو المعتمدة إدارياً: لا يعدلها إلا الإدارة:
+    if (hasLegacy || hasMgr) return false;
+
+    // 3) المعلمة العادية: يجب أن تكون صاحبة الحاضر هي نفسها منشئة الغياب أو إحدى مؤكداته في absClerks
+    const isAuthor = (presentBy && (presentBy === absentBy || clerks.includes(presentBy)))
+      || (sessionBy && (sessionBy === absentBy || clerks.includes(sessionBy)));
+    if (!isAuthor) return false;
+
+    // 4) إذا كان مؤكداً من معلمتين اثنتين، لا تلغيه معلمة واحدة منفردة:
+    const realClerks = new Set(clerks.filter(c => c !== LEGACY_ABS && c !== MGR_ABS));
+    if (realClerks.size >= 2) return false;
+
+    return true;
+  };
+
+  // اختيار السجل الفائز: الغائب/المتأخر على الحاضر مهما تقدم زمنه، إلا بإلغاء صريح مصرح به
   const better = (a, b) => {
     if (inf(a) !== inf(b)) {
-      // استثناء الإلغاء الصريح: حضورٌ أحدث زمناً يهزم غياباً «معلَّقاً» أقدم (معلم واحد فقط)
       const absentSide = inf(a) === 1 ? a : b;
       const presentSide = absentSide === a ? b : a;
-      if (__attIsPending(absentSide) && (typeof presentSide._t === 'number') && (typeof absentSide._t === 'number') && presentSide._t > absentSide._t) return presentSide;
+      if (canOverrideAbsence(presentSide, absentSide) && (typeof presentSide._t === 'number') && (typeof absentSide._t === 'number') && presentSide._t > absentSide._t) {
+        return presentSide;
+      }
       return inf(a) > inf(b) ? a : b;
     }
     return tOf(a) >= tOf(b) ? a : b;
   };
-  // اتحاد قوائم مؤكِّدي الغياب: عند تطابق سجلّي غياب لنفس الطالب/اليوم (من معلّمين/أجهزة مختلفة)
-  // ندمج absClerks (المجموعات) بدل إبقاء الفائز وحده — فلا تضيع تأكيدات تُجمِّع الغياب.
-  const LEGACY_ABS = '__legacy_abs__';
+
+  // اتحاد قوائم مؤكِّدي الغياب مع توحيد المعرفات النصية بدقة ومنع التكرار
   const unionClerks = (a, b) => {
     const win = better(a, b);
-    if (!win || win.status !== 'ABSENT') return win;
+    if (!win) return win;
+    if (win.status === 'LATE') {
+      if (!win.lateMinutes && (a.lateMinutes || b.lateMinutes)) {
+        win.lateMinutes = a.lateMinutes || b.lateMinutes;
+      }
+      return win;
+    }
+    if (win.status !== 'ABSENT') return win;
     if (!Array.isArray(a.absClerks) && !Array.isArray(b.absClerks)) return win;
+
+    const seen = new Set();
     const clerks = [];
-    const add = c => { if (c && clerks.indexOf(c) === -1) clerks.push(c); };
+    const add = c => {
+      const s = cleanClerk(c);
+      if (s && !seen.has(s)) {
+        seen.add(s);
+        clerks.push(s);
+      }
+    };
     [a, b].forEach(r => {
       if (!r || r.status !== 'ABSENT') return;
       if (Array.isArray(r.absClerks)) r.absClerks.forEach(add);
@@ -1989,52 +2050,6 @@ async function normalizeTeacherDuplicates(school, data) {
   return { remapped: 0, dropped };
 }
 
-/* حارس الاستمرارية: الكتابة الواردة لا تُسقط طالبات أو حضوراً أو ملاحظات كانت محفوظة
-   على الخادم (نسخة قديمة/ناقصة من جهاز). الحذف المقصود محفوظ: الحذف الناعم بعلامة deleted
-   داخل السجل نفسه، والحذف النهائي مسجّل في _blockedStudents/_blockedClasses فلا يُعاد السجل.
-   ولا يُعاد فتح فصل فيه طالبات بعلامة محذوف من نسخة قديمة. */
-function protectContinuity(prevData, clean) {
-  const restored = {};
-  if (!prevData || typeof prevData !== 'object' || !clean || typeof clean !== 'object') return restored;
-  const blockedStudents = new Set((Array.isArray(prevData._blockedStudents) ? prevData._blockedStudents : []).map(String));
-  const blockedClasses = new Set((Array.isArray(prevData._blockedClasses) ? prevData._blockedClasses : []).map(String));
-  const keyOf = (r) => (r.id != null ? 'id:' + r.id : 'sd:' + (r.studentId || '') + '|' + (r.date || ''));
-  const keep = (key, isBlocked) => {
-    const prevArr = Array.isArray(prevData[key]) ? prevData[key] : [];
-    const curArr = Array.isArray(clean[key]) ? clean[key] : [];
-    const have = new Set(curArr.filter(Boolean).map(keyOf));
-    const missing = prevArr.filter(r => r && typeof r === 'object' && !have.has(keyOf(r)) && !(isBlocked && isBlocked(r)));
-    if (missing.length) { clean[key] = curArr.concat(missing); restored[key] = missing.length; }
-  };
-  keep('students', (s) => blockedStudents.has(String(s.id)));
-  keep('notes', (n) => blockedStudents.has(String(n.studentId)));
-  keep('attendance', (a) => blockedStudents.has(String(a.studentId)));
-  // مستخدمو القسم (المعلمات/الإدارة) لا يُسقطون من نسخة قديمة أو ناقصة
-  if (Array.isArray(prevData.users) && Array.isArray(clean.users)) {
-    const haveU = new Set(clean.users.filter(Boolean).map(u => String(u.id)));
-    const missingU = prevData.users.filter(u => u && u.id != null && !haveU.has(String(u.id)) && u.role !== 'STUDENT');
-    if (missingU.length) { clean.users = clean.users.concat(missingU.map(u => JSON.parse(JSON.stringify(u)))); restored.users = missingU.length; }
-  }
-  const activeClassIds = new Set((Array.isArray(prevData.students) ? prevData.students : [])
-    .filter(s => s && s.classId && !s.deleted).map(s => String(s.classId)));
-  if (Array.isArray(prevData.classes) && Array.isArray(clean.classes)) {
-    // 1) استعادة فصول مفقودة (حسب id) من النسخة المخزنة
-    const have = new Set(clean.classes.filter(Boolean).map(c => String(c.id)));
-    const missingClasses = prevData.classes.filter(p => p && p.id != null && !have.has(String(p.id)) && !blockedClasses.has(String(p.id)));
-    if (missingClasses.length) { clean.classes = clean.classes.concat(missingClasses.map(c => JSON.parse(JSON.stringify(c)))); restored.classesRestored = missingClasses.length; }
-    // 2) فصل فيه طالبات نشطات لا يُعلَّم محذوفاً بنسخة قديمة ( blocked/tombstoned ones honored)
-    let reopened = 0;
-    clean.classes = clean.classes.map(c => {
-      if (!c || !c.id) return c;
-      if (blockedClasses.has(String(c.id))) return c; // محجوب نهائياً stays deleted
-      if (activeClassIds.has(String(c.id)) && c.deleted) { reopened++; return Object.assign({}, c, { deleted: false }); }
-      return c;
-    });
-    if (reopened) restored.classesReopened = reopened;
-  }
-  return restored;
-}
-
 app.put('/api/db/:school', requireAuth, (req, res) => {
   (async () => {
     // تدقيق الرفض: كل ردٍّ غير ناجح على هذا المسار يُسجَّل بسببه ومَن صاحبه،
@@ -2063,8 +2078,6 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     let data = req.body && req.body.data;
     if (!data || typeof data !== 'object' || Array.isArray(data))
       return res.status(400).json({ error: 'invalid_payload' });
-    // طبقات data المتداخلة الموروثة من عميل قديم لا تُخزَّن: تُدمج حضورها وتُحذف.
-    data = db.unwrapSchoolData(data);
     for (const k of ['users','grades','classes','students','attendance','notes','transfers','maintenance']) {
       if (!Array.isArray(data[k])) return res.status(400).json({ error: 'invalid_section:' + k });
     }
@@ -2086,9 +2099,6 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     } catch (e) { console.warn('[normalizeTeacherDuplicates]', e.message); }
     const prev = await db.getSchoolData(school);
     const prevUsers = (prev.data && Array.isArray(prev.data.users)) ? prev.data.users : [];
-    if ((!data.users || data.users.length === 0) && prevUsers.length > 0) {
-      return res.status(409).json({ error: 'wipe_blocked', reason: 'users' });
-    }
     // ===== حارس ضد المسح الفارغ (wipe-guard) =====
     // متصفح/جهاز جديد يفتح التطبيق أول مرة يكون تخزينه المحلي فارغاً، ومع خوارزميات
     // الوقت القديمة يُرى «أحدث» فيدفع القسم فارغاً فيمسح قسمَ المدرسة كله (users=students=classes=0).
@@ -2190,20 +2200,30 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         }
         // قسم الحضور يُدمج بمنطق خاص (last-write-wins حسب studentId|date) لكافة الأدوار
         // حتى يبقى الغياب المسجَّل قائماً ولا يختفي بأي نسخة قديمة من أي دور.
-        if (key === 'attendance') { merged[key] = mergeAttendance(a, b); continue; }
+        if (key === 'attendance') { merged[key] = mergeAttendance(a, b, req.session); continue; }
         if (key === 'activities') { merged[key] = mergeActivities(a, b); continue; }
         if (key === 'adminMsgs') { merged[key] = mergeAdminMsgs(a, b); continue; }
-        // نجم الأسبوع: last-write-wins (النسخة الأحدث حسب setAt) — لا يُدمج كجدول
+        // نجمة الأسبوع: last-write-wins (النسخة الأحدث حسب setAt) — لا تُدمج كجدول
         if (key === 'starOfWeek') {
+          const canManageStar = (role === 'ADMIN' || role === 'AGENT' || role === 'COUNSELOR');
+          if (b === null && canManageStar) {
+            merged[key] = null;
+            continue;
+          }
           const pa = a && typeof a === 'object' ? a : null;
           const pb = b && typeof b === 'object' ? b : null;
-          if (pa && pb) merged[key] = ( (pb.setAt||0) >= (pa.setAt||0) ) ? JSON.parse(JSON.stringify(pb)) : JSON.parse(JSON.stringify(pa));
-          else if (pb) merged[key] = JSON.parse(JSON.stringify(pb));
-          else if (pa) merged[key] = JSON.parse(JSON.stringify(pa));
-          else merged[key] = b || a || null;
+          if (pa && pb) {
+            merged[key] = ( (pb.setAt||0) >= (pa.setAt||0) ) ? JSON.parse(JSON.stringify(pb)) : JSON.parse(JSON.stringify(pa));
+          } else if (pb) {
+            merged[key] = JSON.parse(JSON.stringify(pb));
+          } else if (pa) {
+            merged[key] = (canManageStar && b === null) ? null : JSON.parse(JSON.stringify(pa));
+          } else {
+            merged[key] = null;
+          }
           continue;
         }
-        // سجل النجوم السابقين: اتحاد حسب setAt (لا حذف)
+        // سجل النجمات السابقات: اتحاد حسب setAt (لا حذف)
         if (key === 'starOfWeekHistory') {
           const pa = Array.isArray(a) ? a : [];
           const pb = Array.isArray(b) ? b : [];
@@ -2260,7 +2280,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
           if (!jsonEqual(prev.data.activities, cf.activities)) cf.activities = mergeActivities(prev.data.activities, cf.activities);
           if (!jsonEqual(prev.data.classes, cf.classes)) cf.classes = mergeClasses(prev.data.classes, cf.classes);
           if (!jsonEqual(prev.data.timetable, cf.timetable)) cf.timetable = mergeTimetable(prev.data.timetable, cf.timetable);
-          if (!jsonEqual(prev.data.attendance, cf.attendance)) cf.attendance = mergeAttendance(prev.data.attendance, cf.attendance);
+          if (!jsonEqual(prev.data.attendance, cf.attendance)) cf.attendance = mergeAttendance(prev.data.attendance, cf.attendance, req.session);
           // الرسائل/الإعلان/الاقتراحات: تُدمج دائماً حتى مع استبدال المدير الكامل،
           // حتى لا يمسح حفظٌ إداري على جهاز قديم رسائلَ وصلت حديثاً للمعلمين من جهات أخرى.
           if (Array.isArray(prev.data.adminMsgs) && !jsonEqual(prev.data.adminMsgs, cf.adminMsgs)) cf.adminMsgs = mergeAdminMsgs(prev.data.adminMsgs, cf.adminMsgs);
@@ -2347,6 +2367,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     try {
       const prevTransfers = prev.data && Array.isArray(prev.data.transfers) ? prev.data.transfers : [];
       if (Array.isArray(data.transfers)) {
+        data.transfers = transferPrivacy.enforceTransferOwners(data.transfers, req.session, prevTransfers);
         const tDel = transferPrivacy.enforceTransferDeleteRights(data.transfers, req.session, prevTransfers);
         data.transfers = tDel.transfers;
         for (const bad of tDel.blocked) {
@@ -2355,7 +2376,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
         }
         if (Array.isArray(tDel.blocked) && tDel.blocked.length) droppedSections.push('transfers');
       }
-    } catch (e) { console.warn('[transfer-delete-rights]', e.message); }
+    } catch (e) { console.warn('[transfer-privacy]', e.message); }
 
     // حماية «بداية النقاط»: أي ملاحظة سلبية (points < 0) بتاريخ قبل بداية العام الدراسي تُحذف
     // حتى لو حملها جهاز قديم لا يزال يحتوي نسخة كاملة — تمنع عودة النقاط السلبية المحذوفة.
@@ -2392,8 +2413,6 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     } catch (e) { console.warn('[blockedStudents]', e.message); }
 
     // تنظيف دفاعي: لا تُخزن أي بيانات اعتماد في نسخة البيانات + حقن أسماء المستخدمين الحالية حتى لا تضيع
-    // إزالة حسابات الطالبات من users (أُدخلت خطأً من أجهزة): school_data.users يحتوي المعلمات/الإدارة فقط.
-    if (Array.isArray(data.users)) data.users = data.users.filter(u => u && u.role !== 'STUDENT');
     const clean = JSON.parse(JSON.stringify(data));
     // تصحيح أسماء العائلة المثبّتة قبل التخزين (فيصحّح جدول الحسابات عبر reconcileUserTable)
     fixUsersNames(clean.users);
@@ -2411,15 +2430,6 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     // . _ - فقط، بلا مسافات.
     try {
       const prevMapU = new Map((prevUsers || []).map(u => [u.id, String(u.username || '').trim().toLowerCase()]));
-      // جدول الحسابات مصدر الحقيقة لأسماء المستخدمين: الحساب الموجود فيه باسمه نفسه يُعد غير متغيّر
-      // (حتى لو غاب عن نسخة القسم)، فلا يُرفض الحفظ بسبب اسم قديم لطالبة مثلاً.
-      const hasAccountNames = (clean.users || []).some(nu => nu && !prevMapU.has(nu.id));
-      if (hasAccountNames) {
-        const accRows = await db.pool.query('SELECT id, username FROM users WHERE school = $1', [school]);
-        for (const r of accRows.rows) {
-          if (!prevMapU.has(r.id)) prevMapU.set(r.id, String(r.username || '').trim().toLowerCase());
-        }
-      }
       const seenLocal = new Set();
       for (const nu of (clean.users || [])) {
         const uname = String((nu && nu.username) || '').trim().toLowerCase();
@@ -2544,8 +2554,6 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
 
     // لا تُكتب نسخة بلا قسم: المفتاح الناقص يُملأ من نسخة الخادم السابقة أو
     // بقائمة فارغة، فيتوقف زوال المفتاح من الجذر (كان يُسقط شاشات العميل).
-    const continuity = protectContinuity(prev ? prev.data : null, clean);
-    if (Object.keys(continuity).length) console.warn('[continuity]', school, JSON.stringify(continuity));
     ensureDataSections(clean, prev ? prev.data : null);
 
     let putRes = await db.setSchoolData(school, clean, nextTs);
@@ -2639,7 +2647,6 @@ app.put('/api/settings/:school', requireAuth, (req, res) => {
   })().catch(fail(res));
 });
 
-
 /* ===== نجمة الأسبوع — API مخصص (حفظ واسترجاع من قاعدة البيانات) ===== */
 app.get('/api/star-of-week/:school', requireAuth, (req, res) => {
   (async () => {
@@ -2647,8 +2654,14 @@ app.get('/api/star-of-week/:school', requireAuth, (req, res) => {
     if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
     if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
     const settings = await db.getSchoolSettings(school);
-    const star = (settings && settings.starOfWeek) ? settings.starOfWeek : null;
-    const history = (settings && Array.isArray(settings.starOfWeekHistory)) ? settings.starOfWeekHistory : [];
+    let star = (settings && settings.starOfWeek) ? settings.starOfWeek : null;
+    let history = (settings && Array.isArray(settings.starOfWeekHistory)) ? settings.starOfWeekHistory : [];
+    if (!star) {
+      const rec = await db.getSchoolData(school);
+      const sd = (rec && rec.data) ? rec.data : {};
+      if (sd.starOfWeek && sd.starOfWeek.name) star = sd.starOfWeek;
+      if (history.length === 0 && Array.isArray(sd.starOfWeekHistory)) history = sd.starOfWeekHistory;
+    }
     res.json({ ok: true, star, history });
   })().catch(fail(res));
 });
@@ -2657,15 +2670,25 @@ app.post('/api/star-of-week/:school', requireAuth, (req, res) => {
     const school = String(req.params.school).toUpperCase();
     if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
     if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
-    if (req.session.role !== 'ADMIN' && req.session.role !== 'COUNSELOR' && req.session.role !== 'AGENT' && req.session.role !== 'TEACHER') return res.status(403).json({ error: 'forbidden' });
-    const star = req.body && req.body.star;
-    const history = req.body && req.body.history;
+    if (req.session.role !== 'ADMIN' && req.session.role !== 'COUNSELOR' && req.session.role !== 'AGENT') return res.status(403).json({ error: 'forbidden' });
+    const star = (req.body && req.body.star && req.body.star.name) ? req.body.star : null;
+    const history = req.body && Array.isArray(req.body.history) ? req.body.history : null;
     const settings = await db.getSchoolSettings(school);
     const merged = Object.assign({}, settings || {});
     if (star) merged.starOfWeek = star;
     else delete merged.starOfWeek;
-    if (Array.isArray(history)) merged.starOfWeekHistory = history;
+    if (history) merged.starOfWeekHistory = history;
     await db.setSchoolSettings(school, merged);
+
+    // مزامنة فورية في school_data لمنع أي تعارض أو إحياء بين الجدولين
+    await db.mutateSchoolData(school, (d) => {
+      if (!d) return { changed: false, value: null };
+      if (star) d.starOfWeek = star;
+      else delete d.starOfWeek;
+      if (history) d.starOfWeekHistory = history;
+      return { changed: true, value: true };
+    });
+
     res.json({ ok: true });
   })().catch(fail(res));
 });
@@ -2812,20 +2835,6 @@ async function takeBackups() {
       if (rec.data) await db.saveBackup(school, rec.ts, rec.data);
     }
   } catch (e) { console.error('[backup]', e.message); }
-}
-// إصلاح ذاتي عند الإقلاع: يفكّ أي طبقة تلوّث في بيانات القسم (حادثة مسار الحضور
-// في 2026-11-13 التي كانت تكتب { data:{...}, ts } داخل العمود نفسه).
-// لا يحذف أيّ سجل: يعيد بنية القسم الأصلية ويدمج سجلات الحضور.
-async function repairAllSchools() {
-  for (const school of db.SCHOOLS) {
-    try {
-      const r = await db.repairSchoolData(school);
-      if (r && r.repaired) {
-        console.warn('[repair] فُكّت طبقة بيانات تالفة للقسم', school,
-          '— أُعيدت البنية الأصلية (طلاب/فصول/حسابات) بلا حذف أي سجل. ts=', r.ts);
-      }
-    } catch (e) { console.warn('[repair]', school, e.message); }
-  }
 }
 app.get('/api/backups', requireAuth, (req, res) => {
   (async () => {
@@ -3228,52 +3237,75 @@ app.post('/api/wa/consent', requireAuth, async (req, res) => {
 
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));
 
-
-/* ===== الحضور والغياب — API مخصص (حفظ واسترجاع من قاعدة البيانات) ===== */
-app.get('/api/attendance/:school', requireAuth, (req, res) => {
+/* ===== الأنشطة والفعاليات — API مخصص (حفظ واسترجاع من قاعدة البيانات) ===== */
+app.get('/api/activities/:school', requireAuth, (req, res) => {
   (async () => {
     const school = String(req.params.school).toUpperCase();
     if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
     if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
-    // getSchoolData() يعيد { data, ts } — لا الكائن نفسه. الخطأ السابق كان يقرأ
-    // data.attendance على الغلاف فيعود دائماً [] وتظهر الحضور وكأنه ضاع.
     const rec = await db.getSchoolData(school);
-    const data = (rec && rec.data) || {};
-    const attendance = Array.isArray(data.attendance) ? data.attendance : [];
-    res.json({ ok: true, attendance });
+    const schoolData = (rec && rec.data) ? rec.data : {};
+    let activities = [];
+    if (Array.isArray(schoolData.activities)) {
+      activities = schoolData.activities;
+    } else if (schoolData.data && Array.isArray(schoolData.data.activities)) {
+      activities = schoolData.data.activities;
+    }
+    res.json({ ok: true, activities });
   })().catch(fail(res));
 });
-app.post('/api/attendance/:school', requireAuth, (req, res) => {
+app.post('/api/activities/:school', requireAuth, (req, res) => {
   (async () => {
     const school = String(req.params.school).toUpperCase();
     if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
     if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
-    const attendance = req.body && Array.isArray(req.body.attendance) ? req.body.attendance : null;
-    if (!attendance) return res.status(400).json({ error: 'invalid_payload' });
-    // تعديل جزئي داخل معاملة واحدة: نكتب داخل كائن القسم نفسه (attendance فقط)
-    // لا فوقه. الخطأ السابق كان يعيد كتابة ناتج getSchoolData كاملاً
-    // ({ data, ts }) فتصير بيانات المدرسة متداخلة تحت مفتاح data وتُفقد من العميل.
-    // ندمج بسجل الحضور: الأحدث _t يفوز، فلا يمحو جهازٌ حفظَ جهازٍ آخر في نفس اللحظة.
-    const out = await db.mutateSchoolData(school, (d) => {
-      const merged = new Map();
-      for (const r of (Array.isArray(d.attendance) ? d.attendance : [])) if (r) merged.set(String(r.studentId || '') + '|' + String(r.date || ''), r);
-      for (const r of attendance) {
-        if (!r) continue;
-        const k = String(r.studentId || '') + '|' + String(r.date || '');
-        const ex = merged.get(k);
-        if (!ex || (Number(r._t) || 0) >= (Number(ex._t) || 0)) merged.set(k, r);
+    if (req.session.role !== 'ADMIN' && req.session.role !== 'AGENT' && req.session.role !== 'COUNSELOR' && req.session.role !== 'TEACHER') return res.status(403).json({ error: 'forbidden' });
+    const incoming = req.body && Array.isArray(req.body.activities) ? req.body.activities : null;
+    if (!incoming) return res.status(400).json({ error: 'invalid_payload' });
+
+    const mutRes = await db.mutateSchoolData(school, (data) => {
+      const current = Array.isArray(data.activities) ? data.activities.slice() : [];
+      if (incoming.length === 0 && current.length > 0 && req.session.role !== 'ADMIN') {
+        return { changed: false, value: current.length };
       }
-      d.attendance = Array.from(merged.values());
-      d._ts = Date.now();
-      return { changed: true, value: d.attendance.length };
+
+      const byId = new Map(current.map(a => [a.id, a]));
+      const next = [];
+
+      if (req.session.role === 'ADMIN' || req.session.role === 'AGENT') {
+        for (const inc of incoming) {
+          if (!inc || !inc.id) continue;
+          const old = byId.get(inc.id);
+          if (old) {
+            if (!inc.requests && old.requests) inc.requests = old.requests;
+            next.push(inc);
+            byId.delete(inc.id);
+          } else {
+            next.push(inc);
+          }
+        }
+        data.activities = next;
+      } else {
+        for (const a of current) {
+          const inc = incoming.find(x => x && x.id === a.id);
+          if (inc && Array.isArray(inc.requests) && inc.requests.length) {
+            const reqMap = new Map((a.requests || []).map(r => [r.id, r]));
+            for (const r of inc.requests) if (r && r.id) reqMap.set(r.id, r);
+            a.requests = Array.from(reqMap.values());
+          }
+        }
+        const curIds = new Set(current.map(x => x.id));
+        for (const inc of incoming) {
+          if (inc && inc.id && !curIds.has(inc.id)) current.push(inc);
+        }
+        data.activities = current;
+      }
+
+      return { changed: true, value: data.activities.length };
     });
-    res.json({ ok: true, count: attendance.length, total: out && out.value });
+
+    res.json({ ok: true, count: mutRes.value, ts: mutRes.ts });
   })().catch(fail(res));
-});
-app.use((err, req, res, next) => {
-  if (err && err.type === 'entity.too.large') return res.status(413).json({ error: 'payload_too_large', limit: MAX_BODY_MB + 'mb' });
-  if (err && err.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid_json' });
-  return next(err);
 });
 app.use((req, res) => res.status(404).json({ error: 'not_found' }));
 
@@ -3287,7 +3319,6 @@ app.listen(PORT, async () => {
   const dbOk = await (async () => {
     try {
       await db.initSchema();
-      await repairAllSchools();
       const seed = require('./seed');
       const temp = await seed.ensureAdminAccount();
       if (temp) {
@@ -3314,7 +3345,6 @@ app.listen(PORT, async () => {
     const tryConn = async () => {
       try {
         await db.initSchema();
-        await repairAllSchools();
         console.log('✅ استعاد الخادم الاتصال بقاعدة البيانات.');
         try { takeBackups(); } catch (e) {}
       } catch (e) {

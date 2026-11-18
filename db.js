@@ -7,11 +7,75 @@ const path = require('path');
 const DATABASE_URL = process.env.DATABASE_URL;
 if(!DATABASE_URL && process.env.NODE_ENV === 'production'){ throw new Error('DATABASE_URL is required: set it in the platform environment'); }
 
-const pool = new Pool({ connectionString: DATABASE_URL, max: 10 });
+// حارس عزل قاعدة البنات: يسمح محلياً بقاعدة الاختبار، وفي Render
+// يسمح فقط بقاعدة Neon الحالية المخصصة للبنات. لا تُقبل أي قاعدة للبنين.
+const REQUIRED_DB_NAME = 'nibras_girls_local'; // الاسم المحلي فقط (للتوافق مع الاختبارات القديمة)
+const ALLOWED_DB_HOST = '127.0.0.1';
+const ALLOWED_DB_PORT = '5433';
+const PRODUCTION_DB_NAME = 'neondb';
+const PRODUCTION_DB_HOST = 'ep-bitter-rice-aerhp71v-pooler.c-2.us-east-2.aws.neon.tech';
+const PRODUCTION_DB_PORT = '5432';
+const FORBIDDEN_DB_NAMES = new Set(['nibras_boys_psay', 'nibras_boys_local']);
+
+function databaseNameFromUrl(url) {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split('/').filter(Boolean);
+    return decodeURIComponent(parts[parts.length - 1] || '').toLowerCase();
+  } catch (_) { return ''; }
+}
+
+function validateDatabaseUrl(url) {
+  if (!url || typeof url !== 'string' || !url.trim()) {
+    throw new Error('Refusing to connect: DATABASE_URL must be explicitly set to the approved girls database');
+  }
+  let u;
+  try {
+    u = new URL(url);
+  } catch (_) {
+    throw new Error('Refusing to connect: DATABASE_URL is not a valid URL');
+  }
+  const host = String(u.hostname || '').toLowerCase();
+  const port = String(u.port || '');
+  const name = databaseNameFromUrl(url);
+
+  if (FORBIDDEN_DB_NAMES.has(name) || /boys/i.test(name)) {
+    throw new Error('Refusing to start: connection to boys database "' + name + '" is strictly forbidden');
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    if (host !== PRODUCTION_DB_HOST || port !== PRODUCTION_DB_PORT || name !== PRODUCTION_DB_NAME) {
+      throw new Error('Refusing to start: production DATABASE_URL must target the approved girls Neon host, port 5432, database neondb');
+    }
+    if (String(u.searchParams.get('sslmode') || '').toLowerCase() !== 'require') {
+      throw new Error('Refusing to start: production Neon DATABASE_URL must require SSL (sslmode=require)');
+    }
+    return { host, port, name, environment: 'production' };
+  }
+
+  if (host !== ALLOWED_DB_HOST || port !== ALLOWED_DB_PORT) {
+    throw new Error('Refusing to start: local DATABASE_URL must point only to 127.0.0.1:5433');
+  }
+  if (name !== REQUIRED_DB_NAME) {
+    throw new Error('Refusing to start: local DATABASE_URL must point to nibras_girls_local');
+  }
+  return { host, port, name, environment: 'local' };
+}
+
+if (DATABASE_URL || process.env.NODE_ENV === 'production' || process.env.NIBRAS_REQUIRE_GIRLS_DB === '1') {
+  validateDatabaseUrl(DATABASE_URL);
+}
+
+const pool = new Pool(
+  DATABASE_URL
+    ? { connectionString: DATABASE_URL, max: 10 }
+    : { host: '127.0.0.1', port: 5433, database: REQUIRED_DB_NAME, max: 10 }
+);
 
 const SCHOOLS = ['GIRLS'];
 
 async function initSchema() {
+  validateDatabaseUrl(DATABASE_URL);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -20,7 +84,7 @@ async function initSchema() {
         id             TEXT PRIMARY KEY,
         school         TEXT NOT NULL CHECK (school IN ('BOYS','GIRLS')),
         name           TEXT NOT NULL,
-        email          TEXT NOT NULL,
+        email          TEXT,
         username       TEXT,
         password_hash  TEXT NOT NULL,
         plain_password TEXT,
@@ -31,6 +95,8 @@ async function initSchema() {
         data           JSONB NOT NULL DEFAULT '{}'::jsonb,
         created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
       )`);
+    // البريد الإلكتروني اختياري لحسابات الطالبات؛ migration آمن للجداول الموجودة.
+    await client.query(`ALTER TABLE users ALTER COLUMN email DROP NOT NULL`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_username_key ON users(username)`);
     await client.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
     await client.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('ADMIN','AGENT','COUNSELOR','TEACHER','ADMINISTRATIVE','SCHOOL_AGENT','STUDENT'))`);
@@ -131,19 +197,27 @@ async function initSchema() {
 
 /* ===== المستخدمون ===== */
 async function userByEmail(email) {
-  const r = await pool.query('SELECT * FROM users WHERE email = $1', [String(email || '').toLowerCase().trim()]);
+  const value = String(email || '').toLowerCase().trim();
+  if (!value) return null;
+  const r = await pool.query('SELECT * FROM users WHERE lower(email) = lower($1)', [value]);
   return r.rows[0] || null;
 }
 async function usersByEmail(email) {
-  const r = await pool.query('SELECT * FROM users WHERE email = $1', [String(email || '').toLowerCase().trim()]);
+  const value = String(email || '').toLowerCase().trim();
+  if (!value) return [];
+  const r = await pool.query('SELECT * FROM users WHERE lower(email) = lower($1)', [value]);
   return r.rows;
 }
 async function userByUsername(username) {
-  const r = await pool.query('SELECT * FROM users WHERE username = $1', [String(username || '').trim().toLowerCase()]);
+  const value = String(username || '').trim();
+  if (!value) return null;
+  const r = await pool.query('SELECT * FROM users WHERE lower(username) = lower($1)', [value]);
   return r.rows[0] || null;
 }
 async function usernameExists(username) {
-  const r = await pool.query('SELECT 1 FROM users WHERE username = $1', [String(username || '').trim().toLowerCase()]);
+  const value = String(username || '').trim();
+  if (!value) return false;
+  const r = await pool.query('SELECT 1 FROM users WHERE lower(username) = lower($1)', [value]);
   return r.rows.length > 0;
 }
 // تحويل الاسم العربي إلى اسم مستخدم لاتيني بسيط (للحصول على قيمة فريدة تُستخدم للدخول)
@@ -248,7 +322,7 @@ async function insertUser(u) {
        plain_password=COALESCE(EXCLUDED.plain_password, users.plain_password),
        role=EXCLUDED.role, active=EXCLUDED.active, first_login=EXCLUDED.first_login,
        granted=EXCLUDED.granted, data=EXCLUDED.data`,
-    [u.id, u.school, u.name, String(u.email).toLowerCase().trim(), u.username ? String(u.username).trim().toLowerCase() : null,
+    [u.id, u.school, u.name, (u.email == null || !String(u.email).trim()) ? null : String(u.email).toLowerCase().trim(), u.username ? String(u.username).trim().toLowerCase() : null,
      u.password_hash, u.plain_password || null, u.role, u.active !== false, !!u.first_login, u.granted === true, JSON.stringify(u.data || {})]);
 }
 
@@ -259,7 +333,8 @@ async function createStudentAccountAndRecord(input) {
   try {
     await client.query('BEGIN');
     const id = String(input.id);
-    const username = String(input.username);
+    const username = String(input.username || '').trim();
+    const email = (input.email == null || !String(input.email).trim()) ? null : String(input.email).trim().toLowerCase();
     const school = String(input.school);
     assertSupportedSchool(school); // يمنع إنشاء حساب BOYS (بلا migration)
     const existingUser = await client.query('SELECT 1 FROM users WHERE id = $1', [id]);
@@ -282,6 +357,18 @@ async function createStudentAccountAndRecord(input) {
     const schoolRow = await client.query(
       'SELECT data FROM school_data WHERE school = $1 FOR UPDATE', [school]);
     const data = schoolRow.rows[0].data || {};
+    const classes = Array.isArray(data.classes) ? data.classes.filter(c => c && !c.deleted) : [];
+    const requestedClass = classes.find(c => String(c.id) === String(input.student.classId || '')) || null;
+    const gradeId = String(input.student.gradeId || (requestedClass && requestedClass.gradeId) || '').trim();
+    const grade = (Array.isArray(data.grades) ? data.grades : []).find(g => g && String(g.id) === gradeId);
+    if (!grade) { const err = new Error('grade_not_found'); err.code = 'grade_not_found'; throw err; }
+    const gradeClasses = classes.filter(c => String(c.gradeId) === gradeId).sort((a, b) => {
+      const aDefault = String(a.name || '').trim() === 'أ' ? 0 : 1;
+      const bDefault = String(b.name || '').trim() === 'أ' ? 0 : 1;
+      return (aDefault - bDefault) || String(a.name || '').localeCompare(String(b.name || ''), 'ar');
+    });
+    const assignedClass = gradeClasses.find(c => requestedClass && String(c.id) === String(requestedClass.id)) || gradeClasses[0] || null;
+    if (!assignedClass) { const err = new Error('class_not_found'); err.code = 'class_not_found'; throw err; }
     const students = Array.isArray(data.students) ? data.students.slice() : [];
     if (students.some(student => student && String(student.id) === id)) {
       const err = new Error('duplicate_student');
@@ -296,10 +383,12 @@ async function createStudentAccountAndRecord(input) {
     }
 
     const student = Object.assign({}, input.student, { id });
+    student.gradeId = gradeId;
+    student.classId = assignedClass.id;
     students.push(student);
     const users = Array.isArray(data.users) ? data.users.slice() : [];
     users.push({
-      id, school, name: input.name, username, email: input.email, role: 'STUDENT',
+      id, school, name: input.name, username, email, role: 'STUDENT',
       active: true, firstLogin: false, granted: true,
     });
     const nextData = Object.assign({}, data, { users, students });
@@ -308,21 +397,15 @@ async function createStudentAccountAndRecord(input) {
       `INSERT INTO users
         (id, school, name, email, username, password_hash, plain_password, role, active, first_login, granted, data)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'STUDENT',true,false,true,'{}'::jsonb)`,
-      [id, school, input.name, input.email, username, input.passwordHash, input.password,]);
+      [id, school, input.name, email, username, input.passwordHash, input.password,]);
     await client.query(
       `UPDATE school_data SET data = $2::jsonb, ts = $3, updated_at = now() WHERE school = $1`,
       [school, JSON.stringify(nextData), Date.now()]);
     await client.query('COMMIT');
 
-    const cls = Array.isArray(data.classes)
-      ? data.classes.find(item => item && item.id === student.classId)
-      : null;
-    const grade = cls && Array.isArray(data.grades)
-      ? data.grades.find(item => item && item.id === cls.gradeId)
-      : null;
     return {
-      id, name: input.name, grade: grade ? grade.name : null,
-      class: cls ? cls.name : null, username, student,
+      id, name: input.name, grade: grade.name,
+      class: assignedClass.name, username, student,
     };
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch (_) {}
@@ -374,7 +457,7 @@ async function updateUserIdentity(id, fields) {
   const sets = [];
   const vals = [id];
   if (fields.name !== undefined) { sets.push('name=$' + (vals.length + 1)); vals.push(fields.name); }
-  if (fields.email !== undefined) { sets.push('email=$' + (vals.length + 1)); vals.push(String(fields.email).toLowerCase().trim()); }
+  if (fields.email !== undefined) { sets.push('email=$' + (vals.length + 1)); vals.push((fields.email == null || !String(fields.email).trim()) ? null : String(fields.email).toLowerCase().trim()); }
   if (fields.username !== undefined) { sets.push('username=$' + (vals.length + 1)); vals.push(String(fields.username).trim().toLowerCase()); }
   if (!sets.length) return;
   await pool.query('UPDATE users SET ' + sets.join(', ') + ' WHERE id=$1', vals);
@@ -746,116 +829,10 @@ async function getSupervisionHistory(school, limit) {
 }
 
 /* ===== بيانات الأقسام ===== */
-// ===== فكّ طبقة تلوّث بيانات القسم =====
-// حادثة 2026-11-13: مسار /api/attendance/:school كان يكتب ناتج getSchoolData()
-// كما هو ({ data, ts }) داخل عمود data، فيصير شكل الصف
-//   { data:{ students, classes, ... }, ts, attendance, _ts }
-// فيقرأه العميل بلا students/classes فتُعرض المدرسة فارغة أو تتعطّل الصفحة.
-// هذه الدوال تفكّ الطبقات وتعيد دمج سجل الحضور الذي كتبه المسار المعطوب،
-// بلا حذف أيّ سجل إطلاقاً. آمنة على البيانات السليمة (تعيدها كما هي).
-function _looksWrappedSchoolData(d) {
-  return !!(d && typeof d === 'object' && !Array.isArray(d)
-    && d.data && typeof d.data === 'object' && !Array.isArray(d.data)
-    && d.students === undefined && d.classes === undefined);
-}
-function _attKey(r) {
-  if (!r || typeof r !== 'object') return '';
-  if (r.id != null) return 'id:' + r.id;
-  return 'sd:' + (r.studentId || '') + '|' + (r.date || '');
-}
-// طبقة data زائدة تحوي أقسام المدرسة نفسها (لقطة قديمة متداخلة): لا يلتقطها _looksWrapped
-// لأن الصف يحوي students/classes. ندمج حضورها (الأحدث _t يفوز) ومستخدميها (المعلمات)
-// ثم حذف الطبقة — لا نفقد معلمة تعيش في طبقة متداخلة (وإلا تُفقد أسماء المعلمات).
-function _isStrayDataLayer(d) {
-  if (!d || typeof d !== 'object' || Array.isArray(d)) return false;
-  const inner = d.data;
-  if (!inner || typeof inner !== 'object' || Array.isArray(inner)) return false;
-  return ['students','classes','attendance','notes','users','assignments'].some(k => Array.isArray(inner[k])) || !!inner.data;
-}
-function absorbStrayDataLayers(d) {
-  if (!_isStrayDataLayer(d)) return d;
-  const merged = new Map();
-  const add = (r) => {
-    if (!r || typeof r !== 'object') return;
-    const k = _attKey(r);
-    const ex = merged.get(k);
-    if (!ex || (Number(r._t) || 0) >= (Number(ex._t) || 0)) merged.set(k, r);
-  };
-  (Array.isArray(d.attendance) ? d.attendance : []).forEach(add);
-  const usersById = new Map();
-  for (const u of (Array.isArray(d.users) ? d.users : [])) if (u && u.id != null) usersById.set(u.id, u);
-  let cur = d.data;
-  let guard = 0;
-  while (cur && typeof cur === 'object' && !Array.isArray(cur) && guard++ < 50) {
-    if (Array.isArray(cur.attendance)) cur.attendance.forEach(add);
-    if (Array.isArray(cur.users)) {
-      for (const u of cur.users) if (u && u.id != null && !usersById.has(u.id)) usersById.set(u.id, u);
-    }
-    cur = cur.data;
-  }
-  const out = Object.assign({}, d);
-  delete out.data;
-  out.attendance = Array.from(merged.values());
-  out.users = Array.from(usersById.values());
-  return out;
-}
-function unwrapSchoolData(data) {
-  return absorbStrayDataLayers(_unwrapLegacySchoolData(data));
-}
-function _unwrapLegacySchoolData(data) {
-  let cur = data;
-  let outerAttendance = null;
-  let guard = 0;
-  while (_looksWrappedSchoolData(cur) && guard++ < 5) {
-    if (Array.isArray(cur.attendance) && cur.attendance.length) outerAttendance = cur.attendance;
-    cur = cur.data;
-  }
-  if (!outerAttendance || !cur || typeof cur !== 'object') return cur;
-  const merged = new Map();
-  for (const r of (Array.isArray(cur.attendance) ? cur.attendance : [])) {
-    if (r) merged.set(_attKey(r), r);
-  }
-  for (const r of outerAttendance) {
-    if (!r) continue;
-    const k = _attKey(r);
-    const ex = merged.get(k);
-    if (!ex || (Number(r._t) || 0) >= (Number(ex._t) || 0)) merged.set(k, r);
-  }
-  return Object.assign({}, cur, { attendance: Array.from(merged.values()) });
-}
 async function getSchoolData(school) {
   const r = await pool.query('SELECT data, ts FROM school_data WHERE school = $1', [school]);
   if (!r.rows.length) return { data: null, ts: 0 };
-  // نتسامح مع صفٍّ لوّثه مسار الحضور القديم: يرى كل قارئ بياناتٍ سليمة فوراً.
-  return { data: unwrapSchoolData(r.rows[0].data), ts: Number(r.rows[0].ts) || 0 };
-}
-// إصلاح دائم للصف: إن كان مغلّفاً نكتب النسخة المفكوكة بزمن أحدث (بلا حذف سجلات).
-// يُستدعى عند الإقلاع، فتُشفى قاعدة الإنتاج تلقائياً بعد نشر هذا الإصلاح.
-async function repairSchoolData(school) {
-  assertSupportedSchool(school);
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const sel = await client.query('SELECT data, ts FROM school_data WHERE school = $1 FOR UPDATE', [school]);
-    if (!sel.rows.length) { await client.query('ROLLBACK'); return { repaired: false, reason: 'no_row' }; }
-    const raw = sel.rows[0].data;
-    if (!_looksWrappedSchoolData(raw) && !_isStrayDataLayer(raw)) { await client.query('ROLLBACK'); return { repaired: false, reason: 'clean' }; }
-    const fixed = unwrapSchoolData(raw);
-    const storedTs = Number(sel.rows[0].ts) || 0;
-    const nextTs = Math.max(Date.now(), storedTs + 1);
-    if (fixed && typeof fixed === 'object') fixed._ts = nextTs;
-    const upd = await client.query(
-      'UPDATE school_data SET data = $2::jsonb, ts = $3, updated_at = now() WHERE school = $1 AND ts = $4',
-      [school, JSON.stringify(fixed), nextTs, storedTs]);
-    if (!upd.rowCount) { await client.query('ROLLBACK'); return { repaired: false, reason: 'race' }; }
-    await client.query('COMMIT');
-    return { repaired: true, ts: nextTs };
-  } catch (e) {
-    try { await client.query('ROLLBACK'); } catch (_) {}
-    throw e;
-  } finally {
-    client.release();
-  }
+  return { data: r.rows[0].data, ts: Number(r.rows[0].ts) || 0 };
 }
 // كتابة محمية زمنياً: لا تُستبدل نسخة ذات ts أحدث بنسخة ts أقدم.
 // السبب: school_data صف واحد لكل قسم ويحوي النظام كله (users/classes/students...).
@@ -918,18 +895,14 @@ async function mutateSchoolData(school, mutator) {
     }
     const data = sel.rows[0].data;
     const storedTs = Number(sel.rows[0].ts) || 0;
-    // صفٌّ مغلّف من مسار الحضور القديم: نفكّه في الذاكرة ونعتبره تغييراً،
-    // فيُكتب نظيفاً مع هذا التعديل (شفاء تلقائي بلا حذف أي سجل).
-    const wasWrapped = _looksWrappedSchoolData(data);
-    const working = wasWrapped ? unwrapSchoolData(data) : data;
-    const n = _normMutatorOut(await mutator(working));
-    if (!n.changed && !wasWrapped) { await client.query('ROLLBACK'); return { written: false, value: n.value, reason: 'no_change' }; }
+    const n = _normMutatorOut(await mutator(data));
+    if (!n.changed) { await client.query('ROLLBACK'); return { written: false, value: n.value, reason: 'no_change' }; }
     // ts رتيب: لا نسمح لأي كتابة بأن تُرجع الساعة للخلف مقارنة بالصف المقفول.
     const nextTs = Math.max(Date.now(), storedTs + 1);
     const upd = await client.query(
       `UPDATE school_data SET data = $2::jsonb, ts = $3, updated_at = now()
         WHERE school = $1 AND ts < $3`,
-      [school, JSON.stringify(working), nextTs]);
+      [school, JSON.stringify(data), nextTs]);
     if (!upd.rowCount) { await client.query('ROLLBACK'); return { written: false, value: n.value, reason: 'stale' }; }
     await client.query('COMMIT');
     return { written: true, value: n.value, ts: nextTs };
@@ -1053,6 +1026,9 @@ async function setFlag(key, value) {
 
 module.exports = {
   pool, SCHOOLS,
+  REQUIRED_DB_NAME, ALLOWED_DB_HOST, ALLOWED_DB_PORT,
+  PRODUCTION_DB_NAME, PRODUCTION_DB_HOST, PRODUCTION_DB_PORT,
+  databaseNameFromUrl, validateDatabaseUrl,
   initSchema,
   getFlag, setFlag,
   userByEmail, usersByEmail, userByUsername, usernameExists, generateUsername, baseUsername,
@@ -1068,7 +1044,6 @@ module.exports = {
   canViewSupervisionToday, filterSupervisionAssignments,
   supervisionVisibleRoles: () => [...SUPERVISION_VISIBLE_ROLES],
   getSchoolData, setSchoolData, mutateSchoolData, patchSchoolUserStats, touchUserPresence,
-  unwrapSchoolData, repairSchoolData,
   getSchoolSettings, setSchoolSettings,
   saveBackup, listBackups, getBackup,
   auditSync, listSyncAudit,

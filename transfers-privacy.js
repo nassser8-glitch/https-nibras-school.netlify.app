@@ -88,6 +88,76 @@ function enforceTransferDeleteRights(incomingTransfers, session, serverTransfers
   }
   return { transfers: out, blocked };
 }
+
+/**
+ * فرض ملكية التحويلات على مستوى الخادم:
+ * - التحويل الجديد: createdBy يُشتق دائماً من req.session.user_id الموثوق به، ولا يُقبل من المتصفح.
+ * - التحويل القائم: نسخة الخادم هي المرجع للمالك الأصلي.
+ * - حل المشكلة (RESOLVED / solution): مقصور على الأدوار الإشرافية (AGENT, COUNSELOR, ADMIN).
+ *   المعلمة لا تستطيع اعتماد حل تحويلها بنفسها.
+ * - غير المصرح له والتحويلات القديمة بلا createdBy: تُعاد نسخة الخادم كما هي بلا تعديل.
+ */
+function enforceTransferOwners(incomingTransfers, session, serverTransfers) {
+  if (!Array.isArray(incomingTransfers)) return [];
+  const me = (session && session.user_id != null) ? String(session.user_id).trim() : '';
+  const isPrivileged = session && ALL_TRANSFERS_ROLES.has(String(session.role || ''));
+  const canResolve = session && (session.role === 'ADMIN' || session.role === 'AGENT' || session.role === 'COUNSELOR');
+
+  const serverById = new Map();
+  for (const t of (Array.isArray(serverTransfers) ? serverTransfers : [])) {
+    if (t && t.id != null) serverById.set(String(t.id), t);
+  }
+
+  const out = [];
+  for (const t of incomingTransfers) {
+    if (!t || typeof t !== 'object') continue;
+    const server = t.id != null ? serverById.get(String(t.id)) : null;
+    if (!server) {
+      // تحويل جديد: المالك من الجلسة دائماً وأي createdBy من العميل يُستبدل
+      const fresh = Object.assign({}, t);
+      if (me) fresh.createdBy = me;
+      if (!canResolve && fresh.status === 'RESOLVED') {
+        fresh.status = 'PENDING';
+        delete fresh.solution;
+        delete fresh.resolvedAt;
+        delete fresh.resolvedBy;
+      }
+      out.push(fresh);
+      continue;
+    }
+
+    // تحويل قائم على الخادم: نسخة الخادم هي المرجع في المالك الأصلي
+    const owner = transferOwnerId(server);
+    if (isPrivileged) {
+      // الأدوار الإشرافية: الحفاظ على المالك الأصلي مع السماح بالحل
+      const p = Object.assign({}, t);
+      if (owner) p.createdBy = owner; else delete p.createdBy;
+      out.push(p);
+      continue;
+    }
+
+    if (owner && me && owner === me) {
+      // المعلمة منشئة التحويل:
+      const mine = Object.assign({}, t);
+      mine.createdBy = owner;
+      // المعلمة لا تملك حق حل التحويل بنفسها
+      if (!canResolve && mine.status === 'RESOLVED' && server.status !== 'RESOLVED') {
+        mine.status = server.status || 'PENDING';
+        mine.solution = server.solution;
+        mine.resolvedAt = server.resolvedAt;
+        mine.resolvedBy = server.resolvedBy;
+      }
+      out.push(mine);
+      continue;
+    }
+
+    // غير المالك وغير المصرح له (بما فيه التحويلات القديمة بلا createdBy):
+    // تُعاد نسخة الخادم كما هي بلا أي تعديل
+    out.push(Object.assign({}, server));
+  }
+  return out;
+}
+
 module.exports = {
   ALL_TRANSFERS_ROLES,
   transferOwnerId,
@@ -95,4 +165,5 @@ module.exports = {
   filterTransfersForViewer,
   canDeleteTransfer,
   enforceTransferDeleteRights,
+  enforceTransferOwners,
 };
