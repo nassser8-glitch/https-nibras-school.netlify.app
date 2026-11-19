@@ -1793,7 +1793,7 @@ let raw = null;
               }
               return Array.from(m.values());
             };
-            if(mj.data && Array.isArray(mj.data.assignments)) sd.assignments = mergeByIdBetter(sd.assignments, obj.assignments);
+            if((mj.data && Array.isArray(mj.data.assignments)) || Array.isArray(obj.assignments)) sd.assignments = mergeByIdBetter(sd.assignments, obj.assignments);
             if(mj.data && Array.isArray(mj.data.activities)) sd.activities = mergeByIdBetter(sd.activities, obj.activities);
             const unionMsgs = (srvArr, locArr, merge) => {
               const m = new Map();
@@ -12724,6 +12724,26 @@ function __resolveAssignmentInput(params, d, user){
   const teacherId = teacherIds[0] || (canManageAllAssignments(user) ? '' : user.id);
   return { classId, subject, type, teacherId, teacherIds };
 }
+function __persistAssignmentServer(school, payload){
+  try{
+    if(!__serverEnabled() || typeof fetch !== 'function') return Promise.resolve({ ok: false, skipped: true });
+    school = school || getActiveSchool();
+    if(!school) return Promise.resolve({ ok: false, skipped: true });
+    const body = Array.isArray(payload) ? { assignments: payload } : { assignment: payload };
+    return fetch('/api/assignments/' + encodeURIComponent(school), {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(async r => {
+      let j = null;
+      try { j = await r.json(); } catch(_) {}
+      return { ok: !!(r.ok && j && j.ok), status: r.status, data: j };
+    }).catch(e => ({ ok: false, status: 0, error: e && e.message }));
+  }catch(e){
+    return Promise.resolve({ ok: false, status: 0, error: e && e.message });
+  }
+}
 function renderAssignments(){
   const user = currentUser();
   if(!user || (user.role !== 'TEACHER' && !canManageAllAssignments(user))) return '<h1 class="page-title">غير متاح</h1>';
@@ -12966,6 +12986,7 @@ function deleteAssignment(aid){
   a.deletedAt = Date.now();
   a._v = (typeof a._v === 'number' ? a._v : 0) + 1;
   saveDB(d);
+  __persistAssignmentServer(getActiveSchool(), a);
   // تتبّع التكليف المحذوف حتى تأكيد الخادم (مؤشر «بانتظار المزامنة»)
   try{ __markAssignUnpushed(getActiveSchool(), [a.id]); }catch(e){}
   const params = new URLSearchParams((location.hash.split('?')[1]||''));
@@ -12990,16 +13011,20 @@ function saveAssignment(){
   if(!user) return;
   const d = loadDB();
   const params = new URLSearchParams((location.hash.split('?')[1]||''));
-  const title = (document.getElementById('assTitle')||{}).value||'';
-  const desc = (document.getElementById('assDesc')||{}).value||'';
+  const title = String((document.getElementById('assTitle')||{}).value||'').trim();
+  const desc = String((document.getElementById('assDesc')||{}).value||'').trim();
   const date = (document.getElementById('assDate')||{}).value||'';
   const { classId, subject, type, teacherId, teacherIds } = __resolveAssignmentInput(params, d, user);
+  if(!classId){ alert('يرجى اختيار الفصل أولاً'); return; }
   if(!title){ alert('اكتب عنوان التكليف'); return; }
   if(canManageAllAssignments(user) && !teacherIds.length){ alert('حدد معلمة واحدة على الأقل لإسناد التكليف إليها'); return; }
+  let navigated = false;
   const nav = () => {
+    if(navigated) return;
+    navigated = true;
     location.hash = canManageAllAssignments(user)
       ? '#/assignments?step=list&cid=' + classId
-      : '#/assignments?step=type&cid=' + classId + '&sub=' + encodeURIComponent(subject);
+      : '#/assignments?step=list&cid=' + classId + '&sub=' + encodeURIComponent(subject);
   };
   if(savingAssignment) return;
   savingAssignment = true;
@@ -13024,14 +13049,33 @@ function saveAssignment(){
     try{ __markAssignUnpushed(getActiveSchool(), [aid]); }catch(e){}
     // بلا خادم: نحفظ محلياً وننتقل (لا يوجد تأكيد ممكن)
     if(!__serverEnabled() || !__syncEnabled()){ __draftClear('assignment'); nav(); return; }
-    // لا انتقال ولا نجاح قبل تأكيد الخادم: المراقب ينقل عند النجاح، ويُبقي النموذج عند الفشل.
-    __saveGuardWatch(getActiveSchool(), 'assignment', (res, kind)=>{
+    // لا انتقال ولا نجاح قبل تأكيد الخادم: نحفظ عبر المسار الذري /api/assignments/:school
+    // (لا يتأثر بتعارض 409 في أقسام أخرى) مع الإبقاء على مراقب المزامنة العامة كمسار احتياطي.
+    const school = getActiveSchool();
+    __saveGuardWatch(school, 'assignment', (res, kind)=>{
+      if(navigated) return;
       __saveGuardOutcome(res, kind);
       if(res && res.ok){ try{ __draftClear('assignment'); }catch(e){} nav(); }
     });
     __noteSaveBanner('🔵 جارٍ حفظ التكليف على الخادم...', false);
     __refreshSaveStatus();
-    __syncSchedule(getActiveSchool(), 0);
+    const p = __persistAssignmentServer(school, a);
+    if(p && typeof p.then === 'function'){
+      p.then(res => {
+        if(res && res.ok){
+          try{ __draftClear('assignment'); }catch(e){}
+          try{ if(typeof __clearAssignUnpushed === 'function') __clearAssignUnpushed(school, [aid]); }catch(e){}
+          try{ __noteSaveBanner('✅ تم حفظ التكليف على الخادم بنجاح.', false); }catch(e){}
+          try{ __refreshSaveStatus(); }catch(e){}
+          nav();
+        } else if(res && !res.skipped && res.status === 401){
+          try{ __handleAuthError(res); }catch(e){}
+        } else if(res && !res.skipped){
+          try{ __noteSaveBanner('⚠️ تعذر الحفظ المباشر للتكليف — محفوظ محلياً وجارٍ إعادة المحاولة عبر المزامنة.', true); }catch(e){}
+        }
+      });
+    }
+    __syncSchedule(school, 0);
   } finally {
     savingAssignment = false;
   }

@@ -1475,6 +1475,12 @@ function mergeSection(prevVal, inVal) {
       // إذا وصلت نسخة محذوفة (من جهاز يريد الحذف) نجعلها لاصقة ونُبقي شاهدها في التخزين
       // حتى يُرسل للعملاء عبر GET (يرى كل جهاز أنه محذوف فيحذفه محلياً) ولا يُعرض إطلاقاً.
       if (localDeleted) { tomb.add(k); map.set(k, r); continue; }
+      const ex = map.get(k);
+      if (ex && typeof ex === 'object') {
+        const pv = (typeof ex._v === 'number') ? ex._v : 0;
+        const iv = (typeof r._v === 'number') ? r._v : 0;
+        if (pv > iv) continue;
+      }
       map.set(k, r);
     }
     return Array.from(map.values());
@@ -2120,7 +2126,7 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
 // النسخة القديمة الناقصة مفتاحاً كانت تُسلَّم للعميل كما هي، فيرمي بناء الصفحة
 // استثناءً وتظهر شاشة بيضاء. الناقص يُؤخذ من نسخة الخادم السابقة إن وُجدت،
 // وإلا فقائمة فارغة — لا حذف ولا محو: ما لا وجود له عندنا لا وجود له عند غيرنا.
-const DATA_SECTION_KEYS = ['users','grades','classes','students','attendance','notes','transfers','maintenance','adminMsgs','announcements','suggestions'];
+const DATA_SECTION_KEYS = ['users','grades','classes','students','attendance','notes','transfers','maintenance','adminMsgs','announcements','suggestions','assignments','activities'];
 function ensureDataSections(data, prev){
   if(!data || typeof data !== 'object' || Array.isArray(data)) return data;
   for(const k of DATA_SECTION_KEYS){
@@ -3429,6 +3435,100 @@ app.post('/api/activities/:school', requireAuth, (req, res) => {
     });
 
     res.json({ ok: true, count: mutRes.value, ts: mutRes.ts });
+  })().catch(fail(res));
+});
+
+/* ===== التكليفات — API مخصص (حفظ واسترجاع ذري من قاعدة البيانات لجميع المعلمات والإدارة) ===== */
+app.get('/api/assignments/:school', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.params.school).toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    const rec = await db.getSchoolData(school);
+    const schoolData = (rec && rec.data) ? rec.data : {};
+    const assignments = Array.isArray(schoolData.assignments) ? schoolData.assignments : [];
+    res.json({ ok: true, assignments });
+  })().catch(fail(res));
+});
+
+app.post('/api/assignments/:school', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.params.school).toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    if (!['ADMIN', 'AGENT', 'COUNSELOR', 'TEACHER', 'ADMINISTRATIVE', 'SCHOOL_AGENT'].includes(req.session.role)) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    const rawIncoming = req.body && Array.isArray(req.body.assignments) ? req.body.assignments
+      : (req.body && req.body.assignment && typeof req.body.assignment === 'object' ? [req.body.assignment] : null);
+    if (!rawIncoming || !rawIncoming.length) return res.status(400).json({ error: 'invalid_payload' });
+
+    const uidStr = String(req.session.user_id || '').trim();
+    const isTeacherRole = req.session.role === 'TEACHER';
+    const isForTeacher = (a, tid) => {
+      if (!a || !tid) return false;
+      if (String(a.teacherId || '') === tid) return true;
+      return Array.isArray(a.teacherIds) && a.teacherIds.some(x => String(x || '') === tid);
+    };
+
+    const incoming = [];
+    for (const item of rawIncoming) {
+      if (!item || typeof item !== 'object' || !item.id) return res.status(400).json({ error: 'invalid_assignment' });
+      const copy = JSON.parse(JSON.stringify(item));
+      if (isTeacherRole) {
+        if (!copy.teacherId) copy.teacherId = uidStr;
+        if (!Array.isArray(copy.teacherIds) || !copy.teacherIds.length) copy.teacherIds = [uidStr];
+        else if (!copy.teacherIds.some(x => String(x || '') === uidStr)) copy.teacherIds.push(uidStr);
+      }
+      if (!copy.deleted && (!String(copy.title || '').trim() || !String(copy.classId || '').trim())) {
+        return res.status(400).json({ error: 'missing_fields' });
+      }
+      incoming.push(copy);
+    }
+
+    let forbiddenErr = false;
+    const mutRes = await db.mutateSchoolData(school, (data) => {
+      const current = Array.isArray(data.assignments) ? data.assignments.slice() : [];
+      if (isTeacherRole) {
+        for (const inc of incoming) {
+          const existing = current.find(x => x && x.id === inc.id);
+          if (existing && !isForTeacher(existing, uidStr)) {
+            forbiddenErr = true;
+            return { changed: false, value: current };
+          }
+        }
+      }
+      const merged = mergeSection(current, incoming);
+      const BANNED_ASSIGN = ['id_5d17111nmtttorn5', 'id_wk9ojhlymtv7xr3g', 'id_srbjht5ymts4tp8s', 'id_92j0tg1amtsejasl'];
+      merged.forEach(a => {
+        if (a && typeof a === 'object' && BANNED_ASSIGN.includes(a.id)) a.deleted = true;
+      });
+      data.assignments = merged;
+      if (Array.isArray(data.classes)) {
+        for (const inc of incoming) {
+          if (!inc || inc.deleted || !inc.classId) continue;
+          const cls = data.classes.find(c => c && c.id === inc.classId && !c.deleted);
+          if (!cls) continue;
+          if (!Array.isArray(cls.teacherIds)) cls.teacherIds = [];
+          const tids = [];
+          if (inc.teacherId && typeof inc.teacherId === 'string') tids.push(inc.teacherId);
+          if (Array.isArray(inc.teacherIds)) {
+            inc.teacherIds.forEach(t => { if (t && typeof t === 'string' && !tids.includes(t)) tids.push(t); });
+          }
+          for (const tid of tids) {
+            if (tid === 'id_admin_seed') continue;
+            if (!cls.teacherIds.includes(tid)) cls.teacherIds.push(tid);
+            if (Array.isArray(cls.removedTeacherIds)) {
+              cls.removedTeacherIds = cls.removedTeacherIds.filter(x => x !== tid);
+            }
+          }
+        }
+      }
+      return { changed: true, value: data.assignments };
+    });
+
+    if (forbiddenErr) return res.status(403).json({ error: 'forbidden' });
+    res.json({ ok: true, count: Array.isArray(mutRes.value) ? mutRes.value.length : 0, assignments: mutRes.value || [], ts: mutRes.ts });
   })().catch(fail(res));
 });
 app.use((req, res) => res.status(404).json({ error: 'not_found' }));
