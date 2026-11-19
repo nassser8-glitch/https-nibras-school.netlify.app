@@ -3059,6 +3059,28 @@ function canManageActivities(u){ return u && (u.role === 'ADMIN' || u.role === '
 function canManageVideos(u){ return u && (u.role === 'ADMIN' || u.role === 'AGENT'); }
 const GUARDIAN_PHONE_EDITOR_IDS = ['id_61e90132bc11ff7b'];
 function canEditGuardianPhone(u){ return isManager(u) || !!(u && GUARDIAN_PHONE_EDITOR_IDS.includes(u.id)); }
+// حساب المساعدة الإدارية (ADMINISTRATIVE) المصرَّح لها بإضافة الطالبات في قسم البنات فقط:
+// تهاني أحمد (tahani / tahani@nibras.school / id_61e90132bc11ff7b)
+const GIRLS_ADMIN_STUDENT_MANAGERS = [
+  { id: 'id_61e90132bc11ff7b', username: 'tahani', email: 'tahani@nibras.school' },
+];
+const GIRLS_ADMIN_STUDENT_MANAGER_IDS = ['id_61e90132bc11ff7b'];
+const GIRLS_ADMIN_STUDENT_MANAGER_USERNAMES = ['tahani'];
+const GIRLS_ADMIN_STUDENT_MANAGER_EMAILS = ['tahani@nibras.school'];
+function isGirlsAdminStudentManager(u){
+  if(!u || u.role !== 'ADMINISTRATIVE') return false;
+  if(String(u.school || '').toUpperCase() !== 'GIRLS') return false;
+  const uid = String(u.user_id || u.id || '').trim();
+  const uname = String(u.username || '').trim().toLowerCase();
+  const email = String(u.email || '').trim().toLowerCase();
+  if(!uid && !uname) return false;
+  return GIRLS_ADMIN_STUDENT_MANAGERS.some(m => {
+    if(uid && uid !== m.id) return false;
+    if(uname && uname !== m.username) return false;
+    if(email && email !== m.email) return false;
+    return (uid === m.id || uname === m.username);
+  });
+}
 function ensureDefaultAccounts(){
   if(__serverEnabled()) return; // في وضع الخادم: الحسابات في قاعدة البيانات، لا زرع محلي
   if(DEMO_MODE){
@@ -8594,6 +8616,7 @@ function renderStudents(){
   const isAdmin = user?.role === 'ADMIN';
   const isTeacher = user?.role === 'TEACHER';
   const canManage = isManager(user);
+  const canAddStu = typeof isGirlsAdminStudentManager === 'function' && isGirlsAdminStudentManager(user);
   const students = getVisibleStudents();
   const grades = (Array.isArray(d.grades) ? d.grades : []).filter(g => g && !g.deleted).slice().sort((a,b) => (Number(a.order) || 0) - (Number(b.order) || 0) || String(a.name || '').localeCompare(String(b.name || ''), 'ar'));
 
@@ -8603,7 +8626,7 @@ function renderStudents(){
     <div class="btn-group">
       ${(canManage || canEditGuardianPhone(user)) ? `<button class="btn-secondary" onclick="downloadStudentTemplate()">⬇ تنزيل القالب</button>
       <label class="btn-secondary file-btn">📥 استيراد Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importStudents(event)"/></label>` : ''}
-      ${canManage ? `<button class="btn-primary" onclick="toggleEl('studentForm')">+ إضافة طالب</button>` : ''}
+      ${canManage ? `<button class="btn-primary" onclick="toggleEl('studentForm')">+ إضافة طالب</button>` : (canAddStu ? `<button class="btn-primary" onclick="toggleEl('studentForm')">+ إضافة طالبة</button>` : '')}
       ${isAdmin ? `<button class="btn-secondary danger" onclick="deleteAllStudents()">🗑 حذف الكل</button>` : ''}
     </div>
   </div>
@@ -8798,6 +8821,8 @@ async function resetStudentPassword(studentId, studentName){
   }
 }
 async function addStudent(){
+  const u = typeof currentUser === 'function' ? currentUser() : null;
+  if(u && !isManager(u) && !(typeof isGirlsAdminStudentManager === 'function' && isGirlsAdminStudentManager(u))){ alert('غير مصرح بهذه العملية'); return; }
   const fullName = document.getElementById('sFullName').value.trim();
   const studentNo = document.getElementById('sStudentNo').value.trim();
   const gradeId = document.getElementById('sGradeId').value || null;

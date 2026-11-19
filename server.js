@@ -197,6 +197,28 @@ const GUARDIAN_PHONE_EDITOR_IDS = ['id_61e90132bc11ff7b'];
 function isGuardianPhoneEditor(userId) {
   return GUARDIAN_PHONE_EDITOR_IDS.indexOf(userId) !== -1;
 }
+// حساب المساعدة الإدارية (ADMINISTRATIVE) المصرَّح لها بإضافة الطالبات في قسم البنات فقط:
+// تهاني أحمد (tahani / tahani@nibras.school / id_61e90132bc11ff7b)
+const GIRLS_ADMIN_STUDENT_MANAGERS = [
+  { id: 'id_61e90132bc11ff7b', username: 'tahani', email: 'tahani@nibras.school' },
+];
+const GIRLS_ADMIN_STUDENT_MANAGER_IDS = ['id_61e90132bc11ff7b'];
+const GIRLS_ADMIN_STUDENT_MANAGER_USERNAMES = ['tahani'];
+const GIRLS_ADMIN_STUDENT_MANAGER_EMAILS = ['tahani@nibras.school'];
+function isGirlsAdminStudentManager(u) {
+  if (!u || u.role !== 'ADMINISTRATIVE') return false;
+  if (String(u.school || '').toUpperCase() !== 'GIRLS') return false;
+  const uid = String(u.user_id || u.id || '').trim();
+  const uname = String(u.username || '').trim().toLowerCase();
+  const email = String(u.email || '').trim().toLowerCase();
+  if (!uid && !uname) return false;
+  return GIRLS_ADMIN_STUDENT_MANAGERS.some(m => {
+    if (uid && uid !== m.id) return false;
+    if (uname && uname !== m.username) return false;
+    if (email && email !== m.email) return false;
+    return (uid === m.id || uname === m.username);
+  });
+}
 // تصحيح أخطاء إملائية مثبّتة في أسماء العائلة (أُبلغ عنها إدارياً). تُطبَّق على اسم
 // المستخدم في كل قراءة وكتابة لقسم users، فيصحّح الخادم نفسه بلا حاجة لتعديل يدوي
 // من أي جهاز — وأي نسخة قديمة تحمل الاسم الخطأ تُصحَّح فور مرورها. المطابقة بالبديل
@@ -898,7 +920,12 @@ app.post('/api/auth/admin/create-student', requireAuth, (req, res) => {
     if (rateLimit('createStudent', 60, 15 * 60 * 1000, req))
       return res.status(429).json({ error: 'rate_limited' });
     const school = db.SCHOOLS[0]; // نظام GIRLS فقط: لا يُقبل أي قسم من جسم الطلب
-    if (!canManageUsers(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    if (!canManageUsers(req.session, school) && !isGirlsAdminStudentManager(req.session))
+      return res.status(403).json({ error: 'forbidden' });
+    if (!canManageUsers(req.session, school)) {
+      const actor = await db.userById(req.session.user_id);
+      if (!isGirlsAdminStudentManager(actor)) return res.status(403).json({ error: 'forbidden' });
+    }
     const id = String(req.body && req.body.studentId || '').trim();
     const name = String(req.body && req.body.name || '').trim();
     const studentNo = String(req.body && req.body.studentNo || '').trim();
