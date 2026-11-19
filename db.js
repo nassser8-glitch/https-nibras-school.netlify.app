@@ -44,13 +44,14 @@ function validateDatabaseUrl(url) {
   }
 
   if (process.env.NODE_ENV === 'production') {
-    if (host !== PRODUCTION_DB_HOST || port !== PRODUCTION_DB_PORT || name !== PRODUCTION_DB_NAME) {
+    const effectivePort = port || PRODUCTION_DB_PORT;
+    if (host !== PRODUCTION_DB_HOST || effectivePort !== PRODUCTION_DB_PORT || name !== PRODUCTION_DB_NAME) {
       throw new Error('Refusing to start: production DATABASE_URL must target the approved girls Neon host, port 5432, database neondb');
     }
     if (String(u.searchParams.get('sslmode') || '').toLowerCase() !== 'require') {
       throw new Error('Refusing to start: production Neon DATABASE_URL must require SSL (sslmode=require)');
     }
-    return { host, port, name, environment: 'production' };
+    return { host, port: effectivePort, name, environment: 'production' };
   }
 
   if (host !== ALLOWED_DB_HOST || port !== ALLOWED_DB_PORT) {
