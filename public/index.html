@@ -3167,7 +3167,12 @@ const __NAV_MONTHS = ['يناير','فبراير','مارس','أبريل','ما�
 function __fmtNavDate(iso){ try { const d = new Date(String(iso).slice(0,10) + 'T00:00:00'); return __NAV_WEEKDAYS[d.getDay()] + ' ' + d.getDate() + ' ' + __NAV_MONTHS[d.getMonth()] + ' ' + d.getFullYear(); } catch(e){ return iso; } }
 function __addDaysIso(iso, n){ const d = new Date(String(iso).slice(0,10) + 'T00:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 let __navDate = (function(){ try { const v = localStorage.getItem('nibras_nav_date_v1'); if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v; } catch(e){} return todayStr(); })();
+function canNavigateDate(u){
+  const user = u !== undefined ? u : (typeof currentUser === 'function' ? currentUser() : null);
+  return !!(user && (user.role === 'ADMIN' || user.role === 'AGENT'));
+}
 function __setNavDate(iso){
+  if(!canNavigateDate()) return;
   if(!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
   const t = todayStr();
   if (iso > __addDaysIso(t, 30)) iso = __addDaysIso(t, 30);
@@ -3191,10 +3196,11 @@ function __setNavDate(iso){
   }
   if (typeof renderApp === 'function') renderApp();
 }
-function __navPrev(){ __setNavDate(__addDaysIso(__navDate, -1)); }
-function __navNext(){ __setNavDate(__addDaysIso(__navDate, 1)); }
-function __navToday(){ __setNavDate(todayStr()); }
+function __navPrev(){ if(!canNavigateDate()) return; __setNavDate(__addDaysIso(__navDate, -1)); }
+function __navNext(){ if(!canNavigateDate()) return; __setNavDate(__addDaysIso(__navDate, 1)); }
+function __navToday(){ if(!canNavigateDate()) return; __setNavDate(todayStr()); }
 function __navDateWidget(){
+  if(!canNavigateDate()) return '';
   const t = todayStr();
   const prevDisabled = __navDate <= __addDaysIso(t, -365);
   const nextDisabled = __navDate >= __addDaysIso(t, 30);
@@ -7618,18 +7624,20 @@ function renderAppStrip(){
   window.__stripWxAt = 0;
   // خانة الروابط التعليمية صارت الطقس (موضعها الأصلي في الشريط)،
   // وبوابة الروابط التعليمية صارت أول أدوات شريط الأدوات.
+  const canNav = canNavigateDate();
+  const shownDate = canNav ? __navDate : todayStr();
   el.innerHTML = `
     <div class="strip-item strip-weather">
       <span class="strip-ico strip-ico-wx" id="stripWxIco">🌤</span>
       <div><div class="strip-main strip-temp" id="stripWxTemp">—</div><div class="strip-sub" id="stripWxDesc">الطقس</div></div>
       <span class="strip-sep"></span>
-      <button class="strip-nav-btn" onclick="__navPrev()" ${__navDate <= __addDaysIso(todayStr(), -365)?'disabled':''} title="اليوم السابق" aria-label="اليوم السابق">◀</button>
+      ${canNav ? `<button class="strip-nav-btn" onclick="__navPrev()" ${__navDate <= __addDaysIso(todayStr(), -365)?'disabled':''} title="اليوم السابق" aria-label="اليوم السابق">◀</button>` : ''}
       <div>
-        <div class="strip-main" id="stripSelDate">${__fmtNavDate(__navDate)}</div>
-        <div class="strip-sub"><span id="stripHijri">${hijriIslamabad()}</span>${__navDate < todayStr() ? ' <span class="date-nav-badge">مراجعة</span>' : ''}</div>
+        <div class="strip-main" id="stripSelDate">${__fmtNavDate(shownDate)}</div>
+        <div class="strip-sub"><span id="stripHijri">${hijriIslamabad()}</span>${canNav && __navDate < todayStr() ? ' <span class="date-nav-badge">مراجعة</span>' : ''}</div>
       </div>
-      <button class="strip-nav-btn" onclick="__navNext()" ${__navDate >= __addDaysIso(todayStr(), 30)?'disabled':''} title="اليوم التالي" aria-label="اليوم التالي">▶</button>
-      <button class="strip-today-btn" onclick="__navToday()" ${__navDate === todayStr()?'disabled':''}>اليوم</button>
+      ${canNav ? `<button class="strip-nav-btn" onclick="__navNext()" ${__navDate >= __addDaysIso(todayStr(), 30)?'disabled':''} title="اليوم التالي" aria-label="اليوم التالي">▶</button>
+      <button class="strip-today-btn" onclick="__navToday()" ${__navDate === todayStr()?'disabled':''}>اليوم</button>` : ''}
     </div>`;
   __stripWxRender();
 }
