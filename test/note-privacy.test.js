@@ -287,10 +287,10 @@ test('13) قاعة نقاط الخادم تطابق pointItems — الغياب 
     assignments: [], students: [{ id: STU, active: true, classId: 'C1' }],
   };
   const t = NP.computePointsTotals(d, '2026-09-07')[STU];
-  assert.equal(t.total, -3, 'غياب -2 وتأخّر قصير -1');
-  assert.equal(t.neg, -3);
+  assert.equal(t.total, -0.75, 'غياب -0.5 وتأخّر قصير -0.25');
+  assert.equal(t.neg, -0.75);
   // ABSENT لم يُقرأ PRESENT (كان خطأ النسخة الأولى: فينقص الغياب كله)
-  assert.notEqual(t.total, -1, 'الغياب لا يُحتسب حاضراً');
+  assert.notEqual(t.total, -0.25, 'الغياب لا يُحتسب حاضراً');
 });
 
 // ----------------------- 14) خط بداية النقاط يشمل الحضور والتكليف أيضاً
@@ -310,8 +310,8 @@ test('14) خط بداية النقاط يطبَّق على الحضور والت
     students: [{ id: STU, active: true, classId: 'C1', joinedAt: '' }],
   };
   const t = NP.computePointsTotals(d, '2026-09-07')[STU];
-  assert.equal(t.total, -2, 'غياب واحد بعد البداية فقط');
-  assert.notEqual(t.total, -2 - 4, 'خصم التكليف القديم قبل البداية لا يُحتسب');
+  assert.equal(t.total, -0.5, 'غياب واحد بعد البداية فقط');
+  assert.notEqual(t.total, -0.5 - 1, 'خصم التكليف القديم قبل البداية لا يُحتسب');
 });
 
 // -------------------- 15) نقاط مشتقّة من الخادم: لا تُكتب ولا تُدمج من العميل

@@ -2826,20 +2826,20 @@ const noteCategoriesNegative = ['الغياب','التأخر','عدم إنجاز
 const transferReasons = ['الغياب المتكرر','التأخر المستمر','سلوك غير لائق','عدم إنجاز الواجبات','نزاع مع زملاء','مشكلة أسرية','صعوبات في التعلم','حاجة لمتابعة إرشادية','قلة انتباه أثناء الشرح','تعطيل سير الحصة','الأكل','أخرى','تحرير'];
 // خصم النقاط تلقائيًا عند تحويل الطالب للوكيل/المدير/الموجه — حسب سبب التحويل (غيّر القيم من هنا)
 const transferDeductionMap = {
-  'الغياب المتكرر':-4, 'التأخر المستمر':-2, 'سلوك غير لائق':-5, 'عدم إنجاز الواجبات':-4,
-  'نزاع مع زملاء':-5, 'مشكلة أسرية':0, 'صعوبات في التعلم':0, 'حاجة لمتابعة إرشادية':-1,
-  'قلة انتباه أثناء الشرح':-2, 'تعطيل سير الحصة':-4, 'الأكل':-2, 'أخرى':-3, 'تحرير':-3
+  'الغياب المتكرر':-1, 'التأخر المستمر':-0.5, 'سلوك غير لائق':-1.25, 'عدم إنجاز الواجبات':-1,
+  'نزاع مع زملاء':-1.25, 'مشكلة أسرية':0, 'صعوبات في التعلم':0, 'حاجة لمتابعة إرشادية':-0.25,
+  'قلة انتباه أثناء الشرح':-0.5, 'تعطيل سير الحصة':-1, 'الأكل':-0.5, 'أخرى':-0.75, 'تحرير':-0.75
 };
 // نظام النقاط (الإيجابية والسلبية) — حسب موقف الملاحظة
 const notePointsMap = {
   'الانضباط':5, 'الاحترام':5, 'التعاون':4, 'المشاركة':3, 'المثابرة':4,
   'تفوق دراسي':10, 'إنجاز الواجبات':3, 'القيادة':6,
-  'الغياب':-2, 'التأخر':-1, 'عدم إنجاز الواجبات':-4, 'الإزعاج داخل الفصل':-5,
-  'عدم الانضباط':-6, 'قلة الاحترام':-7, 'التنمر':-10, 'عدم المشاركة':-3,
+  'الغياب':-0.5, 'التأخر':-0.25, 'عدم إنجاز الواجبات':-1, 'الإزعاج داخل الفصل':-1.25,
+  'عدم الانضباط':-1.5, 'قلة الاحترام':-1.75, 'التنمر':-2.5, 'عدم المشاركة':-0.75,
 };
 function notePoints(type, category){
   if(notePointsMap[category] != null) return notePointsMap[category];
-  return type === 'POSITIVE' ? 2 : -3; // لأخرى وتحرير
+  return type === 'POSITIVE' ? 2 : -0.75; // لأخرى وتحرير
 }
 /* ===== خصوصية ملاحظات الطالبات =====
    المالك هو createdBy (معرّف مستخدم ثابت). لا يُشتق من الاسم ولا من الطالبة.
@@ -2967,13 +2967,13 @@ function NRC_editableNote(n, me){
 }
 // خصم نقاط تلقائي حسب حالة الحضور (يتزايد مع دقائق التأخر)
 function attendancePoints(status, lateMins){
-  if(status === 'ABSENT') return -2; // الغياب
+  if(status === 'ABSENT') return -0.5; // الغياب
   if(status === 'LATE'){
     var m = parseInt(lateMins, 10) || 0;
-    if(m <= 15) return -1;
-    if(m <= 30) return -2;
-    if(m <= 60) return -3;
-    return -4;
+    if(m <= 15) return -0.25;
+    if(m <= 30) return -0.5;
+    if(m <= 60) return -0.75;
+    return -1;
   }
   return 0;
 }
@@ -8303,7 +8303,7 @@ function renderCharts(d){
 /* ============ الطالبات ============ */
 // مصدر موحد لعناصر النقاط (ملاحظات + حضور) مع منع الازدواج:
 // إذا سُجّل غياب/تأخر في الحضور فتُهمل الملاحظة اليدوية لنفس اليوم حتى لا تُخصم مرتين
-const UNDONE_DEDUCTION = -4;
+const UNDONE_DEDUCTION = -1;
 function pointItems(d){
   const items = [];
   const today = todayStr();
@@ -10334,7 +10334,7 @@ function addTransfer(){
   const tr = { id:uid(), studentIds:ids, studentId:ids[0], target, priority, reason, status:'PENDING', createdBy: myUid, createdAt: new Date().toISOString() };
   d.transfers.push(tr);
   // خصم نقاط تلقائي حسب سبب التحويل (عند التحويل للوكيل أو المدير أو الموجه الطلابي) — لكل طالب مخصومة
-  const ded = transferDeductionMap[reason] != null ? transferDeductionMap[reason] : -3;
+  const ded = transferDeductionMap[reason] != null ? transferDeductionMap[reason] : -0.75;
   if(ded !== 0){
     tr.deductedPoints = ded;
     ids.forEach(sid => {
@@ -14652,7 +14652,7 @@ function buildChartData(type, rows){
   }
   if(type === 'notes'){
     const sums = {};
-    rows.forEach(r => { const k = r['الطالب'] || '—'; const v = parseInt(r['النقاط']) || 0; sums[k] = (sums[k]||0) + v; });
+    rows.forEach(r => { const k = r['الطالب'] || '—'; const v = parseFloat(r['النقاط']) || 0; sums[k] = (sums[k]||0) + v; });
     return Object.entries(sums).map(([label, value]) => ({ label, value, color: value >= 0 ? '#16a34a' : '#dc2626' }));
   }
   const col = reportChartCol[type];

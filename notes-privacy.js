@@ -274,23 +274,23 @@ function listPendingClaims(notes) {
 const NOTE_POINTS_MAP = {
   'الانضباط': 5, 'الاحترام': 5, 'التعاون': 4, 'المشاركة': 3, 'المثابرة': 4,
   'تفوق دراسي': 10, 'إنجاز الواجبات': 3, 'القيادة': 6,
-  'الغياب': -2, 'التأخر': -1, 'عدم إنجاز الواجبات': -4, 'الإزعاج داخل الفصل': -5,
-  'عدم الانضباط': -6, 'قلة الاحترام': -7, 'التنمر': -10, 'عدم المشاركة': -3,
+  'الغياب': -0.5, 'التأخر': -0.25, 'عدم إنجاز الواجبات': -1, 'الإزعاج داخل الفصل': -1.25,
+  'عدم الانضباط': -1.5, 'قلة الاحترام': -1.75, 'التنمر': -2.5, 'عدم المشاركة': -0.75,
 };
-const UNDONE_DEDUCTION = -4;
+const UNDONE_DEDUCTION = -1;
 
 function notePoints(type, category) {
   if (NOTE_POINTS_MAP[category] != null) return NOTE_POINTS_MAP[category];
-  return type === 'POSITIVE' ? 2 : -3;
+  return type === 'POSITIVE' ? 2 : -0.75;
 }
 function attendancePoints(status, lateMins) {
-  if (status === 'ABSENT') return -2;
+  if (status === 'ABSENT') return -0.5;
   if (status === 'LATE') {
     const m = parseInt(lateMins, 10) || 0;
-    if (m <= 15) return -1;
-    if (m <= 30) return -2;
-    if (m <= 60) return -3;
-    return -4;
+    if (m <= 15) return -0.25;
+    if (m <= 30) return -0.5;
+    if (m <= 60) return -0.75;
+    return -1;
   }
   return 0;
 }
