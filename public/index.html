@@ -2426,15 +2426,34 @@ async function __syncPull(school){
         }
         merged.announcements = srvAnnP;
       }
-      // المستخدمون (غياب/تأخر المعلمين): نسخة الخادم أساس ونحفظ فوقها التعديلات المحلية
-      // — وإلا محى السحبُ غيابَ المعلم الذي سجّله الوكيل/المدير للتو من كشف «المعلمون».
+      // المستخدمون (غياب/تأخر المعلمين + شواهد الحذف): نسخة الخادم أساس ونحفظ فوقها التعديلات المحلية
+      // مع تثبيت شواهد حذف الحسابات (_blockedUsers و deleted:true) حتى لا يعود حساب محذوف أبداً.
       if(Array.isArray(local.users)){
+        const blockedU = new Set([
+          ...(Array.isArray(merged._blockedUsers) ? merged._blockedUsers.map(String) : []),
+          ...(Array.isArray(local._blockedUsers) ? local._blockedUsers.map(String) : []),
+        ]);
         merged.users = Array.isArray(merged.users) ? merged.users.slice() : [];
         const uMapP = new Map(merged.users.map(u => [u.id, u]));
+        for(const su of merged.users){
+          if(su && su.id != null && (su.deleted || blockedU.has(String(su.id)))){
+            blockedU.add(String(su.id));
+            su.active = false;
+            su.deleted = true;
+          }
+        }
         for(const lu of local.users){
           if(!lu || !lu.id) continue;
+          const uidStr = String(lu.id);
           const su = uMapP.get(lu.id);
+          if(lu.deleted || blockedU.has(uidStr)){
+            blockedU.add(uidStr);
+            if(su){ su.active = false; su.deleted = true; }
+            else { const dlu = JSON.parse(JSON.stringify(lu)); dlu.active = false; dlu.deleted = true; merged.users.push(dlu); uMapP.set(lu.id, dlu); }
+            continue;
+          }
           if(!su){ merged.users.push(JSON.parse(JSON.stringify(lu))); continue; }
+          if(su.deleted || blockedU.has(uidStr)){ su.active = false; su.deleted = true; continue; }
           const unionArrP = (f) => {
             if(!Array.isArray(lu[f])) return;
             if(!Array.isArray(su[f])) su[f] = [];
@@ -2451,6 +2470,7 @@ async function __syncPull(school){
             for(const dt in lu.lateType){ su.lateType[dt] = lu.lateType[dt]; }
           }
         }
+        if(blockedU.size) merged._blockedUsers = [...blockedU];
       }
       // الأقسام غير المُدمجة أعلاه (الطالبات/الفصول/الدرجات/المحوّلات/الصيانة/التنبيهات...):
       // نُلحق أي سجل محلي غير موجود في نسخة الخادم حتى لا يفقد السحبُ حفظَ هذا الجهاز
@@ -11058,18 +11078,32 @@ function addTeacherAbsenceFromList(){
 }
 function deleteUser(id){
   const u = userById(id);
-  if(!confirm(`هل تريد حذف المعلم "${u?.name||''}"؟`)) return;
+  if(!confirm(`هل تريد حذف الحساب "${u?.name||''}" نهائيًا؟`)) return;
+  const school = getActiveSchool();
   const d = loadDB();
   const target = d.users.find(x => x.id === id);
-  if(target) target.active = false;
+  if(target){ target.active = false; target.deleted = true; }
+  const bu = new Set(Array.isArray(d._blockedUsers) ? d._blockedUsers.map(String) : []);
+  if(id) bu.add(String(id));
+  d._blockedUsers = [...bu];
   saveDB(d);
-  // موثوقية الحفظ: التعطيل تغييرٌ على قسم المستخدمين يجب أن يصل الخادم — نربط
-  // النجاح برفعه الفعلي بدل ترك الحالة بلا تأكيد (كان المسار بلا حراسة ولا رفع صريح).
+  // موثوقية الحفظ: الحذف النهائي يمر أولاً عبر مسار الخادم المخصّص (delete-user) لتعطيل
+  // الحساب في جدول users وإنهاء جلساته وتثبيت _blockedUsers، مع الإبقاء على حراسة المزامنة.
   if(__serverEnabled() && __syncEnabled()){
-    __saveGuardWatch(getActiveSchool(), 'user', __saveGuardOutcome);
-    __noteSaveBanner('🔵 جارٍ حفظ تعطيل الحساب على الخادم...', false);
+    __saveGuardWatch(school, 'user', __saveGuardOutcome);
+    __noteSaveBanner('🔵 جارٍ حفظ حذف الحساب على الخادم...', false);
     try{ __refreshSaveStatus(); }catch(e){}
-    try{ __syncSchedule(getActiveSchool(), 0); }catch(e){}
+    if(typeof __api === 'function'){
+      __api('POST', 'admin/delete-user', { userId: id, school }).then(r => {
+        if(r && r.status === 401){ try{ __handleAuthError(r); }catch(_){} return; }
+        if(r && r.status === 200 && r.j && r.j.ok){
+          try{ __noteSaveBanner('✅ تم حذف الحساب نهائيًا على الخادم', true); }catch(_){}
+        }
+        try{ __syncSchedule(school, 0); }catch(_){}
+      }).catch(() => { try{ __syncSchedule(school, 0); }catch(_){} });
+    } else {
+      try{ __syncSchedule(school, 0); }catch(e){}
+    }
   }
   renderApp();
 }

@@ -1092,6 +1092,87 @@ function applyBlockedStudents(data, keys) {
   } catch (e) { console.warn('[blockedStudents]', e.message); return false; }
 }
 
+// حذف نهائي لحساب إداري أو معلمة (غير المدير): يُعطّل الحساب في جدول users ويلغي جلساته،
+// ويحوّل سجله في المرآة إلى شاهد حذف (active=false, deleted=true) ويسجّل معرّفه في
+// _blockedUsers فلا يعود الاسم المكرر أو المحذوف أبداً من أي جهاز قديم أو مزامنة متأخرة.
+app.post('/api/auth/admin/delete-user', requireAuth, (req, res) => {
+  (async () => {
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    if (rateLimit('delUser', 30, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+    const id = String(req.body && req.body.userId || '').trim();
+    if (!id) return res.status(400).json({ error: 'missing_userId' });
+    if (id === String(req.session.user_id || '')) return res.status(400).json({ error: 'cannot_delete_self' });
+    if (FORCE_ACTIVE.has(id)) return res.status(403).json({ error: 'protected_user' });
+    const school = String(req.body && req.body.school || db.SCHOOLS[0]).toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!canManageUsers(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+
+    const target = await db.userById(id);
+    if (target) {
+      if (target.role === 'ADMIN') return res.status(403).json({ error: 'cannot_delete_admin' });
+      if (target.school !== school) return res.status(400).json({ error: 'wrong_school' });
+      try { await db.setUserActive(id, false); } catch (e) { console.warn('[del-user] active', e.message); }
+      try { await db.deleteUserSessions(id); } catch (e) { console.warn('[del-user] sessions', e.message); }
+    }
+
+    const keepIds = new Set(ALWAYS_TEACHER_IDS[school] || []);
+    await db.mutateSchoolData(school, (d) => {
+      if (!d) return { changed: false, value: false };
+      const blockSet = new Set(Array.isArray(d._blockedUsers) ? d._blockedUsers.map(String) : []);
+      blockSet.add(id);
+      d._blockedUsers = [...blockSet];
+      if (Array.isArray(d.users)) {
+        d.users = d.users.map(u => {
+          if (!u || String(u.id) !== id) return u;
+          if (u.role === 'ADMIN') return u;
+          const t = JSON.parse(JSON.stringify(u));
+          t.active = false;
+          t.deleted = true;
+          delete t.lastLogin;
+          return t;
+        });
+      }
+      if (Array.isArray(d.classes) && !keepIds.has(id)) {
+        d.classes = d.classes.map(c => {
+          if (!c || !Array.isArray(c.teacherIds)) return c;
+          if (!c.teacherIds.some(tid => String(tid) === id)) return c;
+          const nc = JSON.parse(JSON.stringify(c));
+          nc.teacherIds = nc.teacherIds.filter(tid => String(tid) !== id);
+          return nc;
+        });
+      }
+      return { changed: true, value: true };
+    });
+
+    console.log('[del-user]', school, 'حُذف الحساب نهائياً:', id, '| بواسطة:', req.session.user_id);
+    res.json({ ok: true, id });
+  })().catch(fail(res));
+});
+
+function applyBlockedUsers(data, keys) {
+  try {
+    const ids = keys instanceof Set ? keys : new Set(Array.isArray(data && data._blockedUsers) ? data._blockedUsers.map(String) : []);
+    if (!ids.size) return false;
+    let changed = false;
+    if (Array.isArray(data.users)) {
+      data.users = data.users.map(u => {
+        if (!u || u.id == null) return u;
+        const uid = String(u.id);
+        if (!ids.has(uid) || FORCE_ACTIVE.has(uid) || u.role === 'ADMIN') return u;
+        if (u.active !== false || !u.deleted) {
+          changed = true;
+          const t = JSON.parse(JSON.stringify(u));
+          t.active = false;
+          t.deleted = true;
+          return t;
+        }
+        return u;
+      });
+    }
+    return changed;
+  } catch (e) { console.warn('[blockedUsers]', e.message); return false; }
+}
+
 app.post('/api/auth/admin/reset-password', requireAuth, (req, res) => {
   (async () => {
     if (rateLimit('reset', 15, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
@@ -1926,6 +2007,7 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
     // تصحيح أسماء العائلة المثبّتة عند القراءة أيضاً: تظهر صحيحة فوراً في الواجهة
     // حتى قبل أي حفظ جديد من أي جهاز.
     try { fixUsersNames(rec.data.users); } catch (_) {}
+    try { applyBlockedUsers(rec.data); } catch (_) {}
     // احقن إحصاءات الدخول الموثوقة من جدول الحسابات (مصدر الحقيقة) في نسخة القسم،
     // حتى لو اختلفت معرّفات/إحصاءات local storage لدى المتصفحات. المطابقة بالمعرّف ثم باسم المستخدم.
     if (Array.isArray(rec.data.users) && rec.data.users.length) {
@@ -2432,6 +2514,7 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       const prevMapU = new Map((prevUsers || []).map(u => [u.id, String(u.username || '').trim().toLowerCase()]));
       const seenLocal = new Set();
       for (const nu of (clean.users || [])) {
+        if (!nu || nu.deleted || nu.active === false) continue;
         const uname = String((nu && nu.username) || '').trim().toLowerCase();
         if (!uname) continue;
         // حساب قديم اسمُه مخالف للشكل (قصير جداً أو برموز ممنوعة) كان يُرفض
@@ -2535,6 +2618,20 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
       clean._blockedStudents = [...ib];
       applyBlockedStudents(clean, ib);
     } catch (e) { console.warn('[blockedStudents#final]', e.message); }
+
+    // دمج قائمة الحسابات المحذوفة نهائيًا (_blockedUsers) من نسخة الخادم والواصل،
+    // وأي مستخدم وُسِم deleted:true في أي منهما — فلا يعود حسابٌ مكرر أو محذوف أبداً.
+    try {
+      const pu = new Set(Array.isArray(prev.data && prev.data._blockedUsers) ? prev.data._blockedUsers.map(String) : []);
+      const iu = new Set(Array.isArray(clean._blockedUsers) ? clean._blockedUsers.map(String) : []);
+      for (const x of pu) iu.add(x);
+      for (const u of prevUsers) { if (u && u.id != null && u.deleted) iu.add(String(u.id)); }
+      if (Array.isArray(clean.users)) {
+        for (const u of clean.users) { if (u && u.id != null && u.deleted) iu.add(String(u.id)); }
+      }
+      clean._blockedUsers = [...iu];
+      applyBlockedUsers(clean, iu);
+    } catch (e) { console.warn('[blockedUsers#final]', e.message); }
 
     // ===== حارس تاريخ الانضمام (joinedAt) =====
     // أجهزة قديمة (localStorage بلا joinedAt) تستبدل قسم الطلاب كاملاً للمدير/الوكيل
