@@ -1095,6 +1095,178 @@ window.__nibrasMarkBooted = function(){
   @media (max-width: 860px){
     .layout.theme-girls-student .sd-bottom-3{ grid-template-columns: 1fr; }
   }
+
+  /* ===== واجهة المدير التنفيذية الرسمية (ADMIN فقط — ترتيب المساحة ولمسات فنية رسمية) ===== */
+  .layout.theme-admin-exec{
+    background: radial-gradient(65% 45% at 100% 0%, rgba(157,23,77,.07), transparent 65%), radial-gradient(55% 45% at 0% 100%, rgba(23,37,84,.08), transparent 65%), linear-gradient(180deg, #faf7fa 0%, #f1ecf4 100%) !important;
+    min-height: 100vh;
+  }
+  .layout.theme-admin-exec .main{
+    background: transparent !important;
+    padding: 10px 14px 16px !important;
+  }
+  .layout.theme-admin-exec .topbar{
+    border-bottom: 2px solid rgba(244,114,182,.55) !important;
+    box-shadow: 0 4px 18px rgba(15,23,42,.20) !important;
+  }
+  .layout.theme-admin-exec .sidebar{
+    background: linear-gradient(180deg, #172554 0%, #242154 58%, #5b1941 100%) !important;
+    border-left: 1px solid rgba(244,114,182,.28);
+    box-shadow: 0 8px 24px rgba(15,23,42,.22);
+    padding: 10px 10px 14px !important;
+  }
+  .layout.theme-admin-exec .sidebar .nav-link{
+    color: rgba(248,250,252,.92) !important;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 7px 11px !important;
+    margin-bottom: 2px;
+  }
+  .layout.theme-admin-exec .sidebar .nav-link:hover{
+    background: rgba(255,255,255,.12) !important;
+  }
+  .layout.theme-admin-exec .sidebar .nav-link.active{
+    background: linear-gradient(135deg, #9d174d, #be185d) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255,255,255,.28);
+    box-shadow: 0 4px 12px rgba(15,23,42,.28);
+    font-weight: 800;
+  }
+  .layout.theme-admin-exec .sidebar .group-title{
+    color: #fbcfe8 !important;
+    font-weight: 800;
+    letter-spacing: .02em;
+    margin-top: 8px !important;
+    margin-bottom: 4px !important;
+  }
+  /* إبراز بطاقة رسالة اليوم بشكل رسمي أنيق */
+  .layout.theme-admin-exec .sidebar-widgets .msg-day-center{
+    background: linear-gradient(135deg, #fdf2f8 0%, #ffffff 100%) !important;
+    color: #0f172a !important;
+    border: 1px solid #f472b6 !important;
+    border-right: 4px solid #9d174d !important;
+    border-radius: 12px !important;
+    padding: 9px 11px !important;
+    margin: 8px 0 !important;
+    box-shadow: 0 5px 14px rgba(0,0,0,.22) !important;
+    cursor: pointer;
+  }
+  .layout.theme-admin-exec .sidebar-widgets .msg-day-center .dash-welcome-label{
+    color: #172554 !important;
+    font-weight: 900 !important;
+    font-size: 12.5px !important;
+    margin-bottom: 3px;
+  }
+  .layout.theme-admin-exec .sidebar-widgets .msg-day-center .msg-static{
+    color: #0f172a !important;
+    font-weight: 700 !important;
+    font-size: 12px !important;
+    line-height: 1.55;
+  }
+  .layout.theme-admin-exec .sidebar-widgets .msg-day-center .msg-sender{
+    color: #9d174d !important;
+    font-weight: 800 !important;
+    margin-top: 3px;
+  }
+  /* إطار رسمي متناسق لنجم/نجمة الأسبوع مع إبقاء الاسم داخل النجمة بلونه الداكن */
+  .layout.theme-admin-exec .sidebar-widgets [title="نجمة الأسبوع"]{
+    background: rgba(255,255,255,.08) !important;
+    border: 1px solid rgba(255,255,255,.22) !important;
+    border-radius: 14px !important;
+    padding: 8px 6px !important;
+    margin-top: 8px !important;
+  }
+  .layout.theme-admin-exec .sidebar-widgets [title="نجمة الأسبوع"] > div{ color:#fff !important; }
+  /* ترتيب المساحة وتوحيد البطاقات التنفيذية */
+  .layout.theme-admin-exec .dash-hero{
+    gap: 10px !important;
+    margin-bottom: 10px !important;
+  }
+  .layout.theme-admin-exec .dash-greet{
+    background: linear-gradient(135deg, #ffffff 0%, #fdf4f8 100%) !important;
+    border: 1px solid rgba(23,37,84,.12) !important;
+    border-right: 4px solid #172554 !important;
+    border-radius: 14px !important;
+    padding: 11px 14px !important;
+    box-shadow: 0 4px 14px rgba(15,23,42,.06) !important;
+  }
+  .layout.theme-admin-exec .dash-greet-icon{
+    background: linear-gradient(135deg, #172554, #9d174d) !important;
+    width: 46px; height: 46px; border-radius: 12px; font-size: 21px;
+  }
+  .layout.theme-admin-exec .dash-greet-title{ color: #172554 !important; font-size: 17px !important; }
+  .layout.theme-admin-exec .dash-status{
+    border-radius: 14px !important;
+    padding: 11px 14px !important;
+    box-shadow: 0 4px 14px rgba(15,23,42,.06) !important;
+  }
+  .layout.theme-admin-exec .dash-panel,
+  .layout.theme-admin-exec .card,
+  .layout.theme-admin-exec .nbr-panel{
+    background: rgba(255,255,255,.97) !important;
+    border: 1px solid rgba(23,37,84,.12) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 4px 16px rgba(15,23,42,.06) !important;
+  }
+  .layout.theme-admin-exec .dash-panel{
+    padding: 11px 14px !important;
+    margin-bottom: 10px !important;
+  }
+  .layout.theme-admin-exec .card{
+    margin-bottom: 10px !important;
+  }
+  .layout.theme-admin-exec .dash-panel-head{
+    border-bottom: 1px solid rgba(157,23,77,.12);
+    padding-bottom: 7px;
+    margin-bottom: 8px !important;
+  }
+  .layout.theme-admin-exec .dash-panel-title{
+    color: #172554 !important;
+    font-weight: 900 !important;
+    font-size: 14px !important;
+  }
+  .layout.theme-admin-exec .dash-panel-more{
+    color: #9d174d !important;
+    font-weight: 800 !important;
+  }
+  .layout.theme-admin-exec .nbr-wrap{ margin-bottom: 10px !important; }
+  .layout.theme-admin-exec .nbr-panel{
+    border-right: 4px solid #9d174d !important;
+    padding: 11px 14px !important;
+  }
+  .layout.theme-admin-exec .dash-bottom{
+    gap: 10px !important;
+    margin-bottom: 10px !important;
+  }
+  .layout.theme-admin-exec .dash-mid{ gap: 10px !important; }
+  .layout.theme-admin-exec .dash-pioneers-card{
+    border-radius: 14px !important;
+    border: 1px solid rgba(23,37,84,.12) !important;
+    margin-bottom: 10px !important;
+    box-shadow: 0 4px 16px rgba(15,23,42,.07) !important;
+  }
+  .layout.theme-admin-exec .dash-pioneers-head{
+    background: linear-gradient(135deg, #172554 0%, #312e81 55%, #831843 100%) !important;
+    padding: 10px 16px !important;
+  }
+  .layout.theme-admin-exec .useful-links-card{
+    margin-top: 0 !important;
+    padding: 10px 14px !important;
+    border-right: 4px solid #172554 !important;
+  }
+  .layout.theme-admin-exec .useful-links-card .btn-secondary{
+    border-radius: 999px !important;
+    background: #fdf2f8 !important;
+    border: 1px solid #f9a8d4 !important;
+    color: #172554 !important;
+    font-weight: 800;
+    transition: all .15s ease;
+  }
+  .layout.theme-admin-exec .useful-links-card .btn-secondary:hover{
+    background: #9d174d !important;
+    border-color: #9d174d !important;
+    color: #fff !important;
+  }
 </style>
 </head>
 <body>
@@ -4862,7 +5034,7 @@ function renderLayout(user, hash){
   else if(page === 'about') pageHtml = renderAbout();
   else pageHtml = renderDashboard();
 
-  const themeClass = 'theme-girls' + (user && user.role === 'STUDENT' ? ' theme-girls-student' : '');
+  const themeClass = 'theme-girls' + (user && user.role === 'STUDENT' ? ' theme-girls-student' : (user && user.role === 'ADMIN' ? ' theme-admin-exec' : ''));
   setTimeout(__warnPendingOnOpen, 0);
   return `
   <div class="layout ${themeClass}">
@@ -6530,8 +6702,8 @@ function renderDashboard(){
   ${isTeacher ? teacherQuickCards : ''}
   ${attPanel}
   ${isMgr ? renderCharts(d) : ''}
-  <div style="border-radius:18px;overflow:hidden;border:1px solid #bfdbfe;margin-bottom:14px;background:#fff;box-shadow:0 4px 18px rgba(37,99,235,.12)">
-    <div style="background:linear-gradient(135deg,#38bdf8,#2563eb);color:#fff;padding:11px 18px;display:flex;align-items:center;justify-content:space-between">
+  <div class="dash-pioneers-card" style="border-radius:18px;overflow:hidden;border:1px solid #bfdbfe;margin-bottom:14px;background:#fff;box-shadow:0 4px 18px rgba(37,99,235,.12)">
+    <div class="dash-pioneers-head" style="background:linear-gradient(135deg,#38bdf8,#2563eb);color:#fff;padding:11px 18px;display:flex;align-items:center;justify-content:space-between">
       <div style="font-weight:800;font-size:15px">🏆 رواد نبراس — الأكثر تفاعلاً هذا الأسبوع</div>
       <span style="font-size:11px;font-weight:700;opacity:.95">تسجيل الدخول</span>
     </div>
