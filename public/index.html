@@ -8635,6 +8635,7 @@ function renderStudents(){
       ${(canManage || canEditGuardianPhone(user)) ? `<button class="btn-secondary" onclick="downloadStudentTemplate()">⬇ تنزيل القالب</button>
       <label class="btn-secondary file-btn">📥 استيراد Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importStudents(event)"/></label>` : ''}
       ${canManage ? `<button class="btn-primary" onclick="toggleEl('studentForm')">+ إضافة طالب</button>` : (canAddStu ? `<button class="btn-primary" onclick="toggleEl('studentForm')">+ إضافة طالبة</button>` : '')}
+      ${isAdmin ? `<button class="btn-secondary" onclick="exportAccountsExcel()">📥 تصدير الحسابات</button>` : ''}
       ${isAdmin ? `<button class="btn-secondary danger" onclick="deleteAllStudents()">🗑 حذف الكل</button>` : ''}
     </div>
   </div>
@@ -10761,6 +10762,7 @@ function renderAdmins(){
   return `
   <div class="header-row"><h1 class="page-title">الإداريون</h1>
     <div class="btn-group">
+      ${isAdmin ? `<button class="btn-secondary" onclick="exportAccountsExcel()">📥 تصدير الحسابات</button>` : ''}
       <button class="btn-primary" onclick="toggleEl('userForm')">+ إضافة إداري</button>
     </div>
   </div>
@@ -10865,6 +10867,59 @@ function showTempList(creds){
         <table class="data-table"><thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>كلمة المرور المؤقتة</th><th>القسم</th></tr></thead><tbody>${rows}</tbody></table>
       </div>
     </div>`;
+}
+function buildAccountsExportRows(d, school){
+  const targetSchool = String(school || getActiveSchool() || 'GIRLS').toUpperCase();
+  const data = d || {};
+  const grades = Array.isArray(data.grades) ? data.grades : [];
+  const classes = Array.isArray(data.classes) ? data.classes : [];
+  const students = Array.isArray(data.students) ? data.students : [];
+  const users = Array.isArray(data.users) ? data.users : [];
+  const gradeMap = new Map(grades.filter(g => g && g.id != null).map(g => [String(g.id), String(g.name || '')]));
+  const classMap = new Map(classes.filter(c => c && c.id != null).map(c => [String(c.id), c]));
+  const studentMap = new Map(students.filter(s => s && s.id != null).map(s => [String(s.id), s]));
+  const roleOrder = { ADMIN: 0, AGENT: 1, SCHOOL_AGENT: 2, COUNSELOR: 3, ADMINISTRATIVE: 4, TEACHER: 5, STUDENT: 6 };
+  const filtered = users.filter(u => {
+    if(!u || u.deleted) return false;
+    if(u.school && String(u.school).toUpperCase() !== targetSchool) return false;
+    return true;
+  });
+  filtered.sort((a, b) => {
+    const ra = roleOrder[a.role] ?? 9, rb = roleOrder[b.role] ?? 9;
+    if(ra !== rb) return ra - rb;
+    return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
+  });
+  return filtered.map(u => {
+    const isStu = u.role === 'STUDENT';
+    const stu = isStu ? studentMap.get(String(u.id)) : null;
+    const cls = stu && stu.classId ? classMap.get(String(stu.classId)) : null;
+    const gradeId = (cls && cls.gradeId) ? String(cls.gradeId) : (stu && stu.gradeId ? String(stu.gradeId) : '');
+    const gradeName = isStu ? (gradeMap.get(gradeId) || '—') : '—';
+    const className = isStu ? (cls && cls.name ? String(cls.name) : '—') : '—';
+    const roleTxt = isStu ? (targetSchool === 'GIRLS' ? 'طالبة' : 'طالب') : (typeof roleLabel === 'function' ? roleLabel(u.role) : String(u.role || '—'));
+    return {
+      'الاسم الكامل': String(u.name || (stu && stu.fullName) || '').trim() || '—',
+      'اسم المستخدم': String(u.username || '').trim() || '—',
+      'الدور / الصفة': roleTxt,
+      'الصف الدراسي': gradeName,
+      'الفصل': className,
+      'حالة الحساب': u.active === false ? 'غير مفعّل' : 'مفعّل',
+    };
+  });
+}
+function exportAccountsExcel(){
+  const cur = currentUser();
+  if(!cur || cur.role !== 'ADMIN'){ alert('هذه الميزة متاحة لمدير المدرسة فقط'); return; }
+  if(typeof XLSX === 'undefined'){ alert('مكتبة التصدير قيد التحميل، حاول بعد لحظة'); return; }
+  const school = getActiveSchool();
+  const rows = buildAccountsExportRows(loadDB(), school);
+  if(!rows.length){ alert('لا توجد حسابات للتصدير'); return; }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  const sheetName = school === 'GIRLS' ? 'حسابات البنات' : 'حسابات البنين';
+  const fileName = school === 'GIRLS' ? 'حسابات_قسم_البنات.xlsx' : 'حسابات_قسم_البنين.xlsx';
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, fileName);
 }
 async function exportCredentials(){
   if(__userBusy) return;
