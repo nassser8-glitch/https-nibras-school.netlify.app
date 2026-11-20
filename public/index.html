@@ -4849,8 +4849,10 @@ function computeStudentActivationStats(sd, tagText){
     }
   }
 
-  res.activationPct = res.total ? Math.round((res.activated / res.total) * 100) : 0;
-  res.loginPct = res.total ? Math.round((res.loggedIn / res.total) * 100) : 0;
+  res.notActivated = res.total - res.activated;
+  res.notLoggedIn = res.total - res.loggedIn;
+  res.activationPct = res.total ? Number(((res.activated / res.total) * 100).toFixed(2)) : 0;
+  res.loginPct = res.total ? Number(((res.loggedIn / res.total) * 100).toFixed(2)) : 0;
   return res;
 }
 
@@ -4870,6 +4872,7 @@ function showActNames(gkey, grp){
     const loggedLabels = st.loggedInItems.map(it => it.name + (it.lastLogin ? ' — آخر دخول: ' + sdDate(it.lastLogin) : ''));
     openDetails('إحصائية حسابات الطالبات (بنات — الإجمالي: ' + st.total + ')',
       `<li style="font-weight:800;color:#2563eb">🔑 الحسابات المفعّلة (${st.activated}/${st.total} — ${st.activationPct}%)</li>${li(st.activatedNames)}` +
+      `<li style="font-weight:800;color:#dc2626;margin-top:8px">🚫 الحسابات غير المفعّلة (${st.notActivated})</li>${li(st.notActivatedNames)}` +
       `<li style="font-weight:800;color:#16a34a;margin-top:8px">✅ سجلن الدخول فعليًا مرة واحدة على الأقل (${st.loggedIn})</li>${li(loggedLabels)}` +
       `<li style="font-weight:800;color:#9ca3af;margin-top:8px">⏳ لم يسجلن الدخول بعد (${st.notLoggedIn})</li>${li(st.notLoggedInNames)}`);
     return;
@@ -6221,19 +6224,23 @@ function renderDashboard(){
     // "الكل/بنين/بنات" لأن الفلترة والإجمالي شيء واحد ولا داعي لتكرار التبويب.
     const onlyGirls = schoolActs.length === 1 && groups.length === 2;
     const studentDonut = (label, st, gkey) => {
-      const pct = st.total ? Math.round((st.activated / st.total) * 100) : 0;
+      const pct = st.total ? Number(((st.activated / st.total) * 100).toFixed(2)) : 0;
+      const notActivated = st.total - st.activated;
+      const notLoggedIn = st.total - st.loggedIn;
       const donutBg = st.total ? `conic-gradient(#2563eb 0 ${pct}%, #eef2f7 ${pct}% 100%)` : 'conic-gradient(#e4edf5 0 100%)';
       return `
         <div class="act-block">
           <div style="font-weight:800;font-size:14px;color:#0f172a;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:5px" onclick="showActNames('${gkey}','students')" title="اضغط لعرض التفاصيل الكاملة">${label}: ${st.activated}/${st.total} <span style="font-size:11px;color:#2563eb">📋</span></div>
           <div class="act-flex">
             <div class="dash-donut" style="width:116px;height:116px;background:${donutBg};cursor:pointer" onclick="showActNames('${gkey}','students')" title="اضغط لعرض الأسماء">
-              <div class="dash-donut-center"><b>${pct}%</b><span>مفعّل</span></div>
+              <div class="dash-donut-center"><b style="font-size:18px">${pct}%</b><span>مفعّل</span></div>
             </div>
             <div class="att-legend">
-              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#2563eb"></span>الحسابات المفعّلة <b>${st.activated}</b></div>
+              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#0f172a"></span>إجمالي الطالبات <b>${st.total}</b></div>
+              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#2563eb"></span>الحسابات المفعّلة <b>${st.activated}</b> <span class="muted small">(${pct}%)</span></div>
+              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#dc2626"></span>الحسابات غير المفعّلة <b>${notActivated}</b></div>
               <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#22c55e"></span>سجلن الدخول فعليًا <b>${st.loggedIn}</b></div>
-              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#cbd5e1"></span>لم يسجلن الدخول بعد <b>${st.notLoggedIn}</b></div>
+              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#cbd5e1"></span>لم يسجلن الدخول بعد <b>${notLoggedIn}</b></div>
             </div>
           </div>
         </div>`;
