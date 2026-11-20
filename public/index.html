@@ -915,6 +915,86 @@ window.__nibrasMarkBooted = function(){
     .report-data-table td:last-child{ border-bottom:none; }
     .report-data-table td::before{ content:attr(data-label); font-weight:700; color:#475569; font-size:12px; text-align:right; flex-shrink:0; }
   }
+
+  /* ===== خلفية وتنسيق صفحة الطالبات فقط (قسم البنات) ===== */
+  .layout.theme-girls-student{
+    background: url('assets/student-bg-girls.jpg') center/cover no-repeat fixed !important;
+    min-height: 100vh;
+  }
+  .layout.theme-girls-student .main{
+    background: transparent !important;
+  }
+  .layout.theme-girls-student .topbar{
+    background: rgba(255,255,255,.84) !important;
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(244,114,182,.25);
+    box-shadow: 0 4px 18px rgba(157,23,77,.07);
+  }
+  .layout.theme-girls-student .topbar-brand h1,
+  .layout.theme-girls-student .topbar-user-name{ color:#3b0724 !important; }
+  .layout.theme-girls-student .sidebar{
+    background: rgba(255,255,255,.84) !important;
+    backdrop-filter: blur(12px);
+    border-left: 1px solid rgba(244,114,182,.22);
+    box-shadow: 0 6px 24px rgba(157,23,77,.07);
+  }
+  .layout.theme-girls-student .sidebar .menu a,
+  .layout.theme-girls-student .sidebar .nav-item{ color:#4a1030 !important; }
+  .layout.theme-girls-student .sidebar .menu a.active,
+  .layout.theme-girls-student .sidebar .nav-item.active{
+    background: linear-gradient(135deg,#fdf2f8,#fce7f3) !important;
+    color: #9d174d !important;
+    border: 1px solid #fbcfe8;
+    font-weight: 800;
+  }
+  .layout.theme-girls-student .sidebar .menu-group-label,
+  .layout.theme-girls-student .sidebar .nav-section{ color:#9d174d !important; opacity:.75; }
+  .layout.theme-girls-student .sidebar-widgets{ color:#3b0724; }
+  .layout.theme-girls-student .sidebar-widgets .msg-today,
+  .layout.theme-girls-student .sidebar-widgets [title="نجمة الأسبوع"] div{ color:#4a1030 !important; }
+  .layout.theme-girls-student .student-dash{
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 4px 2px 16px;
+  }
+  .layout.theme-girls-student .dash-panel,
+  .layout.theme-girls-student .sd-card,
+  .layout.theme-girls-student .useful-links-card,
+  .layout.theme-girls-student .card{
+    background: rgba(255,255,255,.88) !important;
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(251,207,232,.85) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 6px 22px rgba(157,23,77,.07) !important;
+  }
+  .layout.theme-girls-student .sd-hero-floral{
+    background: rgba(255,255,255,.84);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(251,207,232,.9);
+    border-radius: 20px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+    box-shadow: 0 8px 24px rgba(157,23,77,.08);
+  }
+  .layout.theme-girls-student .sd-bottom-3{
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .layout.theme-girls-student .useful-links-card .btn-secondary{
+    border-radius: 999px !important;
+    background: rgba(255,255,255,.95) !important;
+    border: 1px solid #fbcfe8 !important;
+    color: #831843 !important;
+    font-weight: 700;
+  }
+  .layout.theme-girls-student .useful-links-card .btn-secondary:hover{
+    background: #fdf2f8 !important;
+  }
+  @media (max-width: 860px){
+    .layout.theme-girls-student .sd-bottom-3{ grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -4682,7 +4762,7 @@ function renderLayout(user, hash){
   else if(page === 'about') pageHtml = renderAbout();
   else pageHtml = renderDashboard();
 
-  const themeClass = 'theme-girls';
+  const themeClass = 'theme-girls' + (user && user.role === 'STUDENT' ? ' theme-girls-student' : '');
   setTimeout(__warnPendingOnOpen, 0);
   return `
   <div class="layout ${themeClass}">
@@ -5544,192 +5624,180 @@ function renderStudentDashboard(){
   const posDeg = Math.round((sp.pos / maxPts) * 180);
   const negDeg = Math.round((Math.abs(sp.neg) / maxPts) * 180);
   return `<div class="student-dash">
-  <div class="sd-hero" style="background:linear-gradient(135deg,#0f766e,#1d4ed8);border-radius:18px;padding:24px 22px;margin-bottom:16px;color:#fff;position:relative;overflow:hidden;box-shadow:0 10px 26px rgba(13,118,110,.22)">
-    <div style="position:absolute;top:-46px;right:-46px;width:190px;height:190px;border-radius:50%;background:rgba(255,255,255,.09)"></div>
-    <div style="position:absolute;bottom:-70px;left:10px;width:210px;height:210px;border-radius:50%;background:rgba(255,255,255,.07)"></div>
-    <div class="sd-hero-row" style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;position:relative">
+  <div class="sd-hero-floral">
+    <div class="sd-hero-row" style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
       <div class="sd-hero-info">
-        <div style="font-size:13px;font-weight:600;opacity:.9">مرحباً بك 👋</div>
-        <div class="sd-name" style="font-size:25px;font-weight:800;margin:2px 0;letter-spacing:.5px">${escapeHtml(user.name || 'طالب')}</div>
-        <div style="font-size:13px;opacity:.95">🏫 ${escapeHtml(classLabel)}</div>
-        ${schoolWeekHTML(user)}
+        <div style="font-size:13px;font-weight:700;color:#be185d">مرحباً بكِ 👋</div>
+        <div class="sd-name" style="font-size:24px;font-weight:900;margin:2px 0;color:#3b0724">${escapeHtml(user.name || 'طالبة')}</div>
+        <div style="font-size:13px;color:#6b2149;font-weight:600">🏫 ${escapeHtml(classLabel)}</div>
+        <div style="margin-top:4px">${schoolWeekHTML(user)}</div>
       </div>
-      <div class="sd-hero-stats" style="display:flex;gap:10px;align-items:center">
-        <div class="sd-herostat" style="background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:14px;padding:10px 16px;text-align:center;min-width:96px">
-          <div style="font-size:22px;font-weight:800">${pts > 0 ? '+' : ''}${pts}</div>
-          <div style="font-size:11px;opacity:.92">نقاطي</div>
+      <div class="sd-hero-stats" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div class="sd-herostat" style="background:linear-gradient(135deg,#fffbeb,#ffffff);border:1px solid #fde68a;border-radius:16px;padding:10px 18px;text-align:center;min-width:104px;box-shadow:0 3px 10px rgba(217,119,6,.08)">
+          <div style="font-size:22px;font-weight:900;color:#b45309">⭐ ${pts > 0 ? '+' : ''}${pts}</div>
+          <div style="font-size:11.5px;color:#78350f;font-weight:700">نقاطي</div>
         </div>
-        <div class="sd-herostat" style="background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:14px;padding:10px 16px;text-align:center;min-width:96px">
-          <div style="font-size:22px;font-weight:800">${total > 0 ? attPct + '%' : '—'}</div>
-          <div style="font-size:11px;opacity:.92">نسبة الحضور</div>
+        <div class="sd-herostat" style="background:linear-gradient(135deg,#fdf2f8,#ffffff);border:1px solid #fbcfe8;border-radius:16px;padding:10px 18px;text-align:center;min-width:104px;box-shadow:0 3px 10px rgba(190,24,93,.08)">
+          <div style="font-size:22px;font-weight:900;color:#be185d">${total > 0 ? attPct + '%' : '—'}</div>
+          <div style="font-size:11.5px;color:#831843;font-weight:700">نسبة الحضور</div>
         </div>
       </div>
     </div>
   </div>
-  <div class="sd-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-bottom:16px">
-    <div class="dash-panel" style="padding:16px 18px;border-radius:16px">
+  <div class="sd-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:14px">
+    <div class="dash-panel" style="padding:14px 18px">
       <div class="dash-panel-head" style="margin-bottom:8px"><div class="dash-panel-title">⭐ نقاطي</div></div>
-      <div style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap">
-        <div style="width:132px;height:132px;border-radius:50%;background:conic-gradient(#16a34a 0deg ${posDeg}deg, #dc2626 ${posDeg}deg ${posDeg + negDeg}deg, #e5e7eb ${posDeg + negDeg}deg 360deg);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(0,0,0,.12)">
-          <div style="width:100px;height:100px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 1px 4px rgba(0,0,0,.05)">
-            <span style="font-size:26px;font-weight:800;color:${pts >= 0 ? '#16a34a' : '#dc2626'}">${pts > 0 ? '+' : ''}${pts}</span>
+      <div style="display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap">
+        <div style="width:120px;height:120px;border-radius:50%;background:conic-gradient(#16a34a 0deg ${posDeg}deg, #dc2626 ${posDeg}deg ${posDeg + negDeg}deg, #e5e7eb ${posDeg + negDeg}deg 360deg);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(0,0,0,.1)">
+          <div style="width:90px;height:90px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center">
+            <span style="font-size:24px;font-weight:900;color:${pts >= 0 ? '#16a34a' : '#dc2626'}">${pts > 0 ? '+' : ''}${pts}</span>
             <span style="font-size:11px;color:var(--muted);font-weight:600">نقطة</span>
           </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:#ecfdf5;font-size:13px;font-weight:700;color:#16a34a">✅ النقاط الإيجابية <span style="flex:1"></span>+${sp.pos}</div>
-          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:#fef2f2;font-size:13px;font-weight:700;color:#dc2626">⚠️ النقاط السلبية <span style="flex:1"></span>${sp.neg}</div>
+        <div style="display:flex;flex-direction:column;gap:8px;min-width:155px">
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:#ecfdf5;font-size:13px;font-weight:700;color:#16a34a">✅ النقاط الإيجابية <span style="flex:1"></span>+${sp.pos}</div>
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:#fef2f2;font-size:13px;font-weight:700;color:#dc2626">⚠️ النقاط السلبية <span style="flex:1"></span>${sp.neg}</div>
         </div>
       </div>
     </div>
-    <div class="dash-panel" style="padding:16px 18px;border-radius:16px">
-      <div class="dash-panel-head" style="margin-bottom:8px"><div class="dash-panel-title">✅ حضوري</div></div>
-      <div style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap">
-        <div style="position:relative;width:132px;height:132px;display:flex;align-items:center;justify-content:center">
-          <svg viewBox="0 0 36 36" style="width:132px;height:132px;transform:rotate(-90deg)">
+    <div class="dash-panel" style="padding:14px 18px">
+      <div class="dash-panel-head" style="margin-bottom:8px"><div class="dash-panel-title">📅 حضوري</div></div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap">
+        <div style="position:relative;width:120px;height:120px;display:flex;align-items:center;justify-content:center">
+          <svg viewBox="0 0 36 36" style="width:120px;height:120px;transform:rotate(-90deg)">
             <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3.2" />
             <circle cx="18" cy="18" r="15.9" fill="none" stroke="#ef4444" stroke-width="3.2" stroke-dasharray="${total > 0 ? Math.round(absent/total*100) : 0} ${total > 0 ? 100 - Math.round(absent/total*100) : 100}" stroke-linecap="round" />
             <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f59e0b" stroke-width="3.2" stroke-dasharray="${total > 0 ? Math.round(late/total*100) : 0} ${total > 0 ? 100 - Math.round(late/total*100) : 100}" stroke-dashoffset="${total > 0 ? -Math.round(absent/total*100) : 0}" stroke-linecap="round" />
           </svg>
           <div style="position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center">
-            <span style="font-size:26px;font-weight:800;color:#ef4444">${absent}</span>
+            <span style="font-size:24px;font-weight:900;color:#ef4444">${absent}</span>
             <span style="font-size:11px;color:var(--muted);font-weight:600">غياب</span>
           </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:#dcfce7;font-size:13px;font-weight:700;color:#16a34a">✅ حاضر <span style="flex:1"></span>${present}</div>
-          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:#fef9c3;font-size:13px;font-weight:700;color:#b45309">🟡 متأخر <span style="flex:1"></span>${late}</div>
+        <div style="display:flex;flex-direction:column;gap:8px;min-width:140px">
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:#dcfce7;font-size:13px;font-weight:700;color:#16a34a">✅ حاضر <span style="flex:1"></span>${present}</div>
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:#fef9c3;font-size:13px;font-weight:700;color:#b45309">🟡 متأخر <span style="flex:1"></span>${late}</div>
         </div>
       </div>
     </div>
   </div>
-  <div class="dash-panel" style="margin-bottom:14px;padding:16px 20px">
-    <div class="dash-panel-head" style="margin-bottom:12px">
+  <div class="dash-panel" style="margin-bottom:14px;padding:14px 18px">
+    <div class="dash-panel-head" style="margin-bottom:10px">
       <div class="dash-panel-title">📊 التكليفات حسب النوع</div>
-      <span style="font-size:12px;color:var(--muted)">${assignments.length} تكليف</span>
+      <span style="font-size:12px;font-weight:700;color:#9d174d">${assignments.length} تكليف</span>
     </div>
-    ${typeStats.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:12px">لا توجد تكليفات بعد</p>' :
-    `<div style="display:flex;flex-direction:column;gap:10px">
+    ${typeStats.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:10px">لا توجد تكليفات بعد</p>' :
+    `<div style="display:flex;flex-direction:column;gap:8px">
       ${typeStats.map(s => `<div style="display:flex;align-items:center;gap:8px">
-        <span style="width:24px;text-align:center;font-size:18px">${s.icon}</span>
-        <span style="width:46px;font-size:12px;font-weight:600">${s.type}</span>
-        <div style="flex:1;height:11px;background:#f1f5f9;border-radius:10px;overflow:hidden;position:relative">
+        <span style="width:22px;text-align:center;font-size:16px">${s.icon}</span>
+        <span style="width:46px;font-size:12px;font-weight:700">${s.type}</span>
+        <div style="flex:1;height:10px;background:#f1f5f9;border-radius:10px;overflow:hidden;position:relative">
           <div style="height:100%;width:${s.done > 0 ? Math.round(s.done/s.total*100) : 0}%;background:linear-gradient(90deg,${s.color},${s.color}cc);border-radius:10px;transition:width .3s"></div>
         </div>
-        <span style="font-size:11px;font-weight:800;color:${s.color};min-width:44px;text-align:center">${s.done > 0 ? Math.round(s.done/s.total*100) : 0}%</span>
+        <span style="font-size:11.5px;font-weight:800;color:${s.color};min-width:40px;text-align:center">${s.done > 0 ? Math.round(s.done/s.total*100) : 0}%</span>
         <div style="display:flex;gap:4px;font-size:11px;white-space:nowrap">
           <span style="background:#dcfce7;color:#16a34a;padding:2px 7px;border-radius:8px;font-weight:700">نفذ ${s.done}</span>
           <span style="background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:8px;font-weight:700">لم ينفذ ${s.todo}</span>
         </div>
       </div>`).join('')}
-    </div>
-    <div style="display:flex;gap:16px;margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)">
-      <div style="display:flex;align-items:center;gap:4px;font-size:12px">
-        <span style="width:14px;height:10px;border-radius:5px;background:var(--primary);display:inline-block"></span>
-        <span style="color:var(--muted)">نفذ</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:4px;font-size:12px">
-        <span style="width:14px;height:10px;border-radius:5px;background:#dc2626;opacity:.3;display:inline-block"></span>
-        <span style="color:var(--muted)">لم ينفذ</span>
-      </div>
     </div>`}
   </div>
-  <div class="sd-card" style="border-radius:18px;overflow:hidden;border:1px solid #e6edf5;margin-bottom:16px;background:#fff;box-shadow:0 4px 18px rgba(15,79,136,.08)">
-    <div style="background:linear-gradient(135deg,#2563eb,#0f766e);color:#fff;padding:13px 18px;display:flex;align-items:center;justify-content:space-between">
-      <div style="font-weight:800;font-size:15px">🏆 أوائل فصلي</div>
-      <a href="#/student-leaders" style="color:#fff;font-size:12px;font-weight:700;opacity:.95;text-decoration:none">عرض الكل ←</a>
-    </div>
-    <div style="padding:16px 18px">
-    ${(() => {
-      const sPtsMap = studentPointsMap();
-      const sMedals = ['🥇','🥈','🥉'];
-      const myStud = myStudent && myStudent.classId
-        ? (d.students||[]).filter(s => s.active && s.classId === myStudent.classId).map(s => ({ s, pts: sPtsMap[s.id] || 0 })).sort((a,b) => b.pts - a.pts || String(a.s.fullName||'').localeCompare(String(b.s.fullName||''),'ar'))
-        : [];
-      if(myStud.length === 0) return '<p style="color:var(--muted);text-align:center;padding:10px">لا توجد نقاط مسجلة في فصلك بعد</p>';
-      const myRank = myStud.findIndex(x => x.s.id === user.id) + 1;
-      return `
-      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-        <div style="text-align:center;flex:1;min-width:110px;padding:12px 10px;background:linear-gradient(135deg,#eff6ff,#ffffff);border-radius:14px;border:1px solid #dbeafe">
-          <div style="font-size:30px;font-weight:800;color:#2563eb">${myRank <= myStud.length ? myRank : '—'}</div>
-          <div style="font-size:11px;color:var(--muted);font-weight:600;margin-top:2px">ترتيبي في الفصل</div>
-        </div>
-        <div style="text-align:center;flex:1;min-width:110px;padding:12px 10px;background:linear-gradient(135deg,#ecfdf5,#ffffff);border-radius:14px;border:1px solid #a7f3d0">
-          <div style="font-size:30px;font-weight:800;color:#16a34a">+${sPtsMap[user.id] || 0}</div>
-          <div style="font-size:11px;color:var(--muted);font-weight:600;margin-top:2px">نقاطي في الفصل</div>
-        </div>
-        <div style="flex:1.6;min-width:200px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:700">الأوائل في فصلك</div>
-          ${myStud.slice(0,3).map((x,i) => {
-            const me = x.s.id === user.id;
-            return `<div class="dash-leader-row" style="${me ? 'background:#eff6ff;border-radius:10px' : ''}">
-              <span class="dash-leader-medal">${sMedals[i] || '•'}</span>
-              <div style="min-width:0;flex:1">
-                <div class="dash-leader-name">${escapeHtml(x.s.fullName || x.s.name || x.s.username || '')} ${me ? '<span style="font-size:10px;background:#2563eb;color:#fff;padding:1px 6px;border-radius:6px;margin:0 4px">أنت</span>' : ''}</div>
-              </div>
-              <span class="dash-leader-pts" style="color:#16a34a">+${x.pts}</span>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>`;
-    })()}
-    </div>
-  </div>
-  <div class="sd-card" style="border-radius:18px;overflow:hidden;border:1px solid #bfdbfe;margin-bottom:16px;background:#fff;box-shadow:0 4px 18px rgba(37,99,235,.12)">
-    <div style="background:linear-gradient(135deg,#38bdf8,#2563eb);color:#fff;padding:11px 18px;display:flex;align-items:center;justify-content:space-between">
-      <div style="font-weight:800;font-size:15px">🏆 رواد نبراس — هذا الأسبوع</div>
-      <span style="font-size:11px;font-weight:700;opacity:.95">الأكثر تفاعلاً بتسجيل الدخول</span>
-    </div>
-    <div style="padding:10px 18px 12px">${renderNibrasPioneers(false)}</div>
-  </div>
-  <div class="sd-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
-    <div class="dash-panel" style="min-width:280px">
+  <div class="sd-bottom-3">
+    <div class="dash-panel" style="padding:14px 16px">
       <div class="dash-panel-head">
-        <div class="dash-panel-title"><span style="display:inline-flex;width:26px;height:26px;border-radius:8px;align-items:center;justify-content:center;background:#1d7fd6;color:#fff;margin-left:6px;font-size:14px">📝</span> التكليفات الأخيرة</div>
+        <div class="dash-panel-title"><span style="display:inline-flex;width:24px;height:24px;border-radius:8px;align-items:center;justify-content:center;background:#be185d;color:#fff;margin-left:6px;font-size:13px">📝</span> التكليفات الأخيرة</div>
         <a href="#/assignments" class="dash-panel-more">عرض الكل ←</a>
       </div>
-      ${recentAssignments.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:20px">لا توجد تكليفات بعد</p>' :
-      recentAssignments.map(a => {
+      ${recentAssignments.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:14px">لا توجد تكليفات بعد</p>' :
+      recentAssignments.slice(0,4).map(a => {
         const ac = typeColors[a.type] || '#888';
-        return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--line)">
-        <span style="width:9px;height:9px;border-radius:50%;background:${ac};flex-shrink:0"></span>
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid var(--line)">
+        <span style="width:8px;height:8px;border-radius:50%;background:${ac};flex-shrink:0"></span>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13px">${escapeHtml(a.title || 'تكليف')}</div>
+          <div style="font-weight:700;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(a.title || 'تكليف')}</div>
           <div style="font-size:11px;color:var(--muted)">${escapeHtml(a.subject || '')} · ${a.type||'واجب'}</div>
         </div>
-        <span style="font-size:11px;color:var(--muted);white-space:nowrap">${a.date || ''}</span>
+        <span style="font-size:10.5px;color:var(--muted);white-space:nowrap">${a.date || ''}</span>
       </div>`}).join('')}
     </div>
-    <div class="dash-panel" style="min-width:220px;max-width:340px">
+    <div class="dash-panel" style="padding:14px 16px">
       <div class="dash-panel-head">
-        <div class="dash-panel-title"><span style="display:inline-flex;width:26px;height:26px;border-radius:8px;align-items:center;justify-content:center;background:#f59e0b;color:#fff;margin-left:6px;font-size:14px">★</span> ملاحظاتي</div>
+        <div class="dash-panel-title"><span style="display:inline-flex;width:24px;height:24px;border-radius:8px;align-items:center;justify-content:center;background:#f59e0b;color:#fff;margin-left:6px;font-size:13px">★</span> ملاحظاتي</div>
         <a href="#/notes" class="dash-panel-more">عرض الكل ←</a>
       </div>
-      ${myNotes.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:12px">لا توجد ملاحظات بعد</p>' :
-      myNotes.map(n => `<div style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--line)">
-        <span style="font-size:16px">${n.type==='POSITIVE'?'🟢':'🔴'}</span>
+      ${myNotes.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:14px">لا توجد ملاحظات بعد</p>' :
+      myNotes.slice(0,4).map(n => `<div style="display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid var(--line)">
+        <span style="font-size:14px">${n.type==='POSITIVE'?'🟢':'🔴'}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:12px">${escapeHtml(n.category)}</div>
+          <div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(n.category)}</div>
           <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.description ? escapeHtml(n.description) : '—'}</div>
         </div>
-        <span style="font-size:12px;font-weight:700;color:${n.type==='POSITIVE'?'#16a34a':'#dc2626'};white-space:nowrap">${(n.points ?? 0) > 0 ? '+' : ''}${n.points ?? 0}</span>
+        <span style="font-size:12px;font-weight:800;color:${n.type==='POSITIVE'?'#16a34a':'#dc2626'};white-space:nowrap">${(n.points ?? 0) > 0 ? '+' : ''}${n.points ?? 0}</span>
       </div>`).join('')}
-      <div style="border-top:2px dashed var(--line,#e5e7eb);margin:8px 0"></div>
-      <div class="dash-panel-head" style="margin-top:4px">
-        <div class="dash-panel-title"><span style="display:inline-flex;width:26px;height:26px;border-radius:8px;align-items:center;justify-content:center;background:#8e44ad;color:#fff;margin-left:6px;font-size:14px">↔</span> تحويلاتي</div>
+    </div>
+    <div class="dash-panel" style="padding:14px 16px">
+      <div class="dash-panel-head">
+        <div class="dash-panel-title"><span style="display:inline-flex;width:24px;height:24px;border-radius:8px;align-items:center;justify-content:center;background:#db2777;color:#fff;margin-left:6px;font-size:13px">↔</span> تحويلاتي</div>
         <a href="#/transfers" class="dash-panel-more">عرض الكل ←</a>
       </div>
-      ${myTransfers.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:12px">لا توجد تحويلات</p>' :
-      myTransfers.map(t => {
+      ${myTransfers.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:14px">لا توجد تحويلات</p>' :
+      myTransfers.slice(0,4).map(t => {
         const st = t.status === 'PENDING' ? '<span style="color:#d97706;font-size:11px">⏳ قيد المتابعة</span>' : '<span style="color:#16a34a;font-size:11px">✅ تم الحل</span>';
-        return `<div style="padding:8px;border-bottom:1px solid var(--line)">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="font-weight:600;font-size:12px">${escapeHtml(t.reason || '')}</span>
+        return `<div style="padding:7px 2px;border-bottom:1px solid var(--line)">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+            <span style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.reason || '')}</span>
             ${st}
           </div>
           <div style="font-size:11px;color:var(--muted)">${t.createdAt ? new Date(t.createdAt).toLocaleDateString('ar-SA') : ''}${t.deductedPoints ? ' · خصم ' + t.deductedPoints + ' نقطة' : ''}</div>
         </div>`;
       }).join('')}
+    </div>
+  </div>
+  <div class="sd-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:14px">
+    <div class="sd-card" style="overflow:hidden">
+      <div style="background:linear-gradient(135deg,#be185d,#db2777);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-weight:800;font-size:14px">🏆 أوائل فصلي</div>
+        <a href="#/student-leaders" style="color:#fff;font-size:12px;font-weight:700;opacity:.95;text-decoration:none">عرض الكل ←</a>
+      </div>
+      <div style="padding:12px 14px">
+      ${(() => {
+        const sPtsMap = studentPointsMap();
+        const sMedals = ['🥇','🥈','🥉'];
+        const myStud = myStudent && myStudent.classId
+          ? (d.students||[]).filter(s => s.active && s.classId === myStudent.classId).map(s => ({ s, pts: sPtsMap[s.id] || 0 })).sort((a,b) => b.pts - a.pts || String(a.s.fullName||'').localeCompare(String(b.s.fullName||''),'ar'))
+          : [];
+        if(myStud.length === 0) return '<p style="color:var(--muted);text-align:center;padding:8px">لا توجد نقاط مسجلة في فصلك بعد</p>';
+        const myRank = myStud.findIndex(x => x.s.id === user.id) + 1;
+        return `
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <div style="text-align:center;flex:1;padding:8px;background:#fdf2f8;border-radius:12px;border:1px solid #fbcfe8">
+            <div style="font-size:22px;font-weight:900;color:#be185d">${myRank <= myStud.length ? myRank : '—'}</div>
+            <div style="font-size:11px;color:#831843;font-weight:600">ترتيبي</div>
+          </div>
+          <div style="text-align:center;flex:1;padding:8px;background:#ecfdf5;border-radius:12px;border:1px solid #a7f3d0">
+            <div style="font-size:22px;font-weight:900;color:#16a34a">+${sPtsMap[user.id] || 0}</div>
+            <div style="font-size:11px;color:#166534;font-weight:600">نقاطي</div>
+          </div>
+        </div>
+        ${myStud.slice(0,3).map((x,i) => {
+          const me = x.s.id === user.id;
+          return `<div class="dash-leader-row" style="${me ? 'background:#fdf2f8;border-radius:10px' : ''}">
+            <span class="dash-leader-medal">${sMedals[i] || '•'}</span>
+            <div style="min-width:0;flex:1">
+              <div class="dash-leader-name">${escapeHtml(x.s.fullName || x.s.name || x.s.username || '')} ${me ? '<span style="font-size:10px;background:#be185d;color:#fff;padding:1px 6px;border-radius:6px;margin:0 4px">أنتِ</span>' : ''}</div>
+            </div>
+            <span class="dash-leader-pts" style="color:#16a34a">+${x.pts}</span>
+          </div>`;
+        }).join('')}`;
+      })()}
+      </div>
+    </div>
+    <div class="sd-card" style="overflow:hidden">
+      <div style="background:linear-gradient(135deg,#db2777,#f472b6);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-weight:800;font-size:14px">🏆 رواد نبراس — هذا الأسبوع</div>
+        <span style="font-size:11px;font-weight:700;opacity:.95">الأكثر تفاعلاً</span>
+      </div>
+      <div style="padding:10px 14px">${renderNibrasPioneers(false)}</div>
     </div>
   </div>
   ${renderUsefulLinksCard()}
