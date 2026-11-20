@@ -900,6 +900,21 @@ window.__nibrasMarkBooted = function(){
   .thanks-from{ margin:0 0 14px; font-size:12.5px; color:#9ca3af; }
   .thanks-actions{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; padding-bottom:4px; }
   @media (prefers-reduced-motion: reduce){ .thanks-card, .thanks-card.thanks-pop, .thanks-petal{ animation:none !important; } }
+
+  .report-table-wrap{ width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; border-radius:10px; }
+  .report-data-table{ width:100%; border-collapse:separate; border-spacing:0; table-layout:auto; }
+  .report-data-table th{ background:#fdf2f8; color:#be185d; font-weight:800; font-size:12.5px; padding:10px 12px; border-bottom:2px solid #fbcfe8; text-align:right; white-space:nowrap; }
+  .report-data-table td{ padding:10px 12px; border-bottom:1px solid #e2e8f0; vertical-align:top; line-height:1.6; font-size:13px; color:#0f172a; word-break:break-word; }
+  .report-data-table tbody tr:nth-child(even){ background:#f8fafc; }
+  .report-data-table tbody tr:hover{ background:#fdf2f8; }
+  @media (max-width: 720px){
+    .report-data-table thead{ display:none; }
+    .report-data-table, .report-data-table tbody, .report-data-table tr, .report-data-table td{ display:block; width:100%; }
+    .report-data-table tbody tr{ background:#fff !important; border:1px solid #e2e8f0; border-right:4px solid #be185d; border-radius:12px; margin-bottom:10px; padding:8px 10px; box-shadow:0 2px 6px rgba(15,23,42,.05); }
+    .report-data-table td{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:6px 4px; border-bottom:1px dashed #e2e8f0; text-align:left; }
+    .report-data-table td:last-child{ border-bottom:none; }
+    .report-data-table td::before{ content:attr(data-label); font-weight:700; color:#475569; font-size:12px; text-align:right; flex-shrink:0; }
+  }
 </style>
 </head>
 <body>
@@ -12182,7 +12197,7 @@ function buildTeacherDetail(type, teacherId){
     rows = list.length ? list.map(n => { const s = d.students.find(x => x.id === n.studentId); const nm = s ? s.fullName : '—'; const ic = n.type === 'POSITIVE' ? '⭐' : '⚠️'; return dlRow(`${ic} ${escapeHtml(nm)}`, `${escapeHtml(n.text || '')} · ${fmtTime(n.createdAt)}`); }).join('') : DL_EMPTY;
   } else if(type === 'ACTIVITIES'){
     title = tl('الأنشطة المشارك فيها');
-    const list = (d.activities || []).filter(a => isActivityParticipant(a, teacherId)).sort((a,b) => String(b.date).localeCompare(String(a.date)));
+    const list = (d.activities || []).filter(a => isActivityParticipant(a, teacherId)).sort((a,b) => (__reportTimestampMs(b.createdAt || b.date) - __reportTimestampMs(a.createdAt || a.date)) || String(b.id||'').localeCompare(String(a.id||''),'en'));
     rows = list.length ? list.map(a => {
       const t = activityTypes.find(x => x.value === a.type);
       const req = (a.requests || []).find(r => r.teacherId === teacherId && r.status === 'APPROVED');
@@ -12250,7 +12265,7 @@ function renderTeacherPage(teacherId){
     return { name:a.name, icon, typeLabel, date:a.date, kind, status };
   }).filter(Boolean).sort((a,b) => String(b.date).localeCompare(String(a.date)));
   // الوكيل يرى رسائله هو فقط، والمدير يرى الكل
-  const msgs = aliveMsgs(loadAdminMsgs()).filter(m => (m.teacherId === teacherId || m.teacherId === 'ALL') && (isAdmin || ownsMsg(m))).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+  const msgs = aliveMsgs(loadAdminMsgs()).filter(m => (m.teacherId === teacherId || m.teacherId === 'ALL') && (isAdmin || ownsMsg(m))).sort((a,b) => (__reportTimestampMs(b.createdAt) - __reportTimestampMs(a.createdAt)) || String(b.id||'').localeCompare(String(a.id||''),'en'));
   const unread = msgs.filter(m => !m.revealed).length;
   // أعمال المعلمة: تحويلات وتكليفات وملاحظات أنشأتها هي — المالك من الحقل
   // (createdBy/teacherId) لا من اسم الجلسة، فلا يُنسب عمل زميلة إليها.
@@ -14553,7 +14568,7 @@ function renderMaintenance(){
   d.maintenance = d.maintenance || [];
   const me = user ? user.id : null;
 
-  const rows = d.maintenance.slice().sort((a, b) => String(b.createdAt || b.date || '').localeCompare(String(a.createdAt || a.date || '')));
+  const rows = __reportSortDesc(d.maintenance, { primary: r => r.createdAt || r.date, secondary: r => r.updatedAt || r.date, id: r => r.id });
   const f = maintFilter;
   const mineOnly = !!(user && user.role === 'TEACHER') || f.mine;
   const filtered = rows.filter(r => {
@@ -15201,7 +15216,7 @@ function renderReports(){
   <h1 class="page-title">التقارير</h1>
   <div class="card mb form-inline">
     <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">نوع التقرير</label>
-      <select id="rType" class="input" style="min-width:170px" onchange="reportState.type=this.value;reportState.rows=null;reportState.period='month'" data-tip="اختر نوع التقرير المطلوب">${types.map(t=>`<option value="${t.value}" ${t.value===reportState.type?'selected':''}>${t.label}</option>`).join('')}</select></div>
+      <select id="rType" class="input" style="min-width:170px" onchange="reportState.type=this.value;reportState.rows=null;reportState.period='month';renderApp()" data-tip="اختر نوع التقرير المطلوب">${types.map(t=>`<option value="${t.value}" ${t.value===reportState.type?'selected':''}>${t.label}</option>`).join('')}</select></div>
     ${isEng ? `<div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفترة</label>
       <select id="rPeriod" class="input" style="min-width:170px" onchange="reportState.period=this.value" data-tip="${reportState.type === 'teacher_logins' ? 'اختر الفترة الزمنية لعدّ دخولات المعلمات (التحقق من النشاط/المداومة داخل النظام)' : 'اختر الفترة الزمنية لقياس تفاعل المعلمين — يُحسب النشاط الفعلي داخل النظام (الغياب والملاحظات والتحويلات والأنشطة والفيديوهات)'}">${periodOptions.map(p=>`<option value="${p.value}" ${p.value===reportState.period?'selected':''}>${p.label}</option>`).join('')}</select></div>` : `
     <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفصل (اختياري)</label>
@@ -15224,6 +15239,50 @@ function renderReports(){
 function cadreGroupLabel(u){
   return u && u.role === 'TEACHER' ? tl('المعلمون') : tl('الكادر الإداري');
 }
+
+function __reportTimestampMs(v){
+  if(v == null || v === '') return 0;
+  if(typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const s = String(v).trim();
+  if(!s) return 0;
+  if(/^\d{10,13}$/.test(s)) return Number(s);
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)){
+    const p = s.split('-').map(Number);
+    return Date.UTC(p[0], p[1] - 1, p[2]);
+  }
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? t : 0;
+}
+
+function __reportSortDesc(items, opts){
+  const o = opts || {};
+  const getPrimary = o.primary || (x => x && (x.createdAt || x.created || x.date || x.at || ''));
+  const getSecondary = o.secondary || (x => x && (x.createdAt || x._t || x.created || x.updatedAt || ''));
+  const getId = o.id || (x => x && (x.id || ''));
+  return (Array.isArray(items) ? items : []).slice().sort((a, b) => {
+    const pDiff = __reportTimestampMs(getPrimary(b)) - __reportTimestampMs(getPrimary(a));
+    if(pDiff !== 0) return pDiff;
+    const sDiff = __reportTimestampMs(getSecondary(b)) - __reportTimestampMs(getSecondary(a));
+    if(sDiff !== 0) return sDiff;
+    return String(getId(b) || '').localeCompare(String(getId(a) || ''), 'en');
+  });
+}
+
+function __filterReportSearch(q){
+  const term = String(q || '').trim().toLowerCase();
+  const body = document.getElementById('reportTableBody');
+  const cnt = document.getElementById('reportVisibleCount');
+  if(!body) return;
+  let shown = 0;
+  body.querySelectorAll('tr').forEach(tr => {
+    const txt = (tr.textContent || '').toLowerCase();
+    const ok = !term || txt.includes(term);
+    tr.style.display = ok ? '' : 'none';
+    if(ok) shown++;
+  });
+  if(cnt) cnt.textContent = String(shown);
+}
+
 function computeReportRows(){
   const d = loadDB();
   const { type, classId, from, to } = reportState;
@@ -15253,49 +15312,50 @@ function computeReportRows(){
       const cadreRank = r => (r['الصف'] === tl('المعلمون') ? 0 : 1);
       d.users.filter(u => (u.role === 'TEACHER' || isAdminRole(u.role) || u.role === 'ADMIN') && u.active).forEach(t => {
         const grp = cadreGroupLabel(t);
-        if(showAbs) (t.absences || []).filter(inRange).sort().reverse().forEach(date => {
-          rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': grp, 'الفصل': '—', 'الحالة': 'غائب' });
+        if(showAbs) [...new Set((t.absences || []).map(x => String(x || '').slice(0,10)).filter(inRange))].forEach(date => {
+          rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': grp, 'الفصل': '—', 'الحالة': 'غائب', __ts: date, __id: (t.id || '') + '_abs_' + date });
         });
-        if(showLate) (t.markedLate || []).filter(inRange).sort().reverse().forEach(date => {
+        if(showLate) [...new Set([...(t.markedLate || []), ...Object.keys(t.lateMinutes || {})].map(x => String(x || '').slice(0,10)).filter(inRange))].forEach(date => {
           const mins = t.lateMinutes ? t.lateMinutes[date] : null;
           const typeLbl = t.lateType && t.lateType[date] ? (tTypeLbl[t.lateType[date]] || '') : '';
-          rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': grp, 'الفصل': '—', 'الحالة': 'متأخر' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : '') });
+          rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': grp, 'الفصل': '—', 'الحالة': 'متأخر' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : ''), __ts: date, __id: (t.id || '') + '_late_' + date });
         });
       });
-      rows.sort((a,b) => String(b['التاريخ']||'').localeCompare(String(a['التاريخ']||'')) || cadreRank(a) - cadreRank(b));
+      rows = __reportSortDesc(rows, { primary: r => r['التاريخ'], secondary: r => r.__ts, id: r => r.__id }).map(({ __ts, __id, ...r }) => r);
     } else {
-      rows = d.attendance
-        .filter(a => canSeeClass(a.classId) && (!classId || a.classId===classId) && (!statusFilter || __attEffStatus(a)===statusFilter) && inRange(a.date))
-        .sort((a,b) => b.date.localeCompare(a.date))
-        .map(a => { const s = studentById(a.studentId); const c = classById(a.classId); const g = c?gradeById(c.gradeId):null;
-          return { 'التاريخ':a.date, 'الطالب':s?.fullName||'—', 'الرقم':s?.studentNo||'—', 'الصف':g?.name||'—', 'الفصل':c?.name||'—', 'الحالة':statusLabels[__attEffStatus(a)] }; });
+      rows = __reportSortDesc(
+        d.attendance.filter(a => canSeeClass(a.classId) && (!classId || a.classId===classId) && (!statusFilter || __attEffStatus(a)===statusFilter) && inRange(a.date)),
+        { primary: a => a.date, secondary: a => a._t || a.createdAt || a.date, id: a => a.id || (a.studentId + '_' + a.date) }
+      ).map(a => { const s = studentById(a.studentId); const c = classById(a.classId); const g = c?gradeById(c.gradeId):null;
+          return { 'التاريخ':a.date, 'الطالب':s?.fullName||'—', 'الرقم':s?.studentNo||'—', 'الصف':g?.name||'—', 'الفصل':c?.name||'—', 'الحالة':statusLabels[__attEffStatus(a)], __ts: a._t || a.createdAt || a.date, __id: a.id || (a.studentId + '_' + a.date) }; });
       // غياب/تأخر المعلمات والإداريات: في تقريري الغياب والتأخر يُضاف سجلُّ الكادر
       // (محفوظ على صفة المستخدم لا في d.attendance) — يظهر ضمن «كل الفصول» لأنهم لا يتبعون فصلًا،
       // ويحمل عمود «الصف» اسم المجموعة («المعلمات»/«الكادر الإداري») بدل اسم الخانة.
-      if(statusFilter === 'ABSENT' || statusFilter === 'LATE'){
+      if(!classId && (statusFilter === 'ABSENT' || statusFilter === 'LATE')){
         const tTypeLbl = { MORNING:'تأخر صباحي', CLASS:'تأخر عن الحصة', EARLY_LEAVE:'خروج مبكر' };
         d.users.filter(u => (u.role === 'TEACHER' || isAdminRole(u.role) || u.role === 'ADMIN') && u.active).forEach(t => {
-          const dates = (statusFilter === 'ABSENT' ? (t.absences || []) : (t.markedLate || [])).filter(inRange);
-          dates.sort().reverse().forEach(date => {
+          const rawDates = statusFilter === 'ABSENT' ? (t.absences || []) : [...(t.markedLate || []), ...Object.keys(t.lateMinutes || {})];
+          const dates = [...new Set(rawDates.map(x => String(x || '').slice(0,10)).filter(inRange))];
+          dates.forEach(date => {
             const mins = statusFilter === 'LATE' && t.lateMinutes ? t.lateMinutes[date] : null;
             const typeLbl = statusFilter === 'LATE' && t.lateType && t.lateType[date] ? (tTypeLbl[t.lateType[date]] || '') : '';
-            rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': cadreGroupLabel(t), 'الفصل': '—', 'الحالة': statusFilter === 'ABSENT' ? 'غائب' : ('متأخر' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : '')) });
+            rows.push({ 'التاريخ': date, 'الطالب': (t.name || '—'), 'الرقم': '—', 'الصف': cadreGroupLabel(t), 'الفصل': '—', 'الحالة': statusFilter === 'ABSENT' ? 'غائب' : ('متأخر' + (typeLbl ? ' — ' + typeLbl : '') + (mins != null && mins > 0 ? ' (' + mins + ' دقيقة)' : '')), __ts: date, __id: (t.id || '') + '_' + statusFilter + '_' + date });
           });
         });
-        rows.sort((a,b) => String(b['التاريخ']||'').localeCompare(String(a['التاريخ']||'')));
       }
+      rows = __reportSortDesc(rows, { primary: r => r['التاريخ'], secondary: r => r.__ts, id: r => r.__id }).map(({ __ts, __id, ...r }) => r);
     }
   } else if(type === 'notes'){
     rows = d.notes
       .filter(n => { const s = studentById(n.studentId); return !n.deleted && NRC_canSeeNote(n) && canSeeStudent(n.studentId) && (!classId || s?.classId===classId) && (!from && !to || inRange(n.createdAt.slice(0,10))); })
-      .sort((a,b) => b.createdAt.localeCompare(a.createdAt))
+      .sort((a,b) => (__reportTimestampMs(b.createdAt) - __reportTimestampMs(a.createdAt)) || String(b.id||'').localeCompare(String(a.id||''),'en'))
       .map(n => { const s = studentById(n.studentId); const by = userById(n.createdBy);
         const pts = n.points ?? notePoints(n.type, n.category);
         return { 'التاريخ':n.createdAt.slice(0,10), 'الطالب':s?.fullName||'—', 'النوع':noteTypeLabels[n.type], 'الفئة':n.category, 'الوصف':n.description, 'بواسطة':by?.name||'—', 'النقاط':(pts>0?'+':'')+pts }; });
   } else if(type === 'transfers'){
     rows = d.transfers
       .filter(t => { const ss = studentIdsOf(t).map(id => studentById(id)).filter(Boolean); return ss.some(s => canSeeStudent(s.id) && (!classId || s?.classId===classId)) && (!from && !to || inRange(t.createdAt.slice(0,10))); })
-      .sort((a,b) => b.createdAt.localeCompare(a.createdAt))
+      .sort((a,b) => (__reportTimestampMs(b.createdAt) - __reportTimestampMs(a.createdAt)) || String(b.id||'').localeCompare(String(a.id||''),'en'))
       .map(t => { const ss = studentIdsOf(t).map(id => studentById(id)).filter(Boolean); const by = userById(t.createdBy);
         return { 'التاريخ':t.createdAt.slice(0,10), 'الطالب': ss.map(s=>s?.fullName||'—').join('، ') || '—', 'إلى':targetLabel(t.target), 'الأولوية':priorityLabels[t.priority], 'السبب':t.reason, 'الحالة': t.status==='PENDING'?'قيد المتابعة':'تم الحل', 'بواسطة':by?.name||'—' }; });
   } else if(type === 'assignments'){
@@ -15304,7 +15364,7 @@ function computeReportRows(){
     // المدير/الوكيل/الشموليون يرون كل الفصول.
     const myClassIds = new Set((user && !seesAllClasses(user)) ? getAssignmentClassIds(user, d) : getClassesSorted().map(c => c.id));
     const clsAss = (d.assignments||[]).filter(a => myClassIds.has(a.classId) && !(a && a.deleted) && (!classId || a.classId===classId) && (!from && !to || (a.date && inRange(a.date))));
-    const rowsAll = clsAss.sort((a,b) => (b.created||0) - (a.created||0)).map(a => {
+    const rowsAll = __reportSortDesc(clsAss, { primary: a => a.created || a.createdAt || a.date, secondary: a => a.createdAt || a.date, id: a => a.id }).map(a => {
       const cls = classById(a.classId);
       const g = cls ? gradeById(cls.gradeId) : null;
       const clsStudents = d.students.filter(s => s.active && s.classId === a.classId);
@@ -15377,8 +15437,7 @@ function computeReportRows(){
         'إجمالي الدخولات (المحدود)': cappedLoginCount(logins),
         '__lastISO': lastLogin || '',
       };
-    }).sort((a,b) => String(a['__lastISO']).localeCompare(String(b['__lastISO'])))
-    .reverse()
+    }).sort((a,b) => (__reportTimestampMs(b['__lastISO']) - __reportTimestampMs(a['__lastISO'])) || String(a['المعلم']||a['المعلمة']||'').localeCompare(String(b['المعلم']||b['المعلمة']||''),'ar'))
     .map(({ __lastISO, ...r }) => r);
   } else if(type === 'points_detail'){
     // تشخيص: تفاصيل سجلات النقاط (الملاحظات) لكل طالبة — بدون Console. يساعد في معرفة إن كانت
@@ -15406,8 +15465,8 @@ function computeReportRows(){
         '__stuId': n.studentId,
         '__ts': n.createdAt || '',
       };
-    }).sort((a,b) => String(b['__ts']).localeCompare(String(a['__ts'])))
-    .map(({ __stuId, __ts, ...r }) => r);
+    }).sort((a,b) => (__reportTimestampMs(b['__ts']) - __reportTimestampMs(a['__ts'])) || String(b['_noteId']||'').localeCompare(String(a['_noteId']||''),'en'))
+    .map(({ __stuId, __ts, _orphan, _noteId, ...r }) => r);
   } else if(type === 'sync_log'){
     // تشخيص: سجل الحفظ والرفع من هذا المتصفح — يبيّن هل وصلت النقطة للخادم أم رُفضت/فشلت،
     // ومتى أعاد سحبٌ الكتابة فوقها. يُدوَّن عبر __syncLogAdd أثناء addNote/__syncPush/__syncPull.
@@ -15435,7 +15494,7 @@ function computeReportRows(){
         'بواسطة': (e.byName || teacherName || '—'),
         '__at': e.at,
       };
-    }).sort((a,b) => String(b['__at']).localeCompare(String(a['__at'])))
+    }).sort((a,b) => __reportTimestampMs(b['__at']) - __reportTimestampMs(a['__at']))
     .map(({ __at, ...r }) => r);
   } else if(type === 'teacher_engagement'){
     const pr = engagementPeriodRange(reportState.period);
@@ -15499,10 +15558,20 @@ function engagementPeriodRange(period){
   return { from: (m >= 8 ? y : y-1) + '-09-01', to: today }; // من بداية العام الدراسي (سبتمبر)
 }
 function renderReportTable(rows){
-  if(rows.length === 0) return `<div class="card" style="text-align:center;padding:32px;color:#9ca3af">لا توجد بيانات مطابقة</div>`;
-  const cols = Object.keys(rows[0]);
-  return `<div class="card table-card"><table class="data-table"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
-    <tbody>${rows.map(r => `<tr>${cols.map(c=>`<td>${escapeHtml(r[c])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  if(!rows || rows.length === 0) return `<div class="card" style="text-align:center;padding:32px;color:#9ca3af">لا توجد بيانات مطابقة</div>`;
+  const cols = Object.keys(rows[0]).filter(c => !String(c).startsWith('_'));
+  return `<div class="card table-card" style="padding:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <div class="small" style="font-weight:700;color:#334155">📋 إجمالي السجلات: <b id="reportVisibleCount">${rows.length}</b> <span class="muted" style="font-weight:400">(مرتّبة من الأحدث إلى الأقدم)</span></div>
+      <input type="search" class="input" style="max-width:260px;padding:6px 10px;font-size:12.5px" placeholder="🔎 بحث سريع داخل التقرير..." oninput="__filterReportSearch(this.value)" />
+    </div>
+    <div class="report-table-wrap">
+      <table class="data-table report-data-table">
+        <thead><tr>${cols.map(c=>`<th>${escapeHtml(c)}</th>`).join('')}</tr></thead>
+        <tbody id="reportTableBody">${rows.map(r => `<tr>${cols.map(c=>`<td data-label="${escapeHtml(c)}">${escapeHtml(r[c] == null || r[c] === '' ? '—' : r[c])}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>
+    </div>
+  </div>`;
 }
 // أي عمود يُجمَّع عليه الرسم البياني حسب نوع التقرير
 const reportChartCol = { absence:'الصف', late:'الصف', notes:'الطالب', transfers:'إلى', messages:'الحالة', activities:null, maintenance:'الحالة' };
