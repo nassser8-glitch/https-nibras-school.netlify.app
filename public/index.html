@@ -6353,13 +6353,403 @@ function renderUsefulLinksCard(){
     <div style="font-weight:700;margin-bottom:8px;">🔗 روابط مفيدة</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
       <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openSchoolCalendar()" title="التقويم الدراسي 1448-1449هـ">🗓️ التقويم الدراسي</button>
-      <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://www.moe.gov.sa" target="_blank" rel="noopener">📚 الروابط التعليمية</a>
-      <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('📅 تقويم Google', 'https://calendar.google.com/calendar/embed?src=ar.sa%23holiday%40group.v.calendar.google.com&ctz=Asia/Riyadh')" title="Google Calendar">📅 التقويم</button>
-      <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🕌 مواقيت الصلاة', 'https://www.islamicfinder.org/prayer-widget/')" title="IslamicFinder">🕌 مواقيت الصلاة</button>
-      <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://www.bing.com/translator')" title="Bing Translator">🌐 المترجم</button>
+      <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEduLinks()" title="بوابة الروابط والمصادر التعليمية">📚 الروابط التعليمية</button>
+      <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openInAppCalendar()" title="التقويم التفاعلي">📅 التقويم</button>
+      <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openInAppPrayerTimes()" title="مواقيت الصلاة اليومية">🕌 مواقيت الصلاة</button>
+      <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openInAppTranslator()" title="المترجم الفوري داخل نبراس">🌐 المترجم</button>
       <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openQuickSchedule()" title="عرض جدول الحصص الأسبوعي">👁 جدول الحصص</button>
     </div>
   </div>`;
+}
+
+const __NIBRAS_SC_EVENTS = [
+  { cat:'بداية الدراسة', ico:'🎒', title:'بداية العام الدراسي 1448–1449هـ', date:'الفصل الدراسي الأول', color:'#be185d' },
+  { cat:'إجازة', ico:'🌿', title:'إجازة اليوم الوطني وإجازات نهاية الأسبوع المطوّلة', date:'وفق تقويم إسلام آباد 1448هـ', color:'#059669' },
+  { cat:'اختبارات', ico:'📝', title:'اختبارات نهاية الفصل الدراسي الأول', date:'نهاية الفصل الأول', color:'#d97706' },
+  { cat:'إجازة', ico:'❄️', title:'إجازة منتصف العام الدراسي', date:'بين الفصلين الأول والثاني', color:'#0891b2' },
+  { cat:'بداية الدراسة', ico:'📚', title:'بداية الفصل الدراسي الثاني', date:'بعد إجازة منتصف العام', color:'#be185d' },
+  { cat:'إجازة', ico:'🌙', title:'إجازة عيد الفطر المبارك', date:'رمضان – شوال 1448هـ', color:'#059669' },
+  { cat:'اختبارات', ico:'🎓', title:'الاختبارات النهائية ونهاية العام الدراسي', date:'نهاية الفصل الثاني 1448هـ', color:'#7c3aed' }
+];
+
+function __nibrasRemoveModal(id){
+  if(id){ const el = document.getElementById(id); if(el) el.remove(); return; }
+  const ov = document.querySelector('.modal-overlay'); if(ov) ov.remove();
+}
+
+function __scRenderTab(tab){
+  const body = document.getElementById('scModalBody');
+  const bEv = document.getElementById('scTabEvents');
+  const bPdf = document.getElementById('scTabPdf');
+  if(!body) return;
+  if(bEv){ bEv.className = tab === 'events' ? 'btn-primary' : 'btn-secondary'; }
+  if(bPdf){ bPdf.className = tab === 'pdf' ? 'btn-primary' : 'btn-secondary'; }
+  if(tab === 'pdf'){
+    body.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="font-size:12px;color:#475569;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+        <span>📄 ملف التقويم الدراسي الرسمي 1448–1449هـ (عرض داخلي داخل نبراس)</span>
+        <a class="btn-secondary" style="padding:4px 10px;font-size:12px;text-decoration:none;" href="school-calendar-1448.pdf" download>⬇️ حفظ نسخة PDF</a>
+      </div>
+      <iframe src="school-calendar-1448.pdf#view=FitH" title="التقويم الدراسي 1448-1449هـ" style="width:100%;height:62vh;min-height:360px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;"></iframe>
+    </div>`;
+    return;
+  }
+  const d = typeof loadDB === 'function' ? loadDB() : {};
+  const acts = (d.activities || []).filter(a => a && !a.deleted).slice(0, 6);
+  const cards = __NIBRAS_SC_EVENTS.map(ev => `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid #e2e8f0;border-right:4px solid ${ev.color};background:#fff;">
+    <span style="font-size:20px;line-height:1;">${ev.ico}</span>
+    <div style="flex:1;min-width:0;">
+      <div style="font-weight:700;font-size:13.5px;color:#0f172a;">${escapeHtml(ev.title)}</div>
+      <div style="font-size:12px;color:#64748b;margin-top:2px;">${escapeHtml(ev.cat)} · ${escapeHtml(ev.date)}</div>
+    </div>
+  </div>`).join('');
+  const actHtml = acts.length ? `<div style="margin-top:12px;">
+    <div style="font-weight:700;font-size:13px;color:#be185d;margin-bottom:6px;">📌 فعاليات وأنشطة المدرسة المسجلة</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">${acts.map(a => `<div style="padding:8px 10px;border-radius:8px;background:#fdf2f8;border:1px solid #fbcfe8;font-size:12.5px;">
+      <div style="font-weight:700;color:#0f172a;">${escapeHtml(a.title || a.name || 'نشاط')}</div>
+      <div style="font-size:11.5px;color:#475569;margin-top:2px;">📅 ${escapeHtml(a.date || '—')}</div>
+    </div>`).join('')}</div>
+  </div>` : '';
+  body.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">${cards}</div>${actHtml}`;
+}
+
+function openSchoolCalendar(){
+  __nibrasRemoveModal('nibrasSchoolCalOverlay');
+  const html = `<div id="nibrasSchoolCalOverlay" class="modal-overlay" onclick="if(event.target===this) closeSchoolCalendar()">
+    <div class="modal-box" style="max-width:860px;width:96vw;max-height:90vh;display:flex;flex-direction:column;border-top:5px solid #be185d;">
+      <div class="modal-head">
+        <h3>🗓️ التقويم الدراسي 1448–1449هـ</h3>
+        <button type="button" class="modal-close" onclick="closeSchoolCalendar()" title="إغلاق">✕</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <button type="button" id="scTabEvents" class="btn-primary" style="padding:6px 14px;font-size:13px;" onclick="__scRenderTab('events')">📋 المواعيد والإجازات والاختبارات</button>
+        <button type="button" id="scTabPdf" class="btn-secondary" style="padding:6px 14px;font-size:13px;" onclick="__scRenderTab('pdf')">📄 عرض ملف التقويم (PDF)</button>
+      </div>
+      <div id="scModalBody" style="overflow-y:auto;flex:1;padding:2px;"></div>
+    </div>
+  </div>`;
+  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
+  __scRenderTab('events');
+}
+function closeSchoolCalendar(){ __nibrasRemoveModal('nibrasSchoolCalOverlay'); }
+
+/* ============ التقويم التفاعلي الداخلي ============ */
+let __inAppCalYear = new Date().getFullYear();
+let __inAppCalMonth = new Date().getMonth();
+let __inAppCalSelected = '';
+
+function __inAppHijriText(dt){
+  try {
+    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic', { day:'numeric', month:'long', year:'numeric' }).format(dt);
+  } catch(e){ return ''; }
+}
+function __inAppCalEventsMap(){
+  const map = {};
+  try {
+    const d = loadDB();
+    (d.activities || []).filter(a => a && !a.deleted && a.date).forEach(a => {
+      const k = String(a.date).slice(0,10);
+      if(!map[k]) map[k] = [];
+      map[k].push({ title: a.title || a.name || 'نشاط مدرسي', type: 'نشاط' });
+    });
+  } catch(e){}
+  return map;
+}
+function __inAppCalRender(){
+  const body = document.getElementById('nibrasCalBody');
+  if(!body) return;
+  const now = new Date();
+  const todayIso = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+  if(!__inAppCalSelected) __inAppCalSelected = todayIso;
+  const first = new Date(__inAppCalYear, __inAppCalMonth, 1);
+  const daysInMonth = new Date(__inAppCalYear, __inAppCalMonth + 1, 0).getDate();
+  const startDow = first.getDay();
+  const monthNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  const dayHeads = ['أحد','إثنين','ثلاثاء','أربعاء','خميس','جمعة','سبت'];
+  const evMap = __inAppCalEventsMap();
+  const hijriMonth = __inAppHijriText(new Date(__inAppCalYear, __inAppCalMonth, 15));
+
+  let cells = '';
+  for(let i = 0; i < startDow; i++) cells += '<div></div>';
+  for(let day = 1; day <= daysInMonth; day++){
+    const iso = __inAppCalYear + '-' + String(__inAppCalMonth+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+    const isToday = iso === todayIso;
+    const isSel = iso === __inAppCalSelected;
+    const hasEv = !!(evMap[iso] && evMap[iso].length);
+    const bg = isToday ? '#be185d' : (isSel ? '#fdf2f8' : '#fff');
+    const fg = isToday ? '#fff' : '#0f172a';
+    const bdr = isSel ? '2px solid #be185d' : '1px solid #e2e8f0';
+    cells += `<button type="button" onclick="__inAppCalSelect('${iso}')" style="padding:8px 4px;border-radius:10px;border:${bdr};background:${bg};color:${fg};cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-weight:${isToday||isSel?'800':'600'};font-size:13px;">
+      <span>${day}</span>
+      ${hasEv ? '<span style="width:6px;height:6px;border-radius:50%;background:' + (isToday ? '#fff' : '#16a34a') + ';"></span>' : ''}
+    </button>`;
+  }
+  const selParts = __inAppCalSelected.split('-').map(Number);
+  const selDt = selParts.length === 3 ? new Date(selParts[0], selParts[1]-1, selParts[2]) : now;
+  const selEvents = evMap[__inAppCalSelected] || [];
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;border-radius:12px;background:#fdf2f8;border:1px solid #fbcfe8;">
+      <div>
+        <div style="font-weight:800;font-size:15px;color:#be185d;">${monthNames[__inAppCalMonth]} ${__inAppCalYear}</div>
+        ${hijriMonth ? `<div style="font-size:12px;color:#475569;">${escapeHtml(hijriMonth)}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button type="button" class="btn-secondary" style="padding:5px 10px;font-size:13px;" onclick="__inAppCalMove(-1)">‹ السابق</button>
+        <button type="button" class="btn-primary" style="padding:5px 10px;font-size:13px;" onclick="__inAppCalToday()">اليوم</button>
+        <button type="button" class="btn-secondary" style="padding:5px 10px;font-size:13px;" onclick="__inAppCalMove(1)">التالي ›</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;font-size:12px;font-weight:700;color:#64748b;margin-bottom:6px;">
+      ${dayHeads.map(h => `<div>${h}</div>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;">${cells}</div>
+    <div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;">
+      <div style="font-weight:700;font-size:13px;color:#0f172a;">📅 ${escapeHtml(__inAppCalSelected)} — ${escapeHtml(__inAppHijriText(selDt))}</div>
+      <div style="margin-top:6px;font-size:12.5px;color:#475569;">
+        ${selEvents.length ? selEvents.map(e => `<div>• <b>${escapeHtml(e.title)}</b> (${escapeHtml(e.type)})</div>`).join('') : 'لا توجد أحداث مسجلة في هذا اليوم.'}
+      </div>
+    </div>`;
+}
+function __inAppCalMove(delta){
+  __inAppCalMonth += delta;
+  if(__inAppCalMonth < 0){ __inAppCalMonth = 11; __inAppCalYear--; }
+  if(__inAppCalMonth > 11){ __inAppCalMonth = 0; __inAppCalYear++; }
+  __inAppCalRender();
+}
+function __inAppCalToday(){
+  const n = new Date();
+  __inAppCalYear = n.getFullYear(); __inAppCalMonth = n.getMonth();
+  __inAppCalSelected = n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0') + '-' + String(n.getDate()).padStart(2,'0');
+  __inAppCalRender();
+}
+function __inAppCalSelect(iso){ __inAppCalSelected = iso; __inAppCalRender(); }
+function openInAppCalendar(){
+  __nibrasRemoveModal('nibrasCalOverlay');
+  const html = `<div id="nibrasCalOverlay" class="modal-overlay" onclick="if(event.target===this) closeInAppCalendar()">
+    <div class="modal-box" style="max-width:640px;width:96vw;max-height:90vh;overflow-y:auto;border-top:5px solid #be185d;">
+      <div class="modal-head">
+        <h3>📅 التقويم التفاعلي</h3>
+        <button type="button" class="modal-close" onclick="closeInAppCalendar()" title="إغلاق">✕</button>
+      </div>
+      <div id="nibrasCalBody"></div>
+    </div>
+  </div>`;
+  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
+  __inAppCalToday();
+}
+function closeInAppCalendar(){ __nibrasRemoveModal('nibrasCalOverlay'); }
+
+/* ============ مواقيت الصلاة الداخلية ============ */
+const __NIBRAS_PRAYER_CITIES = [
+  { id:'islamabad', name:'إسلام آباد (موقع المدرسة)', lat:33.6844, lon:73.0479, tz:'Asia/Karachi', method:1 },
+  { id:'riyadh',    name:'الرياض',                    lat:24.7136, lon:46.6753, tz:'Asia/Riyadh',  method:4 },
+  { id:'makkah',    name:'مكة المكرمة',               lat:21.4225, lon:39.8262, tz:'Asia/Riyadh',  method:4 },
+  { id:'madinah',   name:'المدينة المنورة',           lat:24.5247, lon:39.5692, tz:'Asia/Riyadh',  method:4 },
+  { id:'amman',     name:'عمّان',                     lat:31.9454, lon:35.9284, tz:'Asia/Amman',   method:4 }
+];
+function __prayerGetCity(){
+  let id = 'islamabad';
+  try { id = localStorage.getItem('nibras_prayer_city_v1') || 'islamabad'; } catch(e){}
+  return __NIBRAS_PRAYER_CITIES.find(c => c.id === id) || __NIBRAS_PRAYER_CITIES[0];
+}
+function __prayerSetCity(id){
+  try { localStorage.setItem('nibras_prayer_city_v1', id); } catch(e){}
+  __prayerLoadAndRender();
+}
+function __prayerFmtTime(val, tz){
+  if(typeof val === 'string') return val;
+  try {
+    return new Intl.DateTimeFormat('ar-SA', { hour:'2-digit', minute:'2-digit', hour12:true, timeZone: tz || undefined }).format(new Date(val));
+  } catch(e){
+    const d = new Date(val);
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+}
+function __prayerFallbackTimes(){
+  return { fajr:'05:10', sunrise:'06:35', dhuhr:'12:15', asr:'15:30', maghrib:'17:50', isha:'19:15', _offline:true };
+}
+function __prayerPaint(city, t, tz, isOffline){
+  const body = document.getElementById('nibrasPrayerBody');
+  if(!body) return;
+  const labels = [
+    ['fajr','🌙 الفجر'], ['sunrise','🌅 الشروق'], ['dhuhr','☀️ الظهر'],
+    ['asr','🌤 العصر'], ['maghrib','🌇 المغرب'], ['isha','🌃 العشاء']
+  ];
+  const nowMs = Date.now();
+  let nextKey = null, nextDiffMin = 0;
+  for(const [k] of labels){
+    if(typeof t[k] === 'number' && t[k] > nowMs){
+      nextKey = k;
+      nextDiffMin = Math.max(1, Math.round((t[k] - nowMs) / 60000));
+      break;
+    }
+  }
+  const remTxt = nextKey ? (Math.floor(nextDiffMin/60) > 0 ? Math.floor(nextDiffMin/60) + ' ساعة و ' + (nextDiffMin%60) + ' دقيقة' : nextDiffMin + ' دقيقة') : '';
+  const todayHijri = __inAppHijriText(new Date());
+  const cards = labels.map(([k, lbl]) => {
+    const isNext = nextKey === k;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:12px;border:${isNext?'2px solid #be185d':'1px solid #e2e8f0'};background:${isNext?'#fdf2f8':'#fff'};">
+      <span style="font-weight:700;font-size:14px;color:#0f172a;">${lbl} ${isNext ? '<span style="font-size:11px;background:#be185d;color:#fff;padding:1px 7px;border-radius:999px;margin-right:6px;">القادمة</span>' : ''}</span>
+      <span style="font-weight:800;font-size:15px;color:#be185d;direction:ltr;">${escapeHtml(t[k] ? __prayerFmtTime(t[k], tz) : '—')}</span>
+    </div>`;
+  }).join('');
+  body.innerHTML = `
+    <div style="padding:10px 12px;border-radius:10px;background:#fdf2f8;border:1px solid #fbcfe8;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+      <div>
+        <div style="font-weight:800;font-size:14px;color:#be185d;">📍 ${escapeHtml(city.name)}</div>
+        <div style="font-size:12px;color:#475569;">${escapeHtml(todayHijri)}</div>
+      </div>
+      ${remTxt ? `<div style="font-size:12.5px;font-weight:700;color:#0f172a;">⏳ المتبقي للصلاة القادمة: ${escapeHtml(remTxt)}</div>` : ''}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;">${cards}</div>
+    ${isOffline ? '<div style="margin-top:8px;font-size:11.5px;color:#64748b;text-align:center;">عرض تقريبي محفوظ لعدم توفر الاتصال حاليًا.</div>' : ''}`;
+}
+async function __prayerLoadAndRender(){
+  const city = __prayerGetCity();
+  const body = document.getElementById('nibrasPrayerBody');
+  if(body) body.innerHTML = '<div style="text-align:center;padding:24px;color:#64748b;">⏳ جاري تحديث مواقيت الصلاة…</div>';
+  const cacheKey = 'nibras_prayer_cache_' + city.id + '_' + new Date().toISOString().slice(0,10);
+  try {
+    const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+    if(cached && cached.t){ __prayerPaint(city, cached.t, cached.tz || city.tz, false); return; }
+  } catch(e){}
+  try {
+    const r = await fetch('/api/prayer?lat=' + city.lat + '&lon=' + city.lon + '&method=' + city.method + '&tz=' + encodeURIComponent(city.tz));
+    if(r.ok){
+      const j = await r.json();
+      if(j && j.t){
+        try { localStorage.setItem(cacheKey, JSON.stringify({ t: j.t, tz: j.tz || city.tz })); } catch(e){}
+        __prayerPaint(city, j.t, j.tz || city.tz, false);
+        return;
+      }
+    }
+  } catch(e){}
+  __prayerPaint(city, __prayerFallbackTimes(), city.tz, true);
+}
+function openInAppPrayerTimes(){
+  __nibrasRemoveModal('nibrasPrayerOverlay');
+  const cur = __prayerGetCity();
+  const opts = __NIBRAS_PRAYER_CITIES.map(c => `<option value="${c.id}" ${c.id===cur.id?'selected':''}>${escapeHtml(c.name)}</option>`).join('');
+  const html = `<div id="nibrasPrayerOverlay" class="modal-overlay" onclick="if(event.target===this) closeInAppPrayerTimes()">
+    <div class="modal-box" style="max-width:620px;width:96vw;max-height:90vh;overflow-y:auto;border-top:5px solid #be185d;">
+      <div class="modal-head">
+        <h3>🕌 مواقيت الصلاة اليومية</h3>
+        <button type="button" class="modal-close" onclick="closeInAppPrayerTimes()" title="إغلاق">✕</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <label for="nibrasPrayerCitySel" style="font-size:13px;font-weight:700;">الموقع:</label>
+        <select id="nibrasPrayerCitySel" class="input" style="flex:1;min-width:180px;" onchange="__prayerSetCity(this.value)">${opts}</select>
+        <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="__prayerLoadAndRender()">🔄 تحديث</button>
+      </div>
+      <div id="nibrasPrayerBody"></div>
+    </div>
+  </div>`;
+  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
+  __prayerLoadAndRender();
+}
+function closeInAppPrayerTimes(){ __nibrasRemoveModal('nibrasPrayerOverlay'); }
+
+/* ============ المترجم الداخلي ============ */
+function __trSwapLangs(){
+  const f = document.getElementById('nibrasTrFrom');
+  const t = document.getElementById('nibrasTrTo');
+  const inp = document.getElementById('nibrasTrIn');
+  const out = document.getElementById('nibrasTrOut');
+  if(!f || !t) return;
+  const tmp = f.value; f.value = t.value; t.value = tmp;
+  if(inp && out && out.dataset.raw){ inp.value = out.dataset.raw; out.dataset.raw = ''; out.textContent = 'ستظهر الترجمة هنا…'; }
+}
+async function __trRunTranslate(){
+  const f = document.getElementById('nibrasTrFrom');
+  const t = document.getElementById('nibrasTrTo');
+  const inp = document.getElementById('nibrasTrIn');
+  const out = document.getElementById('nibrasTrOut');
+  if(!f || !t || !inp || !out) return;
+  const text = String(inp.value || '').trim();
+  if(!text){ out.textContent = 'أدخل نصًا للترجمة أولًا.'; return; }
+  const from = f.value, to = t.value;
+  if(from === to){ out.dataset.raw = text; out.textContent = text; return; }
+  out.textContent = '⏳ جاري الترجمة داخل نبراس…';
+  try {
+    const r = await fetch('/api/translate?q=' + encodeURIComponent(text) + '&from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to));
+    if(r.ok){
+      const j = await r.json();
+      if(j && j.text){
+        out.dataset.raw = j.text;
+        out.textContent = j.text;
+        return;
+      }
+    }
+  } catch(e){}
+  // بديل محلي عند انقطاع الاتصال
+  try {
+    if(window.__tb && typeof window.__tb.trDict === 'function'){
+      const localRes = window.__tb.trDict(text, from, to);
+      if(localRes){ out.dataset.raw = localRes; out.textContent = localRes; return; }
+    }
+  } catch(e){}
+  out.textContent = 'تعذّر الاتصال بخدمة الترجمة حاليًا. حاول مرة أخرى بعد لحظات.';
+}
+function __trCopyResult(){
+  const out = document.getElementById('nibrasTrOut');
+  const txt = out && out.dataset.raw ? out.dataset.raw : '';
+  if(!txt) return;
+  try { navigator.clipboard.writeText(txt); } catch(e){}
+}
+function openInAppTranslator(){
+  __nibrasRemoveModal('nibrasTrOverlay');
+  const langs = [
+    ['ar','العربية'], ['en','الإنجليزية (English)'], ['ur','الأردية (اردو)'], ['fr','الفرنسية (Français)'], ['tr','التركية (Türkçe)']
+  ];
+  const optHtml = (sel) => langs.map(([v,l]) => `<option value="${v}" ${v===sel?'selected':''}>${l}</option>`).join('');
+  const html = `<div id="nibrasTrOverlay" class="modal-overlay" onclick="if(event.target===this) closeInAppTranslator()">
+    <div class="modal-box" style="max-width:640px;width:96vw;max-height:90vh;overflow-y:auto;border-top:5px solid #be185d;">
+      <div class="modal-head">
+        <h3>🌐 المترجم الفوري</h3>
+        <button type="button" class="modal-close" onclick="closeInAppTranslator()" title="إغلاق">✕</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <select id="nibrasTrFrom" class="input" style="flex:1;min-width:130px;">${optHtml('ar')}</select>
+        <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="__trSwapLangs()" title="تبديل اللغتين">⇄ تبديل</button>
+        <select id="nibrasTrTo" class="input" style="flex:1;min-width:130px;">${optHtml('en')}</select>
+      </div>
+      <textarea id="nibrasTrIn" class="input" rows="4" placeholder="اكتب النص المراد ترجمته هنا…" style="width:100%;resize:vertical;margin-bottom:10px;" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter') __trRunTranslate()"></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <button type="button" class="btn-primary" style="padding:8px 18px;font-size:13.5px;" onclick="__trRunTranslate()">🌐 ترجمة</button>
+        <button type="button" class="btn-secondary" style="padding:8px 14px;font-size:13px;" onclick="const i=document.getElementById('nibrasTrIn'),o=document.getElementById('nibrasTrOut');if(i)i.value='';if(o){o.dataset.raw='';o.textContent='ستظهر الترجمة هنا…';}">مسح</button>
+        <button type="button" class="btn-secondary" style="padding:8px 14px;font-size:13px;" onclick="__trCopyResult()">📋 نسخ الترجمة</button>
+      </div>
+      <div id="nibrasTrOut" data-raw="" style="min-height:84px;padding:12px;border-radius:10px;background:#fdf2f8;border:1px solid #fbcfe8;font-size:14px;line-height:1.7;color:#0f172a;white-space:pre-wrap;">ستظهر الترجمة هنا…</div>
+    </div>
+  </div>`;
+  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
+}
+function closeInAppTranslator(){ __nibrasRemoveModal('nibrasTrOverlay'); }
+
+/* ============ عرض المصادر داخل بوابة الروابط التعليمية ============ */
+function __eduOpenInApp(id){
+  const list = __eduActive();
+  const item = list.find(x => x.id === id);
+  const body = document.getElementById('eduBody');
+  if(!item || !body) return;
+  const cat = EDU_CATS.find(c => c.id === item.cat);
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="__eduPaintBody()">← العودة إلى بوابة الروابط</button>
+        <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:12.5px;" onclick="try{navigator.clipboard.writeText('${escapeHtml(item.url)}');}catch(e){}">📋 نسخ العنوان</button>
+      </div>
+      <div style="padding:12px 14px;border-radius:12px;background:#fdf2f8;border:1px solid #fbcfe8;">
+        <div style="font-weight:800;font-size:15px;color:#be185d;">${escapeHtml(item.icon || '📚')} ${escapeHtml(item.name)}</div>
+        ${cat ? `<div style="font-size:12px;color:#475569;margin-top:2px;">${cat.icon} ${escapeHtml(cat.name)}</div>` : ''}
+        ${item.desc ? `<div style="font-size:13px;color:#0f172a;margin-top:6px;">${escapeHtml(item.desc)}</div>` : ''}
+        <div style="font-size:11.5px;color:#64748b;margin-top:6px;direction:ltr;text-align:left;word-break:break-all;">${escapeHtml(item.url)}</div>
+      </div>
+      <div style="position:relative;border-radius:10px;overflow:hidden;border:1px solid #cbd5e1;background:#f8fafc;min-height:46vh;">
+        <iframe src="${escapeHtml(item.url)}" title="${escapeHtml(item.name)}" style="width:100%;height:46vh;border:none;background:#fff;"></iframe>
+      </div>
+      <div style="font-size:11.5px;color:#64748b;text-align:center;">يُعرض المحتوى داخل نبراس مباشرة؛ بعض المنصات الحكومية قد تقيّد العرض داخل الإطارات لدواعٍ أمنية.</div>
+    </div>`;
 }
 
 function openQuickSchedule(){
@@ -6425,45 +6815,6 @@ function openEmbeddedViewer(title, url){
   const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
 }
 function closeEmbeddedViewer(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
-
-function openSchoolCalendar(){
-  const pdfUrl = 'school-calendar-1448.pdf';
-  const html = `<div class="modal-overlay" onclick="if(event.target===this) closeSchoolCalendar()">
-    <div class="modal-box" style="max-width:96vw;width:96vw;">
-      <div class="modal-head">
-        <h3>🗓️ التقويم الدراسي 1448–1449هـ</h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <a class="btn-secondary" style="padding:4px 10px;font-size:13px;text-decoration:none;" href="${pdfUrl}" target="_blank" rel="noopener">🔗 فتح</a>
-          <a class="btn-secondary" style="padding:4px 10px;font-size:13px;text-decoration:none;" href="${pdfUrl}" download>⬇️ تنزيل</a>
-          <button class="btn-secondary" style="padding:4px 10px;font-size:13px" onclick="printSchoolCalendar()">🖨 طباعة</button>
-          <button class="modal-close" onclick="closeSchoolCalendar()">✕</button>
-        </div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px 20px;background:#f1f5f9;border-radius:8px;min-height:30vh;">
-        <div style="font-size:48px;">🗓️</div>
-        <div style="font-size:16px;font-weight:700;color:var(--primary, #be185d);">التقويم الدراسي 1448–1449هـ</div>
-        <div style="font-size:13px;color:#64748b;text-align:center;">الملف: تقويم إسلام آباد 1448هـ.pdf (3 صفحات)</div>
-        <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:8px;">
-          <a class="btn-primary" style="text-decoration:none;padding:10px 20px;font-size:14px;" href="${pdfUrl}" target="_blank" rel="noopener">🔗 فتح</a>
-          <a class="btn-secondary" style="text-decoration:none;padding:10px 20px;font-size:14px;" href="${pdfUrl}" download>⬇️ تنزيل</a>
-          <button class="btn-secondary" style="padding:10px 20px;font-size:14px" onclick="printSchoolCalendar()">🖨 طباعة</button>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px;border-top:1px dashed #cbd5e1;padding-top:12px;">
-          <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('📅 تقويم Google', 'https://calendar.google.com/calendar/embed?src=ar.sa%23holiday%40group.v.calendar.google.com&ctz=Asia/Riyadh')" title="Google Calendar">📅 التقويم</button>
-          <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🕌 مواقيت الصلاة', 'https://www.islamicfinder.org/prayer-widget/')" title="IslamicFinder">🕌 مواقيت الصلاة</button>
-          <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://www.bing.com/translator')" title="Bing Translator">🌐 المترجم</button>
-        </div>
-      </div>
-    </div>
-  </div>`;
-  const old = document.querySelector('.modal-overlay'); if (old) old.remove();
-  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
-}
-function closeSchoolCalendar(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
-function printSchoolCalendar(){
-  const w = window.open('school-calendar-1448.pdf', '_blank');
-  if(!w){ alert('يرجى السماح بالنوافذ المنبثقة'); return; }
-}
 
 let __lastClassScheduleHTML = '';
 function viewClassSchedule(classId){
@@ -8019,12 +8370,12 @@ async function __eduSave(list){
 
 /* ---------------------------------------------------------- العرض العام */
 function __eduCardHtml(l){
-  return '<a class="edu-card" href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener noreferrer nofollow">' +
+  return '<button type="button" class="edu-card" style="text-align:right;width:100%;cursor:pointer;font-family:inherit;background:#fff;" onclick="__eduOpenInApp(\'' + escapeHtml(l.id) + '\')">' +
     '<span class="edu-card-ico">' + escapeHtml(l.icon || '🔗') + '</span>' +
     '<span class="edu-card-body"><span class="edu-card-name">' + escapeHtml(l.name) +
-      '<span class="edu-card-ext" title="فتح الرابط الخارجي">↗</span></span>' +
+      '<span class="edu-card-ext" title="فتح داخل نبراس">👁</span></span>' +
     (l.desc ? `<span class="edu-card-desc">${escapeHtml(l.desc)}</span>` : '') +
-    '</span></a>';
+    '</span></button>';
 }
 function __eduBodyHtml(links){
   if(!links || !links.length) return '<div class="edu-empty">لا نتائج مطابقة للبحث.</div>';

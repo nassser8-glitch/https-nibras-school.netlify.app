@@ -3096,11 +3096,12 @@ app.get('/api/prayer', requireAuth, (req, res) => {
     if (!isFinite(lat) || Math.abs(lat) > 90 || !isFinite(lon) || Math.abs(lon) > 180) return res.status(400).json({ error: 'bad_coords' });
     let m = parseInt(req.query.method, 10);
     if (!isFinite(m) || m < 1 || m > 99) m = 4;
-    const r = await fetch('https://api.aladhan.com/v1/timings?latitude=' + lat + '&longitude=' + lon + '&method=' + m + '&timezonestring=Asia/Amman');
+    const reqTz = /^[A-Za-z_\/+-]{2,60}$/.test(String(req.query.tz || '')) ? String(req.query.tz) : 'Asia/Amman';
+    const r = await fetch('https://api.aladhan.com/v1/timings?latitude=' + lat + '&longitude=' + lon + '&method=' + m + '&timezonestring=' + encodeURIComponent(reqTz));
     const j = await r.json();
     const timings = j && j.data && j.data.timings;
     if (!timings) return res.status(502).json({ error: 'no_timings' });
-    const tz = (j.data && j.data.meta && j.data.meta.timezone) || 'Asia/Amman';
+    const tz = (j.data && j.data.meta && j.data.meta.timezone) || reqTz;
     let y = 0, mo = 0, da = 0, off = 0;
     if (/^[A-Za-z_/+-]{2,60}$/.test(String(tz))) {
       const now = new Date();
