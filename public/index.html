@@ -695,8 +695,9 @@ window.__nibrasMarkBooted = function(){
   .dash-leader-name { font-weight:700; font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .dash-leader-meta { font-size:10.5px; color:var(--muted); margin-top:1px; }
   .dash-leader-pts { margin-inline-start:auto; font-weight:800; font-size:13px; flex-shrink:0; }
-  .nibras-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:6px; }
-  @media (max-width:560px){ .nibras-grid { grid-template-columns:repeat(2,1fr); } }
+  .nibras-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:6px; }
+  @media (max-width:860px){ .nibras-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width:520px){ .nibras-grid { grid-template-columns:1fr; } }
   .app-footer { background:#fff; border-top:1px solid var(--line); padding:10px 16px; text-align:center; font-size:11px; color:var(--muted); }
   @media (max-width:1180px){ .dash-stats { grid-template-columns:repeat(3,1fr); } .dash-bottom { grid-template-columns:1fr; } }
   @media (max-width:900px){ .topbar-search { display:none; } }
@@ -928,7 +929,7 @@ window.__nibrasMarkBooted = function(){
     padding: 10px 14px 16px !important;
   }
   .layout.theme-girls-student .topbar{
-    background: linear-gradient(135deg, #172554 0%, #312e81 50%, #831843 100%) !important;
+    background: linear-gradient(rgba(11,42,72,.30), rgba(11,42,72,.30)), #0d3154 url('assets/nibras-school-building.png') center/cover no-repeat !important;
     border-bottom: 2px solid rgba(244,114,182,.45);
     box-shadow: 0 4px 18px rgba(15,23,42,.22);
     color: #fff !important;
@@ -969,6 +970,7 @@ window.__nibrasMarkBooted = function(){
     box-shadow: 0 4px 12px rgba(190,24,93,.35);
     font-weight: 800;
   }
+  .layout.theme-girls-student .sidebar .group-title,
   .layout.theme-girls-student .sidebar .menu-group-label,
   .layout.theme-girls-student .sidebar .nav-section{
     color: #fbcfe8 !important;
@@ -977,7 +979,7 @@ window.__nibrasMarkBooted = function(){
     margin-bottom: 4px !important;
   }
   /* إبراز بطاقة الرسالة اليومية بوضوح عالٍ */
-  .layout.theme-girls-student .sidebar-widgets .msg-today{
+  .layout.theme-girls-student .sidebar-widgets .msg-day-center{
     background: linear-gradient(135deg, #fff5f8 0%, #ffffff 100%) !important;
     color: #0f172a !important;
     border: 1.5px solid #f472b6 !important;
@@ -986,14 +988,26 @@ window.__nibrasMarkBooted = function(){
     padding: 10px 12px !important;
     margin: 8px 0 !important;
     box-shadow: 0 6px 16px rgba(0,0,0,.25) !important;
+    cursor: pointer;
   }
-  .layout.theme-girls-student .sidebar-widgets .msg-today .msg-title,
-  .layout.theme-girls-student .sidebar-widgets .msg-today b,
-  .layout.theme-girls-student .sidebar-widgets .msg-today strong{ color: #9d174d !important; font-weight: 900 !important; }
-  .layout.theme-girls-student .sidebar-widgets .msg-today .msg-body,
-  .layout.theme-girls-student .sidebar-widgets .msg-today .msg-text{ color: #0f172a !important; font-weight: 700 !important; line-height: 1.6; }
-  .layout.theme-girls-student .sidebar-widgets .msg-today .msg-sender{ color: #1e3a8a !important; font-weight: 800 !important; }
-  /* تحسين وضوح نجمة الأسبوع */
+  .layout.theme-girls-student .sidebar-widgets .msg-day-center .dash-welcome-label{
+    color: #9d174d !important;
+    font-weight: 900 !important;
+    font-size: 13px !important;
+    margin-bottom: 4px;
+  }
+  .layout.theme-girls-student .sidebar-widgets .msg-day-center .msg-static{
+    color: #0f172a !important;
+    font-weight: 700 !important;
+    font-size: 12.5px !important;
+    line-height: 1.6;
+  }
+  .layout.theme-girls-student .sidebar-widgets .msg-day-center .msg-sender{
+    color: #1e3a8a !important;
+    font-weight: 800 !important;
+    margin-top: 4px;
+  }
+  /* تحسين وضوح نجمة الأسبوع (الاسم داخل النجمة يبقى باللون الداكن #6b0f3a فوق النجمة البيضاء) */
   .layout.theme-girls-student .sidebar-widgets [title="نجمة الأسبوع"]{
     background: rgba(255,255,255,.1) !important;
     border: 1px solid rgba(251,207,232,.35) !important;
@@ -1001,7 +1015,7 @@ window.__nibrasMarkBooted = function(){
     padding: 8px 6px !important;
     margin-top: 8px !important;
   }
-  .layout.theme-girls-student .sidebar-widgets [title="نجمة الأسبوع"] div{ color:#fff !important; }
+  .layout.theme-girls-student .sidebar-widgets [title="نجمة الأسبوع"] > div{ color:#fff !important; }
   .layout.theme-girls-student .student-dash{
     max-width: 1120px;
     margin: 0 auto;
@@ -1036,6 +1050,16 @@ window.__nibrasMarkBooted = function(){
     gap: 10px;
     margin-bottom: 10px;
   }
+  .layout.theme-girls-student .sd-leaders-grid{
+    display: grid;
+    grid-template-columns: minmax(250px, 1fr) minmax(0, 2.2fr);
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .layout.theme-girls-student .nibras-grid{
+    grid-template-columns: repeat(auto-fit, minmax(195px, 1fr));
+    gap: 7px;
+  }
   .layout.theme-girls-student .useful-links-card{
     margin-top: 0 !important;
     padding: 10px 14px !important;
@@ -1051,6 +1075,9 @@ window.__nibrasMarkBooted = function(){
     background: #be185d !important;
     color: #fff !important;
     border-color: #be185d !important;
+  }
+  @media (max-width: 920px){
+    .layout.theme-girls-student .sd-leaders-grid{ grid-template-columns: 1fr; }
   }
   @media (max-width: 860px){
     .layout.theme-girls-student .sd-bottom-3{ grid-template-columns: 1fr; }
@@ -5813,7 +5840,7 @@ function renderStudentDashboard(){
       }).join('')}
     </div>
   </div>
-  <div class="sd-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:10px">
+  <div class="sd-leaders-grid">
     <div class="sd-card" style="overflow:hidden">
       <div style="background:linear-gradient(135deg,#172554,#9d174d);color:#fff;padding:9px 14px;display:flex;align-items:center;justify-content:space-between">
         <div style="font-weight:800;font-size:13.5px">🏆 أوائل فصلي</div>
@@ -9488,13 +9515,13 @@ function renderNibrasPioneers(showClass){
   const rows = nd.list.map((x,i) => {
     const clsName = showClass ? clsOf(x.s) : '';
     const pal = palettes[i] || palettes[palettes.length-1];
-    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:${pal[1]};border:1px solid ${pal[3]}55;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,.05);min-width:0">
-      <div style="width:26px;height:26px;border-radius:50%;background:${pal[0]};display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;box-shadow:0 2px 6px ${pal[3]}55">${medals[i] || '🏆'}</div>
+    return `<div style="display:flex;align-items:center;gap:7px;padding:7px 9px;background:${pal[1]};border:1px solid ${pal[3]}55;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,.05);min-width:0">
+      <div style="width:24px;height:24px;border-radius:50%;background:${pal[0]};display:flex;align-items:center;justify-content:center;font-size:12.5px;flex-shrink:0;box-shadow:0 2px 6px ${pal[3]}55">${medals[i] || '🏆'}</div>
       <div style="min-width:0;flex:1;text-align:start">
-        <div style="font-weight:800;font-size:12px;color:${pal[3]};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(x.s.fullName)}</div>
-        ${clsName ? `<div style="font-size:10px;color:${pal[3]}99;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(clsName)}</div>` : ''}
+        <div title="${escapeHtml(x.s.fullName)}" style="font-weight:800;font-size:12.5px;color:${pal[2]};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(x.s.fullName)}</div>
+        ${clsName ? `<div style="font-size:10px;color:${pal[3]};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(clsName)}</div>` : ''}
       </div>
-      <span style="font-size:10.5px;font-weight:800;background:${pal[0]};color:#fff;padding:2px 8px;border-radius:999px;flex-shrink:0">${x.score} دخول</span>
+      <span style="font-size:10px;font-weight:800;background:${pal[0]};color:#fff;padding:2px 7px;border-radius:999px;flex-shrink:0">${x.score} دخول</span>
     </div>`;
   });
   return `<div class="nibras-grid">${rows.join('')}</div>`;
