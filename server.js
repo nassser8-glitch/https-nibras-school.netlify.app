@@ -2077,9 +2077,12 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
       // إذا وُجدت طالبة مسجّلة في rec.data.students ولها حساب فعلي في جدول users غير ظاهر في rec.data.users،
       // نُلحق إسقاطاً للقراءة فقط بحالة تفعيلها وسجل دخولها دون تعديل قاعدة البيانات.
       if (Array.isArray(rec.data.students) && rec.data.students.length) {
-        const studentIdSet = new Set(rec.data.students.filter(s => s && s.active !== false && !s.deleted).map(s => String(s.id)));
+        const activeStudents = rec.data.students.filter(s => s && s.active !== false && !s.deleted);
+        const studentIdSet = new Set(activeStudents.map(s => String(s.id)));
+        const studentUnameSet = new Set(activeStudents.map(s => String(s.username || '').trim().toLowerCase()).filter(Boolean));
         for (const t of stats) {
-          if (seen.has(t.id) || t.role !== 'STUDENT' || !studentIdSet.has(String(t.id))) continue;
+          const uname = String(t.username || '').trim().toLowerCase();
+          if (seen.has(t.id) || t.role !== 'STUDENT' || (!studentIdSet.has(String(t.id)) && (!uname || !studentUnameSet.has(uname)))) continue;
           const d = t.data || {};
           const proj = { id: t.id, username: t.username, name: t.name, role: 'STUDENT', active: t.active !== false, firstLogin: !!t.first_login };
           if (d.lastLogin) proj.lastLogin = d.lastLogin;

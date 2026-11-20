@@ -4783,21 +4783,22 @@ function switchActTab(key){
 /* عرض أسماء من دخلوا ومن لم يدخلوا حساباتهم (الطالبات أو المعلمون) لنطاق معيّن */
 function computeStudentActivationStats(sd, tagText){
   const tag = tagText || '';
+  // التعريف المعتمد: الطالبة مفعّلة فقط إذا سجلت الدخول بنجاح مرة واحدة على الأقل (لا يُعتمد active=true)
   const hasLoggedIn = u => !!(u && (u.lastLogin || Number(u.loginCount || 0) > 0 || (Array.isArray(u.loginHistory) && u.loginHistory.length > 0)));
-  const isActivatedAccount = u => !!(u && u.role === 'STUDENT' && u.active !== false && !u.deleted);
+  const isTechActive = u => !!(u && u.role === 'STUDENT' && u.active !== false && !u.deleted);
 
   const stuUserById = new Map();
   const stuUserByUsername = new Map();
   for(const u of (sd && Array.isArray(sd.users) ? sd.users : [])){
     if(!u || u.role !== 'STUDENT') continue;
     const prevById = u.id ? stuUserById.get(u.id) : null;
-    if(u.id && (!prevById || (isActivatedAccount(u) && !isActivatedAccount(prevById)) || (hasLoggedIn(u) && !hasLoggedIn(prevById)))){
+    if(u.id && (!prevById || (hasLoggedIn(u) && !hasLoggedIn(prevById)))){
       stuUserById.set(u.id, u);
     }
     const uname = String(u.username || '').trim().toLowerCase();
     if(uname){
       const prevByU = stuUserByUsername.get(uname);
-      if(!prevByU || (isActivatedAccount(u) && !isActivatedAccount(prevByU)) || (hasLoggedIn(u) && !hasLoggedIn(prevByU))){
+      if(!prevByU || (hasLoggedIn(u) && !hasLoggedIn(prevByU))){
         stuUserByUsername.set(uname, u);
       }
     }
@@ -4810,8 +4811,12 @@ function computeStudentActivationStats(sd, tagText){
     notActivated: 0,
     loggedIn: 0,
     notLoggedIn: 0,
+    activeAccounts: 0,
+    inactiveAccounts: 0,
     activationPct: 0,
-    loginPct: 0,
+    notActivatedPct: 0,
+    activationPctText: '0.00',
+    notActivatedPctText: '0.00',
     activatedNames: [],
     notActivatedNames: [],
     loggedInNames: [],
@@ -4830,29 +4835,32 @@ function computeStudentActivationStats(sd, tagText){
     const u = (sid && stuUserById.get(sid)) || (uname && stuUserByUsername.get(uname)) || null;
     const nm = (s.fullName || s.name || s.username || '—') + tag;
     res.total++;
-    const act = isActivatedAccount(u);
+
+    // فصل الحالة التقنية للحساب (نشط/معطل) عن التفعيل الفعلي (أول دخول ناجح)
+    if(isTechActive(u)) res.activeAccounts++;
+    else res.inactiveAccounts++;
+
     const logged = !!(u && hasLoggedIn(u));
-    if(act){
-      res.activated++;
-      res.activatedNames.push(nm);
-    } else {
-      res.notActivated++;
-      res.notActivatedNames.push(nm);
-    }
     if(logged){
+      res.activated++;
       res.loggedIn++;
+      res.activatedNames.push(nm);
       res.loggedInNames.push(nm);
       res.loggedInItems.push({ name: nm, lastLogin: u.lastLogin || '' });
     } else {
+      res.notActivated++;
       res.notLoggedIn++;
+      res.notActivatedNames.push(nm);
       res.notLoggedInNames.push(nm);
     }
   }
 
   res.notActivated = res.total - res.activated;
-  res.notLoggedIn = res.total - res.loggedIn;
-  res.activationPct = res.total ? Number(((res.activated / res.total) * 100).toFixed(2)) : 0;
-  res.loginPct = res.total ? Number(((res.loggedIn / res.total) * 100).toFixed(2)) : 0;
+  res.notLoggedIn = res.notActivated;
+  res.activationPctText = res.total ? ((res.activated / res.total) * 100).toFixed(2) : '0.00';
+  res.notActivatedPctText = res.total ? ((res.notActivated / res.total) * 100).toFixed(2) : '0.00';
+  res.activationPct = Number(res.activationPctText);
+  res.notActivatedPct = Number(res.notActivatedPctText);
   return res;
 }
 
@@ -4870,11 +4878,9 @@ function showActNames(gkey, grp){
     const sd = loadSchoolDB('GIRLS');
     const st = computeStudentActivationStats(sd, tag('GIRLS'));
     const loggedLabels = st.loggedInItems.map(it => it.name + (it.lastLogin ? ' — آخر دخول: ' + sdDate(it.lastLogin) : ''));
-    openDetails('إحصائية حسابات الطالبات (بنات — الإجمالي: ' + st.total + ')',
-      `<li style="font-weight:800;color:#2563eb">🔑 الحسابات المفعّلة (${st.activated}/${st.total} — ${st.activationPct}%)</li>${li(st.activatedNames)}` +
-      `<li style="font-weight:800;color:#dc2626;margin-top:8px">🚫 الحسابات غير المفعّلة (${st.notActivated})</li>${li(st.notActivatedNames)}` +
-      `<li style="font-weight:800;color:#16a34a;margin-top:8px">✅ سجلن الدخول فعليًا مرة واحدة على الأقل (${st.loggedIn})</li>${li(loggedLabels)}` +
-      `<li style="font-weight:800;color:#9ca3af;margin-top:8px">⏳ لم يسجلن الدخول بعد (${st.notLoggedIn})</li>${li(st.notLoggedInNames)}`);
+    openDetails('إحصائية تفعيل حسابات الطالبات (بنات — الإجمالي: ' + st.total + ')',
+      `<li style="font-weight:800;color:#16a34a">✅ الحسابات المفعّلة — سبق لهن تسجيل الدخول (${st.activated}/${st.total} — ${st.activationPctText}%)</li>${li(loggedLabels)}` +
+      `<li style="font-weight:800;color:#dc2626;margin-top:8px">⏳ الحسابات غير المفعّلة — لم يسجلن الدخول مطلقًا (${st.notActivated} — ${st.notActivatedPctText}%)</li>${li(st.notActivatedNames)}`);
     return;
   }
   const actNames = [], pendNames = [];
@@ -6224,23 +6230,22 @@ function renderDashboard(){
     // "الكل/بنين/بنات" لأن الفلترة والإجمالي شيء واحد ولا داعي لتكرار التبويب.
     const onlyGirls = schoolActs.length === 1 && groups.length === 2;
     const studentDonut = (label, st, gkey) => {
-      const pct = st.total ? Number(((st.activated / st.total) * 100).toFixed(2)) : 0;
+      const pctText = st.activationPctText || (st.total ? ((st.activated / st.total) * 100).toFixed(2) : '0.00');
+      const notPctText = st.notActivatedPctText || (st.total ? (((st.total - st.activated) / st.total) * 100).toFixed(2) : '0.00');
+      const pctNum = Number(pctText) || 0;
       const notActivated = st.total - st.activated;
-      const notLoggedIn = st.total - st.loggedIn;
-      const donutBg = st.total ? `conic-gradient(#2563eb 0 ${pct}%, #eef2f7 ${pct}% 100%)` : 'conic-gradient(#e4edf5 0 100%)';
+      const donutBg = st.total ? `conic-gradient(#22c55e 0 ${pctNum}%, #eef2f7 ${pctNum}% 100%)` : 'conic-gradient(#e4edf5 0 100%)';
       return `
         <div class="act-block">
           <div style="font-weight:800;font-size:14px;color:#0f172a;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:5px" onclick="showActNames('${gkey}','students')" title="اضغط لعرض التفاصيل الكاملة">${label}: ${st.activated}/${st.total} <span style="font-size:11px;color:#2563eb">📋</span></div>
           <div class="act-flex">
             <div class="dash-donut" style="width:116px;height:116px;background:${donutBg};cursor:pointer" onclick="showActNames('${gkey}','students')" title="اضغط لعرض الأسماء">
-              <div class="dash-donut-center"><b style="font-size:18px">${pct}%</b><span>مفعّل</span></div>
+              <div class="dash-donut-center"><b style="font-size:17px">${pctText}%</b><span>مفعّل</span></div>
             </div>
             <div class="att-legend">
               <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#0f172a"></span>إجمالي الطالبات <b>${st.total}</b></div>
-              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#2563eb"></span>الحسابات المفعّلة <b>${st.activated}</b> <span class="muted small">(${pct}%)</span></div>
-              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#dc2626"></span>الحسابات غير المفعّلة <b>${notActivated}</b></div>
-              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#22c55e"></span>سجلن الدخول فعليًا <b>${st.loggedIn}</b></div>
-              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#cbd5e1"></span>لم يسجلن الدخول بعد <b>${notLoggedIn}</b></div>
+              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#22c55e"></span>الحسابات المفعّلة (سبق لهن الدخول) <b>${st.activated}</b> <span class="muted small">(${pctText}%)</span></div>
+              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#dc2626"></span>الحسابات غير المفعّلة (لم يسجلن الدخول مطلقًا) <b>${notActivated}</b> <span class="muted small">(${notPctText}%)</span></div>
             </div>
           </div>
         </div>`;
@@ -6280,7 +6285,7 @@ function renderDashboard(){
         ${groups.map((g,i) => `<button class="dash-tab ${i===0?'active':''}" data-act="${g.key}" onclick="switchActTab('${g.key}')">${g.school}</button>`).join('')}
       </div>
       ${groups.map(g => `<div class="act-pane" data-act="${g.key}" style="${g.key==='ALL'?'':'display:none'}">${actTab(g)}</div>`).join('')}`}
-      <p class="muted small" style="margin:10px 0 0">تُحتسب نسبة تفعيل الطالبات آليًا (الحسابات المفعّلة ÷ إجمالي الطالبات × 100) مع الفصل التام عن عدد من سجلن الدخول فعليًا ومن لم يسجلن بعد. اضغط لعرض الأسماء.</p>
+      <p class="muted small" style="margin:10px 0 0">الطالبة تُحتسب مفعّلة فقط إذا سجّلت الدخول إلى حسابها بنجاح مرة واحدة على الأقل (ولا يُعدّ مجرد وجود الحساب أو كونه نشطًا تفعيلًا). اضغط لعرض الأسماء.</p>
     </div>`;
   })();
 

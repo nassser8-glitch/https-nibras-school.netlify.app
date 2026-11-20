@@ -20,51 +20,53 @@ function extractFn(src, name) {
   return rest.slice(0, m.index + m[0].length);
 }
 
-test('1) سيناريو 170 طالبة: المفعّلة 138 (81.18%)، غير المفعّلة 32 (170-138)، لم يسجلن الدخول 99 (منفصلة تمامًا عن غير المفعّلة)', () => {
+test('1) سيناريو 171 طالبة: 138 مفعّلة (سجلن الدخول مرة على الأقل = 80.70%) و33 غير مفعّلة (لم يسجلن مطلقًا = 19.30%)', () => {
   const fnSrc = extractFn(HTML, 'computeStudentActivationStats');
   const students = [];
   const users = [];
 
-  // 170 طالبة فعلية نشطة:
-  // - 71 حساب مفعّل وسجلن الدخول فعليًا
-  // - 67 حساب مفعّل لكن لم يسجلن الدخول بعد (إجمالي المفعّلة = 138 => 81.18%)
-  // - 16 حساب غير مفعّل (active: false)
-  // - 16 طالبة بدون حساب في users بعد (إجمالي غير المفعّلة = 32، وإجمالي من لم يسجلن الدخول = 67 + 32 = 99)
-  for (let i = 1; i <= 170; i++) {
+  // 171 طالبة فعلية نشطة:
+  // - 138 طالبة سجلن الدخول مرة واحدة على الأقل (بعضهن دخلن 10 مرات، وبعضهن دخلن قديمًا مرة واحدة فقط، وإحداهن active:false لكنها دخلت سابقًا)
+  // - 33 طالبة لم يسجلن الدخول مطلقًا (معظمهن active:true تقنيًا، وبعضهن بلا حساب، فلا يُحتسبن مفعّلات!)
+  for (let i = 1; i <= 171; i++) {
     const id = `stu_${i}`;
     const username = `girl_${i}`;
     students.push({ id, fullName: `طالبة ${i}`, username, active: true });
-    if (i <= 71) {
-      users.push({ id, username, role: 'STUDENT', active: true, lastLogin: '2026-11-18T08:00:00Z', loginCount: 2 });
-    } else if (i <= 138) {
-      users.push({ id: i === 138 ? 'alt_id_138' : id, username, role: 'STUDENT', active: true, lastLogin: null, loginCount: 0 });
-    } else if (i <= 154) {
-      users.push({ id, username, role: 'STUDENT', active: false, lastLogin: null, loginCount: 0 });
+    if (i <= 100) {
+      users.push({ id, username, role: 'STUDENT', active: true, lastLogin: '2026-11-18T08:00:00Z', loginCount: 10 });
+    } else if (i <= 137) {
+      // دخلت مرة واحدة قديمًا
+      users.push({ id, username, role: 'STUDENT', active: true, lastLogin: '2026-09-02T07:30:00Z', loginCount: 1 });
+    } else if (i === 138) {
+      // مطابقة باسم المستخدم مع سجل دخول سابق
+      users.push({ id: 'alt_id_138', username, role: 'STUDENT', active: true, loginHistory: ['2026-09-10T08:00:00Z'] });
+    } else if (i <= 165) {
+      // حساب active=true تقنيًا لكن لم تسجل الدخول مطلقًا => غير مفعّلة
+      users.push({ id, username, role: 'STUDENT', active: true, lastLogin: null, loginCount: 0, loginHistory: [] });
     }
+    // البقية (166..171): بلا سجل في users بعد => غير مفعّلات
   }
-  // تكرار + محذوفة + معلمة + إدارية (لا يجوز احتسابها ضمن 170)
+  // تكرار + محذوفة + غير نشطة + معلمة + إدارية (لا يجوز احتسابها ضمن 171)
   students.push({ id: 'stu_1', fullName: 'طالبة 1 مكررة', username: 'girl_1', active: true });
   students.push({ id: 'stu_del', fullName: 'طالبة محذوفة', active: true, deleted: true });
   students.push({ id: 'stu_inactive', fullName: 'طالبة موقوفة', active: false });
   users.push({ id: 't_1', username: 'teacher1', role: 'TEACHER', active: true, lastLogin: '2026-11-18T08:00:00Z', loginCount: 5 });
   users.push({ id: 'adm_1', username: 'admin1', role: 'ADMIN', active: true, lastLogin: '2026-11-18T08:00:00Z', loginCount: 10 });
-  users.push({ id: 'ag_1', username: 'agent1', role: 'AGENT', active: true, lastLogin: '2026-11-18T08:00:00Z', loginCount: 3 });
 
   const ctx = { sd: { students, users } };
   vm.runInNewContext(`${fnSrc}\nthis.res = computeStudentActivationStats(sd, '');`, ctx);
   const r = ctx.res;
 
-  assert.equal(r.total, 170, 'إجمالي الطالبات يجب أن يساوي 170');
-  assert.equal(r.activated, 138, 'الحسابات المفعّلة يجب أن تساوي 138');
-  assert.equal(r.notActivated, 32, 'الحسابات غير المفعّلة يجب أن تساوي 32 (170 - 138)');
-  assert.equal(r.activationPct, 81.18, 'نسبة التفعيل يجب أن تساوي 81.18%');
-  assert.equal(r.loggedIn, 71, 'من سجلن الدخول فعليًا يجب أن يساوي 71');
-  assert.equal(r.notLoggedIn, 99, 'من لم يسجلن الدخول بعد يجب أن يساوي 99 (منفصل عن غير المفعّلة 32)');
+  assert.equal(r.total, 171, 'إجمالي الطالبات يجب أن يساوي 171');
+  assert.equal(r.activated, 138, 'الحسابات المفعّلة (سبق لهن الدخول مرة على الأقل) يجب أن تساوي 138 (دون جمع عدد مرات الدخول)');
+  assert.equal(r.notActivated, 33, 'الحسابات غير المفعّلة (لم يسجلن مطلقًا) يجب أن تساوي 33 حتى لو كان active=true');
+  assert.equal(r.activationPctText, '80.70', 'نسبة التفعيل يجب أن تساوي 80.70%');
+  assert.equal(r.notActivatedPctText, '19.30', 'نسبة عدم التفعيل يجب أن تساوي 19.30%');
+  assert.equal(r.activeAccounts, 165, 'الحالة التقنية للحساب (active=true) تبقى مفصولة عن التفعيل الفعلي');
   assert.equal(r.activated + r.notActivated, r.total);
-  assert.equal(r.loggedIn + r.notLoggedIn, r.total);
 });
 
-test('2) النسبة محسوبة ديناميكيًا وليست قيمة ثابتة', () => {
+test('2) الحساب ديناميكي بالكامل ولا يعتبر active=true تفعيلًا أبدًا', () => {
   const fnSrc = extractFn(HTML, 'computeStudentActivationStats');
   const sd = {
     students: [
@@ -75,26 +77,24 @@ test('2) النسبة محسوبة ديناميكيًا وليست قيمة ثا
     ],
     users: [
       { id: 's1', role: 'STUDENT', active: true, loginCount: 0 },
-      { id: 's2', role: 'STUDENT', active: true, lastLogin: '2026-11-19T10:00:00Z' },
-      { id: 's3', role: 'STUDENT', active: false },
+      { id: 's2', role: 'STUDENT', active: true, lastLogin: '2026-11-19T10:00:00Z', loginCount: 5 },
+      { id: 's3', role: 'STUDENT', active: true },
+      { id: 's4', role: 'STUDENT', active: false },
     ],
   };
   const ctx = { sd };
   vm.runInNewContext(`${fnSrc}\nthis.res = computeStudentActivationStats(sd, '');`, ctx);
   assert.equal(ctx.res.total, 4);
-  assert.equal(ctx.res.activated, 2);
-  assert.equal(ctx.res.notActivated, 2);
-  assert.equal(ctx.res.activationPct, 50);
-  assert.equal(ctx.res.loggedIn, 1);
-  assert.equal(ctx.res.notLoggedIn, 3);
+  assert.equal(ctx.res.activated, 1, 'طالبة واحدة فقط سجلت الدخول (active=true لا يعني التفعيل)');
+  assert.equal(ctx.res.notActivated, 3);
+  assert.equal(ctx.res.activationPctText, '25.00');
+  assert.equal(ctx.res.notActivatedPctText, '75.00');
 });
 
-test('3) لوحة المدير ونافذة التفاصيل تعرض المؤشرات المستقلة الأربعة (الإجمالي، المفعّلة، غير المفعّلة، لم يسجلن الدخول)', () => {
+test('3) لوحة المدير تعرض الإجمالي والمفعّلة (سبق لهن الدخول) وغير المفعّلة (لم يسجلن مطلقًا) والنسبة', () => {
   assert.ok(HTML.includes('إجمالي الطالبات <b>${st.total}</b>'), 'مؤشر إجمالي الطالبات مفقود');
-  assert.ok(HTML.includes('الحسابات المفعّلة <b>${st.activated}</b>'), 'مؤشر الحسابات المفعّلة مفقود');
-  assert.ok(HTML.includes('الحسابات غير المفعّلة <b>${notActivated}</b>'), 'مؤشر الحسابات غير المفعّلة مفقود');
-  assert.ok(HTML.includes('لم يسجلن الدخول بعد <b>${notLoggedIn}</b>'), 'مؤشر لم يسجلن الدخول بعد مفقود');
-  assert.ok(HTML.includes('🚫 الحسابات غير المفعّلة (${st.notActivated})'), 'قائمة غير المفعّلة مفقودة من نافذة التفاصيل');
-  assert.ok(SERVER.includes('u.active = t.active !== false;'), 'server.js لا يزامن حالة التفعيل active من جدول users');
-  assert.ok(DB_SRC.includes('SELECT id, username, email, name, role, active, first_login, data FROM users WHERE school = $1'), 'usersForLoginStats لا تجلب role و email');
+  assert.ok(HTML.includes('الحسابات المفعّلة (سبق لهن الدخول) <b>${st.activated}</b>'), 'مؤشر الحسابات المفعّلة مفقود');
+  assert.ok(HTML.includes('الحسابات غير المفعّلة (لم يسجلن الدخول مطلقًا) <b>${notActivated}</b>'), 'مؤشر الحسابات غير المفعّلة مفقود');
+  assert.ok(SERVER.includes('studentUnameSet'), 'server.js لا تطابق الطالبات باسم المستخدم عند الإسقاط من جدول users');
+  assert.ok(DB_SRC.includes('SELECT id, username, email, name, role, active, first_login, data FROM users WHERE school = $1'), 'usersForLoginStats لا تجلب الحقول الكاملة');
 });
