@@ -4616,25 +4616,28 @@ function renderLayout(user, hash){
   const starName = starOfWeek ? (starOfWeek.name || '') : '';
   const starAvatar = starName ? starName.charAt(0) : '⭐';
   const canSetStar = (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR');
+  const starTrophyBox = (nm, widthPx, faded) => {
+    const clean = String(nm || '').trim();
+    const isBig = widthPx >= 220;
+    const fz = isBig
+      ? (clean.length > 18 ? 14 : (clean.length > 12 ? 16 : 19))
+      : (clean.length > 16 ? 9.5 : (clean.length > 11 ? 10.5 : 12));
+    return `<div style="position:relative;width:${widthPx}px;max-width:100%;margin:0 auto 6px;border-radius:${isBig?18:14}px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.18);${faded?'opacity:.55;':''}">
+      <img src="assets/star-of-week-girls.jpg" alt="نجمة الأسبوع" style="width:100%;height:auto;display:block;" />
+      ${clean ? `<div style="position:absolute;left:21%;width:53%;top:77.5%;height:10%;display:flex;align-items:center;justify-content:center;text-align:center;padding:0 4px;color:#831843;font-weight:900;font-size:${fz}px;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(clean)}">${escapeHtml(clean)}</div>` : ''}
+    </div>`;
+  };
   const starOfWeekWidget = `
-    <div style="margin-top:8px;padding:10px 6px;text-align:center;position:relative;" title="نجمة الأسبوع">
-      <div style="position:absolute;top:4px;right:4px;width:2px;height:12px;background:rgba(255,255,255,.35);border-radius:1px;"></div>
-      <div style="position:absolute;top:4px;left:4px;width:2px;height:12px;background:rgba(255,255,255,.35);border-radius:1px;"></div>
-      <div style="position:absolute;top:4px;right:4px;left:4px;height:2px;background:rgba(255,255,255,.35);border-radius:1px;"></div>
-      <div style="position:absolute;bottom:4px;right:4px;width:2px;height:12px;background:rgba(255,255,255,.35);border-radius:1px;"></div>
-      <div style="position:absolute;bottom:4px;left:4px;width:2px;height:12px;background:rgba(255,255,255,.35);border-radius:1px;"></div>
-      <div style="position:absolute;bottom:4px;right:4px;left:4px;height:2px;background:rgba(255,255,255,.35);border-radius:1px;"></div>
-      <div style="font-size:11px;font-weight:800;color:#fff;letter-spacing:.5px;margin-bottom:4px;text-transform:uppercase;position:relative;z-index:1;">⭐ نجمة الأسبوع</div>
+    <div style="margin-top:8px;padding:8px 4px;text-align:center;position:relative;" title="نجمة الأسبوع">
       ${starName ? `
-        <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:88px;height:88px;margin:0 auto 4px;display:block;position:relative;z-index:1;" />
-        <div style="font-size:15px;font-weight:800;color:#fff;position:relative;z-index:1;">${escapeHtml(starName)}</div>
-        <div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.85);margin-top:2px;position:relative;z-index:1;">طالبة متميزة ومتفوقة ومثابرة</div>
-        ${starOfWeek && starOfWeek.className ? `<div style="font-size:11px;color:rgba(255,255,255,.8);margin-top:2px;position:relative;z-index:1;">${escapeHtml(starOfWeek.className)}</div>` : ''}
+        <a href="#/star-of-week" style="display:block;text-decoration:none;position:relative;z-index:1;">${starTrophyBox(starName, 172, false)}</a>
+        <div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.9);margin-top:2px;position:relative;z-index:1;">طالبة متميزة ومتفوقة ومثابرة</div>
+        ${starOfWeek && starOfWeek.className ? `<div style="font-size:11px;color:rgba(255,255,255,.85);margin-top:2px;position:relative;z-index:1;">${escapeHtml(starOfWeek.className)}</div>` : ''}
       ` : `
-        <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:56px;height:56px;margin:0 auto 4px;display:block;opacity:.4;position:relative;z-index:1;" />
-        <div style="font-size:11px;color:rgba(255,255,255,.6);position:relative;z-index:1;">لم تُحدد بعد</div>
+        <a href="#/star-of-week" style="display:block;text-decoration:none;position:relative;z-index:1;">${starTrophyBox('', 140, true)}</a>
+        <div style="font-size:11px;color:rgba(255,255,255,.7);position:relative;z-index:1;">لم تُحدد بعد</div>
       `}
-      ${canSetStar ? `<a href="#/star-of-week" style="display:inline-block;margin-top:4px;padding:2px 8px;font-size:10px;border-radius:4px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-weight:700;text-decoration:none;position:relative;z-index:1;">✏️ ${starName ? 'تغيير' : 'تعيين'}</a>` : ''}
+      ${canSetStar ? `<a href="#/star-of-week" style="display:inline-block;margin-top:6px;padding:2px 8px;font-size:10px;border-radius:4px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-weight:700;text-decoration:none;position:relative;z-index:1;">✏️ ${starName ? 'تغيير' : 'تعيين'}</a>` : ''}
     </div>`;
 
   let pageHtml = '';
@@ -16165,9 +16168,9 @@ function renderStarOfWeek(){
       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:24px;padding:0;box-shadow:0 10px 40px rgba(0,0,0,.08);overflow:hidden;margin-bottom:32px;">
         <div style="height:8px;background:linear-gradient(90deg,#db2777,#f59e0b,#db2777);"></div>
         <div style="padding:32px 24px;text-align:center;">
-          <div style="position:relative;display:inline-block;margin-bottom:20px;">
-            <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:200px;height:200px;display:block;" />
-            ${photoHtml}
+          <div style="position:relative;display:inline-block;width:270px;max-width:100%;margin-bottom:20px;border-radius:18px;overflow:hidden;box-shadow:0 10px 28px rgba(131,24,67,.2);">
+            <img src="assets/star-of-week-girls.jpg" alt="نجمة الأسبوع" style="width:100%;height:auto;display:block;" />
+            <div style="position:absolute;left:21%;width:53%;top:77.5%;height:10%;display:flex;align-items:center;justify-content:center;text-align:center;padding:0 6px;color:#831843;font-weight:900;font-size:${String(currentStar.name||'').length > 18 ? 14 : (String(currentStar.name||'').length > 12 ? 16 : 19)}px;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(currentStar.name)}</div>
           </div>
           <div style="display:inline-block;padding:6px 20px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border-radius:24px;font-size:13px;font-weight:800;margin-bottom:16px;box-shadow:0 3px 10px rgba(245,158,11,.3);letter-spacing:.5px;">🏆 نجمة الأسبوع</div>
           <h2 style="font-size:28px;font-weight:900;color:#831843;margin:0 0 4px;line-height:1.3;">${escapeHtml(currentStar.name)}</h2>
@@ -16183,7 +16186,7 @@ function renderStarOfWeek(){
   } else {
     mainCardHtml = `
       <div style="background:#fff;border:2px dashed #d1d5db;border-radius:24px;padding:64px 24px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,.04);margin-bottom:32px;">
-        <img src="assets/StarOfWeekIcon.svg" alt="نجمة الأسبوع" style="width:160px;height:160px;opacity:.35;margin-bottom:16px;" />
+        <img src="assets/star-of-week-girls.jpg" alt="نجمة الأسبوع" style="width:200px;max-width:100%;height:auto;border-radius:16px;opacity:.45;margin:0 auto 16px;display:block;" />
         <div style="font-size:20px;font-weight:700;color:#9ca3af;margin-bottom:6px;">لم يتم اختيار نجمة للأسبوع بعد</div>
         <div style="font-size:14px;color:#d1d5db;">${canManage ? 'استخدمي لوحة التحكم أدناه لتعيين نجمة الأسبوع' : 'سيتم الإعلان قريباً'}</div>
       </div>`;
