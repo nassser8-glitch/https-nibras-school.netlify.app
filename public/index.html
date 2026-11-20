@@ -4328,7 +4328,7 @@ function renderStudentLeaders(){
     const isMe = s => s.id === user.id;
     return `<div style="overflow-x:auto"><table class="data-table" style="width:100%">
       <thead><tr><th>#</th><th>الطالب</th>${showClass ? '<th>الفصل</th>' : ''}<th>النقاط</th></tr></thead>
-      <tbody>${withPts.slice(0,20).map((x,i) => {
+      <tbody>${withPts.slice(0,5).map((x,i) => {
         const cls = x.s.classId ? (d.classes||[]).find(c => c.id === x.s.classId) : null;
         const gr = cls ? (d.grades||[]).find(g => g.id === cls.gradeId) : null;
         const clsName = cls ? (gr ? gr.name + ' — ' : '') + 'الفصل ' + cls.name : '—';
