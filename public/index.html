@@ -5633,6 +5633,7 @@ function renderStudentDashboard(){
       }).join('')}
     </div>
   </div>
+  ${renderUsefulLinksCard()}
   </div>`;
 }
 function renderStudentAssignments(){
@@ -6343,7 +6344,185 @@ function renderDashboard(){
   <div class="grid grid-6">${myClassCards}</div>
   ` : ''}
   ${activationPanel}
+  ${renderUsefulLinksCard()}
   `;
+}
+
+function renderUsefulLinksCard(){
+  return `<div class="card mb useful-links-card" style="margin-top:12px;">
+    <div style="font-weight:700;margin-bottom:8px;">🔗 روابط مفيدة</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openSchoolCalendar()" title="التقويم الدراسي 1448-1449هـ">🗓️ التقويم الدراسي</button>
+      <a class="btn-secondary" style="text-decoration:none;padding:6px 12px;font-size:13px;" href="https://www.moe.gov.sa" target="_blank" rel="noopener">📚 الروابط التعليمية</a>
+      <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('📅 تقويم Google', 'https://calendar.google.com/calendar/embed?src=ar.sa%23holiday%40group.v.calendar.google.com&ctz=Asia/Riyadh')" title="Google Calendar">📅 التقويم</button>
+      <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🕌 مواقيت الصلاة', 'https://www.islamicfinder.org/prayer-widget/')" title="IslamicFinder">🕌 مواقيت الصلاة</button>
+      <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://www.bing.com/translator')" title="Bing Translator">🌐 المترجم</button>
+      <button type="button" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openQuickSchedule()" title="عرض جدول الحصص الأسبوعي">👁 جدول الحصص</button>
+    </div>
+  </div>`;
+}
+
+function openQuickSchedule(){
+  const d = loadDB();
+  const user = currentUser();
+  if(!user) return;
+  if(user.role === 'STUDENT'){
+    const s = (d.students || []).find(x => x.id === user.id);
+    if(s && s.classId) viewClassSchedule(s.classId);
+    else alert('غير مسند لفصل');
+    return;
+  }
+  if(user.role === 'TEACHER'){
+    location.hash = '#/timetable';
+    return;
+  }
+  const campus = typeof getActiveSchool === 'function' ? getActiveSchool() : '';
+  const classes = (d.classes || []).filter(c => !campus || !c.campus || c.campus === campus);
+  if(!classes.length){ alert('لا توجد فصول مضافة بعد'); return; }
+  if(classes.length === 1){ viewClassSchedule(classes[0].id); return; }
+  const btns = classes.map(c => {
+    const g = typeof gradeById === 'function' ? gradeById(c.gradeId) : null;
+    const lbl = (g ? g.name + ' — ' : '') + c.name;
+    return `<button type="button" class="btn-secondary" style="padding:8px 14px;font-size:13px;" onclick="viewClassSchedule('${escapeHtml(c.id)}')">🏫 ${escapeHtml(lbl)}</button>`;
+  }).join('');
+  const html = `<div class="modal-overlay" onclick="if(event.target===this) closeClassSchedule()">
+    <div class="modal-box" style="max-width:560px;width:94vw;">
+      <div class="modal-head">
+        <h3>👁 جدول الحصص — اختر الفصل</h3>
+        <button class="modal-close" onclick="closeClassSchedule()">✕</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 4px;">${btns}</div>
+    </div>
+  </div>`;
+  const old = document.querySelector('.modal-overlay'); if(old) old.remove();
+  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
+}
+
+function openEmbeddedViewer(title, url){
+  if (url.includes('translate.google.com')) {
+    url = 'https://www.bing.com/translator';
+  }
+  const bodyHtml = `<div style="flex:1;overflow:auto;border-radius:8px;background:#f1f5f9;min-height:60vh;position:relative;">
+    <iframe src="${url}" style="width:100%;height:100%;min-height:60vh;border:none;" title="${escapeHtml(title)}" onload="this.style.display='block'" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"></iframe>
+    <div style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px 20px;min-height:40vh;">
+      <div style="font-size:48px;">🚫</div>
+      <div style="font-size:13px;color:#64748b;text-align:center;">إذا لم يظهر المحتوى، <a href="${url}" target="_blank" rel="noopener" style="color:var(--primary, #be185d);">افتحه في تبويب جديد</a>.</div>
+    </div>
+  </div>`;
+  const html = `<div class="modal-overlay" onclick="if(event.target===this) closeEmbeddedViewer()">
+    <div class="modal-box" style="max-width:96vw;width:96vw;height:90vh;display:flex;flex-direction:column;">
+      <div class="modal-head">
+        <h3>${escapeHtml(title)}</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <a class="btn-secondary" style="padding:4px 10px;font-size:13px;text-decoration:none;" href="${url}" target="_blank" rel="noopener" title="فتح في تبويب جديد">🔗 فتح</a>
+          <button class="modal-close" onclick="closeEmbeddedViewer()">✕</button>
+        </div>
+      </div>
+      ${bodyHtml}
+    </div>
+  </div>`;
+  const old = document.querySelector('.modal-overlay'); if (old) old.remove();
+  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
+}
+function closeEmbeddedViewer(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
+
+function openSchoolCalendar(){
+  const pdfUrl = 'school-calendar-1448.pdf';
+  const html = `<div class="modal-overlay" onclick="if(event.target===this) closeSchoolCalendar()">
+    <div class="modal-box" style="max-width:96vw;width:96vw;">
+      <div class="modal-head">
+        <h3>🗓️ التقويم الدراسي 1448–1449هـ</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <a class="btn-secondary" style="padding:4px 10px;font-size:13px;text-decoration:none;" href="${pdfUrl}" target="_blank" rel="noopener">🔗 فتح</a>
+          <a class="btn-secondary" style="padding:4px 10px;font-size:13px;text-decoration:none;" href="${pdfUrl}" download>⬇️ تنزيل</a>
+          <button class="btn-secondary" style="padding:4px 10px;font-size:13px" onclick="printSchoolCalendar()">🖨 طباعة</button>
+          <button class="modal-close" onclick="closeSchoolCalendar()">✕</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px 20px;background:#f1f5f9;border-radius:8px;min-height:30vh;">
+        <div style="font-size:48px;">🗓️</div>
+        <div style="font-size:16px;font-weight:700;color:var(--primary, #be185d);">التقويم الدراسي 1448–1449هـ</div>
+        <div style="font-size:13px;color:#64748b;text-align:center;">الملف: تقويم إسلام آباد 1448هـ.pdf (3 صفحات)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:8px;">
+          <a class="btn-primary" style="text-decoration:none;padding:10px 20px;font-size:14px;" href="${pdfUrl}" target="_blank" rel="noopener">🔗 فتح</a>
+          <a class="btn-secondary" style="text-decoration:none;padding:10px 20px;font-size:14px;" href="${pdfUrl}" download>⬇️ تنزيل</a>
+          <button class="btn-secondary" style="padding:10px 20px;font-size:14px" onclick="printSchoolCalendar()">🖨 طباعة</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px;border-top:1px dashed #cbd5e1;padding-top:12px;">
+          <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('📅 تقويم Google', 'https://calendar.google.com/calendar/embed?src=ar.sa%23holiday%40group.v.calendar.google.com&ctz=Asia/Riyadh')" title="Google Calendar">📅 التقويم</button>
+          <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🕌 مواقيت الصلاة', 'https://www.islamicfinder.org/prayer-widget/')" title="IslamicFinder">🕌 مواقيت الصلاة</button>
+          <button class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="openEmbeddedViewer('🌐 المترجم', 'https://www.bing.com/translator')" title="Bing Translator">🌐 المترجم</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  const old = document.querySelector('.modal-overlay'); if (old) old.remove();
+  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
+}
+function closeSchoolCalendar(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
+function printSchoolCalendar(){
+  const w = window.open('school-calendar-1448.pdf', '_blank');
+  if(!w){ alert('يرجى السماح بالنوافذ المنبثقة'); return; }
+}
+
+let __lastClassScheduleHTML = '';
+function viewClassSchedule(classId){
+  const d = loadDB();
+  const c = (d.classes || []).find(x => x.id === classId);
+  if(!c){ alert('الفصل غير موجود'); return; }
+  const g = gradeById(c.gradeId);
+  const sched = {};
+  TIMETABLE_DAYS.forEach(day => { sched[day.key] = {}; });
+  for (const tid of Object.keys(d.timetable || {})) {
+    const t = userById(tid);
+    const tname = t ? t.name : tid;
+    TIMETABLE_DAYS.forEach(day => {
+      const cells = ((d.timetable[tid] || {})[day.key]) || {};
+      for (const [p, cell] of Object.entries(cells)) {
+        if (cell && !cell._del && cell.classId === classId) {
+          sched[day.key][p] = { subject: cell.subject || '—', teacher: tname };
+        }
+      }
+    });
+  }
+  const dayColors = ['#fdf2f8','#f0fdf4','#fefce8','#eef6ff','#f5f3ff'];
+  const rows = TIMETABLE_PERIOD_NAMES.map((name, i) => {
+    const p = i + 1;
+    const rowBg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
+    const cells = TIMETABLE_DAYS.map((day, di) => {
+      const info = sched[day.key][p];
+      const cellBg = info ? dayColors[di] : rowBg;
+      return `<td style="padding:6px;text-align:center;font-size:12px;border:1px solid #e2e8f0;background:${cellBg};">${info ? escapeHtml(info.subject) + '<br><span class="muted small">' + escapeHtml(String(info.teacher).trim().split(/\s+/).filter(Boolean).slice(0,2).join(' ')) + '</span>' : '<span class="muted">—</span>'}</td>`;
+    }).join('');
+    return `<tr style="background:${rowBg};"><td style="padding:6px;font-weight:700;font-size:12px;border:1px solid #e2e8f0;background:#e2e8f0;">${name}</td>${cells}</tr>`;
+  }).join('');
+  const title = '🗓 جدول حصص ' + (g?g.name:'') + ' — ' + c.name + ' (أسبوع كامل)';
+  __lastClassScheduleHTML = '<h2 style="text-align:center;">' + escapeHtml(title) + '</h2><table><thead><tr><th>الحصة</th>' + TIMETABLE_DAYS.map(d=>'<th>'+d.label+'</th>').join('') + '</tr></thead><tbody>' + rows.replace(/style="[^"]*"/g,'') + '</tbody></table>';
+  const html = `<div class="modal-overlay" onclick="if(event.target===this) closeClassSchedule()">
+    <div class="modal-box" style="max-width:960px;width:96vw;">
+      <div class="modal-head"><h3>🎓 ${escapeHtml(title)} 📅</h3><div style="display:flex;gap:8px;"><button class="btn-secondary" style="padding:4px 10px;font-size:13px" onclick="printClassSchedule()">🖨 طباعة</button><button class="modal-close" onclick="closeClassSchedule()">✕</button></div></div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr><th style="padding:6px;border:1px solid #cbd5e1;background:var(--primary, #9d174d);color:#fff;">الحصة</th>${TIMETABLE_DAYS.map((d,di)=>`<th style="padding:6px;border:1px solid #cbd5e1;background:${['#be185d','#0891b2','#059669','#d97706','#7c3aed'][di]};color:#fff;">${d.label}</th>`).join('')}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+  const old = document.querySelector('.modal-overlay'); if (old) old.remove();
+  const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
+}
+function closeClassSchedule(){ const ov = document.querySelector('.modal-overlay'); if (ov) ov.remove(); }
+function printClassSchedule(){
+  if(!__lastClassScheduleHTML){ alert('لا يوجد جدول للطباعة'); return; }
+  const w = window.open('', '_blank', 'width=900,height=700');
+  if(!w){ alert('يرجى السماح بالنوافذ المنبثقة للطباعة'); return; }
+  w.document.write('<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>جدول حصص</title><style>body{font-family:Tahoma,Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #333;padding:6px;text-align:center;font-size:12px;} th{background:#eee;} @media print{ button{display:none;} }</style></head><body>');
+  w.document.write(__lastClassScheduleHTML);
+  w.document.write('</body></html>');
+  w.document.close();
+  w.focus();
+  setTimeout(() => { w.print(); }, 300);
 }
 
 /* ============ «آخر نشاطي» للمعلمة: آخر ثلاث حركات منها في تكليفاتها وتحويلاتها وملاحظاتها ============ */
