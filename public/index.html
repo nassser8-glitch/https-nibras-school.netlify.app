@@ -6363,13 +6363,25 @@ function renderUsefulLinksCard(){
 }
 
 const __NIBRAS_SC_EVENTS = [
-  { cat:'بداية الدراسة', ico:'🎒', title:'بداية العام الدراسي 1448–1449هـ', date:'الفصل الدراسي الأول', color:'#be185d' },
-  { cat:'إجازة', ico:'🌿', title:'إجازة اليوم الوطني وإجازات نهاية الأسبوع المطوّلة', date:'وفق تقويم إسلام آباد 1448هـ', color:'#059669' },
-  { cat:'اختبارات', ico:'📝', title:'اختبارات نهاية الفصل الدراسي الأول', date:'نهاية الفصل الأول', color:'#d97706' },
-  { cat:'إجازة', ico:'❄️', title:'إجازة منتصف العام الدراسي', date:'بين الفصلين الأول والثاني', color:'#0891b2' },
-  { cat:'بداية الدراسة', ico:'📚', title:'بداية الفصل الدراسي الثاني', date:'بعد إجازة منتصف العام', color:'#be185d' },
-  { cat:'إجازة', ico:'🌙', title:'إجازة عيد الفطر المبارك', date:'رمضان – شوال 1448هـ', color:'#059669' },
-  { cat:'اختبارات', ico:'🎓', title:'الاختبارات النهائية ونهاية العام الدراسي', date:'نهاية الفصل الثاني 1448هـ', color:'#7c3aed' }
+  { term:1, cat:'بداية الدراسة', ico:'🏫', title:'عودة الهيئة الإدارية والمعلمين', day:'الاثنين', hijri:'1448/03/04هـ', greg:'2026/08/17م', color:'#be185d' },
+  { term:1, cat:'بداية الدراسة', ico:'🎒', title:'بداية الدراسة للطالبات للفصل الدراسي الأول', day:'الاثنين', hijri:'1448/03/11هـ', greg:'2026/08/24م', color:'#be185d' },
+  { term:1, cat:'إجازة في بلد المقر', ico:'🗓️', title:'إجازة في بلد المقر', day:'الأربعاء', hijri:'1448/03/13هـ', greg:'2026/08/26م', color:'#6366f1' },
+  { term:1, cat:'مناسبة وطنية', ico:'🇸🇦', title:'إجازة اليوم الوطني', day:'الأربعاء', hijri:'1448/04/12هـ', greg:'2026/09/23م', color:'#16a34a' },
+  { term:1, cat:'إجازة', ico:'🍂', title:'إجازة الخريف (إلى الأحد 1448/05/28هـ — 2026/11/08م)', day:'نهاية دوام يوم الخميس', hijri:'1448/05/18هـ', greg:'2026/10/29م', color:'#059669' },
+  { term:1, cat:'بداية الدراسة', ico:'📚', title:'بداية الدراسة بعد إجازة الخريف', day:'الاثنين', hijri:'1448/05/29هـ', greg:'2026/11/09م', color:'#be185d' },
+  { term:1, cat:'إجازة في بلد المقر', ico:'🗓️', title:'إجازة في بلد المقر', day:'الجمعة', hijri:'1448/07/16هـ', greg:'2026/12/25م', color:'#6366f1' },
+  { term:1, cat:'اختبارات', ico:'📝', title:'بداية اختبارات الفصل الدراسي الأول', day:'الاثنين', hijri:'1448/07/26هـ', greg:'2027/01/04م', color:'#d97706' },
+  { term:1, cat:'إجازة', ico:'❄️', title:'بداية إجازة منتصف العام الدراسي', day:'نهاية دوام يوم الخميس', hijri:'1448/07/29هـ', greg:'2027/01/07م', color:'#0891b2' },
+  { term:2, cat:'بداية الدراسة', ico:'📚', title:'بداية الدراسة للفصل الدراسي الثاني', day:'الاثنين', hijri:'1448/08/10هـ', greg:'2027/01/18م', color:'#be185d' },
+  { term:2, cat:'إجازة في بلد المقر', ico:'🗓️', title:'إجازة في بلد المقر', day:'الجمعة', hijri:'1448/08/28هـ', greg:'2027/02/05م', color:'#6366f1' },
+  { term:2, cat:'مناسبة وطنية', ico:'🇸🇦', title:'إجازة يوم التأسيس', day:'الاثنين', hijri:'1448/09/15هـ', greg:'2027/02/22م', color:'#16a34a' },
+  { term:2, cat:'إجازة', ico:'🌙', title:'بداية إجازة عيد الفطر (إلى الأحد 1448/10/06هـ — 2027/03/14م)', day:'نهاية دوام يوم الخميس', hijri:'1448/09/18هـ', greg:'2027/02/25م', color:'#059669' },
+  { term:2, cat:'بداية الدراسة', ico:'📖', title:'بداية الدراسة بعد إجازة عيد الفطر', day:'الاثنين', hijri:'1448/10/07هـ', greg:'2027/03/15م', color:'#be185d' },
+  { term:2, cat:'إجازة في بلد المقر', ico:'🗓️', title:'إجازة في بلد المقر', day:'الثلاثاء', hijri:'1448/10/15هـ', greg:'2027/03/23م', color:'#6366f1' },
+  { term:2, cat:'إجازة', ico:'🕋', title:'بداية إجازة عيد الأضحى (إلى الأحد 1448/12/17هـ — 2027/05/23م)', day:'نهاية دوام يوم الجمعة', hijri:'1448/12/01هـ', greg:'2027/05/07م', color:'#059669' },
+  { term:2, cat:'بداية الدراسة', ico:'📖', title:'بداية الدراسة بعد إجازة عيد الأضحى', day:'الاثنين', hijri:'1448/12/18هـ', greg:'2027/05/24م', color:'#be185d' },
+  { term:2, cat:'نهاية العام', ico:'🎓', title:'بداية إجازة نهاية العام الدراسي 1448–1449هـ', day:'نهاية دوام يوم الخميس', hijri:'1449/01/19هـ', greg:'2027/06/24م', color:'#7c3aed' },
+  { term:2, cat:'العام القادم', ico:'✨', title:'بداية الدراسة للعام الدراسي الجديد 1449–1450هـ', day:'الاثنين', hijri:'1449/03/21هـ', greg:'2027/08/23م', color:'#be185d' }
 ];
 
 function __nibrasRemoveModal(id){
@@ -6379,57 +6391,94 @@ function __nibrasRemoveModal(id){
 
 function __scRenderTab(tab){
   const body = document.getElementById('scModalBody');
-  const bEv = document.getElementById('scTabEvents');
-  const bPdf = document.getElementById('scTabPdf');
+  const tabs = { all:'scTabAll', t1:'scTabT1', t2:'scTabT2', pdf:'scTabPdf' };
+  Object.keys(tabs).forEach(k => {
+    const btn = document.getElementById(tabs[k]);
+    if(btn) btn.className = tab === k ? 'btn-primary' : 'btn-secondary';
+  });
   if(!body) return;
-  if(bEv){ bEv.className = tab === 'events' ? 'btn-primary' : 'btn-secondary'; }
-  if(bPdf){ bPdf.className = tab === 'pdf' ? 'btn-primary' : 'btn-secondary'; }
   if(tab === 'pdf'){
     body.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;">
-      <div style="font-size:12px;color:#475569;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
-        <span>📄 ملف التقويم الدراسي الرسمي 1448–1449هـ (عرض داخلي داخل نبراس)</span>
+      <div style="font-size:12.5px;color:#475569;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+        <span>📄 النسخة الرسمية الموقّعة من التقويم الدراسي 1448–1449هـ (3 صفحات)</span>
         <a class="btn-secondary" style="padding:4px 10px;font-size:12px;text-decoration:none;" href="school-calendar-1448.pdf" download>⬇️ حفظ نسخة PDF</a>
       </div>
       <iframe src="school-calendar-1448.pdf#view=FitH" title="التقويم الدراسي 1448-1449هـ" style="width:100%;height:62vh;min-height:360px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;"></iframe>
     </div>`;
     return;
   }
-  const d = typeof loadDB === 'function' ? loadDB() : {};
-  const acts = (d.activities || []).filter(a => a && !a.deleted).slice(0, 6);
-  const cards = __NIBRAS_SC_EVENTS.map(ev => `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid #e2e8f0;border-right:4px solid ${ev.color};background:#fff;">
-    <span style="font-size:20px;line-height:1;">${ev.ico}</span>
-    <div style="flex:1;min-width:0;">
-      <div style="font-weight:700;font-size:13.5px;color:#0f172a;">${escapeHtml(ev.title)}</div>
-      <div style="font-size:12px;color:#64748b;margin-top:2px;">${escapeHtml(ev.cat)} · ${escapeHtml(ev.date)}</div>
+  const list = tab === 't1' ? __NIBRAS_SC_EVENTS.filter(e => e.term === 1)
+    : tab === 't2' ? __NIBRAS_SC_EVENTS.filter(e => e.term === 2)
+    : __NIBRAS_SC_EVENTS;
+  const rows = list.map(ev => {
+    const termLbl = ev.term === 1 ? 'الفصل الأول' : 'الفصل الثاني';
+    return `<tr>
+      <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;white-space:nowrap;font-size:12px;font-weight:700;color:#be185d;">${termLbl}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:13px;">
+        <div style="font-weight:700;color:#0f172a;">${ev.ico} ${escapeHtml(ev.title)}</div>
+        <span style="display:inline-block;margin-top:3px;font-size:11px;padding:1px 7px;border-radius:999px;background:${ev.color}18;color:${ev.color};font-weight:700;">${escapeHtml(ev.cat)}</span>
+      </td>
+      <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:12.5px;color:#334155;white-space:nowrap;">${escapeHtml(ev.day)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:12.5px;font-weight:700;color:#0f172a;white-space:nowrap;">${escapeHtml(ev.hijri)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:12.5px;color:#475569;white-space:nowrap;">${escapeHtml(ev.greg)}</td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-bottom:12px;">
+      <div style="padding:10px 12px;border-radius:10px;background:#fdf2f8;border:1px solid #fbcfe8;text-align:center;">
+        <div style="font-size:11.5px;color:#475569;font-weight:700;">الفصل الدراسي الأول</div>
+        <div style="font-size:15px;font-weight:800;color:#be185d;margin-top:2px;">19 أسبوعًا · 90 يومًا</div>
+      </div>
+      <div style="padding:10px 12px;border-radius:10px;background:#fdf2f8;border:1px solid #fbcfe8;text-align:center;">
+        <div style="font-size:11.5px;color:#475569;font-weight:700;">الفصل الدراسي الثاني</div>
+        <div style="font-size:15px;font-weight:800;color:#be185d;margin-top:2px;">19 أسبوعًا · 90 يومًا</div>
+      </div>
+      <div style="padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;text-align:center;">
+        <div style="font-size:11.5px;color:#475569;font-weight:700;">إجمالي العام الدراسي</div>
+        <div style="font-size:15px;font-weight:800;color:#0f172a;margin-top:2px;">38 أسبوعًا · 180 يومًا</div>
+      </div>
     </div>
-  </div>`).join('');
-  const actHtml = acts.length ? `<div style="margin-top:12px;">
-    <div style="font-weight:700;font-size:13px;color:#be185d;margin-bottom:6px;">📌 فعاليات وأنشطة المدرسة المسجلة</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">${acts.map(a => `<div style="padding:8px 10px;border-radius:8px;background:#fdf2f8;border:1px solid #fbcfe8;font-size:12.5px;">
-      <div style="font-weight:700;color:#0f172a;">${escapeHtml(a.title || a.name || 'نشاط')}</div>
-      <div style="font-size:11.5px;color:#475569;margin-top:2px;">📅 ${escapeHtml(a.date || '—')}</div>
-    </div>`).join('')}</div>
-  </div>` : '';
-  body.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">${cards}</div>${actHtml}`;
+    <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px;">
+      <table style="width:100%;border-collapse:collapse;background:#fff;">
+        <thead>
+          <tr style="background:#fdf2f8;color:#be185d;text-align:right;font-size:12.5px;">
+            <th style="padding:9px 10px;border-bottom:1px solid #fbcfe8;">الفصل</th>
+            <th style="padding:9px 10px;border-bottom:1px solid #fbcfe8;">الموضوع والمناسبة</th>
+            <th style="padding:9px 10px;border-bottom:1px solid #fbcfe8;">اليوم</th>
+            <th style="padding:9px 10px;border-bottom:1px solid #fbcfe8;">التاريخ الهجري</th>
+            <th style="padding:9px 10px;border-bottom:1px solid #fbcfe8;">التاريخ الميلادي</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 function openSchoolCalendar(){
   __nibrasRemoveModal('nibrasSchoolCalOverlay');
   const html = `<div id="nibrasSchoolCalOverlay" class="modal-overlay" onclick="if(event.target===this) closeSchoolCalendar()">
-    <div class="modal-box" style="max-width:860px;width:96vw;max-height:90vh;display:flex;flex-direction:column;border-top:5px solid #be185d;">
+    <div class="modal-box" style="max-width:920px;width:96vw;max-height:92vh;display:flex;flex-direction:column;border-top:5px solid #be185d;">
       <div class="modal-head">
-        <h3>🗓️ التقويم الدراسي 1448–1449هـ</h3>
+        <div>
+          <h3 style="margin:0;">🗓️ التقويم الدراسي للعام 1448–1449هـ (2026–2027م)</h3>
+          <div style="font-size:12px;color:#64748b;margin-top:2px;">وزارة التعليم — الإدارة العامة للمدارس السعودية في الخارج — المدرسة السعودية في إسلام آباد</div>
+        </div>
         <button type="button" class="modal-close" onclick="closeSchoolCalendar()" title="إغلاق">✕</button>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-        <button type="button" id="scTabEvents" class="btn-primary" style="padding:6px 14px;font-size:13px;" onclick="__scRenderTab('events')">📋 المواعيد والإجازات والاختبارات</button>
-        <button type="button" id="scTabPdf" class="btn-secondary" style="padding:6px 14px;font-size:13px;" onclick="__scRenderTab('pdf')">📄 عرض ملف التقويم (PDF)</button>
+        <button type="button" id="scTabAll" class="btn-primary" style="padding:6px 12px;font-size:13px;" onclick="__scRenderTab('all')">📋 التقويم الكامل</button>
+        <button type="button" id="scTabT1" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="__scRenderTab('t1')">1️⃣ الفصل الأول</button>
+        <button type="button" id="scTabT2" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="__scRenderTab('t2')">2️⃣ الفصل الثاني</button>
+        <button type="button" id="scTabPdf" class="btn-secondary" style="padding:6px 12px;font-size:13px;" onclick="__scRenderTab('pdf')">📄 الملف الرسمي (PDF)</button>
       </div>
       <div id="scModalBody" style="overflow-y:auto;flex:1;padding:2px;"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:10px;padding-top:8px;border-top:1px solid #e2e8f0;">
+        <button type="button" class="btn-secondary" style="padding:6px 16px;font-size:13px;" onclick="closeSchoolCalendar()">← العودة للصفحة الرئيسية</button>
+      </div>
     </div>
   </div>`;
   const div = document.createElement('div'); div.innerHTML = html; document.body.appendChild(div.firstElementChild);
-  __scRenderTab('events');
+  __scRenderTab('all');
 }
 function closeSchoolCalendar(){ __nibrasRemoveModal('nibrasSchoolCalOverlay'); }
 

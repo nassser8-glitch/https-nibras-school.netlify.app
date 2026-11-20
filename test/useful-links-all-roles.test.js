@@ -30,6 +30,7 @@ test('1) بطاقة الخدمات موجودة أسفل الصفحة الرئي
   assert.ok(fs.existsSync(path.join(ROOT, 'public', 'school-calendar-1448.pdf')), 'ملف school-calendar-1448.pdf مفقود');
   assert.ok(SERVER_SRC.includes("app.get('/api/translate'") && SERVER_SRC.includes("app.get('/api/prayer'"), 'مسارات الترجمة ومواقيت الصلاة مفقودة من الخادم');
   assert.ok(SERVER_SRC.includes('req.query.tz'), 'مسار مواقيت الصلاة لا يدعم المنطقة الزمنية لموقع المدرسة');
+  assert.ok(SERVER_SRC.includes("res.setHeader('X-Frame-Options', 'SAMEORIGIN')"), 'ترويسة X-Frame-Options لا تسمح بعرض ملف التقويم PDF داخليًا (SAMEORIGIN)');
 });
 
 test('2) جميع الأيقونات الست تفتح خدمات داخلية في نبراس بلا مغادرة التطبيق', () => {
@@ -143,11 +144,25 @@ test('3) تشغيل جميع الخدمات الست داخليًا لجميع �
   vm.createContext(sandbox);
   vm.runInContext(code, sandbox);
 
-  // 1) التقويم الدراسي: تبويب المواعيد + تبويب PDF داخلي
-  sandbox.openSchoolCalendar();
-  assert.ok(elements.get('scModalBody').innerHTML.includes('بداية العام الدراسي'), 'التقويم الدراسي لم يعرض المواعيد');
-  sandbox.__scRenderTab('pdf');
-  assert.ok(elements.get('scModalBody').innerHTML.includes('<iframe src="school-calendar-1448.pdf'), 'التقويم الدراسي لم يعرض PDF داخليًا');
+  // 1) التقويم الدراسي: التواريخ الرسمية الكاملة + تصفية الفصلين + تبويب PDF + الإغلاق لجميع الأدوار
+  for (const role of ['ADMIN', 'AGENT', 'ADMINISTRATIVE', 'TEACHER', 'STUDENT']) {
+    activeUser = { id: 'u_' + role, role };
+    sandbox.openSchoolCalendar();
+    const allHtml = elements.get('scModalBody').innerHTML;
+    assert.ok(allHtml.includes('1448/03/04هـ') && allHtml.includes('2026/08/17م'), 'تاريخ عودة الهيئة الإدارية والمعلمين مفقود');
+    assert.ok(allHtml.includes('1448/03/11هـ') && allHtml.includes('2026/08/24م'), 'تاريخ بداية الدراسة للفصل الأول مفقود');
+    assert.ok(allHtml.includes('1448/07/26هـ') && allHtml.includes('2027/01/04م'), 'تاريخ بداية اختبارات الفصل الأول مفقود');
+    assert.ok(allHtml.includes('1448/08/10هـ') && allHtml.includes('2027/01/18م'), 'تاريخ بداية الفصل الثاني مفقود');
+    assert.ok(allHtml.includes('1449/01/19هـ') && allHtml.includes('2027/06/24م'), 'تاريخ نهاية العام الدراسي مفقود');
+    sandbox.__scRenderTab('t1');
+    assert.ok(elements.get('scModalBody').innerHTML.includes('إجازة اليوم الوطني') && !elements.get('scModalBody').innerHTML.includes('إجازة يوم التأسيس'), 'تصفية الفصل الأول غير دقيقة');
+    sandbox.__scRenderTab('t2');
+    assert.ok(elements.get('scModalBody').innerHTML.includes('إجازة يوم التأسيس') && !elements.get('scModalBody').innerHTML.includes('إجازة اليوم الوطني'), 'تصفية الفصل الثاني غير دقيقة');
+    sandbox.__scRenderTab('pdf');
+    assert.ok(elements.get('scModalBody').innerHTML.includes('<iframe src="school-calendar-1448.pdf'), 'التقويم الدراسي لم يعرض PDF داخليًا');
+    sandbox.closeSchoolCalendar();
+    assert.equal(elements.get('nibrasSchoolCalOverlay'), undefined, `لم تُغلق نافذة التقويم الدراسي للدور ${role}`);
+  }
 
   // 2) بوابة الروابط التعليمية: عرض المصدر داخل نبراس
   elements.set('eduBody', makeEl('eduBody'));
