@@ -19,21 +19,32 @@
    الصمت — حتى لا يحتاج المستخدم لفتح أدوات المطوّر لمعرفة السبب.
    ملاحظة: لا نمسح localStorage لأنه يحتوي بيانات المدرسة وكل عمل المستخدم. */
 window.__nibrasBooted = false;
+window.__nibrasScriptLoaded = false;
 window.__nibrasBootErr = '';
+window.__nibrasBootTimer = null;
+window.__nibrasMarkBooted = function(){
+  window.__nibrasBooted = true;
+  if (window.__nibrasBootTimer) { clearTimeout(window.__nibrasBootTimer); window.__nibrasBootTimer = null; }
+  try { sessionStorage.removeItem('nibrasBootRepair_v1'); } catch(_){}
+  try { var bx = document.getElementById('nibrasBootErrBox'); if (bx && bx.parentNode) bx.parentNode.removeChild(bx); } catch(_){}
+};
 (function(){
   var KEY = 'nibrasBootRepair_v1';
   var already = false;
-  try { already = sessionStorage.getItem(KEY) === '1'; sessionStorage.setItem(KEY, '1'); } catch(_){}
+  try { already = sessionStorage.getItem(KEY) === '1'; } catch(_){}
   window.addEventListener('error', function(e){
     if (window.__nibrasBooted) return;
+    if (e && !e.message && e.target && e.target !== window) return;
     window.__nibrasBootErr = String((e && (e.message || e.type)) || e || 'unknown error');
   }, true);
   var esc = function(s){
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   };
-  setTimeout(function(){
+  window.__nibrasBootTimer = setTimeout(function(){
     if (window.__nibrasBooted) return;
+    if (window.__nibrasScriptLoaded && !window.__nibrasBootErr) return;
     if (!already) {
+      try { sessionStorage.setItem(KEY, '1'); } catch(_){}
       try {
         if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations)
           navigator.serviceWorker.getRegistrations().then(function(rs){
@@ -48,6 +59,7 @@ window.__nibrasBootErr = '';
       return;
     }
     var box = document.createElement('div');
+    box.id = 'nibrasBootErrBox';
     box.style.cssText = 'max-width:560px;margin:60px auto;padding:22px;border:2px solid #dc2626;border-radius:14px;background:#fff;color:#111;font-family:inherit';
     box.setAttribute('dir', 'rtl');
     box.innerHTML =
@@ -58,7 +70,7 @@ window.__nibrasBootErr = '';
       '</pre>' +
       '<button onclick="location.reload()" style="margin-top:12px;padding:8px 16px">إعادة المحاولة</button>';
     (document.body || document.documentElement).appendChild(box);
-  }, 7000);
+  }, 20000);
 })();
 </script>
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
@@ -68,7 +80,7 @@ window.__nibrasBootErr = '';
 <meta name="apple-mobile-web-app-title" content="نبراس" />
 <title>المدرسة السعودية في إسلام آباد - نظام إدارة المدرسة</title>
 <link rel="stylesheet" href="toolbar.css?v=7">
-<script src="vendor/xlsx.full.min.js"></script>
+<script defer src="vendor/xlsx.full.min.js"></script>
 <script src="toolbar.js?v=8"></script>
 <style>
   * { box-sizing: border-box; }
@@ -3720,6 +3732,7 @@ function setupPasswordToggles(){
     window.__pwObserver.observe(document.body, { childList:true, subtree:true });
   }catch(e){}
 }
+window.__nibrasScriptLoaded = true;
 window.addEventListener('DOMContentLoaded', async () => {
   try{
     if(__serverEnabled()){
@@ -3738,7 +3751,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     try{ __thanksMaybeShow(); }catch(e){}
     if(!window.__thanksTimer) window.__thanksTimer = setInterval(() => { try{ __thanksMaybeShow(); }catch(e){} }, 15000);
     setupPasswordToggles();
-    window.__nibrasBooted = true;
+    if (typeof window.__nibrasMarkBooted === 'function') window.__nibrasMarkBooted(); else window.__nibrasBooted = true;
   }catch(__bootErr){
     const __app = document.getElementById('app');
     if(__app){
@@ -15635,7 +15648,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=120', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=177', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
