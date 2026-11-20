@@ -6284,7 +6284,6 @@ function renderDashboard(){
         ${groups.map((g,i) => `<button class="dash-tab ${i===0?'active':''}" data-act="${g.key}" onclick="switchActTab('${g.key}')">${g.school}</button>`).join('')}
       </div>
       ${groups.map(g => `<div class="act-pane" data-act="${g.key}" style="${g.key==='ALL'?'':'display:none'}">${actTab(g)}</div>`).join('')}`}
-      <p class="muted small" style="margin:10px 0 0">الطالبة تُحتسب مفعّلة فقط إذا سجّلت الدخول إلى حسابها بنجاح مرة واحدة على الأقل (ولا يُعدّ مجرد وجود الحساب أو كونه نشطًا تفعيلًا). اضغط لعرض الأسماء.</p>
     </div>`;
   })();
 
