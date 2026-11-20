@@ -267,7 +267,7 @@ async function listUsers(school) {
 // إحصاءات الدخول الموثوقة من جدول الحسابات (مصدر الحقيقة) لعرضها في لوحة التفعيل حتى لو اختلفت معرّفات نسخة القسم
 async function usersForLoginStats(school) {
   const r = await pool.query(
-    `SELECT id, username, name, active, first_login, data FROM users WHERE school = $1`,
+    `SELECT id, username, email, name, role, active, first_login, data FROM users WHERE school = $1`,
     [school]);
   return r.rows;
 }

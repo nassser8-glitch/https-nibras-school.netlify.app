@@ -4766,6 +4766,79 @@ function switchActTab(key){
   document.querySelectorAll('.act-pane').forEach(p => { p.style.display = p.dataset.act === key ? 'block' : 'none'; });
 }
 /* عرض أسماء من دخلوا ومن لم يدخلوا حساباتهم (الطالبات أو المعلمون) لنطاق معيّن */
+function computeStudentActivationStats(sd, tagText){
+  const tag = tagText || '';
+  const hasLoggedIn = u => !!(u && (u.lastLogin || Number(u.loginCount || 0) > 0 || (Array.isArray(u.loginHistory) && u.loginHistory.length > 0)));
+  const isActivatedAccount = u => !!(u && u.role === 'STUDENT' && u.active !== false && !u.deleted);
+
+  const stuUserById = new Map();
+  const stuUserByUsername = new Map();
+  for(const u of (sd && Array.isArray(sd.users) ? sd.users : [])){
+    if(!u || u.role !== 'STUDENT') continue;
+    const prevById = u.id ? stuUserById.get(u.id) : null;
+    if(u.id && (!prevById || (isActivatedAccount(u) && !isActivatedAccount(prevById)) || (hasLoggedIn(u) && !hasLoggedIn(prevById)))){
+      stuUserById.set(u.id, u);
+    }
+    const uname = String(u.username || '').trim().toLowerCase();
+    if(uname){
+      const prevByU = stuUserByUsername.get(uname);
+      if(!prevByU || (isActivatedAccount(u) && !isActivatedAccount(prevByU)) || (hasLoggedIn(u) && !hasLoggedIn(prevByU))){
+        stuUserByUsername.set(uname, u);
+      }
+    }
+  }
+
+  const seenStudentIds = new Set();
+  const res = {
+    total: 0,
+    activated: 0,
+    notActivated: 0,
+    loggedIn: 0,
+    notLoggedIn: 0,
+    activationPct: 0,
+    loginPct: 0,
+    activatedNames: [],
+    notActivatedNames: [],
+    loggedInNames: [],
+    notLoggedInNames: [],
+    loggedInItems: []
+  };
+
+  for(const s of (sd && Array.isArray(sd.students) ? sd.students : [])){
+    if(!s || s.active === false || s.deleted) continue;
+    const sid = String(s.id || '').trim();
+    if(sid){
+      if(seenStudentIds.has(sid)) continue;
+      seenStudentIds.add(sid);
+    }
+    const uname = String(s.username || '').trim().toLowerCase();
+    const u = (sid && stuUserById.get(sid)) || (uname && stuUserByUsername.get(uname)) || null;
+    const nm = (s.fullName || s.name || s.username || '—') + tag;
+    res.total++;
+    const act = isActivatedAccount(u);
+    const logged = !!(u && hasLoggedIn(u));
+    if(act){
+      res.activated++;
+      res.activatedNames.push(nm);
+    } else {
+      res.notActivated++;
+      res.notActivatedNames.push(nm);
+    }
+    if(logged){
+      res.loggedIn++;
+      res.loggedInNames.push(nm);
+      res.loggedInItems.push({ name: nm, lastLogin: u.lastLogin || '' });
+    } else {
+      res.notLoggedIn++;
+      res.notLoggedInNames.push(nm);
+    }
+  }
+
+  res.activationPct = res.total ? Math.round((res.activated / res.total) * 100) : 0;
+  res.loginPct = res.total ? Math.round((res.loggedIn / res.total) * 100) : 0;
+  return res;
+}
+
 function showActNames(gkey, grp){
   const isStaffRole = r => r !== 'STUDENT' && r !== 'ADMIN';
   const isAdmin = currentUser()?.role === 'ADMIN';
@@ -4774,32 +4847,31 @@ function showActNames(gkey, grp){
   const sdDate = v => { if(!v) return ''; const d = new Date(v); return (!isNaN(d) ? d.toLocaleDateString('ar') + ' ' + d.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}) : ''); };
   const schools = ['GIRLS'];
   const multi = schools.length > 1;
-  const actNames = [], pendNames = [];
   const tag = school => multi ? ' (بنات)' : '';
+  const li = arr => arr.length ? arr.sort((a,b)=>a.localeCompare(b,'ar')).map(n => `<li>${escapeHtml(n)}</li>`).join('') : '<li class="muted">لا يوجد</li>';
+  if(grp === 'students'){
+    const sd = loadSchoolDB('GIRLS');
+    const st = computeStudentActivationStats(sd, tag('GIRLS'));
+    const loggedLabels = st.loggedInItems.map(it => it.name + (it.lastLogin ? ' — آخر دخول: ' + sdDate(it.lastLogin) : ''));
+    openDetails('إحصائية حسابات الطالبات (بنات — الإجمالي: ' + st.total + ')',
+      `<li style="font-weight:800;color:#2563eb">🔑 الحسابات المفعّلة (${st.activated}/${st.total} — ${st.activationPct}%)</li>${li(st.activatedNames)}` +
+      `<li style="font-weight:800;color:#16a34a;margin-top:8px">✅ سجلن الدخول فعليًا مرة واحدة على الأقل (${st.loggedIn})</li>${li(loggedLabels)}` +
+      `<li style="font-weight:800;color:#9ca3af;margin-top:8px">⏳ لم يسجلن الدخول بعد (${st.notLoggedIn})</li>${li(st.notLoggedInNames)}`);
+    return;
+  }
+  const actNames = [], pendNames = [];
   for(const school of schools){
     const sd = loadSchoolDB(school);
-    const userMap = new Map((sd.users||[]).map(u => [u.id, u]));
-    if(grp === 'students'){
-      for(const s of (sd.students||[])){
-        if(!s.active) continue;
-        const u = userMap.get(s.id);
-        if(!u || u.role !== 'STUDENT') continue;
-        const nm = (s.fullName || s.name) + tag(school);
-        if(hasLoggedIn(u)) actNames.push(nm + (u.lastLogin ? ' — دخل: ' + sdDate(u.lastLogin) : '')); else pendNames.push(nm);
-      }
-    } else {
-      for(const u of (sd.users||[])){
-        if(u.active === false) continue;
-        if(grp === 'teachers'){ if(u.role !== 'TEACHER') continue; }
-        else { if(!isStaffRole(u.role) || u.role === 'TEACHER') continue; }
-        const nm = (u.name || u.username) + tag(school);
-        if(hasLoggedIn(u)) actNames.push(nm + (u.lastLogin ? ' — دخل: ' + sdDate(u.lastLogin) : '')); else pendNames.push(nm);
-      }
+    for(const u of (sd.users||[])){
+      if(u.active === false) continue;
+      if(grp === 'teachers'){ if(u.role !== 'TEACHER') continue; }
+      else { if(!isStaffRole(u.role) || u.role === 'TEACHER') continue; }
+      const nm = (u.name || u.username) + tag(school);
+      if(hasLoggedIn(u)) actNames.push(nm + (u.lastLogin ? ' — دخل: ' + sdDate(u.lastLogin) : '')); else pendNames.push(nm);
     }
   }
-  const roleLabel = grp === 'students' ? 'الطالبات' : (grp === 'teachers' ? 'المعلمون' : 'الإداريون والوكلاء والموجهون');
+  const roleLabel = grp === 'teachers' ? 'المعلمون' : 'الإداريون والوكلاء والموجهون';
   const rangeLabel = 'بنات';
-  const li = arr => arr.length ? arr.sort((a,b)=>a.localeCompare(b,'ar')).map(n => `<li>${escapeHtml(n)}</li>`).join('') : '<li class="muted">لا يوجد</li>';
   openDetails('تفعيل الحسابات — ' + roleLabel + ' (' + rangeLabel + ')',
     `<li style="font-weight:800;color:#16a34a">✅ دخلوا حسابهم (${actNames.length})</li>${li(actNames)}<li style="font-weight:800;color:#9ca3af;margin-top:6px">⏳ لم يدخلوا بعد (${pendNames.length})</li>${li(pendNames)}`);
 }
@@ -6091,16 +6163,7 @@ function renderDashboard(){
     const acc = () => ({ activated: 0, total: 0, actNames: [], pendNames: [] });
     const schoolActs = ['GIRLS'].map(school => {
       const sd = loadSchoolDB(school);
-      const userMap = new Map((sd.users||[]).map(u => [u.id, u]));
-      const st = acc();
-      for(const s of (sd.students||[])){
-        if(!s.active) continue;
-        const u = userMap.get(s.id);
-        if(!u || u.role !== 'STUDENT') continue;
-        const nm = (s.fullName || s.name) + ' (بنات)';
-        st.total++;
-        if(hasLoggedIn(u)){ st.activated++; st.actNames.push(nm); } else { st.pendNames.push(nm); }
-      }
+      const st = computeStudentActivationStats(sd, ' (بنات)');
       // المعلمون (role=TEACHER) وحدهم
       const teachers = acc();
       for(const u of (sd.users||[])){
@@ -6125,8 +6188,9 @@ function renderDashboard(){
       };
     });
     const mergeAcc = (arr, f) => {
+      if(f === 'students' && arr.length === 1) return arr[0].students;
       const r = acc();
-      arr.forEach(x => { r.activated += x[f].activated; r.total += x[f].total; r.actNames.push(...x[f].actNames); r.pendNames.push(...x[f].pendNames); });
+      arr.forEach(x => { r.activated += x[f].activated; r.total += x[f].total; r.actNames.push(...(x[f].actNames||[])); r.pendNames.push(...(x[f].pendNames||[])); });
       return r;
     };
     const comb = key => ({
@@ -6141,6 +6205,24 @@ function renderDashboard(){
     // عند قسم واحد فقط (بنات — كما هو الحال الآن) تُعرض البيانات مباشرة دون تبويبات
     // "الكل/بنين/بنات" لأن الفلترة والإجمالي شيء واحد ولا داعي لتكرار التبويب.
     const onlyGirls = schoolActs.length === 1 && groups.length === 2;
+    const studentDonut = (label, st, gkey) => {
+      const pct = st.total ? Math.round((st.activated / st.total) * 100) : 0;
+      const donutBg = st.total ? `conic-gradient(#2563eb 0 ${pct}%, #eef2f7 ${pct}% 100%)` : 'conic-gradient(#e4edf5 0 100%)';
+      return `
+        <div class="act-block">
+          <div style="font-weight:800;font-size:14px;color:#0f172a;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:5px" onclick="showActNames('${gkey}','students')" title="اضغط لعرض التفاصيل الكاملة">${label}: ${st.activated}/${st.total} <span style="font-size:11px;color:#2563eb">📋</span></div>
+          <div class="act-flex">
+            <div class="dash-donut" style="width:116px;height:116px;background:${donutBg};cursor:pointer" onclick="showActNames('${gkey}','students')" title="اضغط لعرض الأسماء">
+              <div class="dash-donut-center"><b>${pct}%</b><span>مفعّل</span></div>
+            </div>
+            <div class="att-legend">
+              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#2563eb"></span>الحسابات المفعّلة <b>${st.activated}</b></div>
+              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#22c55e"></span>سجلن الدخول فعليًا <b>${st.loggedIn}</b></div>
+              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#cbd5e1"></span>لم يسجلن الدخول بعد <b>${st.notLoggedIn}</b></div>
+            </div>
+          </div>
+        </div>`;
+    };
     const miniDonut = (label, g, gkey, grp) => {
       const pct = g.total ? Math.round((g.activated / g.total) * 100) : 0;
       const pend = g.total - g.activated;
@@ -6161,7 +6243,7 @@ function renderDashboard(){
     };
     const actTab = (g) => `
       <div class="act-grid">
-        ${miniDonut('👨‍🎓 الطالبات', g.students, g.key, 'students')}
+        ${studentDonut('👨‍🎓 الطالبات', g.students, g.key)}
         ${miniDonut('👨‍🏫 المعلمون', g.teachers, g.key, 'teachers')}
         ${miniDonut('🛡 الإداريون والوكلاء والموجهون', g.admins, g.key, 'admins')}
       </div>`;
@@ -6176,7 +6258,7 @@ function renderDashboard(){
         ${groups.map((g,i) => `<button class="dash-tab ${i===0?'active':''}" data-act="${g.key}" onclick="switchActTab('${g.key}')">${g.school}</button>`).join('')}
       </div>
       ${groups.map(g => `<div class="act-pane" data-act="${g.key}" style="${g.key==='ALL'?'':'display:none'}">${actTab(g)}</div>`).join('')}`}
-      <p class="muted small" style="margin:10px 0 0">يُحتسب من دخل حسابَه لأول مرة (فعّل حسابه) — وليس مجرد إنشاء الحساب. اضغط على الرقم أو الدائرة لعرض الأسماء.</p>
+      <p class="muted small" style="margin:10px 0 0">تُحتسب نسبة تفعيل الطالبات آليًا (الحسابات المفعّلة ÷ إجمالي الطالبات × 100) مع الفصل التام عن عدد من سجلن الدخول فعليًا ومن لم يسجلن بعد. اضغط لعرض الأسماء.</p>
     </div>`;
   })();
 

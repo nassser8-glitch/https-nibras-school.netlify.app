@@ -2055,12 +2055,13 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
       }
       const overlay = (u, t) => {
         const d = t.data || {};
-        // حالة «أول دخول» إلزامية من جدول الحسابات (مصدر الحقيقة) حتى لو بقي متصفح قديم
+        // حالة الحساب و«أول دخول» من جدول الحسابات (مصدر الحقيقة) حتى لو بقي متصفح قديم
         // يدفع علامة قديمة، فعند أي سحب تظهر الحالة الصحيحة لجهاز المدير.
         u.firstLogin = !!t.first_login;
+        u.active = t.active !== false;
         // حقن إحصاءات الدخول الفعلية فقط (دخول حقيقي مسجّل)، لا نلمس المعرّف
         if (!d) return;
-        const hasLogin = !!d.lastLogin || (d.loginCount || 0) > 0;
+        const hasLogin = !!d.lastLogin || (d.loginCount || 0) > 0 || (Array.isArray(d.loginHistory) && d.loginHistory.length > 0);
         if (!hasLogin) return;
         if (d.lastLogin) u.lastLogin = d.lastLogin;
         if (d.loginCount) u.loginCount = d.loginCount;
@@ -2073,6 +2074,20 @@ app.get('/api/db/:school', requireAuth, (req, res) => {
         if (t) { seen.add(t.id); overlay(u, t); }
         return u;
       });
+      // إذا وُجدت طالبة مسجّلة في rec.data.students ولها حساب فعلي في جدول users غير ظاهر في rec.data.users،
+      // نُلحق إسقاطاً للقراءة فقط بحالة تفعيلها وسجل دخولها دون تعديل قاعدة البيانات.
+      if (Array.isArray(rec.data.students) && rec.data.students.length) {
+        const studentIdSet = new Set(rec.data.students.filter(s => s && s.active !== false && !s.deleted).map(s => String(s.id)));
+        for (const t of stats) {
+          if (seen.has(t.id) || t.role !== 'STUDENT' || !studentIdSet.has(String(t.id))) continue;
+          const d = t.data || {};
+          const proj = { id: t.id, username: t.username, name: t.name, role: 'STUDENT', active: t.active !== false, firstLogin: !!t.first_login };
+          if (d.lastLogin) proj.lastLogin = d.lastLogin;
+          if (d.loginCount) proj.loginCount = d.loginCount;
+          if (Array.isArray(d.loginHistory)) proj.loginHistory = d.loginHistory;
+          rec.data.users.push(proj);
+        }
+      }
     }
     // ===== خصوصية الملاحظات: تُصفّى سطرياً هنا، فلا تُرجَع أصلاً للغير المخوّل =====
     // قبل: كانت data.notes تُرسل كاملةً لكل من له صلاحية المدرسة، فترى كل معلمة
