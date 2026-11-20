@@ -916,81 +916,141 @@ window.__nibrasMarkBooted = function(){
     .report-data-table td::before{ content:attr(data-label); font-weight:700; color:#475569; font-size:12px; text-align:right; flex-shrink:0; }
   }
 
-  /* ===== خلفية وتنسيق صفحة الطالبات فقط (قسم البنات) ===== */
+  /* ===== خلفية وتنسيق صفحة الطالبات فقط (قسم البنات — كحلي × وردي متناسق وملموم) ===== */
   .layout.theme-girls-student{
-    background: url('assets/student-bg-girls.jpg') center/cover no-repeat fixed !important;
+    background:
+      linear-gradient(155deg, rgba(23,37,84,.18) 0%, rgba(131,24,67,.16) 52%, rgba(244,114,182,.22) 100%),
+      url('assets/student-bg-girls.jpg') center/cover no-repeat fixed !important;
     min-height: 100vh;
   }
   .layout.theme-girls-student .main{
     background: transparent !important;
+    padding: 10px 14px 16px !important;
   }
   .layout.theme-girls-student .topbar{
-    background: rgba(255,255,255,.84) !important;
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(244,114,182,.25);
-    box-shadow: 0 4px 18px rgba(157,23,77,.07);
+    background: linear-gradient(135deg, #172554 0%, #312e81 50%, #831843 100%) !important;
+    border-bottom: 2px solid rgba(244,114,182,.45);
+    box-shadow: 0 4px 18px rgba(15,23,42,.22);
+    color: #fff !important;
   }
   .layout.theme-girls-student .topbar-brand h1,
-  .layout.theme-girls-student .topbar-user-name{ color:#3b0724 !important; }
+  .layout.theme-girls-student .topbar-brand p,
+  .layout.theme-girls-student .topbar-user-name,
+  .layout.theme-girls-student .topbar-user-role{ color:#fff !important; }
+  .layout.theme-girls-student .topbar .muted{ color:rgba(255,255,255,.85) !important; }
+  .layout.theme-girls-student .topbar .btn-secondary{
+    background: rgba(255,255,255,.16) !important;
+    border: 1px solid rgba(255,255,255,.35) !important;
+    color: #fff !important;
+  }
   .layout.theme-girls-student .sidebar{
-    background: rgba(255,255,255,.84) !important;
-    backdrop-filter: blur(12px);
-    border-left: 1px solid rgba(244,114,182,.22);
-    box-shadow: 0 6px 24px rgba(157,23,77,.07);
+    background: linear-gradient(180deg, #172554 0%, #2e1065 55%, #701a47 100%) !important;
+    border-left: 1px solid rgba(244,114,182,.35);
+    box-shadow: 0 8px 26px rgba(15,23,42,.24);
+    padding: 10px 10px 14px !important;
   }
   .layout.theme-girls-student .sidebar .menu a,
-  .layout.theme-girls-student .sidebar .nav-item{ color:#4a1030 !important; }
+  .layout.theme-girls-student .sidebar .nav-item{
+    color: #f8fafc !important;
+    font-weight: 700;
+    padding: 7px 10px !important;
+    margin-bottom: 2px;
+    border-radius: 10px;
+  }
+  .layout.theme-girls-student .sidebar .menu a:hover,
+  .layout.theme-girls-student .sidebar .nav-item:hover{
+    background: rgba(255,255,255,.14) !important;
+  }
   .layout.theme-girls-student .sidebar .menu a.active,
   .layout.theme-girls-student .sidebar .nav-item.active{
-    background: linear-gradient(135deg,#fdf2f8,#fce7f3) !important;
-    color: #9d174d !important;
-    border: 1px solid #fbcfe8;
+    background: linear-gradient(135deg,#be185d,#db2777) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255,255,255,.35);
+    box-shadow: 0 4px 12px rgba(190,24,93,.35);
     font-weight: 800;
   }
   .layout.theme-girls-student .sidebar .menu-group-label,
-  .layout.theme-girls-student .sidebar .nav-section{ color:#9d174d !important; opacity:.75; }
-  .layout.theme-girls-student .sidebar-widgets{ color:#3b0724; }
-  .layout.theme-girls-student .sidebar-widgets .msg-today,
-  .layout.theme-girls-student .sidebar-widgets [title="نجمة الأسبوع"] div{ color:#4a1030 !important; }
+  .layout.theme-girls-student .sidebar .nav-section{
+    color: #fbcfe8 !important;
+    font-weight: 800;
+    margin-top: 8px !important;
+    margin-bottom: 4px !important;
+  }
+  /* إبراز بطاقة الرسالة اليومية بوضوح عالٍ */
+  .layout.theme-girls-student .sidebar-widgets .msg-today{
+    background: linear-gradient(135deg, #fff5f8 0%, #ffffff 100%) !important;
+    color: #0f172a !important;
+    border: 1.5px solid #f472b6 !important;
+    border-right: 4px solid #be185d !important;
+    border-radius: 14px !important;
+    padding: 10px 12px !important;
+    margin: 8px 0 !important;
+    box-shadow: 0 6px 16px rgba(0,0,0,.25) !important;
+  }
+  .layout.theme-girls-student .sidebar-widgets .msg-today .msg-title,
+  .layout.theme-girls-student .sidebar-widgets .msg-today b,
+  .layout.theme-girls-student .sidebar-widgets .msg-today strong{ color: #9d174d !important; font-weight: 900 !important; }
+  .layout.theme-girls-student .sidebar-widgets .msg-today .msg-body,
+  .layout.theme-girls-student .sidebar-widgets .msg-today .msg-text{ color: #0f172a !important; font-weight: 700 !important; line-height: 1.6; }
+  .layout.theme-girls-student .sidebar-widgets .msg-today .msg-sender{ color: #1e3a8a !important; font-weight: 800 !important; }
+  /* تحسين وضوح نجمة الأسبوع */
+  .layout.theme-girls-student .sidebar-widgets [title="نجمة الأسبوع"]{
+    background: rgba(255,255,255,.1) !important;
+    border: 1px solid rgba(251,207,232,.35) !important;
+    border-radius: 14px !important;
+    padding: 8px 6px !important;
+    margin-top: 8px !important;
+  }
+  .layout.theme-girls-student .sidebar-widgets [title="نجمة الأسبوع"] div{ color:#fff !important; }
   .layout.theme-girls-student .student-dash{
-    max-width: 1040px;
+    max-width: 1120px;
     margin: 0 auto;
-    padding: 4px 2px 16px;
+    padding: 0 0 10px;
   }
   .layout.theme-girls-student .dash-panel,
   .layout.theme-girls-student .sd-card,
   .layout.theme-girls-student .useful-links-card,
   .layout.theme-girls-student .card{
-    background: rgba(255,255,255,.88) !important;
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(251,207,232,.85) !important;
-    border-radius: 18px !important;
-    box-shadow: 0 6px 22px rgba(157,23,77,.07) !important;
+    background: rgba(255,255,255,.96) !important;
+    backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(190,24,93,.2) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 5px 18px rgba(15,23,42,.09) !important;
+    color: #0f172a;
   }
+  .layout.theme-girls-student .dash-panel-title{ color: #172554 !important; font-weight: 900 !important; }
+  .layout.theme-girls-student .dash-panel-more{ color: #be185d !important; font-weight: 800 !important; }
+  .layout.theme-girls-student .muted{ color: #475569 !important; }
   .layout.theme-girls-student .sd-hero-floral{
-    background: rgba(255,255,255,.84);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(251,207,232,.9);
-    border-radius: 20px;
-    padding: 18px 22px;
-    margin-bottom: 14px;
-    box-shadow: 0 8px 24px rgba(157,23,77,.08);
+    background: linear-gradient(135deg, #172554 0%, #312e81 52%, #9d174d 100%);
+    border: 1.5px solid rgba(244,114,182,.45);
+    border-radius: 18px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    color: #fff;
+    box-shadow: 0 8px 22px rgba(23,37,84,.22);
   }
   .layout.theme-girls-student .sd-bottom-3{
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-    margin-bottom: 14px;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .layout.theme-girls-student .useful-links-card{
+    margin-top: 0 !important;
+    padding: 10px 14px !important;
   }
   .layout.theme-girls-student .useful-links-card .btn-secondary{
     border-radius: 999px !important;
-    background: rgba(255,255,255,.95) !important;
-    border: 1px solid #fbcfe8 !important;
-    color: #831843 !important;
-    font-weight: 700;
+    background: #fdf2f8 !important;
+    border: 1.5px solid #f472b6 !important;
+    color: #172554 !important;
+    font-weight: 800;
   }
   .layout.theme-girls-student .useful-links-card .btn-secondary:hover{
-    background: #fdf2f8 !important;
+    background: #be185d !important;
+    color: #fff !important;
+    border-color: #be185d !important;
   }
   @media (max-width: 860px){
     .layout.theme-girls-student .sd-bottom-3{ grid-template-columns: 1fr; }
@@ -5625,179 +5685,179 @@ function renderStudentDashboard(){
   const negDeg = Math.round((Math.abs(sp.neg) / maxPts) * 180);
   return `<div class="student-dash">
   <div class="sd-hero-floral">
-    <div class="sd-hero-row" style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+    <div class="sd-hero-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div class="sd-hero-info">
-        <div style="font-size:13px;font-weight:700;color:#be185d">مرحباً بكِ 👋</div>
-        <div class="sd-name" style="font-size:24px;font-weight:900;margin:2px 0;color:#3b0724">${escapeHtml(user.name || 'طالبة')}</div>
-        <div style="font-size:13px;color:#6b2149;font-weight:600">🏫 ${escapeHtml(classLabel)}</div>
-        <div style="margin-top:4px">${schoolWeekHTML(user)}</div>
+        <div style="font-size:12.5px;font-weight:700;color:#fbcfe8">مرحباً بكِ 👋</div>
+        <div class="sd-name" style="font-size:22px;font-weight:900;margin:1px 0;color:#fff">${escapeHtml(user.name || 'طالبة')}</div>
+        <div style="font-size:12.5px;color:#f8fafc;font-weight:600;opacity:.95">🏫 ${escapeHtml(classLabel)}</div>
+        <div style="margin-top:3px">${schoolWeekHTML(user)}</div>
       </div>
-      <div class="sd-hero-stats" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <div class="sd-herostat" style="background:linear-gradient(135deg,#fffbeb,#ffffff);border:1px solid #fde68a;border-radius:16px;padding:10px 18px;text-align:center;min-width:104px;box-shadow:0 3px 10px rgba(217,119,6,.08)">
-          <div style="font-size:22px;font-weight:900;color:#b45309">⭐ ${pts > 0 ? '+' : ''}${pts}</div>
-          <div style="font-size:11.5px;color:#78350f;font-weight:700">نقاطي</div>
+      <div class="sd-hero-stats" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="sd-herostat" style="background:rgba(255,255,255,.95);border:1.5px solid #fbbf24;border-radius:14px;padding:8px 16px;text-align:center;min-width:96px;box-shadow:0 4px 12px rgba(0,0,0,.15)">
+          <div style="font-size:20px;font-weight:900;color:#b45309">⭐ ${pts > 0 ? '+' : ''}${pts}</div>
+          <div style="font-size:11px;color:#172554;font-weight:800">نقاطي</div>
         </div>
-        <div class="sd-herostat" style="background:linear-gradient(135deg,#fdf2f8,#ffffff);border:1px solid #fbcfe8;border-radius:16px;padding:10px 18px;text-align:center;min-width:104px;box-shadow:0 3px 10px rgba(190,24,93,.08)">
-          <div style="font-size:22px;font-weight:900;color:#be185d">${total > 0 ? attPct + '%' : '—'}</div>
-          <div style="font-size:11.5px;color:#831843;font-weight:700">نسبة الحضور</div>
+        <div class="sd-herostat" style="background:rgba(255,255,255,.95);border:1.5px solid #f472b6;border-radius:14px;padding:8px 16px;text-align:center;min-width:96px;box-shadow:0 4px 12px rgba(0,0,0,.15)">
+          <div style="font-size:20px;font-weight:900;color:#be185d">${total > 0 ? attPct + '%' : '—'}</div>
+          <div style="font-size:11px;color:#172554;font-weight:800">نسبة الحضور</div>
         </div>
       </div>
     </div>
   </div>
-  <div class="sd-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:14px">
-    <div class="dash-panel" style="padding:14px 18px">
-      <div class="dash-panel-head" style="margin-bottom:8px"><div class="dash-panel-title">⭐ نقاطي</div></div>
-      <div style="display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap">
-        <div style="width:120px;height:120px;border-radius:50%;background:conic-gradient(#16a34a 0deg ${posDeg}deg, #dc2626 ${posDeg}deg ${posDeg + negDeg}deg, #e5e7eb ${posDeg + negDeg}deg 360deg);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(0,0,0,.1)">
-          <div style="width:90px;height:90px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center">
-            <span style="font-size:24px;font-weight:900;color:${pts >= 0 ? '#16a34a' : '#dc2626'}">${pts > 0 ? '+' : ''}${pts}</span>
-            <span style="font-size:11px;color:var(--muted);font-weight:600">نقطة</span>
+  <div class="sd-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:10px">
+    <div class="dash-panel" style="padding:12px 14px">
+      <div class="dash-panel-head" style="margin-bottom:6px"><div class="dash-panel-title">⭐ نقاطي</div></div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap">
+        <div style="width:104px;height:104px;border-radius:50%;background:conic-gradient(#16a34a 0deg ${posDeg}deg, #dc2626 ${posDeg}deg ${posDeg + negDeg}deg, #e2e8f0 ${posDeg + negDeg}deg 360deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(15,23,42,.12)">
+          <div style="width:78px;height:78px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center">
+            <span style="font-size:22px;font-weight:900;color:${pts >= 0 ? '#15803d' : '#b91c1c'}">${pts > 0 ? '+' : ''}${pts}</span>
+            <span style="font-size:10.5px;color:#334155;font-weight:700">نقطة</span>
           </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:8px;min-width:155px">
-          <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:#ecfdf5;font-size:13px;font-weight:700;color:#16a34a">✅ النقاط الإيجابية <span style="flex:1"></span>+${sp.pos}</div>
-          <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:#fef2f2;font-size:13px;font-weight:700;color:#dc2626">⚠️ النقاط السلبية <span style="flex:1"></span>${sp.neg}</div>
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:150px">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;background:#dcfce7;border:1px solid #86efac;font-size:12.5px;font-weight:800;color:#14532d">✅ الإيجابية <span style="flex:1"></span>+${sp.pos}</div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;background:#fee2e2;border:1px solid #fca5a5;font-size:12.5px;font-weight:800;color:#991b1b">⚠️ السلبية <span style="flex:1"></span>${sp.neg}</div>
         </div>
       </div>
     </div>
-    <div class="dash-panel" style="padding:14px 18px">
-      <div class="dash-panel-head" style="margin-bottom:8px"><div class="dash-panel-title">📅 حضوري</div></div>
-      <div style="display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap">
-        <div style="position:relative;width:120px;height:120px;display:flex;align-items:center;justify-content:center">
-          <svg viewBox="0 0 36 36" style="width:120px;height:120px;transform:rotate(-90deg)">
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3.2" />
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#ef4444" stroke-width="3.2" stroke-dasharray="${total > 0 ? Math.round(absent/total*100) : 0} ${total > 0 ? 100 - Math.round(absent/total*100) : 100}" stroke-linecap="round" />
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f59e0b" stroke-width="3.2" stroke-dasharray="${total > 0 ? Math.round(late/total*100) : 0} ${total > 0 ? 100 - Math.round(late/total*100) : 100}" stroke-dashoffset="${total > 0 ? -Math.round(absent/total*100) : 0}" stroke-linecap="round" />
+    <div class="dash-panel" style="padding:12px 14px">
+      <div class="dash-panel-head" style="margin-bottom:6px"><div class="dash-panel-title">📅 حضوري</div></div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap">
+        <div style="position:relative;width:104px;height:104px;display:flex;align-items:center;justify-content:center">
+          <svg viewBox="0 0 36 36" style="width:104px;height:104px;transform:rotate(-90deg)">
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e2e8f0" stroke-width="3.4" />
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#dc2626" stroke-width="3.4" stroke-dasharray="${total > 0 ? Math.round(absent/total*100) : 0} ${total > 0 ? 100 - Math.round(absent/total*100) : 100}" stroke-linecap="round" />
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#d97706" stroke-width="3.4" stroke-dasharray="${total > 0 ? Math.round(late/total*100) : 0} ${total > 0 ? 100 - Math.round(late/total*100) : 100}" stroke-dashoffset="${total > 0 ? -Math.round(absent/total*100) : 0}" stroke-linecap="round" />
           </svg>
           <div style="position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center">
-            <span style="font-size:24px;font-weight:900;color:#ef4444">${absent}</span>
-            <span style="font-size:11px;color:var(--muted);font-weight:600">غياب</span>
+            <span style="font-size:22px;font-weight:900;color:#b91c1c">${absent}</span>
+            <span style="font-size:10.5px;color:#334155;font-weight:700">غياب</span>
           </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:8px;min-width:140px">
-          <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:#dcfce7;font-size:13px;font-weight:700;color:#16a34a">✅ حاضر <span style="flex:1"></span>${present}</div>
-          <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:#fef9c3;font-size:13px;font-weight:700;color:#b45309">🟡 متأخر <span style="flex:1"></span>${late}</div>
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:136px">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;background:#dcfce7;border:1px solid #86efac;font-size:12.5px;font-weight:800;color:#14532d">✅ حاضر <span style="flex:1"></span>${present}</div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;background:#fef3c7;border:1px solid #fcd34d;font-size:12.5px;font-weight:800;color:#92400e">🟡 متأخر <span style="flex:1"></span>${late}</div>
         </div>
       </div>
     </div>
   </div>
-  <div class="dash-panel" style="margin-bottom:14px;padding:14px 18px">
-    <div class="dash-panel-head" style="margin-bottom:10px">
+  <div class="dash-panel" style="margin-bottom:10px;padding:12px 14px">
+    <div class="dash-panel-head" style="margin-bottom:8px">
       <div class="dash-panel-title">📊 التكليفات حسب النوع</div>
-      <span style="font-size:12px;font-weight:700;color:#9d174d">${assignments.length} تكليف</span>
+      <span style="font-size:12px;font-weight:800;color:#9d174d">${assignments.length} تكليف</span>
     </div>
-    ${typeStats.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:10px">لا توجد تكليفات بعد</p>' :
-    `<div style="display:flex;flex-direction:column;gap:8px">
+    ${typeStats.length === 0 ? '<p style="color:#475569;text-align:center;padding:8px;margin:0">لا توجد تكليفات بعد</p>' :
+    `<div style="display:flex;flex-direction:column;gap:7px">
       ${typeStats.map(s => `<div style="display:flex;align-items:center;gap:8px">
-        <span style="width:22px;text-align:center;font-size:16px">${s.icon}</span>
-        <span style="width:46px;font-size:12px;font-weight:700">${s.type}</span>
-        <div style="flex:1;height:10px;background:#f1f5f9;border-radius:10px;overflow:hidden;position:relative">
+        <span style="width:20px;text-align:center;font-size:15px">${s.icon}</span>
+        <span style="width:46px;font-size:12px;font-weight:800;color:#172554">${s.type}</span>
+        <div style="flex:1;height:10px;background:#e2e8f0;border-radius:10px;overflow:hidden;position:relative">
           <div style="height:100%;width:${s.done > 0 ? Math.round(s.done/s.total*100) : 0}%;background:linear-gradient(90deg,${s.color},${s.color}cc);border-radius:10px;transition:width .3s"></div>
         </div>
-        <span style="font-size:11.5px;font-weight:800;color:${s.color};min-width:40px;text-align:center">${s.done > 0 ? Math.round(s.done/s.total*100) : 0}%</span>
+        <span style="font-size:11.5px;font-weight:900;color:${s.color};min-width:38px;text-align:center">${s.done > 0 ? Math.round(s.done/s.total*100) : 0}%</span>
         <div style="display:flex;gap:4px;font-size:11px;white-space:nowrap">
-          <span style="background:#dcfce7;color:#16a34a;padding:2px 7px;border-radius:8px;font-weight:700">نفذ ${s.done}</span>
-          <span style="background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:8px;font-weight:700">لم ينفذ ${s.todo}</span>
+          <span style="background:#dcfce7;color:#14532d;padding:2px 7px;border-radius:8px;font-weight:800">نفذ ${s.done}</span>
+          <span style="background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:8px;font-weight:800">لم ينفذ ${s.todo}</span>
         </div>
       </div>`).join('')}
     </div>`}
   </div>
   <div class="sd-bottom-3">
-    <div class="dash-panel" style="padding:14px 16px">
-      <div class="dash-panel-head">
-        <div class="dash-panel-title"><span style="display:inline-flex;width:24px;height:24px;border-radius:8px;align-items:center;justify-content:center;background:#be185d;color:#fff;margin-left:6px;font-size:13px">📝</span> التكليفات الأخيرة</div>
-        <a href="#/assignments" class="dash-panel-more">عرض الكل ←</a>
+    <div class="dash-panel" style="padding:12px 14px">
+      <div class="dash-panel-head" style="margin-bottom:6px">
+        <div class="dash-panel-title"><span style="display:inline-flex;width:22px;height:22px;border-radius:7px;align-items:center;justify-content:center;background:#172554;color:#fff;margin-left:6px;font-size:12px">📝</span> التكليفات الأخيرة</div>
+        <a href="#/assignments" class="dash-panel-more">الكل ←</a>
       </div>
-      ${recentAssignments.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:14px">لا توجد تكليفات بعد</p>' :
+      ${recentAssignments.length === 0 ? '<p style="color:#475569;text-align:center;padding:10px;margin:0">لا توجد تكليفات بعد</p>' :
       recentAssignments.slice(0,4).map(a => {
         const ac = typeColors[a.type] || '#888';
-        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid var(--line)">
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid #e2e8f0">
         <span style="width:8px;height:8px;border-radius:50%;background:${ac};flex-shrink:0"></span>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(a.title || 'تكليف')}</div>
-          <div style="font-size:11px;color:var(--muted)">${escapeHtml(a.subject || '')} · ${a.type||'واجب'}</div>
+          <div style="font-weight:800;font-size:12.5px;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(a.title || 'تكليف')}</div>
+          <div style="font-size:11px;color:#475569;font-weight:600">${escapeHtml(a.subject || '')} · ${a.type||'واجب'}</div>
         </div>
-        <span style="font-size:10.5px;color:var(--muted);white-space:nowrap">${a.date || ''}</span>
+        <span style="font-size:10.5px;color:#334155;font-weight:700;white-space:nowrap">${a.date || ''}</span>
       </div>`}).join('')}
     </div>
-    <div class="dash-panel" style="padding:14px 16px">
-      <div class="dash-panel-head">
-        <div class="dash-panel-title"><span style="display:inline-flex;width:24px;height:24px;border-radius:8px;align-items:center;justify-content:center;background:#f59e0b;color:#fff;margin-left:6px;font-size:13px">★</span> ملاحظاتي</div>
-        <a href="#/notes" class="dash-panel-more">عرض الكل ←</a>
+    <div class="dash-panel" style="padding:12px 14px">
+      <div class="dash-panel-head" style="margin-bottom:6px">
+        <div class="dash-panel-title"><span style="display:inline-flex;width:22px;height:22px;border-radius:7px;align-items:center;justify-content:center;background:#be185d;color:#fff;margin-left:6px;font-size:12px">★</span> ملاحظاتي</div>
+        <a href="#/notes" class="dash-panel-more">الكل ←</a>
       </div>
-      ${myNotes.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:14px">لا توجد ملاحظات بعد</p>' :
-      myNotes.slice(0,4).map(n => `<div style="display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid var(--line)">
-        <span style="font-size:14px">${n.type==='POSITIVE'?'🟢':'🔴'}</span>
+      ${myNotes.length === 0 ? '<p style="color:#475569;text-align:center;padding:10px;margin:0">لا توجد ملاحظات بعد</p>' :
+      myNotes.slice(0,4).map(n => `<div style="display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid #e2e8f0">
+        <span style="font-size:13px">${n.type==='POSITIVE'?'🟢':'🔴'}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(n.category)}</div>
-          <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.description ? escapeHtml(n.description) : '—'}</div>
+          <div style="font-weight:700;font-size:12px;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(n.category)}</div>
+          <div style="font-size:11px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.description ? escapeHtml(n.description) : '—'}</div>
         </div>
-        <span style="font-size:12px;font-weight:800;color:${n.type==='POSITIVE'?'#16a34a':'#dc2626'};white-space:nowrap">${(n.points ?? 0) > 0 ? '+' : ''}${n.points ?? 0}</span>
+        <span style="font-size:12px;font-weight:900;color:${n.type==='POSITIVE'?'#15803d':'#b91c1c'};white-space:nowrap">${(n.points ?? 0) > 0 ? '+' : ''}${n.points ?? 0}</span>
       </div>`).join('')}
     </div>
-    <div class="dash-panel" style="padding:14px 16px">
-      <div class="dash-panel-head">
-        <div class="dash-panel-title"><span style="display:inline-flex;width:24px;height:24px;border-radius:8px;align-items:center;justify-content:center;background:#db2777;color:#fff;margin-left:6px;font-size:13px">↔</span> تحويلاتي</div>
-        <a href="#/transfers" class="dash-panel-more">عرض الكل ←</a>
+    <div class="dash-panel" style="padding:12px 14px">
+      <div class="dash-panel-head" style="margin-bottom:6px">
+        <div class="dash-panel-title"><span style="display:inline-flex;width:22px;height:22px;border-radius:7px;align-items:center;justify-content:center;background:#9d174d;color:#fff;margin-left:6px;font-size:12px">↔</span> تحويلاتي</div>
+        <a href="#/transfers" class="dash-panel-more">الكل ←</a>
       </div>
-      ${myTransfers.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:14px">لا توجد تحويلات</p>' :
+      ${myTransfers.length === 0 ? '<p style="color:#475569;text-align:center;padding:10px;margin:0">لا توجد تحويلات</p>' :
       myTransfers.slice(0,4).map(t => {
-        const st = t.status === 'PENDING' ? '<span style="color:#d97706;font-size:11px">⏳ قيد المتابعة</span>' : '<span style="color:#16a34a;font-size:11px">✅ تم الحل</span>';
-        return `<div style="padding:7px 2px;border-bottom:1px solid var(--line)">
+        const st = t.status === 'PENDING' ? '<span style="color:#b45309;font-weight:700;font-size:11px">⏳ قيد المتابعة</span>' : '<span style="color:#15803d;font-weight:700;font-size:11px">✅ تم الحل</span>';
+        return `<div style="padding:6px 2px;border-bottom:1px solid #e2e8f0">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
-            <span style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.reason || '')}</span>
+            <span style="font-weight:700;font-size:12px;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.reason || '')}</span>
             ${st}
           </div>
-          <div style="font-size:11px;color:var(--muted)">${t.createdAt ? new Date(t.createdAt).toLocaleDateString('ar-SA') : ''}${t.deductedPoints ? ' · خصم ' + t.deductedPoints + ' نقطة' : ''}</div>
+          <div style="font-size:11px;color:#475569">${t.createdAt ? new Date(t.createdAt).toLocaleDateString('ar-SA') : ''}${t.deductedPoints ? ' · خصم ' + t.deductedPoints + ' نقطة' : ''}</div>
         </div>`;
       }).join('')}
     </div>
   </div>
-  <div class="sd-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:14px">
+  <div class="sd-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:10px">
     <div class="sd-card" style="overflow:hidden">
-      <div style="background:linear-gradient(135deg,#be185d,#db2777);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between">
-        <div style="font-weight:800;font-size:14px">🏆 أوائل فصلي</div>
-        <a href="#/student-leaders" style="color:#fff;font-size:12px;font-weight:700;opacity:.95;text-decoration:none">عرض الكل ←</a>
+      <div style="background:linear-gradient(135deg,#172554,#9d174d);color:#fff;padding:9px 14px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-weight:800;font-size:13.5px">🏆 أوائل فصلي</div>
+        <a href="#/student-leaders" style="color:#fbcfe8;font-size:12px;font-weight:700;text-decoration:none">عرض الكل ←</a>
       </div>
-      <div style="padding:12px 14px">
+      <div style="padding:10px 12px">
       ${(() => {
         const sPtsMap = studentPointsMap();
         const sMedals = ['🥇','🥈','🥉'];
         const myStud = myStudent && myStudent.classId
           ? (d.students||[]).filter(s => s.active && s.classId === myStudent.classId).map(s => ({ s, pts: sPtsMap[s.id] || 0 })).sort((a,b) => b.pts - a.pts || String(a.s.fullName||'').localeCompare(String(b.s.fullName||''),'ar'))
           : [];
-        if(myStud.length === 0) return '<p style="color:var(--muted);text-align:center;padding:8px">لا توجد نقاط مسجلة في فصلك بعد</p>';
+        if(myStud.length === 0) return '<p style="color:#475569;text-align:center;padding:8px;margin:0">لا توجد نقاط مسجلة في فصلك بعد</p>';
         const myRank = myStud.findIndex(x => x.s.id === user.id) + 1;
         return `
-        <div style="display:flex;gap:8px;margin-bottom:10px">
-          <div style="text-align:center;flex:1;padding:8px;background:#fdf2f8;border-radius:12px;border:1px solid #fbcfe8">
-            <div style="font-size:22px;font-weight:900;color:#be185d">${myRank <= myStud.length ? myRank : '—'}</div>
-            <div style="font-size:11px;color:#831843;font-weight:600">ترتيبي</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <div style="text-align:center;flex:1;padding:6px;background:#fdf2f8;border-radius:10px;border:1px solid #f472b6">
+            <div style="font-size:20px;font-weight:900;color:#9d174d">${myRank <= myStud.length ? myRank : '—'}</div>
+            <div style="font-size:11px;color:#172554;font-weight:700">ترتيبي</div>
           </div>
-          <div style="text-align:center;flex:1;padding:8px;background:#ecfdf5;border-radius:12px;border:1px solid #a7f3d0">
-            <div style="font-size:22px;font-weight:900;color:#16a34a">+${sPtsMap[user.id] || 0}</div>
-            <div style="font-size:11px;color:#166534;font-weight:600">نقاطي</div>
+          <div style="text-align:center;flex:1;padding:6px;background:#dcfce7;border-radius:10px;border:1px solid #86efac">
+            <div style="font-size:20px;font-weight:900;color:#15803d">+${sPtsMap[user.id] || 0}</div>
+            <div style="font-size:11px;color:#14532d;font-weight:700">نقاطي</div>
           </div>
         </div>
         ${myStud.slice(0,3).map((x,i) => {
           const me = x.s.id === user.id;
-          return `<div class="dash-leader-row" style="${me ? 'background:#fdf2f8;border-radius:10px' : ''}">
+          return `<div class="dash-leader-row" style="${me ? 'background:#fdf2f8;border-radius:8px;padding:4px 6px' : 'padding:4px 2px'}">
             <span class="dash-leader-medal">${sMedals[i] || '•'}</span>
             <div style="min-width:0;flex:1">
-              <div class="dash-leader-name">${escapeHtml(x.s.fullName || x.s.name || x.s.username || '')} ${me ? '<span style="font-size:10px;background:#be185d;color:#fff;padding:1px 6px;border-radius:6px;margin:0 4px">أنتِ</span>' : ''}</div>
+              <div class="dash-leader-name" style="color:#0f172a;font-weight:800">${escapeHtml(x.s.fullName || x.s.name || x.s.username || '')} ${me ? '<span style="font-size:10px;background:#be185d;color:#fff;padding:1px 6px;border-radius:6px;margin:0 4px">أنتِ</span>' : ''}</div>
             </div>
-            <span class="dash-leader-pts" style="color:#16a34a">+${x.pts}</span>
+            <span class="dash-leader-pts" style="color:#15803d;font-weight:900">+${x.pts}</span>
           </div>`;
         }).join('')}`;
       })()}
       </div>
     </div>
     <div class="sd-card" style="overflow:hidden">
-      <div style="background:linear-gradient(135deg,#db2777,#f472b6);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between">
-        <div style="font-weight:800;font-size:14px">🏆 رواد نبراس — هذا الأسبوع</div>
-        <span style="font-size:11px;font-weight:700;opacity:.95">الأكثر تفاعلاً</span>
+      <div style="background:linear-gradient(135deg,#312e81,#be185d);color:#fff;padding:9px 14px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-weight:800;font-size:13.5px">🏆 رواد نبراس — هذا الأسبوع</div>
+        <span style="font-size:11px;font-weight:700;color:#fbcfe8">الأكثر تفاعلاً</span>
       </div>
-      <div style="padding:10px 14px">${renderNibrasPioneers(false)}</div>
+      <div style="padding:8px 12px">${renderNibrasPioneers(false)}</div>
     </div>
   </div>
   ${renderUsefulLinksCard()}
