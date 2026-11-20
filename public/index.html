@@ -6243,9 +6243,8 @@ function renderDashboard(){
               <div class="dash-donut-center"><b style="font-size:17px">${pctText}%</b><span>مفعّل</span></div>
             </div>
             <div class="att-legend">
-              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#0f172a"></span>إجمالي الطالبات <b>${st.total}</b></div>
-              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#22c55e"></span>الحسابات المفعّلة (سبق لهن الدخول) <b>${st.activated}</b> <span class="muted small">(${pctText}%)</span></div>
-              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#dc2626"></span>الحسابات غير المفعّلة (لم يسجلن الدخول مطلقًا) <b>${notActivated}</b> <span class="muted small">(${notPctText}%)</span></div>
+              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#22c55e"></span>الحسابات المفعّلة <b>${st.activated}</b> <span class="muted small">(${pctText}%)</span></div>
+              <div class="row" style="cursor:pointer" onclick="showActNames('${gkey}','students')"><span class="swatch" style="background:#dc2626"></span>الحسابات غير المفعّلة <b>${notActivated}</b> <span class="muted small">(${notPctText}%)</span></div>
             </div>
           </div>
         </div>`;

@@ -91,10 +91,10 @@ test('2) الحساب ديناميكي بالكامل ولا يعتبر active=t
   assert.equal(ctx.res.notActivatedPctText, '75.00');
 });
 
-test('3) لوحة المدير تعرض الإجمالي والمفعّلة (سبق لهن الدخول) وغير المفعّلة (لم يسجلن مطلقًا) والنسبة', () => {
-  assert.ok(HTML.includes('إجمالي الطالبات <b>${st.total}</b>'), 'مؤشر إجمالي الطالبات مفقود');
-  assert.ok(HTML.includes('الحسابات المفعّلة (سبق لهن الدخول) <b>${st.activated}</b>'), 'مؤشر الحسابات المفعّلة مفقود');
-  assert.ok(HTML.includes('الحسابات غير المفعّلة (لم يسجلن الدخول مطلقًا) <b>${notActivated}</b>'), 'مؤشر الحسابات غير المفعّلة مفقود');
+test('3) لوحة المدير تعرض الحسابات المفعّلة وغير المفعّلة بالنسب المختصرة دون سطر إجمالي الطالبات الزائد', () => {
+  assert.ok(!HTML.includes('إجمالي الطالبات <b>${st.total}</b>'), 'يجب إزالة سطر إجمالي الطالبات أسفل الإحصائية');
+  assert.ok(HTML.includes('الحسابات المفعّلة <b>${st.activated}</b> <span class="muted small">(${pctText}%)</span>'), 'عبارة الحسابات المفعّلة المختصرة مفقودة');
+  assert.ok(HTML.includes('الحسابات غير المفعّلة <b>${notActivated}</b> <span class="muted small">(${notPctText}%)</span>'), 'عبارة الحسابات غير المفعّلة المختصرة مفقودة');
   assert.ok(SERVER.includes('studentUnameSet'), 'server.js لا تطابق الطالبات باسم المستخدم عند الإسقاط من جدول users');
   assert.ok(DB_SRC.includes('SELECT id, username, email, name, role, active, first_login, data FROM users WHERE school = $1'), 'usersForLoginStats لا تجلب الحقول الكاملة');
 });
