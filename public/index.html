@@ -296,6 +296,44 @@ window.__nibrasMarkBooted = function(){
 .class-grid > .ccard:nth-child(4n+3) .ccard-count { background:linear-gradient(135deg,#ffffff 0%,#ecfdf5 100%); color:#047857; box-shadow:inset 0 0 0 1px #a7f3d0; }
 .class-grid > .ccard:nth-child(4n+4) .ccard-count { background:linear-gradient(135deg,#ffffff 0%,#fffbeb 100%); color:#b45309; box-shadow:inset 0 0 0 1px #fde68a; }
 
+  /* ===== لوحة الإشراف اليومي المختصرة (هوية البنات الوردية) ===== */
+  .sup-page { display:flex; flex-direction:column; gap:12px; }
+  .sup-header { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:#fff; border:1px solid #fce7f3; border-inline-start:4px solid #db2777; border-radius:14px; padding:12px 16px; box-shadow:0 3px 12px rgba(190,24,93,.06); }
+  .sup-header h2 { margin:0; font-size:18px; font-weight:800; color:#831843; }
+  .sup-header-sub { font-size:12px; color:#6b7280; margin-top:2px; }
+  .sup-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .sup-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+  @media (max-width:900px){ .sup-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width:480px){ .sup-stats { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; } }
+  .sup-stat { background:#fff; border:1px solid #fce7f3; border-radius:14px; padding:10px 14px; display:flex; align-items:center; gap:10px; box-shadow:0 2px 10px rgba(190,24,93,.05); }
+  .sup-stat-ico { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; background:#fdf2f8; }
+  .sup-stat-val { font-size:20px; font-weight:800; line-height:1.15; color:#be185d; }
+  .sup-stat-lbl { font-size:11.5px; font-weight:700; color:#6b7280; }
+  .sup-stat-ok { border-inline-start:4px solid #10b981; } .sup-stat-ok .sup-stat-val { color:#047857; } .sup-stat-ok .sup-stat-ico { background:#ecfdf5; }
+  .sup-stat-warn { border-inline-start:4px solid #f59e0b; } .sup-stat-warn .sup-stat-val { color:#b45309; } .sup-stat-warn .sup-stat-ico { background:#fffbeb; }
+  .sup-stat-pink { border-inline-start:4px solid #db2777; }
+  .sup-stat-violet { border-inline-start:4px solid #8b5cf6; } .sup-stat-violet .sup-stat-val { color:#6d28d9; } .sup-stat-violet .sup-stat-ico { background:#f5f3ff; }
+  .sup-card { background:#fff; border:1px solid #fce7f3; border-radius:14px; padding:12px 14px; box-shadow:0 3px 12px rgba(190,24,93,.05); }
+  .sup-card-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+  .sup-card-title { font-size:14.5px; font-weight:800; color:#831843; margin:0; }
+  .sup-today-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:8px; }
+  .sup-today-item { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border-radius:10px; background:#fdf2f8; border:1px solid #fbcfe8; font-size:12.5px; }
+  .sup-table-wrap { overflow-x:auto; }
+  .sup-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .sup-table th { background:#fdf2f8; color:#831843; font-weight:800; font-size:12px; padding:8px 10px; text-align:right; border-bottom:2px solid #fbcfe8; white-space:nowrap; }
+  .sup-table td { padding:8px 10px; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+  .sup-row-today { background:#fff5f9; }
+  .sup-row-today td:first-child { border-inline-start:4px solid #db2777; }
+  .sup-chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .sup-chip { display:inline-flex; align-items:center; gap:5px; background:#fdf2f8; border:1px solid #fbcfe8; color:#831843; padding:3px 9px; border-radius:999px; font-size:12px; font-weight:600; }
+  .sup-chip-del { background:none; border:none; color:#be123c; cursor:pointer; font-weight:800; font-size:12px; padding:0 2px; line-height:1; }
+  .sup-picker-box { background:#fdf2f8; border:1px dashed #f9a8d4; border-radius:10px; padding:10px; margin-top:6px; }
+  .sup-mobile-list { display:none; flex-direction:column; gap:8px; }
+  .sup-mobile-day { border:1px solid #fce7f3; border-radius:12px; background:#fff; padding:8px 12px; }
+  .sup-mobile-day[open] { border-color:#f472b6; }
+  .sup-mobile-day summary { cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px; font-weight:800; font-size:13.5px; color:#831843; list-style:none; }
+  @media (max-width:720px){ .sup-table-wrap { display:none; } .sup-mobile-list { display:flex; } }
+
   /* بطاقات مفكرتي الشخصية */
   .nb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
   .nb-card { background:linear-gradient(180deg,#fffdf5,#fff9e6); border:1px solid #fde68a; border-radius:12px; padding:12px 14px; box-shadow:0 2px 6px rgba(0,0,0,.04); }
@@ -12898,42 +12936,133 @@ function renderSupervisionAdmin(){
     if(serverItem && serverItem.name) return serverItem.name;
     return id;
   };
-  const days = SUPERVISION_DAYS.map(day => {
+  const shortName = n => escapeHtml(String(n || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).join(' '));
+  const today = __supervisionToday;
+  const todayDow = (today && typeof today.dayOfWeek === 'number') ? today.dayOfWeek : new Date().getDay();
+  const todayLabel = (SUPERVISION_DAYS.find(x => x.dow === todayDow) || {}).label || 'لا يوجد إشراف';
+  const todayRows = today && Array.isArray(today.assigned) ? today.assigned : [];
+  const checkedInCount = todayRows.filter(x => x && x.checkedInAt).length;
+  const pendingCount = Math.max(0, todayRows.length - checkedInCount);
+  const weekUniqueTeachers = new Set();
+  SUPERVISION_DAYS.forEach(d => { (__supervisionDraftSchedule[d.dow] || new Set()).forEach(id => weekUniqueTeachers.add(id)); });
+
+  const renderPickerHtml = (day, available) => `
+    <div class="sup-picker-box" data-supervision-picker="${day.dow}">
+      <div class="grid-2" style="gap:6px">
+        ${available.length ? available.map(t => {
+          const isChecked = typeof __supervisionPickerSelected !== 'undefined' && __supervisionPickerSelected[day.dow] && __supervisionPickerSelected[day.dow].has(t.id);
+          return `<label class="check-row" style="font-size:12.5px"><input type="checkbox" value="${t.id}" ${isChecked ? 'checked' : ''} onchange="__supervisionTogglePickerSelect(${day.dow},'${t.id}',this.checked)"> ${escapeHtml(t.name || t.username || t.id)}</label>`;
+        }).join('') : '<p class="muted" style="margin:0;font-size:12px">تمت إضافة جميع المعلمات لهذا اليوم</p>'}
+      </div>
+      ${available.length ? `<button type="button" class="btn-primary" style="margin-top:8px;padding:5px 12px;font-size:12px" onclick="__supervisionAddSelected(${day.dow})">✓ إضافة المحددات</button>` : ''}
+    </div>`;
+
+  const dayRowsData = SUPERVISION_DAYS.map(day => {
     const assignedIds = [...__supervisionDraftSchedule[day.dow]];
-    const assignedList = assignedIds
-      .map(id => ({ id, name: teacherName(id) }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    const assignedList = assignedIds.map(id => ({ id, name: teacherName(id) })).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
     const available = teachers.filter(t => !__supervisionDraftSchedule[day.dow].has(t.id));
     const pickerOpen = __supervisionAddOpenDay === day.dow;
-    return `
-    <div class="panel" data-supervision-day="${day.dow}" style="margin-bottom:12px">
-      <h3>🛡️ ${day.label}</h3>
-      ${canEditSchedule ? `<button type="button" class="btn-secondary" onclick="__supervisionToggleAddPicker(${day.dow})">${pickerOpen ? '✕ إغلاق' : '+ إضافة مشرفة'}</button>` : ''}
-      ${pickerOpen && canEditSchedule ? `
-        <div class="grid-2" data-supervision-picker="${day.dow}" style="margin-top:8px">
-          ${available.length ? available.map(t => {
-            const isChecked = typeof __supervisionPickerSelected !== 'undefined' && __supervisionPickerSelected[day.dow] && __supervisionPickerSelected[day.dow].has(t.id);
-            return `<label class="check-row"><input type="checkbox" value="${t.id}" ${isChecked ? 'checked' : ''} onchange="__supervisionTogglePickerSelect(${day.dow},'${t.id}',this.checked)"> ${escapeHtml(t.name || t.username || t.id)}</label>`;
-          }).join('') : '<p class="muted">تمت إضافة جميع المعلمات لهذا اليوم</p>'}
+    const isToday = day.dow === todayDow;
+    let statusBadge = assignedList.length ? '<span class="badge" style="background:#f3f4f6;color:#374151">مجدول</span>' : '<span class="badge" style="background:#fef3c7;color:#92400e">بلا تكليف</span>';
+    if(isToday && todayRows.length){
+      statusBadge = pendingCount === 0
+        ? '<span class="badge" style="background:#dcfce7;color:#166534">🟢 مكتمل</span>'
+        : (checkedInCount > 0
+          ? `<span class="badge" style="background:#fef3c7;color:#92400e">🟡 ${checkedInCount}/${todayRows.length}</span>`
+          : '<span class="badge" style="background:#fee2e2;color:#991b1b">⏳ بانتظار المباشرة</span>');
+    }
+    const chipsHtml = assignedList.length
+      ? `<div class="sup-chips">${assignedList.map(x => `<span class="sup-chip">${shortName(x.name)}${canEditSchedule ? `<button type="button" class="sup-chip-del" title="حذف" onclick="__supervisionRemoveTeacher(${day.dow},'${x.id}')">✕</button>` : ''}</span>`).join('')}</div>`
+      : '<span class="muted" style="font-size:12px">لا توجد مشرفات مكلفات</span>';
+    const addBtn = canEditSchedule ? `<button type="button" class="btn-secondary" style="padding:4px 10px;font-size:12px;white-space:nowrap" onclick="__supervisionToggleAddPicker(${day.dow})">${pickerOpen ? '✕ إغلاق' : '+ إضافة مشرفة'}</button>` : '';
+    return { day, assignedList, available, pickerOpen, isToday, statusBadge, chipsHtml, addBtn };
+  });
+
+  const tableRowsHtml = dayRowsData.map(r => `
+    <tr class="${r.isToday ? 'sup-row-today' : ''}" data-supervision-day="${r.day.dow}">
+      <td style="white-space:nowrap;font-weight:800;color:#831843">${escapeHtml(r.day.label)}${r.isToday ? ' <span class="badge" style="background:#db2777;color:#fff;font-size:10px;padding:2px 6px">اليوم</span>' : ''}</td>
+      <td>${r.chipsHtml}${r.pickerOpen && canEditSchedule ? renderPickerHtml(r.day, r.available) : ''}</td>
+      <td style="text-align:center;font-weight:800;color:#be185d">${r.assignedList.length}</td>
+      <td style="white-space:nowrap">${r.statusBadge}</td>
+      ${canEditSchedule ? `<td style="white-space:nowrap">${r.addBtn}</td>` : ''}
+    </tr>`).join('');
+
+  const mobileCardsHtml = dayRowsData.map(r => `
+    <details class="sup-mobile-day" data-supervision-day-mobile="${r.day.dow}" ${r.isToday || r.pickerOpen ? 'open' : ''}>
+      <summary>
+        <span>${escapeHtml(r.day.label)}${r.isToday ? ' <span class="badge" style="background:#db2777;color:#fff;font-size:10px">اليوم</span>' : ''}</span>
+        <span style="display:flex;align-items:center;gap:6px">${r.statusBadge}<span class="badge" style="background:#fdf2f8;color:#be185d">${r.assignedList.length}</span></span>
+      </summary>
+      <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+        ${r.chipsHtml}
+        ${r.addBtn ? `<div>${r.addBtn}</div>` : ''}
+        ${r.pickerOpen && canEditSchedule ? renderPickerHtml(r.day, r.available) : ''}
+      </div>
+    </details>`).join('');
+
+  const todayBlock = `
+  <div class="sup-card">
+    <div class="sup-card-head">
+      <h3 class="sup-card-title">📌 مشرفات اليوم — ${escapeHtml(todayLabel)}</h3>
+      <span class="muted" style="font-size:12px">${todayRows.length ? `${checkedInCount} من ${todayRows.length} باشرن الإشراف` : 'لا توجد تكليفات اليوم'}</span>
+    </div>
+    ${todayRows.length ? `<div class="sup-today-grid">${todayRows.map(x => `
+      <div class="sup-today-item">
+        <div style="min-width:0">
+          <div style="font-weight:800;color:#4a1d33">${shortName(x.name || x.teacherId)}</div>
+          <div style="font-size:11.5px;color:${x.checkedInAt ? '#047857' : '#b45309'};font-weight:700">${x.checkedInAt ? '🟢 باشرت الإشراف' + (x.checkedInAt ? ' (' + escapeHtml(x.checkedInAt) + ')' : '') : '🟡 لم تسجل المباشرة'}</div>
         </div>
-        ${available.length ? `<button type="button" class="btn-primary" style="margin-top:8px" onclick="__supervisionAddSelected(${day.dow})">إضافة المحددات</button>` : ''}
-      ` : ''}
-      <ul style="margin:10px 0 0;padding-inline-start:18px">
-        ${assignedList.length ? assignedList.map(x => `<li style="padding:4px 0">${escapeHtml(String(x.name).trim().split(/\s+/).filter(Boolean).slice(0,2).join(' '))} ${canEditSchedule ? `<button type="button" class="btn-secondary" style="padding:2px 8px;font-size:12px;margin-inline-start:6px" onclick="__supervisionRemoveTeacher(${day.dow},'${x.id}')">حذف</button>` : ''}</li>`).join('') : '<li class="muted">لا توجد مشرفات مكلفات بعد</li>'}
-      </ul>
-    </div>`;
-  }).join('');
-  const today = __supervisionToday;
-  const todayRows = today && today.assigned ? today.assigned : [];
-  const todayBlock = `<div class="panel"><h3>🛡️ مشرفات اليوم – ${escapeHtml((SUPERVISION_DAYS.find(x=>x.dow===today?.dayOfWeek)||{}).label || 'لا يوجد إشراف')}</h3>
-    ${todayRows.length ? todayRows.map(x => `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #eee;flex-wrap:wrap">${x.checkedInAt ? '🟢 باشرت الإشراف' : '🟡 لم تسجل المباشرة'} — <b>${escapeHtml(x.name || x.teacherId)}</b>${x.checkedInAt ? ` <span class="muted">${escapeHtml(x.checkedInAt)}</span>` : ''}
-      ${canRecord ? (x.checkedInAt
-        ? `<button type="button" class="btn-secondary" style="padding:2px 10px;font-size:12px;margin-inline-start:auto" onclick="__recordSupervision('${x.teacherId}',false)">إلغاء (لم تؤده)</button>`
-        : `<button type="button" class="btn-primary" style="padding:2px 10px;font-size:12px;margin-inline-start:auto" onclick="__recordSupervision('${x.teacherId}',true)">أدت الإشراف</button>`) : ''}
-    </div>`).join('') : '<p class="muted">لا توجد مشرفات اليوم</p>'}</div>`;
-  const history = __supervisionHistory && __supervisionHistory.history;
-  const historyBlock = '';
-  return `<section class="panel"><h2>🛡️ الإشراف اليومي</h2><p class="muted">جدول أسبوعي ثابت يتكرر تلقائيًا من الاثنين إلى الجمعة.</p>${canEditSchedule ? `<div style="display:flex;align-items:center;gap:12px;margin-top:10px"><button class="btn-primary" onclick="__saveSupervisionSchedule()">💾 حفظ جدول الإشراف</button>${isDirty ? '<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:5px 12px;border-radius:6px;font-weight:700">⚠️ توجد تعديلات غير محفوظة في الجدول</span>' : ''}</div>` : ''}</section>${todayBlock}${days}${historyBlock}`;
+        ${canRecord ? (x.checkedInAt
+          ? `<button type="button" class="btn-secondary" style="padding:4px 10px;font-size:11.5px;flex-shrink:0" onclick="__recordSupervision('${x.teacherId}',false)">إلغاء</button>`
+          : `<button type="button" class="btn-primary" style="padding:4px 10px;font-size:11.5px;flex-shrink:0" onclick="__recordSupervision('${x.teacherId}',true)">أدت الإشراف</button>`) : ''}
+      </div>`).join('')}</div>` : '<p class="muted" style="margin:0;font-size:12.5px">لا توجد مشرفات مكلفات لهذا اليوم.</p>'}
+  </div>`;
+
+  return `
+  <div class="sup-page">
+    <div class="sup-header">
+      <div>
+        <h2>🛡️ الإشراف اليومي</h2>
+        <div class="sup-header-sub">جدول أسبوعي ثابت يتكرر تلقائياً (الاثنين — الجمعة)</div>
+      </div>
+      <div class="sup-actions">
+        ${isDirty ? '<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:5px 10px;border-radius:8px;font-weight:700;font-size:12px">⚠️ تعديلات غير محفوظة</span>' : ''}
+        ${canEditSchedule ? `<button type="button" class="btn-primary" style="padding:7px 14px;font-size:13px" onclick="__saveSupervisionSchedule()">💾 حفظ جدول الإشراف</button>` : ''}
+        <button type="button" class="btn-secondary" style="padding:7px 12px;font-size:13px" onclick="__reloadSupervision()">🔄 تحديث</button>
+      </div>
+    </div>
+
+    <div class="sup-stats">
+      <div class="sup-stat sup-stat-pink"><div class="sup-stat-ico">🛡️</div><div><div class="sup-stat-val">${todayRows.length}</div><div class="sup-stat-lbl">مشرفات اليوم</div></div></div>
+      <div class="sup-stat sup-stat-violet"><div class="sup-stat-ico">👥</div><div><div class="sup-stat-val">${weekUniqueTeachers.size}</div><div class="sup-stat-lbl">المعلمات المكلفات</div></div></div>
+      <div class="sup-stat sup-stat-ok"><div class="sup-stat-ico">✅</div><div><div class="sup-stat-val">${checkedInCount}</div><div class="sup-stat-lbl">سجلن المباشرة</div></div></div>
+      <div class="sup-stat sup-stat-warn"><div class="sup-stat-ico">⏳</div><div><div class="sup-stat-val">${pendingCount}</div><div class="sup-stat-lbl">لم يسجلن الحضور</div></div></div>
+    </div>
+
+    ${todayBlock}
+
+    <div class="sup-card">
+      <div class="sup-card-head">
+        <h3 class="sup-card-title">📅 جدول الإشراف الأسبوعي</h3>
+        <span class="muted" style="font-size:11.5px">${canEditSchedule ? 'يمكنك إضافة أو حذف المشرفات ثم الضغط على «حفظ جدول الإشراف»' : 'للعرض فقط'}</span>
+      </div>
+      <div class="sup-table-wrap">
+        <table class="sup-table">
+          <thead>
+            <tr>
+              <th>اليوم</th>
+              <th>المشرفات المناوبات</th>
+              <th style="text-align:center">العدد</th>
+              <th>الحالة</th>
+              ${canEditSchedule ? '<th>إدارة</th>' : ''}
+            </tr>
+          </thead>
+          <tbody>${tableRowsHtml}</tbody>
+        </table>
+      </div>
+      <div class="sup-mobile-list">${mobileCardsHtml}</div>
+    </div>
+  </div>`;
 }
 
 /* ===== جدول الإشراف اليومي الأسبوعي (مصدره الخادم) ===== */
@@ -16974,7 +17103,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=179', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=180', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
