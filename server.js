@@ -2790,6 +2790,15 @@ app.put('/api/settings/:school', requireAuth, (req, res) => {
     if (req.session.role !== 'ADMIN' && req.session.role !== 'COUNSELOR') return res.status(403).json({ error: 'forbidden' });
     const data = req.body && req.body.data;
     if (!data || typeof data !== 'object' || Array.isArray(data)) return res.status(400).json({ error: 'invalid_payload' });
+    if (req.session.role !== 'ADMIN') {
+      const existing = (await db.getSchoolSettings(school)) || {};
+      const schedKeys = ['scheduleMode', 'scheduleTimes', 'scheduleTimesWinter', 'scheduleTimesSummer'];
+      for (const k of schedKeys) {
+        if (JSON.stringify(data[k] ?? null) !== JSON.stringify(existing[k] ?? null)) {
+          return res.status(403).json({ error: 'admin_only_schedule' });
+        }
+      }
+    }
     await db.setSchoolSettings(school, data);
     res.json({ ok: true });
   })().catch(fail(res));

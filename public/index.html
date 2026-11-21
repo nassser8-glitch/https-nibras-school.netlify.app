@@ -1605,9 +1605,9 @@ async function __restoreSession(){
 
 /* ===== إعدادات مشتركة (بداية العام الدراسي) ===== */
 const __schoolSettingsCache = {};
-async function __getSchoolSettings(school){
+async function __getSchoolSettings(school, force){
   if(!__serverEnabled()) return {};
-  if(__schoolSettingsCache[school]) return __schoolSettingsCache[school];
+  if(!force && __schoolSettingsCache[school]) return __schoolSettingsCache[school];
   try{
     const resp = await fetch(SETTINGS_API + school);
     if(resp.status === 401){ __handleAuthError(resp); return {}; }
@@ -3870,6 +3870,8 @@ function logout(){
     fetch(AUTH_API + 'logout', { method:'POST' }).catch(() => {});
     __sessionUser = null;
     __mirrorClear();
+    Object.keys(__schoolSettingsCache).forEach(k => delete __schoolSettingsCache[k]);
+    __lessonSettingsTried = false;
     localStorage.removeItem(SCHOOL_KEY);
     // لا نحذف نسخة المدرسة من الجهاز عند الخروج: قد تحوي تعديلات لم تُرفع بعد
     // (تكليف/نقطة/تحويل) ومسحُها هنا يمحو عملَ المعلمة للأبد إذا فشل رفعها.
@@ -13241,7 +13243,7 @@ const TIMETABLE_PERIOD_NAMES = ['الأولى','الثانية','الثالثة'
  */
 const LESSON_DOW_KEY = { 1:'MONDAY', 2:'TUESDAY', 3:'WEDNESDAY', 4:'THURSDAY', 5:'FRIDAY' };
 const LESSON_RECESS_AFTER = 3;
-// الجدول الرسمي: 7 حصص × 45 دقيقة من الاثنين إلى الجمعة، وفسحة 15 دقيقة (9:45 – 10:00) بعد الحصة الثالثة.
+// الجدول الرسمي (الصيفي الافتراضي): 7 حصص × 45 دقيقة من الاثنين إلى الجمعة، وفسحة 15 دقيقة (9:45 – 10:00) بعد الحصة الثالثة.
 const LESSON_DEFAULT_TIMES = {
   periods: [
     { start:'07:30', end:'08:15' },
@@ -13251,6 +13253,19 @@ const LESSON_DEFAULT_TIMES = {
     { start:'10:45', end:'11:30' },
     { start:'11:30', end:'12:15' },
     { start:'12:15', end:'13:00' }
+  ],
+  days: [1,2,3,4,5]
+};
+// التوقيت الشتوي الرسمي: 7 حصص × 45 دقيقة تبدأ 08:00 ص، والفسحة 10:15 – 10:30 بعد الحصة الثالثة.
+const LESSON_WINTER_DEFAULT_TIMES = {
+  periods: [
+    { start:'08:00', end:'08:45' },
+    { start:'08:45', end:'09:30' },
+    { start:'09:30', end:'10:15' },
+    { start:'10:30', end:'11:15' },
+    { start:'11:15', end:'12:00' },
+    { start:'12:00', end:'12:45' },
+    { start:'12:45', end:'13:30' }
   ],
   days: [1,2,3,4,5]
 };
@@ -13265,10 +13280,11 @@ function lessonMinToHm(min){
   const v = Math.max(0, Math.min(1439, Math.round(Number(min) || 0)));
   return String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0');
 }
-function lessonDefaultTimes(){
+function lessonDefaultTimes(mode){
+  const src = (mode === 'winter') ? LESSON_WINTER_DEFAULT_TIMES : LESSON_DEFAULT_TIMES;
   return {
-    periods: LESSON_DEFAULT_TIMES.periods.map(p => ({ start: lessonHmToMin(p.start), end: lessonHmToMin(p.end) })),
-    days: LESSON_DEFAULT_TIMES.days.slice()
+    periods: src.periods.map(p => ({ start: lessonHmToMin(p.start), end: lessonHmToMin(p.end) })),
+    days: src.days.slice()
   };
 }
 // تطبيع أوقات الإعدادات: تقبل النصوص HH:MM كما يحفظها المحرر، وتُعيد الدقائق.
@@ -13291,6 +13307,20 @@ function lessonNormalizeTimes(raw){
   if(!days.length) days = LESSON_DEFAULT_TIMES.days.slice();
   days = Array.from(new Set(days)).sort((a, b) => a - b);
   return { periods, days };
+}
+// استخراج إعدادات الدوامين (الصيفي والشتوي) بشكل مستقل مع الحفاظ على الإعدادات السابقة.
+function lessonResolveSettings(raw){
+  raw = (raw && typeof raw === 'object') ? raw : {};
+  const mode = (raw.scheduleMode === 'winter') ? 'winter' : 'summer';
+  const legacy = lessonNormalizeTimes(raw.scheduleTimes);
+  const summer = lessonNormalizeTimes(raw.scheduleTimesSummer)
+    || (mode === 'summer' ? legacy : null)
+    || lessonDefaultTimes('summer');
+  const winter = lessonNormalizeTimes(raw.scheduleTimesWinter)
+    || (mode === 'winter' ? legacy : null)
+    || lessonDefaultTimes('winter');
+  const active = (mode === 'winter') ? winter : summer;
+  return { mode, active, summer, winter };
 }
 function lessonMsToMin(ms){
   const d = new Date(ms);
@@ -13376,7 +13406,8 @@ function lessonCardBody(st, snap){
   let head = '', meta = '', timeLine = '', bar = '';
   if(st.kind === 'during'){
     head = snap.present ? '🟢 المعلمة داخل الحصة الآن' : '🟢 الحصة جارية حسب الجدول';
-    meta = metaFor(st, '');
+    const range = (st.startMin != null && st.endMin != null) ? (' (' + lessonMinToHm(st.startMin) + ' - ' + lessonMinToHm(st.endMin) + ')') : '';
+    meta = metaFor(st, '') + range;
     timeLine = '⏳ متبقٍ على نهاية الحصة: ' + lessonFmtDur(st.remainMs);
     bar = `<div style="height:6px;border-radius:999px;background:rgba(255,255,255,.8);margin-top:6px;overflow:hidden;border:1px solid ${c.bd}"><div style="height:100%;width:${Math.round(st.progress || 0)}%;background:${c.bar};border-radius:999px;transition:width 1s linear"></div></div>`;
   } else if(st.kind === 'before'){
@@ -13462,11 +13493,23 @@ function lessonPresent(snap){
   const ts = Date.parse(iso);
   return !!ts && (lessonNow() - ts) < 3 * 60 * 1000;
 }
-// وقت الحصص الفعلي من إعدادات القسم، أو الافتراضي عند غياب/فساد الإعداد.
-function lessonTimes(){
+// وقت الحصص الفعلي من إعدادات القسم (حسب نوع الدوام المختار)، أو الافتراضي عند غياب الإعداد.
+function lessonScheduleState(){
   let raw = null;
-  try{ raw = (__schoolSettingsCache[getActiveSchool()] || {}).scheduleTimes; }catch(e){}
-  return lessonNormalizeTimes(raw) || lessonDefaultTimes();
+  try{ raw = __schoolSettingsCache[getActiveSchool()] || {}; }catch(e){}
+  return lessonResolveSettings(raw);
+}
+function lessonTimes(mode){
+  const st = lessonScheduleState();
+  if(mode === 'winter') return st.winter;
+  if(mode === 'summer') return st.summer;
+  return st.active;
+}
+function lessonSerializeTimes(t){
+  return {
+    periods: (t.periods || []).map(p => ({ start: lessonMinToHm(p.start), end: lessonMinToHm(p.end) })),
+    days: (t.days && t.days.length) ? t.days.slice() : [1,2,3,4,5]
+  };
 }
 function lessonSnapshotFor(user, d){
   const now = lessonNow();
@@ -13510,15 +13553,21 @@ function lessonTick(){
   const now = lessonNow();
   const today = localDateKey(new Date(now));
   if(__lessonDayKey && __lessonDayKey !== today){ __lessonDayKey = today; renderApp(); return; }
+  const curTimes = lessonTimes();
   Object.keys(__lessonCards).forEach(key => {
     const snap = __lessonCards[key];
     const el = document.querySelector('[data-lesson-key="' + key + '"]');
     if(!el){ delete __lessonCards[key]; return; }
+    snap.times = curTimes.periods;
+    snap.days = curTimes.days;
     snap.present = lessonPresent(snap);
     el.innerHTML = lessonCardBody(lessonComputeState(snap, now), snap);
   });
   if(Date.now() - __lessonClockSyncedAt > 5 * 60 * 1000) lessonSyncClock();
-  if(Date.now() - __lessonPresenceAt > 60 * 1000) lessonRefreshPresence();
+  if(Date.now() - __lessonPresenceAt > 60 * 1000){
+    lessonRefreshPresence();
+    if(__serverEnabled()) __getSchoolSettings(getActiveSchool(), true).catch(() => {});
+  }
 }
 // نبضة تواجد خفيفة (حقل lastSeenAt فقط) — ليست حضورًا ولا تغيّر سجلات الغياب.
 function lessonPresencePing(){
@@ -13535,40 +13584,89 @@ function lessonStart(){
   if(!__lessonClockSyncedAt) lessonSyncClock();
   if(!__lessonPresenceAt) lessonRefreshPresence();
 }
-/* ===== محرر أوقات الحصص (المدير فقط) — يُحفظ في school_settings.scheduleTimes ===== */
+/* ===== محرر أوقات الحصص (المدير يعدّل، وبقية المستخدمين يشاهدون الأوقات المعتمدة) ===== */
 let __lessonSettingsLoading = false;
 let __lessonSettingsTried = false;
+let __lessonModeBusy = false;
 function lessonSettingsCard(){
   const u = currentUser();
-  if(!u || u.role !== 'ADMIN') return '';
-  const t = lessonTimes();
+  if(!u) return '';
+  const isAdmin = u.role === 'ADMIN';
+  const st = lessonScheduleState();
+  const mode = st.mode;
+  const t = st.active;
+  const modeLabel = mode === 'winter' ? '🌧️ الدوام الشتوي' : '☀️ الدوام الصيفي';
+  const modeSwitcher = isAdmin ? `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;padding:8px 10px;border-radius:10px;background:#fdf2f8;border:1px solid #fbcfe8">
+      <span style="font-size:12.5px;font-weight:700;color:#831843">نوع الدوام:</span>
+      <button type="button" id="lstModeWinter" class="${mode === 'winter' ? 'btn-primary' : 'btn-secondary'}" style="padding:6px 12px;font-size:12.5px" onclick="switchLessonMode('winter')">🌧️ الدوام الشتوي</button>
+      <button type="button" id="lstModeSummer" class="${mode === 'summer' ? 'btn-primary' : 'btn-secondary'}" style="padding:6px 12px;font-size:12.5px" onclick="switchLessonMode('summer')">☀️ الدوام الصيفي</button>
+    </div>` : `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;padding:8px 10px;border-radius:10px;background:#fdf2f8;border:1px solid #fbcfe8">
+      <span style="font-size:12.5px;font-weight:700;color:#831843">نوع الدوام المعتمد:</span>
+      <span class="badge" style="background:var(--primary,#be185d);color:#fff;font-size:12px;padding:4px 10px">${modeLabel}</span>
+      <span style="font-size:11.5px;color:#6b7280">(للعرض فقط — التعديل متاح للمدير فقط)</span>
+    </div>`;
   const rows = t.periods.map((p, i) => `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
-      <span style="width:104px;font-size:12.5px;font-weight:700">الحصة ${TIMETABLE_PERIOD_NAMES[i] || (i + 1)}</span>
-      <input id="lstStart${i + 1}" class="input" type="time" value="${lessonMinToHm(p.start)}" style="max-width:130px" />
-      <span class="muted">←</span>
-      <input id="lstEnd${i + 1}" class="input" type="time" value="${lessonMinToHm(p.end)}" style="max-width:130px" />
+      <span style="width:104px;font-size:12.5px;font-weight:700">الحصة ${TIMETABLE_PERIOD_NAMES[i] || (i + 1)} ←</span>
+      ${isAdmin
+        ? `<input id="lstStart${i + 1}" class="input" type="time" value="${lessonMinToHm(p.start)}" style="max-width:130px" />
+           <span class="muted">-</span>
+           <input id="lstEnd${i + 1}" class="input" type="time" value="${lessonMinToHm(p.end)}" style="max-width:130px" />`
+        : `<span class="badge" style="direction:ltr;background:#f9fafb;border:1px solid #e5e7eb;color:#111827;padding:4px 10px">${lessonMinToHm(p.start)} - ${lessonMinToHm(p.end)}</span>`}
     </div>${i === LESSON_RECESS_AFTER - 1 && t.periods[i + 1] ? `
     <div style="display:flex;align-items:center;gap:8px;margin:2px 0 8px;padding:6px 10px;border-radius:10px;background:#fef3c7;color:#92400e;font-size:12.5px;font-weight:700;flex-wrap:wrap">
-      ☕ الفسحة: ${lessonMinToHm(p.end)} ← ${lessonMinToHm(t.periods[i + 1].start)} <span style="font-weight:500">(ليست حصة دراسية)</span>
+      ☕ الفسحة: <span style="direction:ltr">${lessonMinToHm(p.end)} - ${lessonMinToHm(t.periods[i + 1].start)}</span> <span style="font-weight:500">(استراحة — ليست حصة دراسية)</span>
     </div>` : ''}`).join('');
   return `<div class="card" style="max-width:640px">
     <div style="font-size:14px;font-weight:700;margin-bottom:6px">🕒 أوقات الحصص</div>
-    <div style="font-size:12.5px;color:#6b7280;margin-bottom:12px">تُستخدم هذه الأوقات في العداد الذكي لحصص المعلمين، وتُحفظ كإعداد مشترك لكل القسم — الجدول الأسبوعي نفسه لا يتغيّر ولا تُنشأ بيانات مكررة.</div>
+    <div style="font-size:12.5px;color:#6b7280;margin-bottom:10px">تُستخدم هذه الأوقات في العداد الذكي لحصص المعلمات، وتُحفظ كإعداد مشترك لكل القسم — الجدول الأسبوعي نفسه لا يتغيّر ولا تُنشأ بيانات مكررة.</div>
+    ${modeSwitcher}
     <div id="lessonTimesErr" class="error-box" style="display:none"></div>
     ${rows}
-    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+    ${isAdmin ? `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
       <button class="btn-primary" onclick="saveLessonTimes()">💾 حفظ أوقات الحصص</button>
       <button class="btn-secondary" onclick="resetLessonTimes()">↺ استعادة الافتراضي</button>
-    </div>
+    </div>` : ''}
   </div>`;
+}
+async function switchLessonMode(mode){
+  const u = currentUser();
+  if(!u || u.role !== 'ADMIN'){ alert('يُسمح للمدير فقط'); return; }
+  if(__lessonModeBusy) return;
+  __lessonModeBusy = true;
+  try{
+    const targetMode = (mode === 'winter') ? 'winter' : 'summer';
+    const school = getActiveSchool();
+    const cur = await __getSchoolSettings(school, true);
+    const resolved = lessonResolveSettings(cur);
+    const activeTimes = lessonSerializeTimes(targetMode === 'winter' ? resolved.winter : resolved.summer);
+    const next = Object.assign({}, cur || {}, {
+      scheduleMode: targetMode,
+      scheduleTimes: activeTimes,
+      scheduleTimesWinter: lessonSerializeTimes(resolved.winter),
+      scheduleTimesSummer: lessonSerializeTimes(resolved.summer)
+    });
+    const ok = await __putSchoolSettings(school, next);
+    if(!ok){
+      const errEl = document.getElementById('lessonTimesErr');
+      if(errEl){ errEl.style.display = 'block'; errEl.textContent = 'تعذر تبديل نوع الدوام — تحقق من الاتصال والصلاحية'; }
+      return;
+    }
+    renderApp();
+    try{ lessonTick(); }catch(e){}
+  }finally{
+    __lessonModeBusy = false;
+  }
 }
 async function saveLessonTimes(){
   const u = currentUser();
   if(!u || u.role !== 'ADMIN'){ alert('يُسمح للمدير فقط'); return; }
   const errEl = document.getElementById('lessonTimesErr');
   const showErr = m => { if(errEl){ errEl.style.display = 'block'; errEl.textContent = m; } alert(m); };
-  const count = lessonTimes().periods.length;
+  const st = lessonScheduleState();
+  const count = st.active.periods.length;
   const periods = [];
   let prevEnd = -1;
   for(let i = 1; i <= count; i++){
@@ -13581,24 +13679,43 @@ async function saveLessonTimes(){
     prevEnd = e;
   }
   const school = getActiveSchool();
-  const cur = await __getSchoolSettings(school);
-  const ok = await __putSchoolSettings(school, Object.assign({}, cur || {}, { scheduleTimes: { periods, days: [1,2,3,4,5] } }));
+  const cur = await __getSchoolSettings(school, true);
+  const resolved = lessonResolveSettings(cur);
+  const mode = resolved.mode;
+  const saved = { periods, days: [1,2,3,4,5] };
+  const next = Object.assign({}, cur || {}, {
+    scheduleMode: mode,
+    scheduleTimes: saved,
+    scheduleTimesWinter: mode === 'winter' ? saved : lessonSerializeTimes(resolved.winter),
+    scheduleTimesSummer: mode === 'summer' ? saved : lessonSerializeTimes(resolved.summer)
+  });
+  const ok = await __putSchoolSettings(school, next);
   if(!ok){ if(errEl){ errEl.style.display = 'block'; errEl.textContent = 'تعذر حفظ الأوقات — تحقق من الاتصال والصلاحية'; } return; }
   if(errEl) errEl.style.display = 'none';
   renderApp();
+  try{ lessonTick(); }catch(e){}
   alert('تم حفظ أوقات الحصص ✅');
 }
 async function resetLessonTimes(){
   const u = currentUser();
   if(!u || u.role !== 'ADMIN'){ alert('يُسمح للمدير فقط'); return; }
-  if(!confirm('استعادة أوقات الحصص الافتراضية؟')) return;
   const school = getActiveSchool();
-  const cur = await __getSchoolSettings(school);
-  const def = lessonDefaultTimes();
-  const periods = def.periods.map(p => ({ start: lessonMinToHm(p.start), end: lessonMinToHm(p.end) }));
-  const ok = await __putSchoolSettings(school, Object.assign({}, cur || {}, { scheduleTimes: { periods, days: def.days } }));
+  const cur = await __getSchoolSettings(school, true);
+  const resolved = lessonResolveSettings(cur);
+  const mode = resolved.mode;
+  const label = mode === 'winter' ? 'الشتوي' : 'الصيفي';
+  if(!confirm('استعادة أوقات الدوام ' + label + ' الافتراضية؟')) return;
+  const def = lessonSerializeTimes(lessonDefaultTimes(mode));
+  const next = Object.assign({}, cur || {}, {
+    scheduleMode: mode,
+    scheduleTimes: def,
+    scheduleTimesWinter: mode === 'winter' ? def : lessonSerializeTimes(resolved.winter),
+    scheduleTimesSummer: mode === 'summer' ? def : lessonSerializeTimes(resolved.summer)
+  });
+  const ok = await __putSchoolSettings(school, next);
   if(!ok){ alert('تعذر الحفظ — تحقق من الاتصال والصلاحية'); return; }
   renderApp();
+  try{ lessonTick(); }catch(e){}
 }
 
 /* جميع المواد الممكنة حسب المراحل ليختار منها المعلم عند إدخال حصته */
@@ -16857,7 +16974,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=178', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=179', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
