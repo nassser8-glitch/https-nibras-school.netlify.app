@@ -67,9 +67,9 @@ test('1) واجهة الإشراف اليومي: ملخص 4 بطاقات، مش�
   assert.ok(out.includes('class="sup-stats"'), 'شريط الإحصائيات موجود');
   assert.ok(out.includes('مشرفات اليوم') && out.includes('المعلمات المكلفات') && out.includes('سجلن المباشرة') && out.includes('لم يسجلن الحضور'));
   assert.ok(out.includes('08:05'), 'وقت تسجيل الحضور ظاهر');
-  assert.ok(out.includes('class="sup-table"'), 'الجدول الأسبوعي المضغوط موجود');
-  assert.ok(out.includes('sup-row-today'), 'تمييز اليوم الحالي موجود');
-  assert.ok(out.includes('class="sup-mobile-day"'), 'بطاقات الجوال القابلة للطي موجودة');
+  assert.ok(out.includes('class="sup-days-grid"'), 'شبكة بطاقات الأيام (3 في كل صف) موجودة');
+  assert.ok(out.includes('sup-day-today'), 'تمييز اليوم الحالي موجود');
+  assert.ok(out.includes('sup-day-card'), 'بطاقات الأيام متساوية الارتفاع موجودة');
   assert.ok(out.includes('data-supervision-picker="1"'), 'منتقي إضافة المشرفات يعمل');
   assert.ok(out.includes('__saveSupervisionSchedule()'), 'زر حفظ الجدول موجود');
   assert.ok(out.includes('__recordSupervision(\'t2\',true)'), 'زر تسجيل المباشرة موجود');
@@ -77,7 +77,8 @@ test('1) واجهة الإشراف اليومي: ملخص 4 بطاقات، مش�
 
 test('2) الهوية الوردية لقسم البنات وتطابق Service Worker', () => {
   assert.ok(HTML.includes('.sup-header {') && HTML.includes('#db2777'));
+  assert.ok(HTML.includes('.sup-days-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr));'));
   const cacheM = SW.match(/const CACHE_NAME = 'nibras-v(\d+)'/);
   const regM = HTML.match(/register\('sw\.js\?v=(\d+)'/);
-  assert.ok(cacheM && regM && cacheM[1] === regM[1] && Number(cacheM[1]) >= 180);
+  assert.ok(cacheM && regM && cacheM[1] === regM[1] && Number(cacheM[1]) >= 181);
 });

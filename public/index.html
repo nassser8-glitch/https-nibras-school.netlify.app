@@ -318,21 +318,20 @@ window.__nibrasMarkBooted = function(){
   .sup-card-title { font-size:14.5px; font-weight:800; color:#831843; margin:0; }
   .sup-today-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:8px; }
   .sup-today-item { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border-radius:10px; background:#fdf2f8; border:1px solid #fbcfe8; font-size:12.5px; }
-  .sup-table-wrap { overflow-x:auto; }
-  .sup-table { width:100%; border-collapse:collapse; font-size:13px; }
-  .sup-table th { background:#fdf2f8; color:#831843; font-weight:800; font-size:12px; padding:8px 10px; text-align:right; border-bottom:2px solid #fbcfe8; white-space:nowrap; }
-  .sup-table td { padding:8px 10px; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
-  .sup-row-today { background:#fff5f9; }
-  .sup-row-today td:first-child { border-inline-start:4px solid #db2777; }
+  .sup-days-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; align-items:stretch; }
+  @media (max-width:960px){ .sup-days-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width:560px){ .sup-days-grid { grid-template-columns:1fr; } }
+  .sup-day-card { background:#fff; border:1px solid #fce7f3; border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; min-width:0; box-shadow:0 2px 8px rgba(190,24,93,.04); }
+  .sup-day-card.sup-day-today { background:#fff5f9; border-color:#db2777; border-inline-start:4px solid #db2777; box-shadow:0 4px 14px rgba(219,39,119,.12); }
+  .sup-day-head { display:flex; align-items:center; justify-content:space-between; gap:6px; padding-bottom:6px; border-bottom:1px dashed #fbcfe8; flex-wrap:wrap; }
+  .sup-day-title { font-size:14px; font-weight:800; color:#831843; display:flex; align-items:center; gap:6px; }
+  .sup-day-meta { display:flex; align-items:center; gap:5px; }
+  .sup-day-body { flex:1; display:flex; flex-direction:column; gap:6px; }
+  .sup-day-foot { margin-top:auto; padding-top:4px; }
   .sup-chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
   .sup-chip { display:inline-flex; align-items:center; gap:5px; background:#fdf2f8; border:1px solid #fbcfe8; color:#831843; padding:3px 9px; border-radius:999px; font-size:12px; font-weight:600; }
   .sup-chip-del { background:none; border:none; color:#be123c; cursor:pointer; font-weight:800; font-size:12px; padding:0 2px; line-height:1; }
   .sup-picker-box { background:#fdf2f8; border:1px dashed #f9a8d4; border-radius:10px; padding:10px; margin-top:6px; }
-  .sup-mobile-list { display:none; flex-direction:column; gap:8px; }
-  .sup-mobile-day { border:1px solid #fce7f3; border-radius:12px; background:#fff; padding:8px 12px; }
-  .sup-mobile-day[open] { border-color:#f472b6; }
-  .sup-mobile-day summary { cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px; font-weight:800; font-size:13.5px; color:#831843; list-style:none; }
-  @media (max-width:720px){ .sup-table-wrap { display:none; } .sup-mobile-list { display:flex; } }
 
   /* بطاقات مفكرتي الشخصية */
   .nb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
@@ -12978,27 +12977,24 @@ function renderSupervisionAdmin(){
     return { day, assignedList, available, pickerOpen, isToday, statusBadge, chipsHtml, addBtn };
   });
 
-  const tableRowsHtml = dayRowsData.map(r => `
-    <tr class="${r.isToday ? 'sup-row-today' : ''}" data-supervision-day="${r.day.dow}">
-      <td style="white-space:nowrap;font-weight:800;color:#831843">${escapeHtml(r.day.label)}${r.isToday ? ' <span class="badge" style="background:#db2777;color:#fff;font-size:10px;padding:2px 6px">اليوم</span>' : ''}</td>
-      <td>${r.chipsHtml}${r.pickerOpen && canEditSchedule ? renderPickerHtml(r.day, r.available) : ''}</td>
-      <td style="text-align:center;font-weight:800;color:#be185d">${r.assignedList.length}</td>
-      <td style="white-space:nowrap">${r.statusBadge}</td>
-      ${canEditSchedule ? `<td style="white-space:nowrap">${r.addBtn}</td>` : ''}
-    </tr>`).join('');
-
-  const mobileCardsHtml = dayRowsData.map(r => `
-    <details class="sup-mobile-day" data-supervision-day-mobile="${r.day.dow}" ${r.isToday || r.pickerOpen ? 'open' : ''}>
-      <summary>
-        <span>${escapeHtml(r.day.label)}${r.isToday ? ' <span class="badge" style="background:#db2777;color:#fff;font-size:10px">اليوم</span>' : ''}</span>
-        <span style="display:flex;align-items:center;gap:6px">${r.statusBadge}<span class="badge" style="background:#fdf2f8;color:#be185d">${r.assignedList.length}</span></span>
-      </summary>
-      <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+  const dayCardsHtml = dayRowsData.map(r => `
+    <div class="sup-day-card${r.isToday ? ' sup-day-today' : ''}" data-supervision-day="${r.day.dow}">
+      <div class="sup-day-head">
+        <div class="sup-day-title">
+          <span>🛡️ ${escapeHtml(r.day.label)}</span>
+          ${r.isToday ? '<span class="badge" style="background:#db2777;color:#fff;font-size:10px;padding:2px 7px">اليوم</span>' : ''}
+        </div>
+        <div class="sup-day-meta">
+          ${r.statusBadge}
+          <span class="badge" style="background:#fdf2f8;color:#be185d;border:1px solid #fbcfe8">${r.assignedList.length}</span>
+        </div>
+      </div>
+      <div class="sup-day-body">
         ${r.chipsHtml}
-        ${r.addBtn ? `<div>${r.addBtn}</div>` : ''}
         ${r.pickerOpen && canEditSchedule ? renderPickerHtml(r.day, r.available) : ''}
       </div>
-    </details>`).join('');
+      ${canEditSchedule ? `<div class="sup-day-foot">${r.addBtn}</div>` : ''}
+    </div>`).join('');
 
   const todayBlock = `
   <div class="sup-card">
@@ -13046,21 +13042,7 @@ function renderSupervisionAdmin(){
         <h3 class="sup-card-title">📅 جدول الإشراف الأسبوعي</h3>
         <span class="muted" style="font-size:11.5px">${canEditSchedule ? 'يمكنك إضافة أو حذف المشرفات ثم الضغط على «حفظ جدول الإشراف»' : 'للعرض فقط'}</span>
       </div>
-      <div class="sup-table-wrap">
-        <table class="sup-table">
-          <thead>
-            <tr>
-              <th>اليوم</th>
-              <th>المشرفات المناوبات</th>
-              <th style="text-align:center">العدد</th>
-              <th>الحالة</th>
-              ${canEditSchedule ? '<th>إدارة</th>' : ''}
-            </tr>
-          </thead>
-          <tbody>${tableRowsHtml}</tbody>
-        </table>
-      </div>
-      <div class="sup-mobile-list">${mobileCardsHtml}</div>
+      <div class="sup-days-grid">${dayCardsHtml}</div>
     </div>
   </div>`;
 }
@@ -17103,7 +17085,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=180', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=181', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
