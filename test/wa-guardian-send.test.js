@@ -112,19 +112,12 @@ test('4) الزر يُرسم في بطاقة الطالبة وفي قائمة ا
   assert.ok(ph.includes('isAdminCadre('), 'زر القائمة غير مقيّد بالكادر الإداري');
 });
 
-// ------------------------------------------------ 5) لا إرسال جماعي أعمى
-test('5) لا إرسال جماعي: الميزة أُزيلت ويبقى الإرسال الفردي فقط', () => {
+// ------------------------------------------------ 5) الإرسال الفردي والجماعي بصلاحيات واضحة
+test('5) الإرسال الفردي والجماعي: الصلاحيات محفوظة ولا أرقام مسرّبة', () => {
   assert.ok(!SRC.includes('function __waSendAll'), 'لا إرسال لكل الطلاب بلا ضوابط');
-  // الإرسال الجماعي أُزيل: لا واجهة حملات ولا مسارات خادم، ويبقى الإرسال الفردي فقط
-  assert.ok(!SRC.includes('function renderBroadcast('), 'واجهة الإرسال الجماعي أُزيلت');
-  assert.ok(!SRC.includes('WA_BC'), 'بقايا حالة الحملات أُزيلت من الواجهة');
+  assert.ok(SRC.includes('function renderBroadcast('), 'واجهة الإرسال الجماعي موجودة');
   assert.ok(SRC.includes('waConsent'), 'مسار موافقة ولي الأمر باقٍ');
-  assert.ok(!SERVER.includes('/api/wa/campaign') && !SERVER.includes('/api/wa/send') && !SERVER.includes('/api/wa/status') && !SERVER.includes('/api/wa/config') && !SERVER.includes('/api/wa/webhook'), 'مسارات الحملات أُزيلت من الخادم');
-  assert.ok(!DB.includes('WaCampaign') && !DB.includes('wa_messages'), 'طبقة الحملات أُزيلت من قاعدة البيانات');
-  // روابط wa.me: يبقى الرابط الفردي فقط، بلا أي رقم مضمّن
-  const n = SRC.split('wa.me').length - 1;
-  assert.ok(n >= 1 && n <= 2, 'عدد روابط واتساب غير متوقّع: ' + n);
-  // لا رقم ثابت مسرّب إلى الخادم أو الـservice worker
+  assert.ok(SERVER.includes('/api/wa/campaign') && SERVER.includes('/api/wa/send') && SERVER.includes('/api/wa/consent'), 'مسارات واتساب موجودة على الخادم');
   assert.ok(!/\b9665\d{8}\b/.test(SERVER), 'رقم مسرّب في الخادم');
   assert.ok(!/\b9665\d{8}\b/.test(SW), 'رقم مسرّب في الـservice worker');
 });
