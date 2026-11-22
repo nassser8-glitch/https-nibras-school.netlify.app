@@ -375,6 +375,25 @@ window.__nibrasMarkBooted = function(){
   .ann-student-item { background:#fdf2f8; border:1px solid #fbcfe8; border-radius:12px; padding:11px 13px; cursor:pointer; transition:transform .12s, box-shadow .12s; display:flex; flex-direction:column; gap:6px; }
   .ann-student-item:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(219,39,119,.12); background:#fff; }
   .ann-student-item.ann-item-unread { background:#fff; border-color:#db2777; box-shadow:0 4px 12px rgba(219,39,119,.1); }
+  @keyframes annGlowPulsePink {
+    0%, 100% { box-shadow:0 0 0 0 rgba(219,39,119,.32), 0 6px 18px rgba(219,39,119,.16); }
+    50% { box-shadow:0 0 18px 4px rgba(219,39,119,.42), 0 8px 24px rgba(219,39,119,.24); }
+  }
+  @keyframes annBellPulse {
+    0%, 100% { transform:scale(1) rotate(0deg); }
+    20% { transform:scale(1.12) rotate(10deg); }
+    40% { transform:scale(1.12) rotate(-10deg); }
+    60% { transform:scale(1.06) rotate(4deg); }
+    80% { transform:scale(1) rotate(0deg); }
+  }
+  .ann-indicator { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; background:linear-gradient(135deg,#fff,#fdf2f8); border:1.5px solid #fbcfe8; border-radius:16px; padding:12px 16px; margin-bottom:10px; cursor:pointer; text-decoration:none; transition:transform .15s; }
+  .ann-indicator:hover { transform:translateY(-1px); }
+  .ann-indicator.ann-indicator-glow { border-color:#db2777; background:linear-gradient(135deg,#fff,#fce7f3); animation:annGlowPulsePink 2.4s ease-in-out infinite; }
+  .ann-indicator-left { display:flex; align-items:center; gap:10px; }
+  .ann-bell-wrap { position:relative; width:40px; height:40px; border-radius:12px; background:#fdf2f8; border:1px solid #fbcfe8; display:flex; align-items:center; justify-content:center; font-size:21px; flex-shrink:0; }
+  .ann-indicator-glow .ann-bell-wrap { background:#db2777; border-color:#be185d; animation:annBellPulse 2.4s ease-in-out infinite; }
+  .ann-bell-count { position:absolute; top:-6px; right:-6px; min-width:20px; height:20px; padding:0 5px; border-radius:999px; background:#ef4444; color:#fff; font-size:11px; font-weight:900; display:flex; align-items:center; justify-content:center; border:2px solid #fff; box-shadow:0 2px 6px rgba(239,68,68,.45); }
+  .ann-new-pill { background:linear-gradient(135deg,#ef4444,#f59e0b); color:#fff; padding:3px 10px; border-radius:999px; font-size:11.5px; font-weight:900; box-shadow:0 2px 8px rgba(239,68,68,.3); }
 
   /* بطاقات مفكرتي الشخصية */
   .nb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
@@ -6086,13 +6105,32 @@ function renderStudentAnnouncementsBanner(){
     setTimeout(() => __loadSchoolAnnouncements(false), 0);
   }
   const list = __schoolAnnCache.list || [];
-  if(!list.length) return '';
   const unread = studentUnreadAnnCount();
+  const indicatorHtml = `<a href="#/school-announcements" class="ann-indicator ${unread > 0 ? 'ann-indicator-glow' : ''}">
+    <div class="ann-indicator-left">
+      <div class="ann-bell-wrap">
+        <span>🔔</span>
+        ${unread > 0 ? `<span class="ann-bell-count">${unread}</span>` : ''}
+      </div>
+      <div>
+        <div style="font-size:15px;font-weight:900;color:#831843;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span>إعلانات المدرسة</span>
+          ${unread > 0 ? '<span class="ann-new-pill">إعلان جديد</span>' : ''}
+        </div>
+        <div style="font-size:12px;color:#64748b;font-weight:700">
+          ${unread > 0 ? ('لديكِ ' + unread + ' إعلان جديد بانتظار القراءة') : (list.length ? ('عرض جميع الإعلانات (' + list.length + ')') : 'لا توجد إعلانات جديدة حالياً')}
+        </div>
+      </div>
+    </div>
+    <span class="ann-btn-soft">فتح الإعلانات ←</span>
+  </a>`;
+  if(!list.length) return indicatorHtml;
   const top = list.slice(0, 3);
-  return `<div class="ann-student-banner">
+  return `${indicatorHtml}
+  <div class="ann-student-banner">
     <div class="ann-student-banner-head">
       <div class="ann-student-banner-title">
-        <span>📢 إعلانات المدرسة</span>
+        <span>📢 أحدث إعلانات المدرسة</span>
         ${unread > 0 ? `<span class="ann-badge ann-badge-new">${unread} جديد</span>` : ''}
       </div>
       <a href="#/school-announcements" class="ann-btn-soft">عرض جميع الإعلانات (${list.length})</a>
@@ -17752,7 +17790,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=184', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=185', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

@@ -3411,18 +3411,31 @@ function stripAnnouncementAttachment(a) {
     createdAt: a.createdAt, updatedAt: a.updatedAt,
   };
 }
-async function resolveStudentAnnouncementContext(school, userId) {
+async function resolveStudentAnnouncementContext(school, session) {
   const rec = await db.getSchoolData(school);
   const data = (rec && rec.data) ? rec.data : {};
   const students = Array.isArray(data.students) ? data.students : [];
   const grades = Array.isArray(data.grades) ? data.grades : [];
   const classes = Array.isArray(data.classes) ? data.classes : [];
-  const student = students.find(s => s && String(s.id) === String(userId)) || null;
+  const uid = String((session && (session.user_id || session.userId)) || '').trim();
+  const uname = String((session && session.username) || '').trim().toLowerCase();
+  const extraSid = String((session && session.data && session.data.studentId) || '').trim();
+  const student = students.find(s => s && (
+    (uid && String(s.id) === uid) ||
+    (extraSid && String(s.id) === extraSid) ||
+    (uname && s.username && String(s.username).trim().toLowerCase() === uname)
+  )) || null;
   const gradeMap = {};
   grades.forEach(g => { if (g && g.id) gradeMap[g.id] = g; });
   const classMap = {};
   classes.forEach(c => { if (c && c.id) classMap[c.id] = c; });
-  return { data, student, gradeMap, classMap };
+  return { data, student, gradeMap, classMap, uid };
+}
+function studentMatchesAnnouncement(ann, ctx) {
+  if (!ann) return false;
+  if (String(ann.targetType || 'all') === 'all') return true;
+  if (!ctx || !ctx.student) return false;
+  return schoolAnn.matchesTarget(ann, ctx.student, ctx.gradeMap, ctx.classMap);
 }
 function checkAnnouncementSchoolAccess(req, res) {
   const reqSchool = String(req.params.school || '').toUpperCase();
@@ -3444,14 +3457,14 @@ app.get('/api/announcements/:school', requireAuth, (req, res) => {
     if (role === 'ADMIN') {
       return res.json({ ok: true, announcements: schoolAnn.sortAnnouncements(rows).map(stripAnnouncementAttachment) });
     }
-    const ctx = await resolveStudentAnnouncementContext(school, req.session.userId);
-    if (!ctx.student) return res.json({ ok: true, announcements: [] });
+    const ctx = await resolveStudentAnnouncementContext(school, req.session);
     const today = todayAnnouncementDate();
     const visible = rows.filter(a =>
       schoolAnn.isAnnouncementActiveOnDate(a, today) &&
-      schoolAnn.matchesTarget(a, ctx.student, ctx.gradeMap, ctx.classMap)
+      studentMatchesAnnouncement(a, ctx)
     );
-    const viewedIds = new Set(await db.listStudentAnnouncementViewIds(school, ctx.student.id));
+    const viewKey = (ctx.student && ctx.student.id) || ctx.uid;
+    const viewedIds = new Set(viewKey ? await db.listStudentAnnouncementViewIds(school, viewKey) : []);
     const list = schoolAnn.sortAnnouncements(visible).map(a =>
       Object.assign(stripAnnouncementAttachment(a), { viewed: viewedIds.has(a.id) })
     );
@@ -3468,9 +3481,9 @@ app.get('/api/announcements/:school/:id', requireAuth, (req, res) => {
     const ann = await db.getSchoolAnnouncement(school, req.params.id);
     if (!ann) return res.status(404).json({ error: 'not_found' });
     if (role === 'STUDENT') {
-      const ctx = await resolveStudentAnnouncementContext(school, req.session.userId);
+      const ctx = await resolveStudentAnnouncementContext(school, req.session);
       const today = todayAnnouncementDate();
-      if (!ctx.student || !schoolAnn.isAnnouncementActiveOnDate(ann, today) || !schoolAnn.matchesTarget(ann, ctx.student, ctx.gradeMap, ctx.classMap)) {
+      if (!schoolAnn.isAnnouncementActiveOnDate(ann, today) || !studentMatchesAnnouncement(ann, ctx)) {
         return res.status(403).json({ error: 'forbidden' });
       }
     }
@@ -3487,7 +3500,7 @@ app.post('/api/announcements/:school', requireAuth, (req, res) => {
     if (!v.ok) return res.status(400).json({ error: v.error });
     const id = 'ann_' + crypto.randomBytes(8).toString('hex');
     const created = await db.createSchoolAnnouncement(Object.assign({
-      id, school, createdBy: req.session.userId, createdByName: req.session.name || '',
+      id, school, createdBy: req.session.user_id || req.session.userId || '', createdByName: req.session.name || '',
     }, v.value));
     res.json({ ok: true, announcement: stripAnnouncementAttachment(created) });
   })().catch(fail(res));
@@ -3534,17 +3547,17 @@ app.post('/api/announcements/:school/:id/view', requireAuth, (req, res) => {
     if (req.session.role !== 'STUDENT') return res.status(403).json({ error: 'forbidden' });
     const ann = await db.getSchoolAnnouncement(school, req.params.id);
     if (!ann) return res.status(404).json({ error: 'not_found' });
-    const ctx = await resolveStudentAnnouncementContext(school, req.session.userId);
+    const ctx = await resolveStudentAnnouncementContext(school, req.session);
     const today = todayAnnouncementDate();
-    if (!ctx.student || !schoolAnn.isAnnouncementActiveOnDate(ann, today) || !schoolAnn.matchesTarget(ann, ctx.student, ctx.gradeMap, ctx.classMap)) {
+    if (!schoolAnn.isAnnouncementActiveOnDate(ann, today) || !studentMatchesAnnouncement(ann, ctx)) {
       return res.status(403).json({ error: 'forbidden' });
     }
-    const cls = ctx.student.classId ? ctx.classMap[ctx.student.classId] : null;
+    const cls = (ctx.student && ctx.student.classId) ? ctx.classMap[ctx.student.classId] : null;
     const view = await db.recordSchoolAnnouncementView({
       announcementId: ann.id,
       school,
-      studentId: ctx.student.id,
-      studentName: ctx.student.name || req.session.name || '',
+      studentId: (ctx.student && ctx.student.id) || ctx.uid,
+      studentName: (ctx.student && ctx.student.name) || req.session.name || '',
       className: cls ? cls.name : '',
     });
     res.json({ ok: true, view });

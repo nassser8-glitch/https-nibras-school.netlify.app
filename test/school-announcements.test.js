@@ -67,6 +67,10 @@ test('1. إنشاء إعلان ونشره والتحقق من صحة المدخ�
 
 test('2. ظهور الإعلان في حساب الطالب واللوحة الرئيسية', () => {
   assert.match(indexSrc, /renderStudentAnnouncementsBanner\(\)/);
+  assert.match(indexSrc, /ann-indicator-glow/);
+  assert.match(indexSrc, /ann-bell-count/);
+  assert.match(indexSrc, /ann-new-pill/);
+  assert.match(serverSrc, /session\.user_id \|\| session\.userId/);
   assert.match(indexSrc, /href:'#\/school-announcements'/);
   assert.match(indexSrc, /renderSchoolAnnouncementsStudent\(\)/);
   assert.match(indexSrc, /renderSchoolAnnouncementsAdmin\(\)/);
