@@ -414,50 +414,48 @@ window.__nibrasMarkBooted = function(){
   .wp-check-btn { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:9px; border:1px solid #fbcfe8; background:#fdf2f8; color:#831843; font-size:12px; font-weight:800; cursor:pointer; }
   .wp-check-btn.checked { background:#16a34a; color:#fff; border-color:#15803d; }
 
-  /* واجهة الخطة الأسبوعية الاحترافية للطلاب — البنات */
-  .wp-stu-shell { display:flex; flex-direction:column; gap:12px; }
-  .wp-stu-topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; background:linear-gradient(135deg,#fff,#fdf2f8); border:1px solid #fbcfe8; border-radius:16px; padding:10px 16px; box-shadow:0 4px 14px rgba(219,39,119,.07); }
-  .wp-stu-user { display:flex; align-items:center; gap:10px; }
-  .wp-stu-avatar { width:42px; height:42px; border-radius:50%; background:#fce7f3; color:#be185d; border:2px solid #f9a8d4; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:900; flex-shrink:0; }
-  .wp-stu-brand { display:flex; align-items:center; gap:8px; font-weight:900; color:#831843; font-size:18px; }
-  .wp-stu-topactions { display:flex; align-items:center; gap:8px; }
-  .wp-stu-bell { position:relative; width:38px; height:38px; border-radius:12px; background:#fff; border:1px solid #fbcfe8; display:flex; align-items:center; justify-content:center; text-decoration:none; font-size:18px; }
+  /* واجهة الخطة الأسبوعية الاحترافية للطلاب — البنات (بطاقات الأيام المتتابعة) */
+  .wp-stu-shell { display:flex; flex-direction:column; gap:10px; max-width:100%; overflow-x:hidden; }
+  .wp-compact-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:linear-gradient(135deg,#fff,#fdf2f8); border:1.5px solid #fbcfe8; border-inline-start:5px solid #db2777; border-radius:14px; padding:10px 14px; box-shadow:0 3px 12px rgba(219,39,119,.07); }
+  .wp-compact-title { font-size:17px; font-weight:900; color:#831843; margin:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .wp-compact-meta { font-size:12px; color:#64748b; font-weight:700; display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:2px; }
+  .wp-stu-topactions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .wp-stu-bell { position:relative; width:36px; height:36px; border-radius:10px; background:#fff; border:1px solid #fbcfe8; display:flex; align-items:center; justify-content:center; text-decoration:none; font-size:17px; }
   .wp-stu-bell-dot { position:absolute; top:-5px; right:-5px; min-width:18px; height:18px; padding:0 4px; border-radius:999px; background:#ef4444; color:#fff; font-size:10px; font-weight:900; display:flex; align-items:center; justify-content:center; border:2px solid #fff; }
-  .wp-stu-banner { background:linear-gradient(135deg,#fdf2f8 0%,#fce7f3 55%,#fbcfe8 100%); border:1.5px solid #f9a8d4; border-radius:18px; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; box-shadow:0 6px 20px rgba(219,39,119,.09); }
-  .wp-stu-banner-title { font-size:22px; font-weight:900; color:#831843; margin:0; display:flex; align-items:center; gap:8px; }
-  .wp-stu-banner-sub { font-size:13px; font-weight:700; color:#9d174d; margin-top:4px; }
-  .wp-stu-chips { display:flex; gap:8px; flex-wrap:wrap; }
-  .wp-stu-chip { background:#fff; border:1px solid #fbcfe8; color:#831843; border-radius:10px; padding:5px 11px; font-size:12px; font-weight:800; box-shadow:0 2px 6px rgba(190,24,93,.06); }
-  .wp-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
-  @media (max-width:980px){ .wp-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-  @media (max-width:600px){ .wp-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-  .wp-kpi { background:#fff; border:1px solid #fce7f3; border-radius:14px; padding:11px 13px; display:flex; align-items:center; justify-content:space-between; gap:8px; box-shadow:0 3px 10px rgba(190,24,93,.05); }
-  .wp-kpi-prog { grid-column:span 1; background:linear-gradient(135deg,#fff,#fdf2f8); border:1.5px solid #fbcfe8; border-radius:14px; padding:10px 14px; display:flex; flex-direction:column; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(190,24,93,.05); }
-  .wp-prog-bar { width:100%; height:9px; border-radius:999px; background:#fce7f3; overflow:hidden; }
+  .wp-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; align-items:stretch; }
+  @media (max-width:960px){ .wp-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+  @media (max-width:560px){ .wp-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  .wp-kpi { background:#fff; border:1px solid #fce7f3; border-radius:12px; padding:9px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px; box-shadow:0 2px 8px rgba(190,24,93,.04); min-height:58px; }
+  .wp-kpi-prog { background:linear-gradient(135deg,#fff,#fdf2f8); border:1.5px solid #fbcfe8; border-radius:12px; padding:9px 12px; display:flex; flex-direction:column; justify-content:center; gap:5px; box-shadow:0 2px 8px rgba(190,24,93,.05); min-height:58px; }
+  .wp-prog-bar { width:100%; height:8px; border-radius:999px; background:#fce7f3; overflow:hidden; }
   .wp-prog-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,#db2777,#f472b6); transition:width .25s ease; }
-  .wp-controls-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:#fff; border:1px solid #fce7f3; border-radius:14px; padding:10px 14px; }
-  .wp-table-wrap { background:#fff; border:1.5px solid #fbcfe8; border-radius:16px; overflow:hidden; box-shadow:0 6px 22px rgba(190,24,93,.07); }
-  .wp-table { width:100%; border-collapse:collapse; }
-  .wp-table thead th { background:linear-gradient(180deg,#be185d,#9d174d); color:#fff; font-size:13px; font-weight:800; padding:11px 10px; text-align:center; white-space:nowrap; }
-  .wp-table tbody td { padding:10px; border-bottom:1px solid #fce7f3; font-size:13px; color:#1e293b; text-align:center; vertical-align:middle; }
-  .wp-table tbody tr:hover { background:#fff7fb; }
-  .wp-day-pill { display:inline-flex; flex-direction:column; align-items:center; gap:2px; background:#fdf2f8; border:1px solid #fbcfe8; border-radius:10px; padding:5px 10px; min-width:92px; }
-  .wp-day-pill strong { font-size:13px; color:#9d174d; }
-  .wp-day-pill span { font-size:10.5px; color:#64748b; font-weight:700; }
-  .wp-sub-btn { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:10px; font-size:12.5px; font-weight:800; border:1px solid transparent; cursor:pointer; }
-  .wp-done-box { width:28px; height:28px; border-radius:8px; border:2px solid #fbcfe8; background:#fff; color:#fff; font-size:15px; font-weight:900; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
-  .wp-done-box.checked { background:#16a34a; border-color:#15803d; }
-  .wp-bottom-dock { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
-  @media (max-width:720px){ .wp-bottom-dock { grid-template-columns:1fr; } }
-  .wp-dock-btn { display:flex; align-items:center; justify-content:center; gap:8px; padding:11px 14px; border-radius:14px; border:1.5px solid #fbcfe8; background:#fff; color:#831843; font-size:13.5px; font-weight:900; cursor:pointer; box-shadow:0 3px 10px rgba(190,24,93,.06); }
+  .wp-controls-bar { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; background:#fff; border:1px solid #fce7f3; border-radius:12px; padding:8px 12px; }
+  .wp-days-stack { display:flex; flex-direction:column; gap:10px; }
+  .wp-day-card { background:#fff; border:1.5px solid #fbcfe8; border-radius:15px; overflow:hidden; box-shadow:0 4px 14px rgba(190,24,93,.05); }
+  .wp-day-card.wp-day-alt { background:#fffafd; }
+  .wp-day-card-head { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; padding:9px 14px; background:linear-gradient(90deg,#fdf2f8,#fce7f3); border-bottom:1px solid #fbcfe8; }
+  .wp-day-card-title { font-size:14.5px; font-weight:900; color:#831843; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .wp-day-card-dates { font-size:12px; font-weight:700; color:#9d174d; background:#fff; border:1px solid #fbcfe8; border-radius:999px; padding:2px 10px; }
+  .wp-rows-list { display:flex; flex-direction:column; }
+  .wp-subject-row { display:grid; grid-template-columns:150px 1.4fr 1fr 1fr auto 44px; gap:10px; align-items:center; padding:9px 14px; border-bottom:1px solid #fce7f3; transition:background .12s; }
+  .wp-subject-row:last-child { border-bottom:none; }
+  .wp-subject-row:hover { background:#fdf2f8; }
+  .wp-subject-row.wp-row-done { background:#f0fdf4; }
+  .wp-row-cell { font-size:12.5px; color:#1e293b; line-height:1.45; min-width:0; word-break:break-word; }
+  .wp-row-lbl { display:none; font-size:11px; font-weight:800; color:#9d174d; margin-inline-end:4px; }
+  .wp-sub-btn { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:10px; font-size:12px; font-weight:800; border:1px solid transparent; cursor:pointer; max-width:100%; }
+  .wp-big-check { width:36px; height:36px; border-radius:10px; border:2px solid #f472b6; background:#fff; color:#fff; font-size:18px; font-weight:900; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:transform .1s, background .15s; }
+  .wp-big-check:hover { transform:scale(1.06); }
+  .wp-big-check.checked { background:#16a34a; border-color:#15803d; }
+  .wp-bottom-dock { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+  .wp-dock-btn { display:flex; align-items:center; justify-content:center; gap:8px; padding:10px 12px; border-radius:12px; border:1.5px solid #fbcfe8; background:#fff; color:#831843; font-size:13px; font-weight:900; cursor:pointer; box-shadow:0 2px 8px rgba(190,24,93,.05); }
   .wp-dock-btn:hover { background:#fdf2f8; }
-  @media (max-width:700px){
-    .wp-table thead { display:none; }
-    .wp-table, .wp-table tbody, .wp-table tr, .wp-table td { display:block; width:100%; }
-    .wp-table tr { padding:10px; border-bottom:2px solid #fce7f3; }
-    .wp-table tbody td { border:none; padding:5px 4px; text-align:right; display:flex; align-items:center; justify-content:space-between; gap:8px; }
-    .wp-table tbody td::before { content:attr(data-label); font-size:11.5px; font-weight:800; color:#9d174d; flex-shrink:0; }
+  @media (max-width:860px){
+    .wp-subject-row { grid-template-columns:1fr; gap:6px; padding:10px 12px; position:relative; }
+    .wp-row-lbl { display:inline; }
+    .wp-row-check-wrap { position:absolute; top:10px; left:12px; }
   }
+  @media (max-width:720px){ .wp-bottom-dock { grid-template-columns:1fr; } }
 
   /* بطاقات مفكرتي الشخصية */
   .nb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
@@ -7063,60 +7061,103 @@ function renderWeeklyPlanStudent(){
   const weekText = (typeof schoolWeekInfo === 'function' ? schoolWeekInfo().label : '') || __wpCache.weekStart;
   const unreadAnn = (typeof studentUnreadAnnCount === 'function') ? studentUnreadAnnCount() : 0;
 
+  const orderedDays = [...__WP_DAYS];
+  if(filteredTasks.some(t => t.dayKey === 'sun')) orderedDays.push({ key:'sun', label:'الأحد', offset:0 });
+  const dayCardsHtml = orderedDays.map((dayObj, dIdx) => {
+    const dayTasks = filteredTasks.filter(t => t.dayKey === dayObj.key);
+    if(!dayTasks.length) return '';
+    const dDate = dayTasks[0].date || wpDateForDay(__wpCache.weekStart, dayObj.key);
+    const hDate = wpHijriOfDate(dDate);
+    return `<div class="wp-day-card ${dIdx % 2 === 1 ? 'wp-day-alt' : ''}">
+      <div class="wp-day-card-head">
+        <div class="wp-day-card-title">
+          <span>📅 ${escapeHtml(dayObj.label)}</span>
+          <span class="wp-day-card-dates">${hDate ? escapeHtml(hDate) + ' · ' : ''}${escapeHtml(dDate)}</span>
+        </div>
+        <span class="ann-badge ann-badge-pin">${dayTasks.length} مهام</span>
+      </div>
+      <div class="wp-rows-list">
+        ${dayTasks.map(t => {
+          const st = wpSubjectStyle(t.subject);
+          const done = !!__wpCache.progress[t.planId + '|' + t.itemId];
+          const hasFiles = !!(t.hasAttachment || (t.links && t.links.length));
+          return `<div class="wp-subject-row ${done ? 'wp-row-done' : ''}">
+            <div class="wp-row-cell">
+              <button type="button" class="wp-sub-btn" style="background:${st.bg};color:${st.color};border-color:${st.border}" onclick="wpOpenTaskDetailModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">
+                ${st.icon} ${escapeHtml(t.subject)}
+              </button>
+            </div>
+            <div class="wp-row-cell" style="font-weight:700">
+              <span class="wp-row-lbl">📖 الدرس:</span>
+              <span>${escapeHtml(t.lesson || t.assessments || '—')}</span>
+              ${(t.lesson && t.assessments) ? `<div style="font-size:11px;color:#7c3aed;margin-top:2px">🧪 ${escapeHtml(t.assessments)}</div>` : ''}
+            </div>
+            <div class="wp-row-cell">
+              <span class="wp-row-lbl">📝 الواجب:</span>
+              <span>${escapeHtml(t.homework || '—')}</span>
+            </div>
+            <div class="wp-row-cell" style="color:#475569">
+              <span class="wp-row-lbl">💬 ملاحظات:</span>
+              <span>${escapeHtml(t.notes || '—')}</span>
+            </div>
+            <div class="wp-row-cell" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+              ${t.hasAttachment ? `<button type="button" class="ann-btn-soft" style="padding:3px 8px;font-size:11.5px" onclick="wpOpenAttachmentModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')" title="عرض المرفق">📎</button>` : ''}
+              ${(t.links && t.links.length) ? `<a href="${escapeHtml(t.links[0])}" target="_blank" rel="noopener noreferrer" class="ann-btn-soft" style="padding:3px 8px;font-size:11.5px" title="رابط تعليمي">🔗</a>` : ''}
+              ${!hasFiles ? '<span style="color:#cbd5e1;font-size:11px">—</span>' : ''}
+            </div>
+            <div class="wp-row-check-wrap" style="display:flex;justify-content:center">
+              <button type="button" class="wp-big-check ${done ? 'checked' : ''}" onclick="wpToggleStudentProgress('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')" title="${done ? 'تم الإنجاز' : 'تحديد كمنجز'}">${done ? '✓' : ''}</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
   return `<div class="wp-stu-shell">
-    <div class="wp-stu-topbar">
-      <div class="wp-stu-user">
-        <div class="wp-stu-avatar">👧</div>
-        <div>
-          <div style="font-size:14.5px;font-weight:900;color:#831843">مرحباً بكِ يا ${escapeHtml(user.name || 'طالبة')}</div>
-          <div style="font-size:12px;color:#64748b;font-weight:700">${escapeHtml(classText)}</div>
+    <div class="wp-compact-head">
+      <div>
+        <h2 class="wp-compact-title">
+          <span>📅 الخطة الأسبوعية</span>
+          <span class="ann-badge ann-badge-pin">${escapeHtml(weekText)}</span>
+          <span class="ann-badge ann-badge-draft">${escapeHtml(classText)}</span>
+        </h2>
+        <div class="wp-compact-meta">
+          <span>مرحباً بكِ يا ${escapeHtml(user.name || 'طالبة')} · جميع المواد الدراسية في مكان واحد</span>
         </div>
       </div>
-      <div class="wp-stu-brand">📖 نبراس <span style="font-size:11px;color:#be185d;font-weight:800">NIBRAS</span></div>
       <div class="wp-stu-topactions">
         <a href="#/school-announcements" class="wp-stu-bell" title="إعلانات المدرسة">
           🔔${unreadAnn > 0 ? `<span class="wp-stu-bell-dot">${unreadAnn}</span>` : ''}
         </a>
+        <button type="button" class="ann-btn-soft" onclick="__loadWeeklyPlans(true)">🔄 تحديث</button>
         <a href="#/" class="ann-btn-soft">🏠 الرئيسية</a>
-      </div>
-    </div>
-
-    <div class="wp-stu-banner">
-      <div>
-        <h2 class="wp-stu-banner-title">📅 الخطة الأسبوعية</h2>
-        <div class="wp-stu-banner-sub">جميع المواد الدراسية في مكان واحد</div>
-      </div>
-      <div class="wp-stu-chips">
-        <span class="wp-stu-chip">✅ دروسي</span>
-        <span class="wp-stu-chip">✅ واجباتي</span>
-        <span class="wp-stu-chip">✅ تقويماتي</span>
       </div>
     </div>
 
     <div class="wp-kpis">
       <div class="wp-kpi">
-        <div><div style="font-size:11.5px;color:#64748b;font-weight:700">الأسبوع الدراسي</div><div style="font-size:16px;font-weight:900;color:#be185d">${escapeHtml(weekText)}</div></div>
-        <span style="font-size:22px">🗓️</span>
+        <div><div style="font-size:11px;color:#64748b;font-weight:700">الدروس</div><div style="font-size:19px;font-weight:900;color:#0284c7">${lessonsCount}</div></div>
+        <span style="font-size:20px">📚</span>
       </div>
       <div class="wp-kpi">
-        <div><div style="font-size:11.5px;color:#64748b;font-weight:700">دروس</div><div style="font-size:20px;font-weight:900;color:#0284c7">${lessonsCount}</div></div>
-        <span style="font-size:22px">📚</span>
+        <div><div style="font-size:11px;color:#64748b;font-weight:700">الواجبات</div><div style="font-size:19px;font-weight:900;color:#d97706">${hwCount}</div></div>
+        <span style="font-size:20px">📖</span>
       </div>
       <div class="wp-kpi">
-        <div><div style="font-size:11.5px;color:#64748b;font-weight:700">واجبات</div><div style="font-size:20px;font-weight:900;color:#d97706">${hwCount}</div></div>
-        <span style="font-size:22px">📖</span>
+        <div><div style="font-size:11px;color:#64748b;font-weight:700">التقويمات</div><div style="font-size:19px;font-weight:900;color:#7c3aed">${assessCount}</div></div>
+        <span style="font-size:20px">📋</span>
       </div>
       <div class="wp-kpi">
-        <div><div style="font-size:11.5px;color:#64748b;font-weight:700">تقويم / اختبار</div><div style="font-size:20px;font-weight:900;color:#7c3aed">${assessCount}</div></div>
-        <span style="font-size:22px">📋</span>
+        <div><div style="font-size:11px;color:#64748b;font-weight:700">المهام المنجزة</div><div style="font-size:19px;font-weight:900;color:#15803d">${doneTasks}/${totalTasks}</div></div>
+        <span style="font-size:20px">✅</span>
       </div>
       <div class="wp-kpi-prog">
-        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:900;color:#831843">
-          <span>🏆 تقدّمكِ هذا الأسبوع</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;font-weight:900;color:#831843">
+          <span>🏆 نسبة الإنجاز</span>
           <span>%${pct}</span>
         </div>
         <div class="wp-prog-bar"><div class="wp-prog-fill" style="width:${pct}%"></div></div>
-        <div style="font-size:11px;color:#64748b;font-weight:700">${doneTasks} من ${totalTasks} مهام</div>
       </div>
     </div>
 
@@ -7136,61 +7177,8 @@ function renderWeeklyPlanStudent(){
 
     ${__wpUi.viewMode === 'daily' ? `<div class="wp-tabs">${__WP_DAYS.map(day => `<button type="button" class="wp-tab ${__wpUi.dayKey===day.key?'active':''}" onclick="__wpUi.dayKey='${day.key}';renderApp()">${day.label}</button>`).join('')}</div>` : ''}
 
-    <div class="wp-table-wrap">
-      ${filteredTasks.length ? `<table class="wp-table">
-        <thead>
-          <tr>
-            <th>اليوم والتاريخ</th>
-            <th>المادة</th>
-            <th>الدرس / المطلوب</th>
-            <th>الواجب</th>
-            <th>ملاحظات</th>
-            <th>الإنجاز</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${(() => {
-            const orderedDays = [...__WP_DAYS];
-            if(filteredTasks.some(t => t.dayKey === 'sun')) orderedDays.push({ key:'sun', label:'الأحد', offset:0 });
-            return orderedDays.map(dayObj => {
-              const dayTasks = filteredTasks.filter(t => t.dayKey === dayObj.key);
-              if(!dayTasks.length) return '';
-              const dDate = dayTasks[0].date || wpDateForDay(__wpCache.weekStart, dayObj.key);
-              const hDate = wpHijriOfDate(dDate);
-              return dayTasks.map((t, idx) => {
-                const st = wpSubjectStyle(t.subject);
-                const done = !!__wpCache.progress[t.planId + '|' + t.itemId];
-                return `<tr>
-                  ${idx === 0 ? `<td data-label="اليوم والتاريخ" rowspan="${dayTasks.length}" class="wp-day-cell">
-                    <div class="wp-day-pill">
-                      <strong>${escapeHtml(dayObj.label)}</strong>
-                      ${hDate ? `<span>${escapeHtml(hDate)}</span>` : ''}
-                      ${dDate ? `<span>${escapeHtml(dDate)}</span>` : ''}
-                    </div>
-                  </td>` : ''}
-                  <td data-label="المادة">
-                    <button type="button" class="wp-sub-btn" style="background:${st.bg};color:${st.color};border-color:${st.border}" onclick="wpOpenTaskDetailModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">
-                      ${st.icon} ${escapeHtml(t.subject)}
-                    </button>
-                  </td>
-                  <td data-label="الدرس / المطلوب" style="font-weight:700">
-                    ${escapeHtml(t.lesson || t.assessments || '—')}
-                    ${(t.lesson && t.assessments) ? `<div style="font-size:11px;color:#7c3aed;margin-top:2px">🧪 ${escapeHtml(t.assessments)}</div>` : ''}
-                  </td>
-                  <td data-label="الواجب">${escapeHtml(t.homework || '—')}</td>
-                  <td data-label="ملاحظات">
-                    ${escapeHtml(t.notes || '—')}
-                    ${(t.hasAttachment || (t.links && t.links.length)) ? `<div style="margin-top:3px"><button type="button" class="ann-btn-soft" style="padding:2px 8px;font-size:11px" onclick="wpOpenTaskDetailModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">📎 مرفقات</button></div>` : ''}
-                  </td>
-                  <td data-label="الإنجاز">
-                    <button type="button" class="wp-done-box ${done ? 'checked' : ''}" onclick="wpToggleStudentProgress('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')" title="${done ? 'تم الإنجاز' : 'تحديد كمنجز'}">${done ? '✓' : ''}</button>
-                  </td>
-                </tr>`;
-              }).join('');
-            }).join('');
-          })()}
-        </tbody>
-      </table>` : '<div style="text-align:center;color:#64748b;padding:30px;font-weight:700">لا توجد خطط أسبوعية منشورة لهذا الاختيار بعد</div>'}
+    <div class="wp-days-stack">
+      ${dayCardsHtml || '<div class="ann-card" style="text-align:center;color:#64748b;padding:30px;font-weight:700">لا توجد خطط أسبوعية منشورة لهذا الاختيار بعد</div>'}
     </div>
 
     <div class="wp-bottom-dock">
@@ -18705,7 +18693,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=191', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=192', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

@@ -96,11 +96,14 @@ test('8 & 9. أرشفة الأسابيع دون تداخل، الظهور في �
 
   assert.match(indexSrc, /renderStudentWeeklyPlanBanner\(\)/);
   assert.match(indexSrc, /wp-stu-shell/);
-  assert.match(indexSrc, /wp-table/);
   assert.match(indexSrc, /wpOpenArchiveModal/);
   assert.match(indexSrc, /wpOpenFilesModal/);
   assert.match(indexSrc, /wpOpenNotesModal/);
-  assert.match(indexSrc, /rowspan="\$\{dayTasks\.length\}"/);
+  assert.match(indexSrc, /wp-compact-head/);
+  assert.match(indexSrc, /wp-days-stack/);
+  assert.match(indexSrc, /wp-day-card/);
+  assert.match(indexSrc, /wp-subject-row/);
+  assert.match(indexSrc, /wp-big-check/);
   assert.deepEqual(wp.WEEK_DAYS.map(d => d.key), ['mon', 'tue', 'wed', 'thu', 'fri']);
   assert.match(indexSrc, /href:'#\/weekly-plan'/);
   if (db.SCHOOLS[0] === 'GIRLS') {
