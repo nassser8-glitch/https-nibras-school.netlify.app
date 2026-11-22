@@ -1,0 +1,104 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const ROOT = path.resolve(__dirname, '..');
+const wp = require(path.join(ROOT, 'weekly-plans.js'));
+const db = require(path.join(ROOT, 'db.js'));
+const serverSrc = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+const indexSrc = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+
+const sampleSchoolData = {
+  grades: [{ id: 'g1', name: 'الأول المتوسط' }],
+  classes: [
+    { id: 'c1', gradeId: 'g1', name: 'أ', teacherIds: ['t_math', 't_sci', 't_ar'] },
+    { id: 'c2', gradeId: 'g1', name: 'ب', teacherIds: ['t_math'] },
+  ],
+  users: [
+    { id: 't_math', name: 'أ. معلم الرياضيات', role: 'TEACHER', active: true },
+    { id: 't_sci', name: 'أ. معلم العلوم', role: 'TEACHER', active: true },
+    { id: 't_ar', name: 'أ. معلم اللغة العربية', role: 'TEACHER', active: true },
+  ],
+  timetable: {
+    t_math: { sun: { 1: { classId: 'c1', subject: 'الرياضيات' } } },
+    t_sci: { sun: { 2: { classId: 'c1', subject: 'العلوم' } } },
+    t_ar: { mon: { 1: { classId: 'c1', subject: 'لغتي' } } },
+  },
+};
+
+test('1-5. تجميع خطط الرياضيات والعلوم والعربية في بوابة موحدة لطالب الفصل نفسه فقط', () => {
+  const vMath = wp.validateWeeklyPlanPayload({
+    classId: 'c1', subject: 'الرياضيات', weekStart: '2026-11-22', status: 'published',
+    items: [
+      { id: 'm1', dayKey: 'sun', lesson: 'المعادلات', homework: 'ص 12', links: ['https://example.com/1'] },
+      { id: 'm2', dayKey: 'sun', lesson: 'مراجعة إضافية', homework: 'ورقة عمل', attachment: { name: 'ws.pdf', type: 'application/pdf', data: 'data:application/pdf;base64,JVBERi0xLjQ=' } },
+    ],
+  });
+  const vSci = wp.validateWeeklyPlanPayload({
+    classId: 'c1', subject: 'العلوم', weekStart: '2026-11-22', status: 'published',
+    items: [{ id: 's1', dayKey: 'sun', lesson: 'الخلية', assessments: 'اختبار قصير' }],
+  });
+  const vAr = wp.validateWeeklyPlanPayload({
+    classId: 'c1', subject: 'لغتي', weekStart: '2026-11-22', status: 'published',
+    items: [{ id: 'a1', dayKey: 'mon', lesson: 'الفاعل', notes: 'إحضار الدفتر' }],
+  });
+  assert.equal(vMath.ok && vSci.ok && vAr.ok, true);
+
+  const allPlans = [
+    Object.assign({ id: 'p_math', teacherId: 't_math', teacherName: 'أ. معلم الرياضيات' }, vMath.value),
+    Object.assign({ id: 'p_sci', teacherId: 't_sci', teacherName: 'أ. معلم العلوم' }, vSci.value),
+    Object.assign({ id: 'p_ar', teacherId: 't_ar', teacherName: 'أ. معلم اللغة العربية' }, vAr.value),
+  ];
+
+  // طالب من الفصل c1 يرى الخطط الثلاث (4 مهام) مجتمعة في بوابة واحدة
+  const unifiedC1 = wp.aggregateUnifiedStudentPlan(allPlans, 'c1', '2026-11-22');
+  assert.equal(unifiedC1.subjects.length, 3);
+  assert.equal(unifiedC1.tasks.length, 4);
+
+  // طالب من فصل آخر c2 لا يرى خطط c1
+  const unifiedC2 = wp.aggregateUnifiedStudentPlan(allPlans, 'c2', '2026-11-22');
+  assert.equal(unifiedC2.tasks.length, 0);
+});
+
+test('6. صلاحيات المعلم: يقتصر على فصوله المسندة وخططه فقط', () => {
+  const assignedSci = wp.extractTeacherAssignments(sampleSchoolData, 't_sci');
+  assert.equal(assignedSci.classIds.has('c1'), true);
+  assert.equal(assignedSci.classIds.has('c2'), false);
+  assert.match(serverSrc, /if \(!assigned\.classIds\.has\(String\(v\.value\.classId\)\)\)/);
+  assert.match(serverSrc, /if \(role === 'TEACHER' && String\(existing\.teacherId\) !== uid\)/);
+});
+
+test('7. متابعة الإنجاز في الخادم واللوحة الموحدة ولوحة المدير', () => {
+  assert.equal(typeof db.setWeeklyPlanItemProgress, 'function');
+  assert.equal(typeof db.listStudentWeeklyProgress, 'function');
+  assert.equal(typeof db.listPlanWeeklyProgress, 'function');
+  assert.match(serverSrc, /app\.post\('\/api\/weekly-plans\/:school\/:id\/items\/:itemId\/progress'/);
+  assert.match(serverSrc, /app\.get\('\/api\/weekly-plans\/:school\/:id\/progress'/);
+
+  const cov = wp.buildAdminCoverageSummary(sampleSchoolData, [
+    { id: 'p_math', classId: 'c1', subject: 'الرياضيات', teacherId: 't_math', weekStart: '2026-11-22', status: 'published', items: [{ id: '1' }, { id: '2' }] },
+  ], '2026-11-22');
+  assert.equal(cov.classesWithPlans, 1);
+  assert.equal(cov.teachersPublished.length, 1);
+  assert.equal(cov.teachersPending.length, 2);
+  assert.equal(cov.totalPublishedTasks, 2);
+});
+
+test('8 & 9. أرشفة الأسابيع دون تداخل، الظهور في الصفحة الرئيسية، والهوية البصرية', () => {
+  const week1 = { id: 'p1', classId: 'c1', subject: 'الرياضيات', weekStart: '2026-11-15', status: 'published', items: [{ id: 'x1', dayKey: 'sun', lesson: 'قديم' }] };
+  const week2 = { id: 'p2', classId: 'c1', subject: 'الرياضيات', weekStart: '2026-11-22', status: 'published', items: [{ id: 'x2', dayKey: 'sun', lesson: 'جديد' }] };
+  const aggW1 = wp.aggregateUnifiedStudentPlan([week1, week2], 'c1', '2026-11-15');
+  const aggW2 = wp.aggregateUnifiedStudentPlan([week1, week2], 'c1', '2026-11-22');
+  assert.deepEqual(aggW1.tasks.map(t => t.lesson), ['قديم']);
+  assert.deepEqual(aggW2.tasks.map(t => t.lesson), ['جديد']);
+
+  assert.match(indexSrc, /renderStudentWeeklyPlanBanner\(\)/);
+  assert.match(indexSrc, /href:'#\/weekly-plan'/);
+  if (db.SCHOOLS[0] === 'GIRLS') {
+    assert.match(indexSrc, /\.wp-tab\.active \{ background:#db2777/);
+  } else {
+    assert.match(indexSrc, /\.wp-tab\.active \{ background:#2563eb/);
+  }
+});

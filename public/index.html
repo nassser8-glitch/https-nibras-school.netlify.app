@@ -395,6 +395,25 @@ window.__nibrasMarkBooted = function(){
   .ann-bell-count { position:absolute; top:-6px; right:-6px; min-width:20px; height:20px; padding:0 5px; border-radius:999px; background:#ef4444; color:#fff; font-size:11px; font-weight:900; display:flex; align-items:center; justify-content:center; border:2px solid #fff; box-shadow:0 2px 6px rgba(239,68,68,.45); }
   .ann-new-pill { background:linear-gradient(135deg,#ef4444,#f59e0b); color:#fff; padding:3px 10px; border-radius:999px; font-size:11.5px; font-weight:900; box-shadow:0 2px 8px rgba(239,68,68,.3); }
 
+  /* الخطة الأسبوعية — هوية قسم البنات (وردي وأبيض) */
+  .wp-page { display:flex; flex-direction:column; gap:12px; }
+  .wp-header { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:#fff; border:1px solid #fce7f3; border-inline-start:5px solid #db2777; border-radius:14px; padding:14px 16px; box-shadow:0 3px 12px rgba(190,24,93,.06); }
+  .wp-header h2 { margin:0; font-size:18px; font-weight:900; color:#831843; }
+  .wp-hero-card { background:linear-gradient(135deg,#fff,#fdf2f8); border:1.5px solid #fbcfe8; border-inline-start:5px solid #db2777; border-radius:16px; padding:14px 16px; margin-bottom:12px; box-shadow:0 6px 20px rgba(219,39,119,.08); display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .wp-tabs { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .wp-tab { background:#fff; color:#831843; border:1px solid #fbcfe8; border-radius:999px; padding:6px 13px; font-size:12.5px; font-weight:800; cursor:pointer; text-decoration:none; }
+  .wp-tab.active { background:#db2777; color:#fff; border-color:#be185d; }
+  .wp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:10px; }
+  .wp-task { background:#fff; border:1px solid #fce7f3; border-radius:13px; padding:12px 14px; box-shadow:0 2px 8px rgba(190,24,93,.04); display:flex; flex-direction:column; gap:7px; }
+  .wp-task.wp-done { background:#f0fdf4; border-color:#86efac; }
+  .wp-sub-pill { display:inline-flex; align-items:center; gap:5px; padding:2px 10px; border-radius:999px; background:#fdf2f8; color:#9d174d; border:1px solid #fbcfe8; font-size:12px; font-weight:800; }
+  .wp-field { font-size:12.5px; color:#1e293b; line-height:1.55; }
+  .wp-field b { color:#831843; }
+  .wp-day-block { background:#fff; border:1px solid #fce7f3; border-radius:14px; padding:12px 14px; box-shadow:0 2px 10px rgba(190,24,93,.04); }
+  .wp-day-head { font-size:14.5px; font-weight:900; color:#831843; padding-bottom:8px; margin-bottom:10px; border-bottom:1px dashed #fbcfe8; display:flex; align-items:center; justify-content:space-between; }
+  .wp-check-btn { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:9px; border:1px solid #fbcfe8; background:#fdf2f8; color:#831843; font-size:12px; font-weight:800; cursor:pointer; }
+  .wp-check-btn.checked { background:#16a34a; color:#fff; border-color:#15803d; }
+
   /* بطاقات مفكرتي الشخصية */
   .nb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
   .nb-card { background:linear-gradient(180deg,#fffdf5,#fff9e6); border:1px solid #fde68a; border-radius:12px; padding:12px 14px; box-shadow:0 2px 6px rgba(0,0,0,.04); }
@@ -3977,6 +3996,7 @@ function logout(){
     Object.keys(__schoolSettingsCache).forEach(k => delete __schoolSettingsCache[k]);
     __lessonSettingsTried = false;
     __schoolAnnReset();
+    __weeklyPlanReset();
     localStorage.removeItem(SCHOOL_KEY);
     // لا نحذف نسخة المدرسة من الجهاز عند الخروج: قد تحوي تعديلات لم تُرفع بعد
     // (تكليف/نقطة/تحويل) ومسحُها هنا يمحو عملَ المعلمة للأبد إذا فشل رفعها.
@@ -5042,6 +5062,7 @@ function renderLayout(user, hash){
     ]},
     { title:'المدرسة', items:[
       { href:'#/school-announcements', key:'school-announcements', label:'إعلانات المدرسة' + (studentUnreadAnnCount() > 0 ? ' (' + studentUnreadAnnCount() + ')' : ''), icon:'📢' },
+      { href:'#/weekly-plan', key:'weekly-plan', label:'الخطة الأسبوعية', icon:'📅' },
       { href:'#/student-leaders', key:'student-leaders', label:'الأوائل', icon:'🏆' },
     ]},
     { title:'النظام', items:[
@@ -5081,6 +5102,7 @@ function renderLayout(user, hash){
       { href:'#/transfers', key:'transfers', label:'التحويلات', icon:'↔' },
       { href:'#/reports', key:'reports', label:'التقارير', icon:'▥' },
       (user.role === 'TEACHER' || user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT' || user.role === 'ADMINISTRATIVE') ? { href:'#/assignments', key:'assignments', label:'التكليفات', icon:'📝' } : null,
+      (user.role === 'TEACHER') ? { href:'#/weekly-plan', key:'weekly-plan', label:'خطتي الأسبوعية', icon:'📅' } : (user.role === 'ADMIN' ? { href:'#/weekly-plan', key:'weekly-plan', label:'الخطة الأسبوعية', icon:'📅' } : null),
     ]},
     { title:'المدرسة', items:[
       (user.role !== 'STUDENT') ? { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉', badge: user.role === 'AGENT' ? pendingPartRequests() : 0 } : null,
@@ -5148,6 +5170,7 @@ function renderLayout(user, hash){
   let pageHtml = '';
   if(page === 'home') pageHtml = (user.role === 'STUDENT') ? renderStudentDashboard() : renderDashboard();
   else if(page === 'school-announcements' && (user.role === 'ADMIN' || user.role === 'STUDENT')) pageHtml = (user.role === 'ADMIN') ? renderSchoolAnnouncementsAdmin() : renderSchoolAnnouncementsStudent();
+  else if(page === 'weekly-plan' && (user.role === 'TEACHER' || user.role === 'ADMIN' || user.role === 'STUDENT')) pageHtml = renderWeeklyPlanPage(user);
   else if(page === 'students') pageHtml = renderStudents();
   else if(page === 'attendance') pageHtml = renderAttendance();
   else if(page === 'notes'){
@@ -6679,6 +6702,604 @@ function renderSchoolAnnouncementsAdmin(){
   </div>`;
 }
 
+/* ===== الخطة الأسبوعية — قسم البنات ===== */
+const __WP_DAYS = [
+  { key:'sun', label:'الأحد', offset:0 },
+  { key:'mon', label:'الإثنين', offset:1 },
+  { key:'tue', label:'الثلاثاء', offset:2 },
+  { key:'wed', label:'الأربعاء', offset:3 },
+  { key:'thu', label:'الخميس', offset:4 },
+];
+const __wpCache = {
+  loaded:false, loading:false, school:'', weekStart:'', weeks:[],
+  plans:[], tasks:[], subjects:[], progress:{}, coverage:null, error:''
+};
+const __wpUi = {
+  viewMode:'weekly', dayKey:'sun', subject:'all', adminTab:'classes',
+  editorOpen:false, editId:'', classId:'', subjectName:'', title:'', weekStart:'', weekLabel:'', items:[]
+};
+
+function __weeklyPlanReset(){
+  __wpCache.loaded = false; __wpCache.loading = false; __wpCache.school = '';
+  __wpCache.weekStart = ''; __wpCache.weeks = []; __wpCache.plans = [];
+  __wpCache.tasks = []; __wpCache.subjects = []; __wpCache.progress = {}; __wpCache.coverage = null;
+}
+function wpCurrentSundayKey(){
+  const d = new Date(Date.now() + 5 * 3600 * 1000);
+  const sun = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - d.getUTCDay()));
+  return sun.toISOString().slice(0, 10);
+}
+function wpTodayDayKey(){
+  const g = new Date(Date.now() + 5 * 3600 * 1000).getUTCDay();
+  const map = { 0:'sun', 1:'mon', 2:'tue', 3:'wed', 4:'thu' };
+  return map[g] || 'sun';
+}
+function wpDateForDay(weekStart, dayKey){
+  const day = __WP_DAYS.find(x => x.key === dayKey);
+  if(!weekStart || !day) return '';
+  const t = Date.parse(weekStart + 'T00:00:00Z');
+  if(!Number.isFinite(t)) return '';
+  return new Date(t + day.offset * 86400000).toISOString().slice(0, 10);
+}
+async function __loadWeeklyPlans(force, weekStartOverride){
+  const school = getActiveSchool();
+  const targetWeek = weekStartOverride !== undefined ? weekStartOverride : __wpCache.weekStart;
+  if(!force && __wpCache.loaded && __wpCache.school === school && __wpCache.weekStart === targetWeek) return;
+  if(__wpCache.loading) return;
+  __wpCache.loading = true;
+  __wpCache.error = '';
+  try {
+    const qs = targetWeek ? ('?weekStart=' + encodeURIComponent(targetWeek)) : '';
+    const res = await fetch('/api/weekly-plans/' + encodeURIComponent(school) + qs);
+    const j = await res.json().catch(() => ({}));
+    if(res.ok && j && j.ok){
+      __wpCache.loaded = true;
+      __wpCache.school = school;
+      __wpCache.weekStart = j.weekStart || targetWeek || wpCurrentSundayKey();
+      __wpCache.weeks = Array.isArray(j.weeks) ? j.weeks : [];
+      __wpCache.plans = Array.isArray(j.plans) ? j.plans : [];
+      __wpCache.tasks = Array.isArray(j.tasks) ? j.tasks : [];
+      __wpCache.subjects = Array.isArray(j.subjects) ? j.subjects : [];
+      __wpCache.progress = (j.progress && typeof j.progress === 'object') ? j.progress : {};
+      __wpCache.coverage = j.coverage || null;
+      if(!__wpUi.dayKey) __wpUi.dayKey = wpTodayDayKey();
+    } else {
+      __wpCache.error = (j && j.error) || 'load_failed';
+      __wpCache.loaded = true;
+    }
+  } catch(e){
+    __wpCache.error = 'network_error';
+    __wpCache.loaded = true;
+  } finally {
+    __wpCache.loading = false;
+    try{ renderApp(); }catch(_){}
+  }
+}
+function renderStudentWeeklyPlanBanner(){
+  if(!__wpCache.loaded && !__wpCache.loading){
+    setTimeout(() => __loadWeeklyPlans(false), 0);
+  }
+  const tasks = __wpCache.tasks || [];
+  const subs = __wpCache.subjects || [];
+  const doneCount = tasks.filter(t => __wpCache.progress[t.planId + '|' + t.itemId]).length;
+  const todayKey = wpTodayDayKey();
+  const todayCount = tasks.filter(t => t.dayKey === todayKey).length;
+  return `<div class="wp-hero-card">
+    <div>
+      <div style="font-size:16px;font-weight:900;color:#831843;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>📅 الخطة الأسبوعية</span>
+        ${subs.length ? `<span class="ann-badge ann-badge-pin">${subs.length} مواد منشورة</span>` : ''}
+      </div>
+      <div style="font-size:12.5px;color:#475569;margin-top:4px;font-weight:700">
+        ${tasks.length
+          ? `مهام اليوم: ${todayCount} · إجمالي الأسبوع: ${tasks.length} · المنجز: ${doneCount}/${tasks.length}`
+          : 'بوابة موحدة لخطط جميع المواد الدراسية في فصلكِ'}
+      </div>
+    </div>
+    <a href="#/weekly-plan" class="ann-btn-primary" style="text-decoration:none">فتح الخطة الأسبوعية ←</a>
+  </div>`;
+}
+async function wpToggleStudentProgress(planId, itemId){
+  const school = getActiveSchool();
+  const key = planId + '|' + itemId;
+  const next = !__wpCache.progress[key];
+  __wpCache.progress[key] = next;
+  renderApp();
+  try {
+    const res = await fetch('/api/weekly-plans/' + encodeURIComponent(school) + '/' + encodeURIComponent(planId) + '/items/' + encodeURIComponent(itemId) + '/progress', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ completed: next }),
+    });
+    if(!res.ok){ __wpCache.progress[key] = !next; renderApp(); }
+  } catch(_){ __wpCache.progress[key] = !next; renderApp(); }
+}
+async function wpOpenAttachmentModal(planId, itemId){
+  const school = getActiveSchool();
+  closeAnnModal();
+  const overlay = document.createElement('div');
+  overlay.id = 'annModalOverlay';
+  overlay.className = 'modal-overlay';
+  overlay.onclick = (e) => { if(e.target === overlay) closeAnnModal(); };
+  overlay.innerHTML = `<div class="modal-box" style="max-width:680px;width:96vw;border-top:5px solid #db2777"><div style="padding:24px;text-align:center;color:#64748b">جاري تحميل المرفق...</div></div>`;
+  document.body.appendChild(overlay);
+  try {
+    const res = await fetch('/api/weekly-plans/' + encodeURIComponent(school) + '/' + encodeURIComponent(planId) + '/attachment/' + encodeURIComponent(itemId));
+    const j = await res.json();
+    if(!res.ok || !j.ok || !j.attachmentData) throw new Error('not_found');
+    const box = overlay.querySelector('.modal-box');
+    const isImg = String(j.attachmentType || '').startsWith('image/');
+    if(box) box.innerHTML = `
+      <div class="modal-head">
+        <h3>📎 ${escapeHtml(j.attachmentName || 'مرفق')}</h3>
+        <button type="button" class="modal-close" onclick="closeAnnModal()">✕</button>
+      </div>
+      ${isImg
+        ? `<div style="text-align:center"><img src="${j.attachmentData}" style="max-width:100%;max-height:460px;border-radius:10px" /></div>`
+        : `<iframe src="${j.attachmentData}" style="width:100%;height:420px;border:1px solid #fbcfe8;border-radius:8px"></iframe>`}
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+        <a href="${j.attachmentData}" download="${escapeHtml(j.attachmentName || 'attachment')}" class="ann-btn-primary" style="text-decoration:none">⬇️ تحميل</a>
+        <button type="button" class="ann-btn-soft" onclick="closeAnnModal()">إغلاق</button>
+      </div>`;
+  } catch(_){
+    const box = overlay.querySelector('.modal-box');
+    if(box) box.innerHTML = `<div style="padding:20px;text-align:center;color:#be123c">تعذر تحميل المرفق</div>`;
+  }
+}
+function wpRenderTaskCard(t, isStudent){
+  const done = isStudent && !!__wpCache.progress[t.planId + '|' + t.itemId];
+  const dayObj = __WP_DAYS.find(x => x.key === t.dayKey) || { label: t.dayKey };
+  return `<div class="wp-task ${done ? 'wp-done' : ''}">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap">
+      <span class="wp-sub-pill">📚 ${escapeHtml(t.subject)}</span>
+      <span style="font-size:11.5px;color:#64748b;font-weight:700">${escapeHtml(dayObj.label)}${t.date ? ' · ' + escapeHtml(t.date) : ''}</span>
+    </div>
+    ${t.lesson ? `<div class="wp-field"><b>الدرس:</b> ${escapeHtml(t.lesson)}</div>` : ''}
+    ${t.homework ? `<div class="wp-field"><b>الواجب:</b> ${escapeHtml(t.homework)}</div>` : ''}
+    ${t.assessments ? `<div class="wp-field"><b>التقويمات/الاختبارات:</b> ${escapeHtml(t.assessments)}</div>` : ''}
+    ${t.notes ? `<div class="wp-field"><b>ملاحظات:</b> ${escapeHtml(t.notes)}</div>` : ''}
+    <div class="wp-field" style="font-size:11.5px;color:#64748b">👩‍🏫 ${escapeHtml(t.teacherName || 'المعلمة')}</div>
+    ${(t.links && t.links.length) ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${t.links.map((lk, i) => `<a href="${escapeHtml(lk)}" target="_blank" rel="noopener noreferrer" class="ann-btn-soft">🔗 رابط ${i+1}</a>`).join('')}</div>` : ''}
+    ${t.hasAttachment ? `<div><button type="button" class="ann-btn-soft" onclick="wpOpenAttachmentModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">📎 ${escapeHtml(t.attachmentName || 'عرض المرفق')}</button></div>` : ''}
+    ${isStudent ? `<div style="margin-top:auto;padding-top:6px;border-top:1px dashed #fce7f3;display:flex;justify-content:flex-end">
+      <button type="button" class="wp-check-btn ${done ? 'checked' : ''}" onclick="wpToggleStudentProgress('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">${done ? '✓ تم الإنجاز' : '☐ تحديد كمنجز'}</button>
+    </div>` : ''}
+  </div>`;
+}
+function wpWeekOptionsHtml(){
+  const weeks = (__wpCache.weeks || []).slice();
+  const cur = wpCurrentSundayKey();
+  if(!weeks.some(w => w.weekStart === cur)){
+    weeks.unshift({ weekStart: cur, weekLabel: (typeof schoolWeekInfo === 'function' ? schoolWeekInfo().label : 'الأسبوع الحالي'), planCount: 0 });
+  }
+  return weeks.map(w => `<option value="${escapeHtml(w.weekStart)}" ${__wpCache.weekStart===w.weekStart?'selected':''}>${escapeHtml(w.weekStart)}${w.weekLabel ? ' — ' + escapeHtml(w.weekLabel) : ''}${w.weekStart===cur ? ' (الحالي)' : ''}</option>`).join('');
+}
+function renderWeeklyPlanStudent(){
+  if(!__wpCache.loaded && !__wpCache.loading){
+    setTimeout(() => __loadWeeklyPlans(false), 0);
+  }
+  const allTasks = (__wpCache.tasks || []).filter(t => __wpUi.subject === 'all' || t.subject === __wpUi.subject);
+  const subs = __wpCache.subjects || [];
+  const totalTasks = (__wpCache.tasks || []).length;
+  const doneTasks = (__wpCache.tasks || []).filter(t => __wpCache.progress[t.planId + '|' + t.itemId]).length;
+  const pct = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+  let contentHtml = '';
+  if(!allTasks.length){
+    contentHtml = '<div class="ann-card" style="text-align:center;color:#64748b;padding:28px">لا توجد خطط أسبوعية منشورة لهذا الأسبوع بعد</div>';
+  } else if(__wpUi.viewMode === 'daily'){
+    const dayTasks = allTasks.filter(t => t.dayKey === __wpUi.dayKey);
+    const dayObj = __WP_DAYS.find(x => x.key === __wpUi.dayKey) || __WP_DAYS[0];
+    contentHtml = `<div class="wp-day-block">
+      <div class="wp-day-head">
+        <span>📅 ${dayObj.label} (${escapeHtml(wpDateForDay(__wpCache.weekStart, dayObj.key))})</span>
+        <span style="font-size:12px;color:#64748b">${dayTasks.length} مهمة</span>
+      </div>
+      ${dayTasks.length ? `<div class="wp-grid">${dayTasks.map(t => wpRenderTaskCard(t, true)).join('')}</div>` : '<div style="text-align:center;color:#64748b;padding:18px">لا توجد مهام مسجلة لهذا اليوم</div>'}
+    </div>`;
+  } else {
+    contentHtml = __WP_DAYS.map(day => {
+      const dayTasks = allTasks.filter(t => t.dayKey === day.key);
+      if(!dayTasks.length) return '';
+      return `<div class="wp-day-block" style="margin-bottom:10px">
+        <div class="wp-day-head">
+          <span>📅 ${day.label} (${escapeHtml(wpDateForDay(__wpCache.weekStart, day.key))})</span>
+          <span style="font-size:12px;color:#64748b">${dayTasks.length} مهمة</span>
+        </div>
+        <div class="wp-grid">${dayTasks.map(t => wpRenderTaskCard(t, true)).join('')}</div>
+      </div>`;
+    }).join('') || '<div class="ann-card" style="text-align:center;color:#64748b;padding:24px">لا توجد مهام مطابقة للتصفية</div>';
+  }
+
+  return `<div class="wp-page">
+    <div class="wp-header">
+      <div>
+        <h2>📅 الخطة الأسبوعية الموحدة</h2>
+        <div class="ann-header-sub">جميع المواد الدراسية لفصلكِ في مكان واحد · الإنجاز: ${doneTasks}/${totalTasks} (${pct}%)</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select onchange="__wpCache.weekStart=this.value;__loadWeeklyPlans(true, this.value)">${wpWeekOptionsHtml()}</select>
+        <button type="button" class="ann-btn-soft" onclick="__loadWeeklyPlans(true)">🔄 تحديث</button>
+        <a href="#/" class="ann-btn-soft">🏠 الرئيسية</a>
+      </div>
+    </div>
+    <div class="ann-filters" style="justify-content:space-between">
+      <div class="wp-tabs">
+        <button type="button" class="wp-tab ${__wpUi.viewMode==='weekly'?'active':''}" onclick="__wpUi.viewMode='weekly';renderApp()">🗓️ العرض الأسبوعي</button>
+        <button type="button" class="wp-tab ${__wpUi.viewMode==='daily'?'active':''}" onclick="__wpUi.viewMode='daily';renderApp()">📌 العرض اليومي</button>
+      </div>
+      <div class="wp-tabs">
+        <button type="button" class="wp-tab ${__wpUi.subject==='all'?'active':''}" onclick="__wpUi.subject='all';renderApp()">الكل</button>
+        ${subs.map(s => `<button type="button" class="wp-tab ${__wpUi.subject===s?'active':''}" onclick="__wpUi.subject='${escapeHtml(s).replace(/'/g, "\\'")}';renderApp()">${escapeHtml(s)}</button>`).join('')}
+      </div>
+    </div>
+    ${__wpUi.viewMode === 'daily' ? `<div class="wp-tabs">${__WP_DAYS.map(day => `<button type="button" class="wp-tab ${__wpUi.dayKey===day.key?'active':''}" onclick="__wpUi.dayKey='${day.key}';renderApp()">${day.label}</button>`).join('')}</div>` : ''}
+    ${contentHtml}
+  </div>`;
+}
+function wpTeacherAvailableClasses(user, d){
+  const ids = getAssignmentClassIds(user, d);
+  const gMap = {};
+  (d.grades || []).forEach(g => { if(g && g.id) gMap[g.id] = g.name; });
+  return (d.classes || []).filter(c => c && !c.deleted && ids.includes(c.id)).map(c => ({
+    id: c.id,
+    label: (gMap[c.gradeId] ? gMap[c.gradeId] + ' — ' : '') + 'فصل ' + c.name,
+  }));
+}
+function wpTeacherSubjectsForClass(user, d, classId){
+  const subs = [];
+  const seen = new Set();
+  getTeacherSubjects(user, d).filter(s => s.classId === classId).forEach(s => {
+    if(s.subject && !seen.has(s.subject)){ seen.add(s.subject); subs.push(s.subject); }
+  });
+  if(!subs.length && typeof TT_SUBJECT_GROUPS !== 'undefined'){
+    TT_SUBJECT_GROUPS.forEach(g => (g.subs || []).forEach(s => { if(s && !seen.has(s)){ seen.add(s); subs.push(s); } }));
+  }
+  return subs;
+}
+function wpOpenEditor(planObj){
+  const d = loadDB();
+  const user = currentUser();
+  const classes = wpTeacherAvailableClasses(user, d);
+  if(!classes.length){ alert('لا توجد فصول مسندة لكِ بعد'); return; }
+  if(planObj){
+    __wpUi.editorOpen = true;
+    __wpUi.editId = planObj.id || '';
+    __wpUi.classId = planObj.classId;
+    __wpUi.subjectName = planObj.subject;
+    __wpUi.weekStart = planObj.weekStart || __wpCache.weekStart || wpCurrentSundayKey();
+    __wpUi.weekLabel = planObj.weekLabel || '';
+    __wpUi.title = planObj.title || '';
+    __wpUi.items = (Array.isArray(planObj.items) && planObj.items.length)
+      ? JSON.parse(JSON.stringify(planObj.items))
+      : [{ id:'wpi_' + Date.now(), dayKey:'sun', lesson:'', homework:'', assessments:'', notes:'', links:[], attachment:null }];
+  } else {
+    const cid = classes[0].id;
+    const subs = wpTeacherSubjectsForClass(user, d, cid);
+    __wpUi.editorOpen = true;
+    __wpUi.editId = '';
+    __wpUi.classId = cid;
+    __wpUi.subjectName = subs[0] || '';
+    __wpUi.weekStart = __wpCache.weekStart || wpCurrentSundayKey();
+    __wpUi.weekLabel = (typeof schoolWeekInfo === 'function' ? schoolWeekInfo().label : '');
+    __wpUi.title = '';
+    __wpUi.items = [{ id:'wpi_' + Date.now(), dayKey:'sun', lesson:'', homework:'', assessments:'', notes:'', links:[], attachment:null }];
+  }
+  renderApp();
+}
+async function wpEditExistingPlan(id){
+  const school = getActiveSchool();
+  try {
+    const res = await fetch('/api/weekly-plans/' + encodeURIComponent(school) + '/' + encodeURIComponent(id));
+    const j = await res.json();
+    if(res.ok && j.ok && j.plan) wpOpenEditor(j.plan);
+  } catch(_){}
+}
+function wpAddItemForDay(dayKey){
+  __wpUi.items.push({
+    id: 'wpi_' + Date.now() + '_' + Math.floor(Math.random()*1000),
+    dayKey: dayKey || 'sun',
+    lesson:'', homework:'', assessments:'', notes:'', links:[], attachment:null
+  });
+  renderApp();
+}
+function wpRemoveItem(idx){
+  __wpUi.items.splice(idx, 1);
+  renderApp();
+}
+function wpHandleItemFile(idx, input){
+  const file = input && input.files && input.files[0];
+  if(!file) return;
+  if(file.size > 3 * 1024 * 1024){ alert('حجم المرفق يجب ألا يتجاوز 3 ميجابايت'); input.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    if(__wpUi.items[idx]){
+      __wpUi.items[idx].attachment = { name: file.name, type: file.type, data: String(reader.result || '') };
+      __wpUi.items[idx].attachmentName = file.name;
+      renderApp();
+    }
+  };
+  reader.readAsDataURL(file);
+}
+async function wpSavePlan(status){
+  const school = getActiveSchool();
+  if(!__wpUi.classId || !__wpUi.subjectName){ alert('يرجى اختيار الفصل والمادة'); return; }
+  const payload = {
+    classId: __wpUi.classId,
+    subject: __wpUi.subjectName,
+    weekStart: __wpUi.weekStart || wpCurrentSundayKey(),
+    weekLabel: __wpUi.weekLabel || '',
+    title: __wpUi.title || '',
+    status,
+    items: __wpUi.items.map(it => Object.assign({}, it, {
+      date: wpDateForDay(__wpUi.weekStart || wpCurrentSundayKey(), it.dayKey),
+      links: Array.isArray(it.links) ? it.links : String(it.linksText || '').split(/\r?\n|,/).map(x => x.trim()).filter(Boolean),
+    })),
+  };
+  try {
+    const isEdit = !!__wpUi.editId;
+    const url = '/api/weekly-plans/' + encodeURIComponent(school) + (isEdit ? '/' + encodeURIComponent(__wpUi.editId) : '');
+    const res = await fetch(url, {
+      method: isEdit ? 'PUT' : 'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const j = await res.json();
+    if(!res.ok || !j.ok){ alert('تعذر الحفظ: ' + ((j && j.error) || 'خطأ')); return; }
+    __wpUi.editorOpen = false;
+    await __loadWeeklyPlans(true, payload.weekStart);
+  } catch(_){ alert('تعذر الاتصال بالخادم'); }
+}
+async function wpDeletePlan(id){
+  if(!confirm('هل أنت متأكد من حذف هذه الخطة؟')) return;
+  const school = getActiveSchool();
+  await fetch('/api/weekly-plans/' + encodeURIComponent(school) + '/' + encodeURIComponent(id), { method:'DELETE' });
+  await __loadWeeklyPlans(true);
+}
+async function wpOpenPlanProgressModal(id){
+  const school = getActiveSchool();
+  closeAnnModal();
+  const overlay = document.createElement('div');
+  overlay.id = 'annModalOverlay';
+  overlay.className = 'modal-overlay';
+  overlay.onclick = (e) => { if(e.target === overlay) closeAnnModal(); };
+  overlay.innerHTML = `<div class="modal-box" style="max-width:680px;width:96vw;max-height:90vh;overflow-y:auto;border-top:5px solid #db2777"><div style="padding:24px;text-align:center;color:#64748b">جاري تحميل متابعة الإنجاز...</div></div>`;
+  document.body.appendChild(overlay);
+  try {
+    const res = await fetch('/api/weekly-plans/' + encodeURIComponent(school) + '/' + encodeURIComponent(id) + '/progress');
+    const j = await res.json();
+    if(!res.ok || !j.ok) throw new Error('failed');
+    const byStudent = {};
+    (j.progress || []).forEach(r => {
+      if(r.completed){
+        if(!byStudent[r.studentId]) byStudent[r.studentId] = 0;
+        byStudent[r.studentId]++;
+      }
+    });
+    const rows = (j.students || []).map(st => {
+      const done = byStudent[st.id] || 0;
+      const tot = j.itemsCount || 0;
+      const pct = tot ? Math.round((done / tot) * 100) : 0;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #fce7f3;font-size:13px">
+        <span style="font-weight:800;color:#831843">${escapeHtml(st.name)}</span>
+        <span class="ann-badge ${pct===100?'ann-badge-pub':'ann-badge-pin'}">${done} / ${tot} (${pct}%)</span>
+      </div>`;
+    }).join('') || '<div style="padding:18px;text-align:center;color:#64748b">لا توجد طالبات مسجلات في هذا الفصل</div>';
+    const box = overlay.querySelector('.modal-box');
+    if(box) box.innerHTML = `
+      <div class="modal-head">
+        <h3>📊 متابعة إنجاز الطالبات</h3>
+        <button type="button" class="modal-close" onclick="closeAnnModal()">✕</button>
+      </div>
+      <div style="font-size:12.5px;color:#64748b;margin-bottom:10px">إجمالي الطالبات: ${j.totalStudents || 0} · عدد المهام في الخطة: ${j.itemsCount || 0}</div>
+      <div style="max-height:380px;overflow-y:auto;border:1px solid #fce7f3;border-radius:10px">${rows}</div>`;
+  } catch(_){
+    const box = overlay.querySelector('.modal-box');
+    if(box) box.innerHTML = `<div style="padding:20px;text-align:center;color:#be123c">تعذر تحميل بيانات الإنجاز</div>`;
+  }
+}
+function renderWeeklyPlanTeacher(user){
+  if(!__wpCache.loaded && !__wpCache.loading){
+    setTimeout(() => __loadWeeklyPlans(false), 0);
+  }
+  const d = loadDB();
+  const classes = wpTeacherAvailableClasses(user, d);
+  const classMap = {};
+  classes.forEach(c => { classMap[c.id] = c.label; });
+  const plans = __wpCache.plans || [];
+
+  if(__wpUi.editorOpen){
+    const subs = wpTeacherSubjectsForClass(user, d, __wpUi.classId);
+    if(__wpUi.subjectName && !subs.includes(__wpUi.subjectName)) subs.unshift(__wpUi.subjectName);
+    return `<div class="wp-page">
+      <div class="wp-header">
+        <div>
+          <h2>${__wpUi.editId ? '✏️ تعديل خطتي الأسبوعية' : '📅 إعداد خطة أسبوعية جديدة'}</h2>
+          <div class="ann-header-sub">أضف مهام كل يوم (يمكن إضافة أكثر من مهمة لنفس المادة في اليوم الواحد)</div>
+        </div>
+        <button type="button" class="ann-btn-soft" onclick="__wpUi.editorOpen=false;renderApp()">← رجوع</button>
+      </div>
+      <div class="ann-card" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+          <div>
+            <label style="font-weight:800;font-size:12.5px">الفصل الدراسي</label>
+            <select style="width:100%" onchange="__wpUi.classId=this.value;const s=wpTeacherSubjectsForClass(currentUser(),loadDB(),this.value);__wpUi.subjectName=s[0]||'';renderApp()">
+              ${classes.map(c => `<option value="${escapeHtml(c.id)}" ${__wpUi.classId===c.id?'selected':''}>${escapeHtml(c.label)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-weight:800;font-size:12.5px">المادة</label>
+            <select style="width:100%" onchange="__wpUi.subjectName=this.value">
+              ${subs.map(s => `<option value="${escapeHtml(s)}" ${__wpUi.subjectName===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-weight:800;font-size:12.5px">بداية الأسبوع (الأحد)</label>
+            <input type="date" style="width:100%" value="${escapeHtml(__wpUi.weekStart)}" onchange="__wpUi.weekStart=this.value;renderApp()" />
+          </div>
+          <div>
+            <label style="font-weight:800;font-size:12.5px">اسم الأسبوع (اختياري)</label>
+            <input type="text" style="width:100%" value="${escapeHtml(__wpUi.weekLabel)}" placeholder="مثال: الأسبوع الرابع" oninput="__wpUi.weekLabel=this.value" />
+          </div>
+        </div>
+        <div>
+          <label style="font-weight:800;font-size:12.5px">عنوان الخطة (اختياري)</label>
+          <input type="text" style="width:100%" value="${escapeHtml(__wpUi.title)}" placeholder="مثال: خطة وحدة الكسور" oninput="__wpUi.title=this.value" />
+        </div>
+      </div>
+      ${__wpUi.items.map((it, idx) => `<div class="ann-card" style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="wp-sub-pill">مهمة #${idx+1}</span>
+            <select onchange="__wpUi.items[${idx}].dayKey=this.value;renderApp()">
+              ${__WP_DAYS.map(day => `<option value="${day.key}" ${it.dayKey===day.key?'selected':''}>${day.label} (${wpDateForDay(__wpUi.weekStart, day.key)})</option>`).join('')}
+            </select>
+          </div>
+          <button type="button" class="ann-btn-danger" onclick="wpRemoveItem(${idx})">🗑️ حذف المهمة</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">
+          <input type="text" placeholder="الدرس المطلوب..." value="${escapeHtml(it.lesson || '')}" oninput="__wpUi.items[${idx}].lesson=this.value" />
+          <input type="text" placeholder="الواجب..." value="${escapeHtml(it.homework || '')}" oninput="__wpUi.items[${idx}].homework=this.value" />
+          <input type="text" placeholder="التقويمات والاختبارات..." value="${escapeHtml(it.assessments || '')}" oninput="__wpUi.items[${idx}].assessments=this.value" />
+          <input type="text" placeholder="ملاحظات..." value="${escapeHtml(it.notes || '')}" oninput="__wpUi.items[${idx}].notes=this.value" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <input type="text" placeholder="روابط تعليمية (افصل بينها بفاصلة)..." value="${escapeHtml(Array.isArray(it.links) ? it.links.join(', ') : (it.linksText || ''))}" oninput="__wpUi.items[${idx}].linksText=this.value;__wpUi.items[${idx}].links=this.value.split(/,|\\n/).map(x=>x.trim()).filter(Boolean)" />
+          <div>
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" onchange="wpHandleItemFile(${idx}, this)" />
+            <div style="font-size:11px;color:#64748b">${it.attachmentName ? ('📎 ' + escapeHtml(it.attachmentName)) : 'PDF أو صورة (حتى 3MB)'}</div>
+          </div>
+        </div>
+      </div>`).join('')}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <button type="button" class="ann-btn-soft" onclick="wpAddItemForDay('sun')">+ إضافة مهمة جديدة</button>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="ann-btn-soft" onclick="wpSavePlan('draft')">حفظ كمسودة</button>
+          <button type="button" class="ann-btn-primary" onclick="wpSavePlan('published')">نشر الخطة للطالبات</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  return `<div class="wp-page">
+    <div class="wp-header">
+      <div>
+        <h2>📅 خطتي الأسبوعية</h2>
+        <div class="ann-header-sub">إعداد ونشر خطط المواد للفصول المسندة لكِ ومتابعة إنجاز الطالبات</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select onchange="__wpCache.weekStart=this.value;__loadWeeklyPlans(true, this.value)">${wpWeekOptionsHtml()}</select>
+        <button type="button" class="ann-btn-primary" onclick="wpOpenEditor(null)">+ إعداد خطة جديدة</button>
+      </div>
+    </div>
+    ${!plans.length ? '<div class="ann-card" style="text-align:center;color:#64748b;padding:28px">لم تقومي بإضافة خطة لهذا الأسبوع بعد</div>' : ''}
+    <div class="ann-list">
+      ${plans.map(p => `<div class="ann-card">
+        <div class="ann-card-head">
+          <div>
+            <div class="ann-badges" style="margin-bottom:6px">
+              <span class="wp-sub-pill">📚 ${escapeHtml(p.subject)}</span>
+              <span class="ann-badge ${p.status==='published'?'ann-badge-pub':'ann-badge-draft'}">${p.status==='published'?'منشورة':'مسودة'}</span>
+            </div>
+            <h3 class="ann-card-title">${escapeHtml(classMap[p.classId] || p.classId)}${p.title ? ' — ' + escapeHtml(p.title) : ''}</h3>
+          </div>
+          <span style="font-size:12px;color:#64748b;font-weight:700">📅 أسبوع ${escapeHtml(p.weekStart)} · ${(p.items||[]).length} مهمة</span>
+        </div>
+        <div class="ann-actions">
+          <button type="button" class="ann-btn-soft" onclick="wpEditExistingPlan('${escapeHtml(p.id)}')">✏️ تعديل الخطة</button>
+          <button type="button" class="ann-btn-soft" onclick="wpOpenPlanProgressModal('${escapeHtml(p.id)}')">👁️ متابعة الإنجاز</button>
+          <button type="button" class="ann-btn-danger" onclick="wpDeletePlan('${escapeHtml(p.id)}')">🗑️ حذف</button>
+        </div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+function renderWeeklyPlanAdmin(){
+  if(!__wpCache.loaded && !__wpCache.loading){
+    setTimeout(() => __loadWeeklyPlans(false), 0);
+  }
+  const d = loadDB();
+  const cov = __wpCache.coverage || { totalClasses:0, classesWithPlans:0, teachersPublished:[], teachersPending:[], completedMaterialsCount:0, pendingMaterialsCount:0, totalPublishedTasks:0, classRows:[] };
+  const plans = __wpCache.plans || [];
+  const gMap = {};
+  (d.grades || []).forEach(g => { if(g && g.id) gMap[g.id] = g.name; });
+  const cMap = {};
+  (d.classes || []).forEach(c => { if(c && c.id) cMap[c.id] = (gMap[c.gradeId] ? gMap[c.gradeId] + ' — ' : '') + 'فصل ' + c.name; });
+
+  let bodyHtml = '';
+  if(__wpUi.adminTab === 'classes'){
+    bodyHtml = `<div class="ann-list">${(cov.classRows || []).map(r => `<div class="ann-card">
+      <div class="ann-card-head">
+        <h3 class="ann-card-title">🏫 ${escapeHtml(r.className)}</h3>
+        <div class="ann-badges">
+          <span class="ann-badge ann-badge-pub">${r.publishedPlans} خطة منشورة</span>
+          <span class="ann-badge ann-badge-pin">${r.publishedTasks} مهمة</span>
+        </div>
+      </div>
+      <div style="font-size:12.5px;margin-top:8px;color:#1e293b"><b>المواد المكتملة (${r.completedCount}/${r.expectedCount}):</b> ${r.publishedSubjects.length ? r.publishedSubjects.map(escapeHtml).join('، ') : 'لا يوجد بعد'}</div>
+      ${r.missingSubjects.length ? `<div style="font-size:12px;margin-top:4px;color:#b45309"><b>مواد لم تُنشر بعد:</b> ${r.missingSubjects.map(m => escapeHtml(m.subject + (m.teacherName ? ' (' + m.teacherName + ')' : ''))).join('، ')}</div>` : ''}
+    </div>`).join('')}</div>`;
+  } else if(__wpUi.adminTab === 'teachers'){
+    bodyHtml = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">
+      <div class="ann-card">
+        <h3 class="ann-card-title" style="color:#15803d;margin-bottom:8px">✅ معلمات نشرن خططهن (${cov.teachersPublished.length})</h3>
+        ${cov.teachersPublished.map(t => `<div style="padding:5px 0;border-bottom:1px solid #fce7f3;font-size:13px">${escapeHtml(t.name)}</div>`).join('') || '<div style="color:#64748b">لا يوجد</div>'}
+      </div>
+      <div class="ann-card">
+        <h3 class="ann-card-title" style="color:#b45309;margin-bottom:8px">⏳ معلمات لم ينشرن بعد (${cov.teachersPending.length})</h3>
+        ${cov.teachersPending.map(t => `<div style="padding:5px 0;border-bottom:1px solid #fce7f3;font-size:13px">${escapeHtml(t.name)}</div>`).join('') || '<div style="color:#15803d">اكتمل نشر جميع المعلمات</div>'}
+      </div>
+    </div>`;
+  } else {
+    bodyHtml = `<div class="ann-list">${plans.map(p => `<div class="ann-card">
+      <div class="ann-card-head">
+        <div>
+          <div class="ann-badges" style="margin-bottom:6px">
+            <span class="wp-sub-pill">📚 ${escapeHtml(p.subject)}</span>
+            <span class="ann-badge ${p.status==='published'?'ann-badge-pub':'ann-badge-draft'}">${p.status==='published'?'منشورة':'مسودة'}</span>
+          </div>
+          <h3 class="ann-card-title">${escapeHtml(cMap[p.classId] || p.classId)} — ${escapeHtml(p.teacherName || 'معلمة')}</h3>
+        </div>
+        <span style="font-size:12px;color:#64748b">${(p.items||[]).length} مهمة</span>
+      </div>
+      <div class="ann-actions">
+        <button type="button" class="ann-btn-soft" onclick="wpOpenPlanProgressModal('${escapeHtml(p.id)}')">📊 متابعة إنجاز الطالبات</button>
+        <button type="button" class="ann-btn-danger" onclick="wpDeletePlan('${escapeHtml(p.id)}')">🗑️ حذف</button>
+      </div>
+    </div>`).join('') || '<div class="ann-card" style="text-align:center;color:#64748b;padding:24px">لا توجد خطط لهذا الأسبوع</div>'}</div>`;
+  }
+
+  return `<div class="wp-page">
+    <div class="wp-header">
+      <div>
+        <h2>📅 متابعة الخطة الأسبوعية — الإدارة</h2>
+        <div class="ann-header-sub">مراقبة نشر الخطط الأسبوعية وتغطية المواد وإنجاز الطالبات</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select onchange="__wpCache.weekStart=this.value;__loadWeeklyPlans(true, this.value)">${wpWeekOptionsHtml()}</select>
+        <button type="button" class="ann-btn-soft" onclick="__loadWeeklyPlans(true)">🔄 تحديث</button>
+      </div>
+    </div>
+    <div class="ann-stats">
+      <div class="ann-stat"><div><div class="ann-stat-val">${cov.classesWithPlans}/${cov.totalClasses}</div><div class="ann-stat-lbl">فصول لها خطط</div></div></div>
+      <div class="ann-stat"><div><div class="ann-stat-val" style="color:#15803d">${cov.teachersPublished.length}</div><div class="ann-stat-lbl">معلمات نشرن</div></div></div>
+      <div class="ann-stat"><div><div class="ann-stat-val" style="color:#b45309">${cov.teachersPending.length}</div><div class="ann-stat-lbl">لم ينشرن بعد</div></div></div>
+      <div class="ann-stat"><div><div class="ann-stat-val">${cov.totalPublishedTasks}</div><div class="ann-stat-lbl">إجمالي المهام</div></div></div>
+    </div>
+    <div class="wp-tabs">
+      <button type="button" class="wp-tab ${__wpUi.adminTab==='classes'?'active':''}" onclick="__wpUi.adminTab='classes';renderApp()">🏫 الفصول والمواد</button>
+      <button type="button" class="wp-tab ${__wpUi.adminTab==='teachers'?'active':''}" onclick="__wpUi.adminTab='teachers';renderApp()">👩‍🏫 حالة المعلمات</button>
+      <button type="button" class="wp-tab ${__wpUi.adminTab==='plans'?'active':''}" onclick="__wpUi.adminTab='plans';renderApp()">📋 جميع الخطط (${plans.length})</button>
+    </div>
+    ${bodyHtml}
+  </div>`;
+}
+function renderWeeklyPlanPage(user){
+  if(!user) return '';
+  if(user.role === 'STUDENT') return renderWeeklyPlanStudent();
+  if(user.role === 'TEACHER') return renderWeeklyPlanTeacher(user);
+  if(user.role === 'ADMIN') return renderWeeklyPlanAdmin();
+  return '';
+}
+
 function renderStudentDashboard(){
   const d = loadDB();
   const user = currentUser();
@@ -6732,6 +7353,7 @@ function renderStudentDashboard(){
     </div>
   </div>
   ${renderStudentAnnouncementsBanner()}
+  ${renderStudentWeeklyPlanBanner()}
   <div class="sd-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:10px">
     <div class="dash-panel" style="padding:12px 14px">
       <div class="dash-panel-head" style="margin-bottom:6px"><div class="dash-panel-title">⭐ نقاطي</div></div>
@@ -17818,7 +18440,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=187', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=188', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

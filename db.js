@@ -220,6 +220,38 @@ async function initSchema() {
         PRIMARY KEY (announcement_id, student_id)
       )`);
     await client.query(`CREATE INDEX IF NOT EXISTS school_announcement_views_school_idx ON school_announcement_views(school, announcement_id)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS weekly_plans (
+        id TEXT PRIMARY KEY,
+        school TEXT NOT NULL CHECK (school IN ('BOYS', 'GIRLS')),
+        class_id TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        week_start TEXT NOT NULL,
+        week_label TEXT NOT NULL DEFAULT '',
+        title TEXT NOT NULL DEFAULT '',
+        teacher_id TEXT NOT NULL,
+        teacher_name TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+        items JSONB NOT NULL DEFAULT '[]'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS weekly_plans_uniq_idx ON weekly_plans(school, class_id, subject, week_start, teacher_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS weekly_plans_school_week_idx ON weekly_plans(school, week_start, class_id)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS weekly_plan_progress (
+        plan_id TEXT NOT NULL REFERENCES weekly_plans(id) ON DELETE CASCADE,
+        item_id TEXT NOT NULL,
+        school TEXT NOT NULL CHECK (school IN ('BOYS', 'GIRLS')),
+        student_id TEXT NOT NULL,
+        student_name TEXT NOT NULL DEFAULT '',
+        completed BOOLEAN NOT NULL DEFAULT TRUE,
+        completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (plan_id, item_id, student_id)
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS weekly_plan_progress_student_idx ON weekly_plan_progress(school, student_id)`);
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
@@ -1173,6 +1205,127 @@ async function listStudentAnnouncementViewIds(school, studentId) {
   return r.rows.map(x => x.announcement_id);
 }
 
+function mapWeeklyPlanRow(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    school: r.school,
+    classId: r.class_id,
+    subject: r.subject,
+    weekStart: r.week_start,
+    weekLabel: r.week_label || '',
+    title: r.title || '',
+    teacherId: r.teacher_id,
+    teacherName: r.teacher_name || '',
+    status: r.status,
+    items: Array.isArray(r.items) ? r.items : [],
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+async function listWeeklyPlans(school, { weekStart, classId, teacherId, status } = {}) {
+  assertSupportedSchool(school);
+  const cond = ['school = $1'];
+  const vals = [school];
+  if (weekStart) { vals.push(String(weekStart)); cond.push('week_start = $' + vals.length); }
+  if (classId) { vals.push(String(classId)); cond.push('class_id = $' + vals.length); }
+  if (teacherId) { vals.push(String(teacherId)); cond.push('teacher_id = $' + vals.length); }
+  if (status) { vals.push(String(status)); cond.push('status = $' + vals.length); }
+  const r = await pool.query(
+    `SELECT * FROM weekly_plans WHERE ${cond.join(' AND ')} ORDER BY week_start DESC, updated_at DESC`,
+    vals
+  );
+  return r.rows.map(mapWeeklyPlanRow);
+}
+async function getWeeklyPlan(school, id) {
+  assertSupportedSchool(school);
+  const r = await pool.query('SELECT * FROM weekly_plans WHERE school = $1 AND id = $2', [school, id]);
+  return mapWeeklyPlanRow(r.rows[0]);
+}
+async function upsertWeeklyPlan(p) {
+  assertSupportedSchool(p.school);
+  const itemsJson = JSON.stringify(Array.isArray(p.items) ? p.items : []);
+  const r = await pool.query(
+    `INSERT INTO weekly_plans
+     (id, school, class_id, subject, week_start, week_label, title, teacher_id, teacher_name, status, items)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
+     ON CONFLICT (school, class_id, subject, week_start, teacher_id) DO UPDATE SET
+       week_label = EXCLUDED.week_label,
+       title = EXCLUDED.title,
+       teacher_name = EXCLUDED.teacher_name,
+       status = EXCLUDED.status,
+       items = EXCLUDED.items,
+       updated_at = NOW()
+     RETURNING *`,
+    [p.id, p.school, p.classId, p.subject, p.weekStart, p.weekLabel || '', p.title || '', p.teacherId, p.teacherName || '', p.status, itemsJson]
+  );
+  return mapWeeklyPlanRow(r.rows[0]);
+}
+async function updateWeeklyPlanById(school, id, patch) {
+  assertSupportedSchool(school);
+  const itemsJson = JSON.stringify(Array.isArray(patch.items) ? patch.items : []);
+  const r = await pool.query(
+    `UPDATE weekly_plans SET
+       class_id = $3, subject = $4, week_start = $5, week_label = $6,
+       title = $7, status = $8, items = $9::jsonb, updated_at = NOW()
+     WHERE school = $1 AND id = $2
+     RETURNING *`,
+    [school, id, patch.classId, patch.subject, patch.weekStart, patch.weekLabel || '', patch.title || '', patch.status, itemsJson]
+  );
+  return mapWeeklyPlanRow(r.rows[0]);
+}
+async function deleteWeeklyPlan(school, id) {
+  assertSupportedSchool(school);
+  const r = await pool.query('DELETE FROM weekly_plans WHERE school = $1 AND id = $2', [school, id]);
+  return r.rowCount > 0;
+}
+async function listWeeklyPlanWeeks(school) {
+  assertSupportedSchool(school);
+  const r = await pool.query(
+    `SELECT week_start, MAX(week_label) AS week_label, COUNT(*)::int AS plan_count
+     FROM weekly_plans WHERE school = $1
+     GROUP BY week_start ORDER BY week_start DESC`,
+    [school]
+  );
+  return r.rows.map(x => ({ weekStart: x.week_start, weekLabel: x.week_label || '', planCount: x.plan_count }));
+}
+async function setWeeklyPlanItemProgress({ planId, itemId, school, studentId, studentName, completed }) {
+  assertSupportedSchool(school);
+  const r = await pool.query(
+    `INSERT INTO weekly_plan_progress (plan_id, item_id, school, student_id, student_name, completed, completed_at)
+     VALUES ($1,$2,$3,$4,$5,$6,NOW())
+     ON CONFLICT (plan_id, item_id, student_id) DO UPDATE SET
+       completed = EXCLUDED.completed,
+       student_name = EXCLUDED.student_name,
+       completed_at = NOW()
+     RETURNING plan_id, item_id, student_id, completed, completed_at`,
+    [planId, String(itemId), school, String(studentId), String(studentName || ''), !!completed]
+  );
+  return r.rows[0] || null;
+}
+async function listStudentWeeklyProgress(school, studentId) {
+  assertSupportedSchool(school);
+  const r = await pool.query(
+    `SELECT plan_id, item_id, completed, completed_at
+     FROM weekly_plan_progress WHERE school = $1 AND student_id = $2`,
+    [school, String(studentId)]
+  );
+  return r.rows.map(x => ({ planId: x.plan_id, itemId: x.item_id, completed: !!x.completed, completedAt: x.completed_at }));
+}
+async function listPlanWeeklyProgress(school, planId) {
+  assertSupportedSchool(school);
+  const r = await pool.query(
+    `SELECT plan_id, item_id, student_id, student_name, completed, completed_at
+     FROM weekly_plan_progress WHERE school = $1 AND plan_id = $2
+     ORDER BY completed_at DESC`,
+    [school, planId]
+  );
+  return r.rows.map(x => ({
+    planId: x.plan_id, itemId: x.item_id, studentId: x.student_id,
+    studentName: x.student_name || '', completed: !!x.completed, completedAt: x.completed_at,
+  }));
+}
+
 module.exports = {
   pool, SCHOOLS,
   REQUIRED_DB_NAME, ALLOWED_DB_HOST, ALLOWED_DB_PORT,
@@ -1199,4 +1352,6 @@ module.exports = {
   listSchoolAnnouncements, getSchoolAnnouncement, createSchoolAnnouncement,
   updateSchoolAnnouncement, deleteSchoolAnnouncement,
   recordSchoolAnnouncementView, listSchoolAnnouncementViews, listStudentAnnouncementViewIds,
+  listWeeklyPlans, getWeeklyPlan, upsertWeeklyPlan, updateWeeklyPlanById, deleteWeeklyPlan,
+  listWeeklyPlanWeeks, setWeeklyPlanItemProgress, listStudentWeeklyProgress, listPlanWeeklyProgress,
 };

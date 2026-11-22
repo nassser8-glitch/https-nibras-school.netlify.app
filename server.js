@@ -16,6 +16,7 @@ const transferPrivacy = require('./transfers-privacy');
 // صلاحية واتساب لمسار الموافقة الفردية (منطق خالص بلا وصول لقاعدة البيانات)
 const wa = require('./whatsapp');
 const schoolAnn = require('./school-announcements');
+const weeklyPlans = require('./weekly-plans');
 const usernamePolicy = require('./username-policy');
 
 // قراءة متغير: من Environment أولاً، ثم من ملف سري في /etc/secrets (بديل Render)
@@ -3605,6 +3606,225 @@ app.get('/api/announcements/:school/:id/views', requireAuth, (req, res) => {
       notViewedCount: notViewed.length,
       views,
       notViewed,
+    });
+  })().catch(fail(res));
+});
+
+/* ===== الخطة الأسبوعية — API موحد بصلاحيات صارمة ===== */
+function canAccessWeeklyPlan(role, uid, studentCtx, plan) {
+  if (!plan) return false;
+  if (role === 'ADMIN') return true;
+  if (role === 'TEACHER') return String(plan.teacherId) === String(uid);
+  if (role === 'STUDENT') {
+    return plan.status === 'published' && studentCtx && studentCtx.student && String(studentCtx.student.classId || '') === String(plan.classId);
+  }
+  return false;
+}
+
+app.get('/api/weekly-plans/:school', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    const role = req.session.role;
+    const uid = String(req.session.user_id || req.session.userId || '');
+    if (!['ADMIN', 'TEACHER', 'STUDENT'].includes(role)) return res.status(403).json({ error: 'forbidden' });
+
+    const weeks = await db.listWeeklyPlanWeeks(school);
+    const reqWeek = weeklyPlans.normalizeDateStr(req.query && req.query.weekStart);
+    const weekStart = reqWeek || (weeks[0] && weeks[0].weekStart) || weeklyPlans.currentSundayKey();
+
+    if (role === 'STUDENT') {
+      const ctx = await resolveStudentAnnouncementContext(school, req.session);
+      const classId = ctx.student && ctx.student.classId ? String(ctx.student.classId) : '';
+      if (!classId) {
+        return res.json({ ok: true, weekStart, weeks, plans: [], tasks: [], subjects: [], progress: {} });
+      }
+      const rawPlans = await db.listWeeklyPlans(school, { weekStart, classId, status: 'published' });
+      const stripped = rawPlans.map(weeklyPlans.stripPlanAttachments);
+      const unified = weeklyPlans.aggregateUnifiedStudentPlan(stripped, classId, weekStart);
+      const progRows = await db.listStudentWeeklyProgress(school, (ctx.student && ctx.student.id) || uid);
+      const progress = {};
+      progRows.forEach(r => { if (r.completed) progress[r.planId + '|' + r.itemId] = true; });
+      return res.json({
+        ok: true,
+        weekStart,
+        weeks,
+        classId,
+        plans: unified.plans,
+        tasks: unified.tasks,
+        subjects: unified.subjects,
+        progress,
+      });
+    }
+
+    if (role === 'TEACHER') {
+      const rec = await db.getSchoolData(school);
+      const assigned = weeklyPlans.extractTeacherAssignments((rec && rec.data) || {}, uid);
+      const rawPlans = await db.listWeeklyPlans(school, { weekStart, teacherId: uid });
+      const filtered = rawPlans.filter(p => assigned.classIds.has(String(p.classId))).map(weeklyPlans.stripPlanAttachments);
+      return res.json({ ok: true, weekStart, weeks, plans: filtered });
+    }
+
+    const rec = await db.getSchoolData(school);
+    const schoolData = (rec && rec.data) ? rec.data : {};
+    const rawPlans = await db.listWeeklyPlans(school, { weekStart });
+    const stripped = rawPlans.map(weeklyPlans.stripPlanAttachments);
+    const coverage = weeklyPlans.buildAdminCoverageSummary(schoolData, stripped, weekStart);
+    res.json({ ok: true, weekStart, weeks, plans: stripped, coverage });
+  })().catch(fail(res));
+});
+
+app.get('/api/weekly-plans/:school/:id', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    const role = req.session.role;
+    const uid = String(req.session.user_id || req.session.userId || '');
+    const plan = await db.getWeeklyPlan(school, req.params.id);
+    if (!plan) return res.status(404).json({ error: 'not_found' });
+    const ctx = role === 'STUDENT' ? await resolveStudentAnnouncementContext(school, req.session) : null;
+    if (!canAccessWeeklyPlan(role, uid, ctx, plan)) return res.status(403).json({ error: 'forbidden' });
+    res.json({ ok: true, plan });
+  })().catch(fail(res));
+});
+
+app.get('/api/weekly-plans/:school/:id/attachment/:itemId', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    const role = req.session.role;
+    const uid = String(req.session.user_id || req.session.userId || '');
+    const plan = await db.getWeeklyPlan(school, req.params.id);
+    if (!plan) return res.status(404).json({ error: 'not_found' });
+    const ctx = role === 'STUDENT' ? await resolveStudentAnnouncementContext(school, req.session) : null;
+    if (!canAccessWeeklyPlan(role, uid, ctx, plan)) return res.status(403).json({ error: 'forbidden' });
+    const item = (plan.items || []).find(it => String(it.id) === String(req.params.itemId));
+    if (!item || !item.attachmentData) return res.status(404).json({ error: 'not_found' });
+    res.json({
+      ok: true,
+      attachmentName: item.attachmentName || 'attachment',
+      attachmentType: item.attachmentType || '',
+      attachmentData: item.attachmentData,
+    });
+  })().catch(fail(res));
+});
+
+app.post('/api/weekly-plans/:school', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    const role = req.session.role;
+    const uid = String(req.session.user_id || req.session.userId || '');
+    if (role !== 'TEACHER' && role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const v = weeklyPlans.validateWeeklyPlanPayload(req.body);
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    if (role === 'TEACHER') {
+      const rec = await db.getSchoolData(school);
+      const assigned = weeklyPlans.extractTeacherAssignments((rec && rec.data) || {}, uid);
+      if (!assigned.classIds.has(String(v.value.classId))) {
+        return res.status(403).json({ error: 'class_not_assigned' });
+      }
+    }
+    const teacherId = (role === 'ADMIN' && req.body && req.body.teacherId) ? String(req.body.teacherId) : uid;
+    const teacherName = (role === 'ADMIN' && req.body && req.body.teacherName) ? String(req.body.teacherName) : (req.session.name || '');
+    const id = 'wp_' + crypto.randomBytes(8).toString('hex');
+    const saved = await db.upsertWeeklyPlan(Object.assign({
+      id, school, teacherId, teacherName,
+    }, v.value));
+    res.json({ ok: true, plan: weeklyPlans.stripPlanAttachments(saved) });
+  })().catch(fail(res));
+});
+
+app.put('/api/weekly-plans/:school/:id', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    const role = req.session.role;
+    const uid = String(req.session.user_id || req.session.userId || '');
+    if (role !== 'TEACHER' && role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const existing = await db.getWeeklyPlan(school, req.params.id);
+    if (!existing) return res.status(404).json({ error: 'not_found' });
+    if (role === 'TEACHER' && String(existing.teacherId) !== uid) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    const v = weeklyPlans.validateWeeklyPlanPayload(Object.assign({}, existing, req.body || {}));
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    if (role === 'TEACHER') {
+      const rec = await db.getSchoolData(school);
+      const assigned = weeklyPlans.extractTeacherAssignments((rec && rec.data) || {}, uid);
+      if (!assigned.classIds.has(String(v.value.classId))) {
+        return res.status(403).json({ error: 'class_not_assigned' });
+      }
+    }
+    const updated = await db.updateWeeklyPlanById(school, req.params.id, v.value);
+    res.json({ ok: true, plan: weeklyPlans.stripPlanAttachments(updated) });
+  })().catch(fail(res));
+});
+
+app.delete('/api/weekly-plans/:school/:id', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    const role = req.session.role;
+    const uid = String(req.session.user_id || req.session.userId || '');
+    if (role !== 'TEACHER' && role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const existing = await db.getWeeklyPlan(school, req.params.id);
+    if (!existing) return res.status(404).json({ error: 'not_found' });
+    if (role === 'TEACHER' && String(existing.teacherId) !== uid) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    await db.deleteWeeklyPlan(school, req.params.id);
+    res.json({ ok: true, deleted: true });
+  })().catch(fail(res));
+});
+
+app.post('/api/weekly-plans/:school/:id/items/:itemId/progress', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    if (req.session.role !== 'STUDENT') return res.status(403).json({ error: 'forbidden' });
+    const plan = await db.getWeeklyPlan(school, req.params.id);
+    if (!plan) return res.status(404).json({ error: 'not_found' });
+    const ctx = await resolveStudentAnnouncementContext(school, req.session);
+    if (!canAccessWeeklyPlan('STUDENT', '', ctx, plan)) return res.status(403).json({ error: 'forbidden' });
+    const itemExists = (plan.items || []).some(it => String(it.id) === String(req.params.itemId));
+    if (!itemExists) return res.status(404).json({ error: 'item_not_found' });
+    const completed = !(req.body && req.body.completed === false);
+    const row = await db.setWeeklyPlanItemProgress({
+      planId: plan.id,
+      itemId: req.params.itemId,
+      school,
+      studentId: (ctx.student && ctx.student.id) || ctx.uid,
+      studentName: (ctx.student && ctx.student.name) || req.session.name || '',
+      completed,
+    });
+    res.json({ ok: true, progress: row });
+  })().catch(fail(res));
+});
+
+app.get('/api/weekly-plans/:school/:id/progress', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    const role = req.session.role;
+    const uid = String(req.session.user_id || req.session.userId || '');
+    if (role !== 'TEACHER' && role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const plan = await db.getWeeklyPlan(school, req.params.id);
+    if (!plan) return res.status(404).json({ error: 'not_found' });
+    if (role === 'TEACHER' && String(plan.teacherId) !== uid) return res.status(403).json({ error: 'forbidden' });
+    const progress = await db.listPlanWeeklyProgress(school, plan.id);
+    const rec = await db.getSchoolData(school);
+    const data = (rec && rec.data) ? rec.data : {};
+    const classStudents = (Array.isArray(data.students) ? data.students : [])
+      .filter(s => s && !s.deleted && String(s.classId || '') === String(plan.classId))
+      .map(s => ({ id: s.id, name: s.name || '' }));
+    res.json({
+      ok: true,
+      planId: plan.id,
+      itemsCount: (plan.items || []).length,
+      totalStudents: classStudents.length,
+      students: classStudents,
+      progress,
     });
   })().catch(fail(res));
 });
