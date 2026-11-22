@@ -95,6 +95,11 @@ test('8 & 9. أرشفة الأسابيع دون تداخل، الظهور في �
   assert.deepEqual(aggW2.tasks.map(t => t.lesson), ['جديد']);
 
   assert.match(indexSrc, /renderStudentWeeklyPlanBanner\(\)/);
+  assert.match(indexSrc, /wp-stu-shell/);
+  assert.match(indexSrc, /wp-table/);
+  assert.match(indexSrc, /wpOpenArchiveModal/);
+  assert.match(indexSrc, /wpOpenFilesModal/);
+  assert.match(indexSrc, /wpOpenNotesModal/);
   assert.match(indexSrc, /href:'#\/weekly-plan'/);
   if (db.SCHOOLS[0] === 'GIRLS') {
     assert.match(indexSrc, /\.wp-tab\.active \{ background:#db2777/);

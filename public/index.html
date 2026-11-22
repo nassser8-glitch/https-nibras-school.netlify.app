@@ -414,6 +414,51 @@ window.__nibrasMarkBooted = function(){
   .wp-check-btn { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:9px; border:1px solid #fbcfe8; background:#fdf2f8; color:#831843; font-size:12px; font-weight:800; cursor:pointer; }
   .wp-check-btn.checked { background:#16a34a; color:#fff; border-color:#15803d; }
 
+  /* واجهة الخطة الأسبوعية الاحترافية للطلاب — البنات */
+  .wp-stu-shell { display:flex; flex-direction:column; gap:12px; }
+  .wp-stu-topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; background:linear-gradient(135deg,#fff,#fdf2f8); border:1px solid #fbcfe8; border-radius:16px; padding:10px 16px; box-shadow:0 4px 14px rgba(219,39,119,.07); }
+  .wp-stu-user { display:flex; align-items:center; gap:10px; }
+  .wp-stu-avatar { width:42px; height:42px; border-radius:50%; background:#fce7f3; color:#be185d; border:2px solid #f9a8d4; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:900; flex-shrink:0; }
+  .wp-stu-brand { display:flex; align-items:center; gap:8px; font-weight:900; color:#831843; font-size:18px; }
+  .wp-stu-topactions { display:flex; align-items:center; gap:8px; }
+  .wp-stu-bell { position:relative; width:38px; height:38px; border-radius:12px; background:#fff; border:1px solid #fbcfe8; display:flex; align-items:center; justify-content:center; text-decoration:none; font-size:18px; }
+  .wp-stu-bell-dot { position:absolute; top:-5px; right:-5px; min-width:18px; height:18px; padding:0 4px; border-radius:999px; background:#ef4444; color:#fff; font-size:10px; font-weight:900; display:flex; align-items:center; justify-content:center; border:2px solid #fff; }
+  .wp-stu-banner { background:linear-gradient(135deg,#fdf2f8 0%,#fce7f3 55%,#fbcfe8 100%); border:1.5px solid #f9a8d4; border-radius:18px; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; box-shadow:0 6px 20px rgba(219,39,119,.09); }
+  .wp-stu-banner-title { font-size:22px; font-weight:900; color:#831843; margin:0; display:flex; align-items:center; gap:8px; }
+  .wp-stu-banner-sub { font-size:13px; font-weight:700; color:#9d174d; margin-top:4px; }
+  .wp-stu-chips { display:flex; gap:8px; flex-wrap:wrap; }
+  .wp-stu-chip { background:#fff; border:1px solid #fbcfe8; color:#831843; border-radius:10px; padding:5px 11px; font-size:12px; font-weight:800; box-shadow:0 2px 6px rgba(190,24,93,.06); }
+  .wp-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
+  @media (max-width:980px){ .wp-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+  @media (max-width:600px){ .wp-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  .wp-kpi { background:#fff; border:1px solid #fce7f3; border-radius:14px; padding:11px 13px; display:flex; align-items:center; justify-content:space-between; gap:8px; box-shadow:0 3px 10px rgba(190,24,93,.05); }
+  .wp-kpi-prog { grid-column:span 1; background:linear-gradient(135deg,#fff,#fdf2f8); border:1.5px solid #fbcfe8; border-radius:14px; padding:10px 14px; display:flex; flex-direction:column; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(190,24,93,.05); }
+  .wp-prog-bar { width:100%; height:9px; border-radius:999px; background:#fce7f3; overflow:hidden; }
+  .wp-prog-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,#db2777,#f472b6); transition:width .25s ease; }
+  .wp-controls-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:#fff; border:1px solid #fce7f3; border-radius:14px; padding:10px 14px; }
+  .wp-table-wrap { background:#fff; border:1.5px solid #fbcfe8; border-radius:16px; overflow:hidden; box-shadow:0 6px 22px rgba(190,24,93,.07); }
+  .wp-table { width:100%; border-collapse:collapse; }
+  .wp-table thead th { background:linear-gradient(180deg,#be185d,#9d174d); color:#fff; font-size:13px; font-weight:800; padding:11px 10px; text-align:center; white-space:nowrap; }
+  .wp-table tbody td { padding:10px; border-bottom:1px solid #fce7f3; font-size:13px; color:#1e293b; text-align:center; vertical-align:middle; }
+  .wp-table tbody tr:hover { background:#fff7fb; }
+  .wp-day-pill { display:inline-flex; flex-direction:column; align-items:center; gap:2px; background:#fdf2f8; border:1px solid #fbcfe8; border-radius:10px; padding:5px 10px; min-width:92px; }
+  .wp-day-pill strong { font-size:13px; color:#9d174d; }
+  .wp-day-pill span { font-size:10.5px; color:#64748b; font-weight:700; }
+  .wp-sub-btn { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:10px; font-size:12.5px; font-weight:800; border:1px solid transparent; cursor:pointer; }
+  .wp-done-box { width:28px; height:28px; border-radius:8px; border:2px solid #fbcfe8; background:#fff; color:#fff; font-size:15px; font-weight:900; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+  .wp-done-box.checked { background:#16a34a; border-color:#15803d; }
+  .wp-bottom-dock { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+  @media (max-width:720px){ .wp-bottom-dock { grid-template-columns:1fr; } }
+  .wp-dock-btn { display:flex; align-items:center; justify-content:center; gap:8px; padding:11px 14px; border-radius:14px; border:1.5px solid #fbcfe8; background:#fff; color:#831843; font-size:13.5px; font-weight:900; cursor:pointer; box-shadow:0 3px 10px rgba(190,24,93,.06); }
+  .wp-dock-btn:hover { background:#fdf2f8; }
+  @media (max-width:700px){
+    .wp-table thead { display:none; }
+    .wp-table, .wp-table tbody, .wp-table tr, .wp-table td { display:block; width:100%; }
+    .wp-table tr { padding:10px; border-bottom:2px solid #fce7f3; }
+    .wp-table tbody td { border:none; padding:5px 4px; text-align:right; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .wp-table tbody td::before { content:attr(data-label); font-size:11.5px; font-weight:800; color:#9d174d; flex-shrink:0; }
+  }
+
   /* بطاقات مفكرتي الشخصية */
   .nb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
   .nb-card { background:linear-gradient(180deg,#fffdf5,#fff9e6); border:1px solid #fde68a; border-radius:12px; padding:12px 14px; box-shadow:0 2px 6px rgba(0,0,0,.04); }
@@ -6872,67 +6917,274 @@ function wpWeekOptionsHtml(){
   }
   return weeks.map(w => `<option value="${escapeHtml(w.weekStart)}" ${__wpCache.weekStart===w.weekStart?'selected':''}>${escapeHtml(w.weekStart)}${w.weekLabel ? ' — ' + escapeHtml(w.weekLabel) : ''}${w.weekStart===cur ? ' (الحالي)' : ''}</option>`).join('');
 }
+function wpSubjectStyle(sub){
+  const s = String(sub || '');
+  if(/قرآن|تلاوة|حفظ/.test(s)) return { icon:'📖', bg:'#ecfdf5', color:'#047857', border:'#a7f3d0' };
+  if(/رياضيات/.test(s)) return { icon:'🧮', bg:'#eff6ff', color:'#1d4ed8', border:'#bfdbfe' };
+  if(/لغت|عرب/.test(s)) return { icon:'✍️', bg:'#fdf2f8', color:'#9d174d', border:'#fbcfe8' };
+  if(/علوم/.test(s)) return { icon:'🔬', bg:'#f0fdfa', color:'#0f766e', border:'#99f6e4' };
+  if(/حديث|توحيد|فقه|تفسير|إسلام/.test(s)) return { icon:'🕌', bg:'#fffbeb', color:'#b45309', border:'#fde68a' };
+  if(/إنجليز|english/i.test(s)) return { icon:'🔤', bg:'#eef2ff', color:'#4338ca', border:'#c7d2fe' };
+  if(/اجتماع|تاريخ|جغراف/.test(s)) return { icon:'🌍', bg:'#fff7ed', color:'#c2410c', border:'#fed7aa' };
+  if(/حاسب|تقن|رقم/.test(s)) return { icon:'💻', bg:'#f1f5f9', color:'#334155', border:'#cbd5e1' };
+  return { icon:'📚', bg:'#fdf2f8', color:'#831843', border:'#fbcfe8' };
+}
+function wpHijriOfDate(iso){
+  try {
+    if(!iso) return '';
+    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura', { day:'numeric', month:'numeric', year:'numeric' }).format(new Date(iso + 'T12:00:00Z'));
+  } catch(_){ return ''; }
+}
+function wpOpenTaskDetailModal(planId, itemId){
+  const t = (__wpCache.tasks || []).find(x => x.planId === planId && x.itemId === itemId);
+  if(!t) return;
+  const st = wpSubjectStyle(t.subject);
+  const dayObj = __WP_DAYS.find(x => x.key === t.dayKey) || { label: t.dayKey };
+  const done = !!__wpCache.progress[t.planId + '|' + t.itemId];
+  closeAnnModal();
+  const overlay = document.createElement('div');
+  overlay.id = 'annModalOverlay';
+  overlay.className = 'modal-overlay';
+  overlay.onclick = (e) => { if(e.target === overlay) closeAnnModal(); };
+  overlay.innerHTML = `<div class="modal-box" style="max-width:600px;width:96vw;border-top:5px solid #db2777">
+    <div class="modal-head">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="wp-sub-btn" style="background:${st.bg};color:${st.color};border-color:${st.border}">${st.icon} ${escapeHtml(t.subject)}</span>
+        <span style="font-size:12px;color:#64748b;font-weight:700">${escapeHtml(dayObj.label)} ${t.date ? '· ' + escapeHtml(t.date) : ''}</span>
+      </div>
+      <button type="button" class="modal-close" onclick="closeAnnModal()">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;padding:6px 2px">
+      ${t.lesson ? `<div class="wp-field"><b>📖 الدرس / المطلوب:</b> ${escapeHtml(t.lesson)}</div>` : ''}
+      ${t.homework ? `<div class="wp-field"><b>📝 الواجب:</b> ${escapeHtml(t.homework)}</div>` : ''}
+      ${t.assessments ? `<div class="wp-field"><b>🧪 التقويم / الاختبار:</b> ${escapeHtml(t.assessments)}</div>` : ''}
+      ${t.notes ? `<div class="wp-field"><b>💬 ملاحظات المعلمة:</b> ${escapeHtml(t.notes)}</div>` : ''}
+      <div class="wp-field"><b>👩‍🏫 المعلمة:</b> ${escapeHtml(t.teacherName || '—')}</div>
+      ${(t.links && t.links.length) ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${t.links.map((lk, i) => `<a href="${escapeHtml(lk)}" target="_blank" rel="noopener noreferrer" class="ann-btn-soft">🔗 رابط تعليمي ${i+1}</a>`).join('')}</div>` : ''}
+      ${t.hasAttachment ? `<div><button type="button" class="ann-btn-primary" onclick="wpOpenAttachmentModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">📎 عرض المرفق: ${escapeHtml(t.attachmentName || 'ملف')}</button></div>` : ''}
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:14px;padding-top:10px;border-top:1px solid #fce7f3">
+      <button type="button" class="wp-check-btn ${done ? 'checked' : ''}" onclick="wpToggleStudentProgress('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}');closeAnnModal()">${done ? '✓ تم الإنجاز' : '☐ تحديد كمنجز'}</button>
+      <button type="button" class="ann-btn-soft" onclick="closeAnnModal()">إغلاق</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function wpOpenArchiveModal(){
+  closeAnnModal();
+  const overlay = document.createElement('div');
+  overlay.id = 'annModalOverlay';
+  overlay.className = 'modal-overlay';
+  overlay.onclick = (e) => { if(e.target === overlay) closeAnnModal(); };
+  const weeks = (__wpCache.weeks || []).slice();
+  const cur = wpCurrentSundayKey();
+  if(!weeks.some(w => w.weekStart === cur)) weeks.unshift({ weekStart: cur, weekLabel: 'الأسبوع الحالي', planCount: 0 });
+  overlay.innerHTML = `<div class="modal-box" style="max-width:540px;width:96vw;border-top:5px solid #db2777">
+    <div class="modal-head"><h3>📁 أرشيف الأسابيع السابقة</h3><button type="button" class="modal-close" onclick="closeAnnModal()">✕</button></div>
+    <div style="display:flex;flex-direction:column;gap:8px;max-height:380px;overflow-y:auto">
+      ${weeks.map(w => `<button type="button" class="ann-btn-soft" style="justify-content:space-between;padding:10px 14px" onclick="__wpCache.weekStart='${escapeHtml(w.weekStart)}';closeAnnModal();__loadWeeklyPlans(true,'${escapeHtml(w.weekStart)}')">
+        <span>📅 ${escapeHtml(w.weekStart)} ${w.weekLabel ? '— ' + escapeHtml(w.weekLabel) : ''}</span>
+        <span>${w.weekStart === __wpCache.weekStart ? '✓ المعروض حالياً' : 'عرض الأسبوع ←'}</span>
+      </button>`).join('')}
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function wpOpenFilesModal(){
+  closeAnnModal();
+  const overlay = document.createElement('div');
+  overlay.id = 'annModalOverlay';
+  overlay.className = 'modal-overlay';
+  overlay.onclick = (e) => { if(e.target === overlay) closeAnnModal(); };
+  const tasks = (__wpCache.tasks || []).filter(t => t.hasAttachment || (t.links && t.links.length));
+  overlay.innerHTML = `<div class="modal-box" style="max-width:620px;width:96vw;border-top:5px solid #db2777">
+    <div class="modal-head"><h3>📎 ملفات ومواد الخطة</h3><button type="button" class="modal-close" onclick="closeAnnModal()">✕</button></div>
+    <div style="display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto">
+      ${tasks.length ? tasks.map(t => `<div class="ann-card" style="padding:10px 12px">
+        <div style="font-weight:800;color:#831843;margin-bottom:6px">${escapeHtml(t.subject)} — ${escapeHtml(t.lesson || 'مهمة')}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${t.hasAttachment ? `<button type="button" class="ann-btn-primary" onclick="wpOpenAttachmentModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">📎 ${escapeHtml(t.attachmentName || 'عرض المرفق')}</button>` : ''}
+          ${(t.links || []).map((lk, i) => `<a href="${escapeHtml(lk)}" target="_blank" rel="noopener noreferrer" class="ann-btn-soft">🔗 رابط ${i+1}</a>`).join('')}
+        </div>
+      </div>`).join('') : '<div style="text-align:center;color:#64748b;padding:20px">لا توجد ملفات أو روابط مرفقة في هذا الأسبوع</div>'}
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function wpOpenNotesModal(){
+  closeAnnModal();
+  const overlay = document.createElement('div');
+  overlay.id = 'annModalOverlay';
+  overlay.className = 'modal-overlay';
+  overlay.onclick = (e) => { if(e.target === overlay) closeAnnModal(); };
+  const tasks = (__wpCache.tasks || []).filter(t => t.notes || t.assessments);
+  overlay.innerHTML = `<div class="modal-box" style="max-width:620px;width:96vw;border-top:5px solid #db2777">
+    <div class="modal-head"><h3>💬 ملاحظات المعلمات</h3><button type="button" class="modal-close" onclick="closeAnnModal()">✕</button></div>
+    <div style="display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto">
+      ${tasks.length ? tasks.map(t => `<div class="ann-card" style="padding:10px 12px">
+        <div style="font-weight:800;color:#831843;margin-bottom:4px">${escapeHtml(t.subject)} (${escapeHtml(t.teacherName || 'المعلمة')})</div>
+        ${t.assessments ? `<div class="wp-field"><b>🧪 تقويم/اختبار:</b> ${escapeHtml(t.assessments)}</div>` : ''}
+        ${t.notes ? `<div class="wp-field"><b>💬 ملاحظة:</b> ${escapeHtml(t.notes)}</div>` : ''}
+      </div>`).join('') : '<div style="text-align:center;color:#64748b;padding:20px">لا توجد ملاحظات مسجلة لهذا الأسبوع</div>'}
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
 function renderWeeklyPlanStudent(){
   if(!__wpCache.loaded && !__wpCache.loading){
     setTimeout(() => __loadWeeklyPlans(false), 0);
   }
-  const allTasks = (__wpCache.tasks || []).filter(t => __wpUi.subject === 'all' || t.subject === __wpUi.subject);
+  const d = loadDB();
+  const user = currentUser() || {};
+  const stu = (d.students || []).find(s => s && String(s.id) === String(user.id)) || {};
+  const cls = stu.classId ? (d.classes || []).find(c => c && c.id === stu.classId) : null;
+  const gr = cls ? (d.grades || []).find(g => g && g.id === cls.gradeId) : null;
+  const classText = cls ? ((gr ? gr.name + ' — ' : '') + 'فصل ' + cls.name) : '—';
+
+  const rawTasks = __wpCache.tasks || [];
   const subs = __wpCache.subjects || [];
-  const totalTasks = (__wpCache.tasks || []).length;
-  const doneTasks = (__wpCache.tasks || []).filter(t => __wpCache.progress[t.planId + '|' + t.itemId]).length;
+  const filteredTasks = rawTasks.filter(t => {
+    if(__wpUi.subject !== 'all' && t.subject !== __wpUi.subject) return false;
+    if(__wpUi.viewMode === 'daily' && t.dayKey !== __wpUi.dayKey) return false;
+    return true;
+  });
+
+  const totalTasks = rawTasks.length;
+  const lessonsCount = rawTasks.filter(t => t.lesson).length;
+  const hwCount = rawTasks.filter(t => t.homework).length;
+  const assessCount = rawTasks.filter(t => t.assessments).length;
+  const doneTasks = rawTasks.filter(t => __wpCache.progress[t.planId + '|' + t.itemId]).length;
   const pct = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
+  const weekText = (typeof schoolWeekInfo === 'function' ? schoolWeekInfo().label : '') || __wpCache.weekStart;
+  const unreadAnn = (typeof studentUnreadAnnCount === 'function') ? studentUnreadAnnCount() : 0;
 
-  let contentHtml = '';
-  if(!allTasks.length){
-    contentHtml = '<div class="ann-card" style="text-align:center;color:#64748b;padding:28px">لا توجد خطط أسبوعية منشورة لهذا الأسبوع بعد</div>';
-  } else if(__wpUi.viewMode === 'daily'){
-    const dayTasks = allTasks.filter(t => t.dayKey === __wpUi.dayKey);
-    const dayObj = __WP_DAYS.find(x => x.key === __wpUi.dayKey) || __WP_DAYS[0];
-    contentHtml = `<div class="wp-day-block">
-      <div class="wp-day-head">
-        <span>📅 ${dayObj.label} (${escapeHtml(wpDateForDay(__wpCache.weekStart, dayObj.key))})</span>
-        <span style="font-size:12px;color:#64748b">${dayTasks.length} مهمة</span>
-      </div>
-      ${dayTasks.length ? `<div class="wp-grid">${dayTasks.map(t => wpRenderTaskCard(t, true)).join('')}</div>` : '<div style="text-align:center;color:#64748b;padding:18px">لا توجد مهام مسجلة لهذا اليوم</div>'}
-    </div>`;
-  } else {
-    contentHtml = __WP_DAYS.map(day => {
-      const dayTasks = allTasks.filter(t => t.dayKey === day.key);
-      if(!dayTasks.length) return '';
-      return `<div class="wp-day-block" style="margin-bottom:10px">
-        <div class="wp-day-head">
-          <span>📅 ${day.label} (${escapeHtml(wpDateForDay(__wpCache.weekStart, day.key))})</span>
-          <span style="font-size:12px;color:#64748b">${dayTasks.length} مهمة</span>
+  return `<div class="wp-stu-shell">
+    <div class="wp-stu-topbar">
+      <div class="wp-stu-user">
+        <div class="wp-stu-avatar">👧</div>
+        <div>
+          <div style="font-size:14.5px;font-weight:900;color:#831843">مرحباً بكِ يا ${escapeHtml(user.name || 'طالبة')}</div>
+          <div style="font-size:12px;color:#64748b;font-weight:700">${escapeHtml(classText)}</div>
         </div>
-        <div class="wp-grid">${dayTasks.map(t => wpRenderTaskCard(t, true)).join('')}</div>
-      </div>`;
-    }).join('') || '<div class="ann-card" style="text-align:center;color:#64748b;padding:24px">لا توجد مهام مطابقة للتصفية</div>';
-  }
-
-  return `<div class="wp-page">
-    <div class="wp-header">
-      <div>
-        <h2>📅 الخطة الأسبوعية الموحدة</h2>
-        <div class="ann-header-sub">جميع المواد الدراسية لفصلكِ في مكان واحد · الإنجاز: ${doneTasks}/${totalTasks} (${pct}%)</div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <select onchange="__wpCache.weekStart=this.value;__loadWeeklyPlans(true, this.value)">${wpWeekOptionsHtml()}</select>
-        <button type="button" class="ann-btn-soft" onclick="__loadWeeklyPlans(true)">🔄 تحديث</button>
+      <div class="wp-stu-brand">📖 نبراس <span style="font-size:11px;color:#be185d;font-weight:800">NIBRAS</span></div>
+      <div class="wp-stu-topactions">
+        <a href="#/school-announcements" class="wp-stu-bell" title="إعلانات المدرسة">
+          🔔${unreadAnn > 0 ? `<span class="wp-stu-bell-dot">${unreadAnn}</span>` : ''}
+        </a>
         <a href="#/" class="ann-btn-soft">🏠 الرئيسية</a>
       </div>
     </div>
-    <div class="ann-filters" style="justify-content:space-between">
-      <div class="wp-tabs">
-        <button type="button" class="wp-tab ${__wpUi.viewMode==='weekly'?'active':''}" onclick="__wpUi.viewMode='weekly';renderApp()">🗓️ العرض الأسبوعي</button>
-        <button type="button" class="wp-tab ${__wpUi.viewMode==='daily'?'active':''}" onclick="__wpUi.viewMode='daily';renderApp()">📌 العرض اليومي</button>
+
+    <div class="wp-stu-banner">
+      <div>
+        <h2 class="wp-stu-banner-title">📅 الخطة الأسبوعية</h2>
+        <div class="wp-stu-banner-sub">جميع المواد الدراسية في مكان واحد</div>
       </div>
-      <div class="wp-tabs">
-        <button type="button" class="wp-tab ${__wpUi.subject==='all'?'active':''}" onclick="__wpUi.subject='all';renderApp()">الكل</button>
-        ${subs.map(s => `<button type="button" class="wp-tab ${__wpUi.subject===s?'active':''}" onclick="__wpUi.subject='${escapeHtml(s).replace(/'/g, "\\'")}';renderApp()">${escapeHtml(s)}</button>`).join('')}
+      <div class="wp-stu-chips">
+        <span class="wp-stu-chip">✅ دروسي</span>
+        <span class="wp-stu-chip">✅ واجباتي</span>
+        <span class="wp-stu-chip">✅ تقويماتي</span>
       </div>
     </div>
+
+    <div class="wp-kpis">
+      <div class="wp-kpi">
+        <div><div style="font-size:11.5px;color:#64748b;font-weight:700">الأسبوع الدراسي</div><div style="font-size:16px;font-weight:900;color:#be185d">${escapeHtml(weekText)}</div></div>
+        <span style="font-size:22px">🗓️</span>
+      </div>
+      <div class="wp-kpi">
+        <div><div style="font-size:11.5px;color:#64748b;font-weight:700">دروس</div><div style="font-size:20px;font-weight:900;color:#0284c7">${lessonsCount}</div></div>
+        <span style="font-size:22px">📚</span>
+      </div>
+      <div class="wp-kpi">
+        <div><div style="font-size:11.5px;color:#64748b;font-weight:700">واجبات</div><div style="font-size:20px;font-weight:900;color:#d97706">${hwCount}</div></div>
+        <span style="font-size:22px">📖</span>
+      </div>
+      <div class="wp-kpi">
+        <div><div style="font-size:11.5px;color:#64748b;font-weight:700">تقويم / اختبار</div><div style="font-size:20px;font-weight:900;color:#7c3aed">${assessCount}</div></div>
+        <span style="font-size:22px">📋</span>
+      </div>
+      <div class="wp-kpi-prog">
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:900;color:#831843">
+          <span>🏆 تقدّمكِ هذا الأسبوع</span>
+          <span>%${pct}</span>
+        </div>
+        <div class="wp-prog-bar"><div class="wp-prog-fill" style="width:${pct}%"></div></div>
+        <div style="font-size:11px;color:#64748b;font-weight:700">${doneTasks} من ${totalTasks} مهام</div>
+      </div>
+    </div>
+
+    <div class="wp-controls-bar">
+      <div class="wp-tabs">
+        <button type="button" class="wp-tab ${__wpUi.viewMode==='weekly'?'active':''}" onclick="__wpUi.viewMode='weekly';renderApp()">🗓️ العرض الأسبوعي</button>
+        <button type="button" class="wp-tab ${__wpUi.viewMode==='daily'?'active':''}" onclick="__wpUi.viewMode='daily';renderApp()">📋 العرض اليومي</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select onchange="__wpUi.subject=this.value;renderApp()">
+          <option value="all" ${__wpUi.subject==='all'?'selected':''}>جميع المواد</option>
+          ${subs.map(s => `<option value="${escapeHtml(s)}" ${__wpUi.subject===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}
+        </select>
+        <select onchange="__wpCache.weekStart=this.value;__loadWeeklyPlans(true, this.value)">${wpWeekOptionsHtml()}</select>
+      </div>
+    </div>
+
     ${__wpUi.viewMode === 'daily' ? `<div class="wp-tabs">${__WP_DAYS.map(day => `<button type="button" class="wp-tab ${__wpUi.dayKey===day.key?'active':''}" onclick="__wpUi.dayKey='${day.key}';renderApp()">${day.label}</button>`).join('')}</div>` : ''}
-    ${contentHtml}
+
+    <div class="wp-table-wrap">
+      ${filteredTasks.length ? `<table class="wp-table">
+        <thead>
+          <tr>
+            <th>اليوم والتاريخ</th>
+            <th>المادة</th>
+            <th>الدرس / المطلوب</th>
+            <th>الواجب</th>
+            <th>ملاحظات</th>
+            <th>الإنجاز</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredTasks.map(t => {
+            const st = wpSubjectStyle(t.subject);
+            const dayObj = __WP_DAYS.find(x => x.key === t.dayKey) || { label: t.dayKey };
+            const done = !!__wpCache.progress[t.planId + '|' + t.itemId];
+            const hDate = wpHijriOfDate(t.date);
+            return `<tr>
+              <td data-label="اليوم والتاريخ">
+                <div class="wp-day-pill">
+                  <strong>${escapeHtml(dayObj.label)}</strong>
+                  ${hDate ? `<span>${escapeHtml(hDate)}</span>` : ''}
+                  ${t.date ? `<span>${escapeHtml(t.date)}</span>` : ''}
+                </div>
+              </td>
+              <td data-label="المادة">
+                <button type="button" class="wp-sub-btn" style="background:${st.bg};color:${st.color};border-color:${st.border}" onclick="wpOpenTaskDetailModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">
+                  ${st.icon} ${escapeHtml(t.subject)}
+                </button>
+              </td>
+              <td data-label="الدرس / المطلوب" style="font-weight:700">
+                ${escapeHtml(t.lesson || t.assessments || '—')}
+                ${(t.lesson && t.assessments) ? `<div style="font-size:11px;color:#7c3aed;margin-top:2px">🧪 ${escapeHtml(t.assessments)}</div>` : ''}
+              </td>
+              <td data-label="الواجب">${escapeHtml(t.homework || '—')}</td>
+              <td data-label="ملاحظات">
+                ${escapeHtml(t.notes || '—')}
+                ${(t.hasAttachment || (t.links && t.links.length)) ? `<div style="margin-top:3px"><button type="button" class="ann-btn-soft" style="padding:2px 8px;font-size:11px" onclick="wpOpenTaskDetailModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">📎 مرفقات</button></div>` : ''}
+              </td>
+              <td data-label="الإنجاز">
+                <button type="button" class="wp-done-box ${done ? 'checked' : ''}" onclick="wpToggleStudentProgress('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')" title="${done ? 'تم الإنجاز' : 'تحديد كمنجز'}">${done ? '✓' : ''}</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>` : '<div style="text-align:center;color:#64748b;padding:30px;font-weight:700">لا توجد خطط أسبوعية منشورة لهذا الاختيار بعد</div>'}
+    </div>
+
+    <div class="wp-bottom-dock">
+      <button type="button" class="wp-dock-btn" onclick="wpOpenArchiveModal()">📁 أرشيف الأسابيع السابقة</button>
+      <button type="button" class="wp-dock-btn" onclick="wpOpenFilesModal()">📎 ملفات ومواد الخطة</button>
+      <button type="button" class="wp-dock-btn" onclick="wpOpenNotesModal()">💬 ملاحظات المعلمات</button>
+    </div>
   </div>`;
 }
 function wpTeacherAvailableClasses(user, d){
@@ -18440,7 +18692,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=188', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=189', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
