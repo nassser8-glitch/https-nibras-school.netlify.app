@@ -152,6 +152,29 @@ test('11. منع السبت والأحد، ربط التكليفات من الإ
   assert.match(serverSrc, /extractClassAssignmentsForWeek/);
 });
 
+test('12. بداية الأسبوع من الاثنين في نموذج المعلم وتوافق التواريخ والخطط السابقة', () => {
+  assert.match(indexSrc, /بداية الأسبوع \(الاثنين\)/);
+  assert.doesNotMatch(indexSrc, /بداية الأسبوع \(الأحد\)/);
+  assert.equal(wp.mondayOfDateStr('2026-11-23'), '2026-11-23');
+  assert.equal(wp.mondayOfDateStr('2026-11-22'), '2026-11-23');
+  assert.equal(wp.weekDateForDay('2026-11-23', 'mon'), '2026-11-23');
+  assert.equal(wp.weekDateForDay('2026-11-23', 'fri'), '2026-11-27');
+
+  const pMon = wp.validateWeeklyPlanPayload({
+    classId: 'c1', subject: 'الرياضيات', weekStart: '2026-11-23', status: 'published',
+    items: [
+      { id: 'd1', dayKey: 'mon', lesson: '1' },
+      { id: 'd2', dayKey: 'tue', lesson: '2' },
+      { id: 'd3', dayKey: 'wed', lesson: '3' },
+      { id: 'd4', dayKey: 'thu', lesson: '4' },
+      { id: 'd5', dayKey: 'fri', lesson: '5' },
+    ],
+  });
+  assert.equal(pMon.ok, true);
+  assert.equal(pMon.value.weekStart, '2026-11-23');
+  assert.deepEqual(pMon.value.items.map(i => i.date), ['2026-11-23', '2026-11-24', '2026-11-25', '2026-11-26', '2026-11-27']);
+});
+
 test('10. تجميع خطط معلمتين أو ثلاث معلمات (سلوم + شادية + ثالثة) لنفس الفصل والأسبوع حتى مع اختلاف يوم حفظ الأسبوع', () => {
   const saloom = {
     id: 'p_saloom', classId: 'c3hs', subject: 'الرياضيات', teacherId: 't_saloom', teacherName: 'سلوم',

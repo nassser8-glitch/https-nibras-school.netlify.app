@@ -4,11 +4,11 @@
 const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024; // 3 MB
 
 const WEEK_DAYS = [
-  { key: 'mon', label: 'الإثنين', offset: 1 },
-  { key: 'tue', label: 'الثلاثاء', offset: 2 },
-  { key: 'wed', label: 'الأربعاء', offset: 3 },
-  { key: 'thu', label: 'الخميس', offset: 4 },
-  { key: 'fri', label: 'الجمعة', offset: 5 },
+  { key: 'mon', label: 'الإثنين', offset: 0 },
+  { key: 'tue', label: 'الثلاثاء', offset: 1 },
+  { key: 'wed', label: 'الأربعاء', offset: 2 },
+  { key: 'thu', label: 'الخميس', offset: 3 },
+  { key: 'fri', label: 'الجمعة', offset: 4 },
 ];
 const DAY_KEY_SET = new Set(WEEK_DAYS.map(d => d.key));
 const PLAN_STATUSES = ['draft', 'published'];
@@ -20,27 +20,28 @@ function normalizeDateStr(val) {
   return m ? m[1] : '';
 }
 
-function currentSundayKey(nowInput) {
+function currentMondayKey(nowInput) {
   const d = nowInput ? new Date(nowInput) : new Date(Date.now() + 5 * 3600 * 1000);
-  const utcDay = d.getUTCDay(); // 0 = Sun, 5 = Fri, 6 = Sat
-  // في الإجازة (الجمعة/السبت) أو أيام الدراسة (الأحد-الخميس) نرجع بداية الأسبوع الدراسي (الأحد)
-  const sun = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - utcDay));
-  return sun.toISOString().slice(0, 10);
+  const utcDay = d.getUTCDay(); // 0=Sun, 1=Mon..6=Sat
+  const delta = utcDay === 0 ? 1 : (1 - utcDay);
+  const mon = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + delta));
+  return mon.toISOString().slice(0, 10);
 }
 
-function sundayOfDateStr(val) {
+function mondayOfDateStr(val) {
   const s = normalizeDateStr(val);
   if (!s) return '';
   const t = Date.parse(s + 'T00:00:00Z');
   if (!Number.isFinite(t)) return s;
   const d = new Date(t);
-  const sun = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - d.getUTCDay()));
-  return sun.toISOString().slice(0, 10);
+  const utcDay = d.getUTCDay();
+  const delta = utcDay === 0 ? 1 : (1 - utcDay);
+  const mon = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + delta));
+  return mon.toISOString().slice(0, 10);
 }
 
 function weekDateForDay(weekStart, dayKey) {
-  const ws = sundayOfDateStr(weekStart) || normalizeDateStr(weekStart);
-  if (dayKey === 'sun') return ws;
+  const ws = mondayOfDateStr(weekStart) || normalizeDateStr(weekStart);
   const day = WEEK_DAYS.find(d => d.key === dayKey);
   if (!ws || !day) return '';
   const base = Date.parse(ws + 'T00:00:00Z');
@@ -117,7 +118,7 @@ function validateWeeklyPlanPayload(body) {
   if (!classId) return { ok: false, error: 'class_required' };
   const subject = String(b.subject || '').trim().slice(0, 120);
   if (!subject) return { ok: false, error: 'subject_required' };
-  const weekStart = sundayOfDateStr(b.weekStart) || currentSundayKey();
+  const weekStart = mondayOfDateStr(b.weekStart) || currentMondayKey();
   const weekLabel = String(b.weekLabel || '').trim().slice(0, 100);
   const title = String(b.title || '').trim().slice(0, 200);
   const status = PLAN_STATUSES.includes(b.status) ? b.status : 'draft';
@@ -225,12 +226,12 @@ function stripPlanAttachments(plan) {
 
 function aggregateUnifiedStudentPlan(plans, classId, weekStart) {
   const cid = String(classId || '');
-  const wsSun = sundayOfDateStr(weekStart);
+  const wsMon = mondayOfDateStr(weekStart);
   const matching = (Array.isArray(plans) ? plans : []).filter(p =>
     p &&
     p.status === 'published' &&
     String(p.classId) === cid &&
-    (!wsSun || sundayOfDateStr(p.weekStart) === wsSun)
+    (!wsMon || mondayOfDateStr(p.weekStart) === wsMon)
   );
   const tasks = [];
   const subjectsSet = new Set();
@@ -291,7 +292,7 @@ function dayKeyOfIsoDate(dateStr) {
 function extractClassAssignmentsForWeek(schoolData, classId, weekStart, studentId) {
   const d = schoolData || {};
   const cid = String(classId || '');
-  const wsSun = sundayOfDateStr(weekStart);
+  const wsMon = mondayOfDateStr(weekStart);
   const userMap = {};
   (Array.isArray(d.users) ? d.users : []).forEach(u => { if (u && u.id) userMap[String(u.id)] = u.name || ''; });
 
@@ -307,7 +308,7 @@ function extractClassAssignmentsForWeek(schoolData, classId, weekStart, studentI
     if (seenIds.has(aid)) continue;
     const aDate = normalizeDateStr(a.date);
     if (!aDate) continue;
-    if (wsSun && sundayOfDateStr(aDate) !== wsSun) continue;
+    if (wsMon && mondayOfDateStr(aDate) !== wsMon) continue;
     const dayKey = dayKeyOfIsoDate(aDate);
     if (!DAY_KEY_SET.has(dayKey)) continue; // يستبعد السبت والأحد
     seenIds.add(aid);
@@ -324,7 +325,7 @@ function extractClassAssignmentsForWeek(schoolData, classId, weekStart, studentI
       planId,
       itemId: aid,
       classId: cid,
-      weekStart: wsSun || sundayOfDateStr(aDate),
+      weekStart: wsMon || mondayOfDateStr(aDate),
       weekLabel: '',
       planTitle: a.title || '',
       subject: sub,
@@ -355,9 +356,9 @@ function buildAdminCoverageSummary(schoolData, plans, weekStart) {
   grades.forEach(g => { if (g && g.id) gradeMap[String(g.id)] = g.name; });
   const users = (Array.isArray(d.users) ? d.users : []).filter(u => u && u.role === 'TEACHER' && u.active !== false && !u.deleted);
 
-  const wsSun = sundayOfDateStr(weekStart);
+  const wsMon = mondayOfDateStr(weekStart);
   const weekPublished = (Array.isArray(plans) ? plans : []).filter(p =>
-    p && p.status === 'published' && (!wsSun || sundayOfDateStr(p.weekStart) === wsSun)
+    p && p.status === 'published' && (!wsMon || mondayOfDateStr(p.weekStart) === wsMon)
   );
   const pubByTeacher = new Set(weekPublished.map(p => String(p.teacherId)));
   const pubByClass = {};
@@ -409,8 +410,10 @@ module.exports = {
   WEEK_DAYS,
   PLAN_STATUSES,
   normalizeDateStr,
-  currentSundayKey,
-  sundayOfDateStr,
+  currentMondayKey,
+  mondayOfDateStr,
+  currentSundayKey: currentMondayKey,
+  sundayOfDateStr: mondayOfDateStr,
   weekDateForDay,
   sanitizeAttachment,
   sanitizeLinks,

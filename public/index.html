@@ -6747,11 +6747,11 @@ function renderSchoolAnnouncementsAdmin(){
 
 /* ===== الخطة الأسبوعية — قسم البنات ===== */
 const __WP_DAYS = [
-  { key:'mon', label:'الإثنين', offset:1 },
-  { key:'tue', label:'الثلاثاء', offset:2 },
-  { key:'wed', label:'الأربعاء', offset:3 },
-  { key:'thu', label:'الخميس', offset:4 },
-  { key:'fri', label:'الجمعة', offset:5 },
+  { key:'mon', label:'الإثنين', offset:0 },
+  { key:'tue', label:'الثلاثاء', offset:1 },
+  { key:'wed', label:'الأربعاء', offset:2 },
+  { key:'thu', label:'الخميس', offset:3 },
+  { key:'fri', label:'الجمعة', offset:4 },
 ];
 const __wpCache = {
   loaded:false, loading:false, school:'', weekStart:'', weeks:[],
@@ -6767,10 +6767,20 @@ function __weeklyPlanReset(){
   __wpCache.weekStart = ''; __wpCache.weeks = []; __wpCache.plans = [];
   __wpCache.tasks = []; __wpCache.subjects = []; __wpCache.progress = {}; __wpCache.coverage = null;
 }
+function wpMondayOfDate(dateStr){
+  if(!dateStr) return '';
+  const base0 = Date.parse(dateStr + 'T00:00:00Z');
+  if(!Number.isFinite(base0)) return '';
+  const d0 = new Date(base0);
+  const g = d0.getUTCDay();
+  const delta = g === 0 ? 1 : (1 - g);
+  return new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), d0.getUTCDate() + delta)).toISOString().slice(0, 10);
+}
 function wpCurrentSundayKey(){
   const d = new Date(Date.now() + 5 * 3600 * 1000);
-  const sun = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - d.getUTCDay()));
-  return sun.toISOString().slice(0, 10);
+  const g = d.getUTCDay();
+  const delta = g === 0 ? 1 : (1 - g);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + delta)).toISOString().slice(0, 10);
 }
 function wpTodayDayKey(){
   const g = new Date(Date.now() + 5 * 3600 * 1000).getUTCDay();
@@ -6778,15 +6788,12 @@ function wpTodayDayKey(){
   return map[g] || 'mon';
 }
 function wpDateForDay(weekStart, dayKey){
-  if(!weekStart) return '';
-  const base0 = Date.parse(weekStart + 'T00:00:00Z');
-  if(!Number.isFinite(base0)) return '';
-  const d0 = new Date(base0);
-  const sunMs = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), d0.getUTCDate() - d0.getUTCDay());
-  if(dayKey === 'sun') return new Date(sunMs).toISOString().slice(0, 10);
+  const mon = wpMondayOfDate(weekStart);
+  if(!mon) return '';
   const day = __WP_DAYS.find(x => x.key === dayKey);
   if(!day) return '';
-  return new Date(sunMs + day.offset * 86400000).toISOString().slice(0, 10);
+  const monMs = Date.parse(mon + 'T00:00:00Z');
+  return new Date(monMs + day.offset * 86400000).toISOString().slice(0, 10);
 }
 async function __loadWeeklyPlans(force, weekStartOverride){
   const school = getActiveSchool();
@@ -7184,11 +7191,15 @@ function renderWeeklyPlanStudent(){
 function wpTeacherAvailableClasses(user, d){
   const ids = getAssignmentClassIds(user, d);
   const gMap = {};
-  (d.grades || []).forEach(g => { if(g && g.id) gMap[g.id] = g.name; });
-  return (d.classes || []).filter(c => c && !c.deleted && ids.includes(c.id)).map(c => ({
-    id: c.id,
-    label: (gMap[c.gradeId] ? gMap[c.gradeId] + ' — ' : '') + 'فصل ' + c.name,
-  }));
+  (d.grades || []).forEach(g => { if(g && g.id) gMap[g.id] = String(g.name || '').trim(); });
+  return (d.classes || []).filter(c => c && !c.deleted && ids.includes(c.id)).map(c => {
+    const gName = gMap[c.gradeId] || '';
+    const cName = String(c.name || '').trim();
+    return {
+      id: c.id,
+      label: gName ? (gName + ' – فصل ' + cName) : ('فصل ' + cName),
+    };
+  });
 }
 function wpTeacherSubjectsForClass(user, d, classId){
   const subs = [];
@@ -7378,8 +7389,8 @@ function renderWeeklyPlanTeacher(user){
             </select>
           </div>
           <div>
-            <label style="font-weight:800;font-size:12.5px">بداية الأسبوع (الأحد)</label>
-            <input type="date" style="width:100%" value="${escapeHtml(__wpUi.weekStart)}" onchange="__wpUi.weekStart=this.value;renderApp()" />
+            <label style="font-weight:800;font-size:12.5px">بداية الأسبوع (الاثنين)</label>
+            <input type="date" style="width:100%" value="${escapeHtml(wpMondayOfDate(__wpUi.weekStart) || __wpUi.weekStart)}" onchange="__wpUi.weekStart=wpMondayOfDate(this.value)||this.value;renderApp()" />
           </div>
           <div>
             <label style="font-weight:800;font-size:12.5px">اسم الأسبوع (اختياري)</label>
@@ -18686,7 +18697,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=193', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=194', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
