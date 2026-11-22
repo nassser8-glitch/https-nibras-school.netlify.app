@@ -107,3 +107,29 @@ test('8 & 9. أرشفة الأسابيع دون تداخل، الظهور في �
     assert.match(indexSrc, /\.wp-tab\.active \{ background:#2563eb/);
   }
 });
+
+test('10. تجميع خطط معلمتين أو ثلاث معلمات (سلوم + شادية + ثالثة) لنفس الفصل والأسبوع حتى مع اختلاف يوم حفظ الأسبوع', () => {
+  const saloom = {
+    id: 'p_saloom', classId: 'c3hs', subject: 'الرياضيات', teacherId: 't_saloom', teacherName: 'سلوم',
+    weekStart: '2026-11-22', status: 'published',
+    items: [{ id: 'i1', dayKey: 'sun', lesson: 'الدوال' }],
+  };
+  const shadia = {
+    id: 'p_shadia', classId: 'c3hs', subject: 'الفيزياء', teacherId: 't_shadia', teacherName: 'شادية',
+    weekStart: '2026-11-23', status: 'published',
+    items: [{ id: 'i2', dayKey: 'mon', lesson: 'الكهرباء' }],
+  };
+  const thirdTeacher = {
+    id: 'p_third', classId: 'c3hs', subject: 'الكيمياء', teacherId: 't_third', teacherName: 'نورة',
+    weekStart: '2026-11-24', status: 'published',
+    items: [{ id: 'i3', dayKey: 'tue', lesson: 'الروابط' }],
+  };
+  const agg = wp.aggregateUnifiedStudentPlan([saloom, shadia, thirdTeacher], 'c3hs', '2026-11-22');
+  assert.equal(agg.plans.length, 3);
+  assert.equal(agg.subjects.length, 3);
+  assert.deepEqual(agg.tasks.map(t => t.teacherName), ['سلوم', 'شادية', 'نورة']);
+
+  // التأكد أن الخادم يبني قائمة الأسابيع للطالبة من الخطط المنشورة لفصلها فقط
+  assert.match(serverSrc, /const allClassPub = await db\.listWeeklyPlans\(school, \{ classId, status: 'published' \}\)/);
+  assert.match(serverSrc, /weeklyPlans\.sundayOfDateStr/);
+});

@@ -3637,18 +3637,33 @@ app.get('/api/weekly-plans/:school', requireAuth, (req, res) => {
       const ctx = await resolveStudentAnnouncementContext(school, req.session);
       const classId = ctx.student && ctx.student.classId ? String(ctx.student.classId) : '';
       if (!classId) {
-        return res.json({ ok: true, weekStart, weeks, plans: [], tasks: [], subjects: [], progress: {} });
+        return res.json({ ok: true, weekStart, weeks: [], plans: [], tasks: [], subjects: [], progress: {} });
       }
-      const rawPlans = await db.listWeeklyPlans(school, { weekStart, classId, status: 'published' });
-      const stripped = rawPlans.map(weeklyPlans.stripPlanAttachments);
-      const unified = weeklyPlans.aggregateUnifiedStudentPlan(stripped, classId, weekStart);
+      const allClassPub = await db.listWeeklyPlans(school, { classId, status: 'published' });
+      const weekMap = new Map();
+      for (const p of allClassPub) {
+        const sun = weeklyPlans.sundayOfDateStr(p.weekStart) || p.weekStart;
+        if (!sun) continue;
+        const prev = weekMap.get(sun) || { weekStart: sun, weekLabel: '', planCount: 0 };
+        if (!prev.weekLabel && p.weekLabel) prev.weekLabel = p.weekLabel;
+        prev.planCount++;
+        weekMap.set(sun, prev);
+      }
+      const classWeeks = Array.from(weekMap.values()).sort((a, b) => String(b.weekStart).localeCompare(String(a.weekStart)));
+      const curSun = weeklyPlans.currentSundayKey();
+      const targetWeek = reqWeek
+        ? (weeklyPlans.sundayOfDateStr(reqWeek) || reqWeek)
+        : (weekMap.has(curSun) ? curSun : ((classWeeks[0] && classWeeks[0].weekStart) || curSun));
+
+      const stripped = allClassPub.map(weeklyPlans.stripPlanAttachments);
+      const unified = weeklyPlans.aggregateUnifiedStudentPlan(stripped, classId, targetWeek);
       const progRows = await db.listStudentWeeklyProgress(school, (ctx.student && ctx.student.id) || uid);
       const progress = {};
       progRows.forEach(r => { if (r.completed) progress[r.planId + '|' + r.itemId] = true; });
       return res.json({
         ok: true,
-        weekStart,
-        weeks,
+        weekStart: targetWeek,
+        weeks: classWeeks,
         classId,
         plans: unified.plans,
         tasks: unified.tasks,
@@ -3660,17 +3675,22 @@ app.get('/api/weekly-plans/:school', requireAuth, (req, res) => {
     if (role === 'TEACHER') {
       const rec = await db.getSchoolData(school);
       const assigned = weeklyPlans.extractTeacherAssignments((rec && rec.data) || {}, uid);
-      const rawPlans = await db.listWeeklyPlans(school, { weekStart, teacherId: uid });
-      const filtered = rawPlans.filter(p => assigned.classIds.has(String(p.classId))).map(weeklyPlans.stripPlanAttachments);
-      return res.json({ ok: true, weekStart, weeks, plans: filtered });
+      const targetSun = weeklyPlans.sundayOfDateStr(weekStart) || weekStart;
+      const rawPlans = await db.listWeeklyPlans(school, { teacherId: uid });
+      const filtered = rawPlans
+        .filter(p => assigned.classIds.has(String(p.classId)) && (weeklyPlans.sundayOfDateStr(p.weekStart) || p.weekStart) === targetSun)
+        .map(weeklyPlans.stripPlanAttachments);
+      return res.json({ ok: true, weekStart: targetSun, weeks, plans: filtered });
     }
 
     const rec = await db.getSchoolData(school);
     const schoolData = (rec && rec.data) ? rec.data : {};
-    const rawPlans = await db.listWeeklyPlans(school, { weekStart });
-    const stripped = rawPlans.map(weeklyPlans.stripPlanAttachments);
-    const coverage = weeklyPlans.buildAdminCoverageSummary(schoolData, stripped, weekStart);
-    res.json({ ok: true, weekStart, weeks, plans: stripped, coverage });
+    const targetSun = weeklyPlans.sundayOfDateStr(weekStart) || weekStart;
+    const rawPlans = await db.listWeeklyPlans(school, {});
+    const weekPlans = rawPlans.filter(p => (weeklyPlans.sundayOfDateStr(p.weekStart) || p.weekStart) === targetSun);
+    const stripped = weekPlans.map(weeklyPlans.stripPlanAttachments);
+    const coverage = weeklyPlans.buildAdminCoverageSummary(schoolData, stripped, targetSun);
+    res.json({ ok: true, weekStart: targetSun, weeks, plans: stripped, coverage });
   })().catch(fail(res));
 });
 

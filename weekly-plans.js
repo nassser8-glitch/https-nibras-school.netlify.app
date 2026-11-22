@@ -28,6 +28,16 @@ function currentSundayKey(nowInput) {
   return sun.toISOString().slice(0, 10);
 }
 
+function sundayOfDateStr(val) {
+  const s = normalizeDateStr(val);
+  if (!s) return '';
+  const t = Date.parse(s + 'T00:00:00Z');
+  if (!Number.isFinite(t)) return s;
+  const d = new Date(t);
+  const sun = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - d.getUTCDay()));
+  return sun.toISOString().slice(0, 10);
+}
+
 function weekDateForDay(weekStart, dayKey) {
   const ws = normalizeDateStr(weekStart);
   const day = WEEK_DAYS.find(d => d.key === dayKey);
@@ -104,7 +114,7 @@ function validateWeeklyPlanPayload(body) {
   if (!classId) return { ok: false, error: 'class_required' };
   const subject = String(b.subject || '').trim().slice(0, 120);
   if (!subject) return { ok: false, error: 'subject_required' };
-  const weekStart = normalizeDateStr(b.weekStart) || currentSundayKey();
+  const weekStart = sundayOfDateStr(b.weekStart) || currentSundayKey();
   const weekLabel = String(b.weekLabel || '').trim().slice(0, 100);
   const title = String(b.title || '').trim().slice(0, 200);
   const status = PLAN_STATUSES.includes(b.status) ? b.status : 'draft';
@@ -212,12 +222,12 @@ function stripPlanAttachments(plan) {
 
 function aggregateUnifiedStudentPlan(plans, classId, weekStart) {
   const cid = String(classId || '');
-  const ws = normalizeDateStr(weekStart);
+  const wsSun = sundayOfDateStr(weekStart);
   const matching = (Array.isArray(plans) ? plans : []).filter(p =>
     p &&
     p.status === 'published' &&
     String(p.classId) === cid &&
-    (!ws || normalizeDateStr(p.weekStart) === ws)
+    (!wsSun || sundayOfDateStr(p.weekStart) === wsSun)
   );
   const tasks = [];
   const subjectsSet = new Set();
@@ -252,7 +262,9 @@ function aggregateUnifiedStudentPlan(plans, classId, weekStart) {
     const da = dayOrder[a.dayKey] != null ? dayOrder[a.dayKey] : 9;
     const db = dayOrder[b.dayKey] != null ? dayOrder[b.dayKey] : 9;
     if (da !== db) return da - db;
-    return String(a.subject || '').localeCompare(String(b.subject || ''), 'ar');
+    const subCmp = String(a.subject || '').localeCompare(String(b.subject || ''), 'ar');
+    if (subCmp !== 0) return subCmp;
+    return String(a.teacherName || '').localeCompare(String(b.teacherName || ''), 'ar');
   });
   return {
     plans: matching,
@@ -270,8 +282,9 @@ function buildAdminCoverageSummary(schoolData, plans, weekStart) {
   grades.forEach(g => { if (g && g.id) gradeMap[String(g.id)] = g.name; });
   const users = (Array.isArray(d.users) ? d.users : []).filter(u => u && u.role === 'TEACHER' && u.active !== false && !u.deleted);
 
+  const wsSun = sundayOfDateStr(weekStart);
   const weekPublished = (Array.isArray(plans) ? plans : []).filter(p =>
-    p && p.status === 'published' && (!ws || normalizeDateStr(p.weekStart) === ws)
+    p && p.status === 'published' && (!wsSun || sundayOfDateStr(p.weekStart) === wsSun)
   );
   const pubByTeacher = new Set(weekPublished.map(p => String(p.teacherId)));
   const pubByClass = {};
@@ -324,6 +337,7 @@ module.exports = {
   PLAN_STATUSES,
   normalizeDateStr,
   currentSundayKey,
+  sundayOfDateStr,
   weekDateForDay,
   sanitizeAttachment,
   sanitizeLinks,
