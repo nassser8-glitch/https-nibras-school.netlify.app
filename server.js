@@ -16,6 +16,7 @@ const transferPrivacy = require('./transfers-privacy');
 // صلاحية واتساب لمسار الموافقة الفردية (منطق خالص بلا وصول لقاعدة البيانات)
 const wa = require('./whatsapp');
 const schoolAnn = require('./school-announcements');
+const usernamePolicy = require('./username-policy');
 
 // قراءة متغير: من Environment أولاً، ثم من ملف سري في /etc/secrets (بديل Render)
 function envOrSecret(name, fallback) {
@@ -2563,26 +2564,34 @@ app.put('/api/db/:school', requireAuth, (req, res) => {
     // الشكل المقبول: من 3 إلى 32 رمزاً بحروف لاتينية صغيرة أو أرقام أو
     // . _ - فقط، بلا مسافات.
     try {
-      const prevMapU = new Map((prevUsers || []).map(u => [u.id, String(u.username || '').trim().toLowerCase()]));
+      const prevMapU = new Map((prevUsers || []).map(u => [u.id, usernamePolicy.normalizeUsername(u && u.username)]));
+      const dbUnameMap = await db.usernamesByIds((clean.users || []).map(u => u && u.id).filter(Boolean));
       const seenLocal = new Set();
       for (const nu of (clean.users || [])) {
         if (!nu || nu.deleted || nu.active === false) continue;
-        const uname = String((nu && nu.username) || '').trim().toLowerCase();
+        const uname = usernamePolicy.normalizeUsername(nu && nu.username);
         if (!uname) continue;
-        // حساب قديم اسمُه مخالف للشكل (قصير جداً أو برموز ممنوعة) كان يُرفض
-        // هنا فيسقط كل حفظ للمدرسة إلى الأبد: لا حذف تحويل ولا حفظ ولا مزامنة،
-        // مع أن الحساب لم يُمس. فنمرّر الاسم المخالف كما هو إن لم يكن مُعدَّلاً،
-        // ونفرض الشكل على الاسم المُعدَّل جديداً فقط، فيصحّح المستخدم حسابه بنفسه.
-        const unchanged = prevMapU.get(nu.id) === uname;
-        if (!unchanged && !/^[a-z0-9._-]{3,32}$/.test(uname))
-          return res.status(400).json({ error: 'username_invalid', username: uname });
+        let check = usernamePolicy.checkSyncUsername({
+          uname,
+          prevSchoolUname: prevMapU.get(nu.id),
+          dbUserUname: dbUnameMap.get(nu.id),
+        });
+        // دعم الحسابات القديمة جداً في جدول users حتى لو اختلفت معرفاتها عن نسخة القسم
+        if (!check.ok && usernamePolicy.isValidLegacyUsername(uname)) {
+          const legacyRow = await db.userByUsername(uname);
+          if (legacyRow && String(legacyRow.school || '').toUpperCase() === school) {
+            check = { ok: true, unchanged: true };
+          }
+        }
+        if (!check.ok)
+          return res.status(400).json({ error: check.error || 'username_invalid', username: uname });
         // تجاوز شرط الشكل لا يعني تجاوز فحص التكرار: بياناتٌ تالفة فيها
         // حسابان بالاسم نفسه كانت تُرفض قبل هذا الإصلاح، ولو تجاوزنا
         // التجاوزُ كشفَ التكرار لثُبِّت التلف في القاعدة بدل أن يُعلن.
         if (seenLocal.has(uname))
           return res.status(409).json({ error: 'username_taken', username: uname });
         seenLocal.add(uname);
-        if (unchanged) continue;
+        if (check.unchanged) continue;
         if (!['ADMIN', 'AGENT'].includes(req.session.role))
           return res.status(403).json({ error: 'username_change_forbidden', username: uname });
         const holder = await db.userByUsername(uname);

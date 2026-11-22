@@ -2500,6 +2500,7 @@ let raw = null;
     }catch(e){}
     let attempt = 0;
     let lastErr = '';
+    let nonRetryable = false;
     const respOf = await (async () => {
       for(; attempt < 3; attempt++){
         let resp = null;
@@ -2517,6 +2518,7 @@ let raw = null;
           catch(e){ lastErr = String(resp.status); }
         }
         if(resp.status === 401){ lastErr = '401'; __handleAuthError(resp); return null; }
+        if(resp.status === 400 || resp.status === 409){ nonRetryable = true; return null; }
         if(resp.status === 403){
           // الحساب محجوب (بانتظار تغيير كلمة المرور مثلاً). نسجّل السبب لنعرف
           // سببَ رفض الرفع فعلاً، ونكمل مسار الفشل المعتاد فيُحتفظ بنسخة احتياطية
@@ -2580,7 +2582,10 @@ let raw = null;
     st.lastFail = Date.now();
     try{ localStorage.setItem(pendKey, JSON.stringify(obj)); }catch(e){}
     __syncLogAdd({ ev:'push-fail', school, notes:(obj && Array.isArray(obj.notes))?obj.notes.length:0, ts:__syncTS(obj), attempt, err:lastErr });
-    if(st.attempts < __PUSH_MAX_ATTEMPTS){
+    if(nonRetryable){
+      __syncLogAdd({ ev:'push-rejected', school, ts:__syncTS(obj), err:lastErr });
+      __uiToast('⚠️ تعذّر رفع حفظك للخادم (' + (lastErr || '400') + ') — بياناتك محفوظة محلياً ولن تُكرَّر المحاولة تلقائياً حتى يُصحَّح السبب.', true);
+    } else if(st.attempts < __PUSH_MAX_ATTEMPTS){
       __syncTimers[school] = setTimeout(() => __syncPush(school), 15000);
       __uiToast('⚠️ تعذّر رفع حفظك للخادم الآن' + (lastErr ? ' (' + lastErr + ')' : '') + ' — سأعيد المحاولة تلقائياً ولا تختفي بياناتك.', true);
     } else {
@@ -12757,7 +12762,7 @@ async function renameAdminUser(id){
   const cleanUser = String(freshUser).trim().toLowerCase();
   const nameChanged = cleanName !== u.name;
   const userChanged = !!cleanUser && cleanUser !== String(u.username || '').trim().toLowerCase();
-  if(cleanUser && !/^[a-z0-9._-]{3,32}$/.test(cleanUser)){
+  if(userChanged && !/^[a-z0-9._-]{3,32}$/.test(cleanUser)){
     alert('اسم المستخدم يجب أن يكون من 3 إلى 32 رمزاً، بحروف لاتينية صغيرة أو أرقام أو . _ - فقط، بلا مسافات');
     return;
   }
@@ -17813,7 +17818,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=186', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=187', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

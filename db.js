@@ -273,6 +273,7 @@ function baseUsername(name) {
   if (!out) out = 'user';
   out = out.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '');
   if (!out) out = 'user';
+  while (out.length < 3) out += '0';
   return out.slice(0, 24);
 }
 async function generateUsername(name, preferred) {
