@@ -6226,10 +6226,7 @@ async function openSchoolAnnouncementDetail(id){
     if(box) box.innerHTML = `<div style="padding:20px;text-align:center;color:#be123c">تعذر فتح الإعلان: ${escapeHtml(e.message || 'خطأ')}</div>`;
   }
 }
-function renderSchoolAnnouncementsStudent(){
-  if(!__schoolAnnCache.loaded && !__schoolAnnCache.loading){
-    setTimeout(() => __loadSchoolAnnouncements(false), 0);
-  }
+function renderAnnStudentListHtml(){
   const list = (__schoolAnnCache.list || []).filter(a => {
     if(__annFilter.category !== 'all' && a.category !== __annFilter.category) return false;
     if(__annFilter.q){
@@ -6238,6 +6235,45 @@ function renderSchoolAnnouncementsStudent(){
     }
     return true;
   });
+  if(__schoolAnnCache.loading && !__schoolAnnCache.loaded){
+    return '<div class="ann-card" style="text-align:center;color:#64748b">جاري تحميل الإعلانات...</div>';
+  }
+  if(!list.length){
+    return '<div class="ann-card" style="text-align:center;color:#64748b;padding:28px">لا توجد إعلانات نشطة حالياً</div>';
+  }
+  return `<div class="ann-list">
+    ${list.map(a => {
+      const cat = annCategoryMeta(a.category);
+      return `<div class="ann-card ${a.pinned ? 'ann-pinned' : ''}" style="cursor:pointer" onclick="openSchoolAnnouncementDetail('${escapeHtml(a.id)}')">
+        <div class="ann-card-head">
+          <div>
+            <div class="ann-badges" style="margin-bottom:6px">
+              <span class="ann-badge" style="background:${cat.bg};color:${cat.color};border-color:${cat.border}">${cat.icon} ${cat.label}</span>
+              ${a.pinned ? '<span class="ann-badge ann-badge-pin">📌 مثبت</span>' : ''}
+              ${!a.viewed ? '<span class="ann-badge ann-badge-new">جديد</span>' : '<span class="ann-badge ann-badge-draft">تمت القراءة</span>'}
+            </div>
+            <h3 class="ann-card-title">${escapeHtml(a.title)}</h3>
+          </div>
+          <span class="ann-btn-soft">عرض التفاصيل ←</span>
+        </div>
+        <div class="ann-body-rich">${formatAnnouncementRichText(String(a.body || '').slice(0, 220) + (String(a.body || '').length > 220 ? '...' : ''))}</div>
+        <div class="ann-meta-row">
+          ${a.startDate ? `<span>📅 ${escapeHtml(a.startDate)}</span>` : ''}
+          ${a.endDate ? `<span>⏳ ينتهي: ${escapeHtml(a.endDate)}</span>` : ''}
+          ${a.hasAttachment ? `<span>📎 ${escapeHtml(a.attachmentName || 'مرفق')}</span>` : ''}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function annFilterStudentList(){
+  const wrap = document.getElementById('annStudentListWrap');
+  if(wrap) wrap.innerHTML = renderAnnStudentListHtml();
+}
+function renderSchoolAnnouncementsStudent(){
+  if(!__schoolAnnCache.loaded && !__schoolAnnCache.loading){
+    setTimeout(() => __loadSchoolAnnouncements(false), 0);
+  }
   return `<div class="ann-page">
     <div class="ann-header">
       <div>
@@ -6250,8 +6286,8 @@ function renderSchoolAnnouncementsStudent(){
       </div>
     </div>
     <div class="ann-filters">
-      <input type="text" placeholder="ابحثي في الإعلانات..." value="${escapeHtml(__annFilter.q)}" oninput="__annFilter.q=this.value;renderApp()" style="flex:1;min-width:180px" />
-      <select onchange="__annFilter.category=this.value;renderApp()">
+      <input type="text" placeholder="ابحثي في الإعلانات..." value="${escapeHtml(__annFilter.q)}" oninput="__annFilter.q=this.value;annFilterStudentList()" style="flex:1;min-width:180px" />
+      <select onchange="__annFilter.category=this.value;annFilterStudentList()">
         <option value="all" ${__annFilter.category==='all'?'selected':''}>جميع التصنيفات</option>
         <option value="general" ${__annFilter.category==='general'?'selected':''}>📢 إعلان عام</option>
         <option value="warning" ${__annFilter.category==='warning'?'selected':''}>⚠️ تنبيه مهم</option>
@@ -6261,32 +6297,7 @@ function renderSchoolAnnouncementsStudent(){
         <option value="urgent" ${__annFilter.category==='urgent'?'selected':''}>📌 إعلان عاجل</option>
       </select>
     </div>
-    ${__schoolAnnCache.loading && !__schoolAnnCache.loaded ? '<div class="ann-card" style="text-align:center;color:#64748b">جاري تحميل الإعلانات...</div>' : ''}
-    ${(!__schoolAnnCache.loading && !list.length) ? '<div class="ann-card" style="text-align:center;color:#64748b;padding:28px">لا توجد إعلانات نشطة حالياً</div>' : ''}
-    <div class="ann-list">
-      ${list.map(a => {
-        const cat = annCategoryMeta(a.category);
-        return `<div class="ann-card ${a.pinned ? 'ann-pinned' : ''}" style="cursor:pointer" onclick="openSchoolAnnouncementDetail('${escapeHtml(a.id)}')">
-          <div class="ann-card-head">
-            <div>
-              <div class="ann-badges" style="margin-bottom:6px">
-                <span class="ann-badge" style="background:${cat.bg};color:${cat.color};border-color:${cat.border}">${cat.icon} ${cat.label}</span>
-                ${a.pinned ? '<span class="ann-badge ann-badge-pin">📌 مثبت</span>' : ''}
-                ${!a.viewed ? '<span class="ann-badge ann-badge-new">جديد</span>' : '<span class="ann-badge ann-badge-draft">تمت القراءة</span>'}
-              </div>
-              <h3 class="ann-card-title">${escapeHtml(a.title)}</h3>
-            </div>
-            <span class="ann-btn-soft">عرض التفاصيل ←</span>
-          </div>
-          <div class="ann-body-rich">${formatAnnouncementRichText(String(a.body || '').slice(0, 220) + (String(a.body || '').length > 220 ? '...' : ''))}</div>
-          <div class="ann-meta-row">
-            ${a.startDate ? `<span>📅 ${escapeHtml(a.startDate)}</span>` : ''}
-            ${a.endDate ? `<span>⏳ ينتهي: ${escapeHtml(a.endDate)}</span>` : ''}
-            ${a.hasAttachment ? `<span>📎 ${escapeHtml(a.attachmentName || 'مرفق')}</span>` : ''}
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
+    <div id="annStudentListWrap">${renderAnnStudentListHtml()}</div>
   </div>`;
 }
 function annInsertFmt(prefix, suffix){
@@ -6437,6 +6448,7 @@ async function openSchoolAnnouncementForm(editId){
     const tv = document.getElementById('annTargetValue');
     if(tv) tv.value = a.targetValue;
   }
+  setTimeout(() => { const ti = document.getElementById('annTitleInput'); if(ti) ti.focus(); }, 20);
 }
 async function submitSchoolAnnouncementForm(status){
   const school = getActiveSchool();
@@ -6553,16 +6565,10 @@ async function openSchoolAnnouncementViewsModal(id){
     if(box) box.innerHTML = `<div style="padding:20px;text-align:center;color:#be123c">تعذر تحميل بيانات المشاهدة</div>`;
   }
 }
-function renderSchoolAnnouncementsAdmin(){
-  if(!__schoolAnnCache.loaded && !__schoolAnnCache.loading){
-    setTimeout(() => __loadSchoolAnnouncements(false), 0);
-  }
+function renderAnnAdminListHtml(){
   const d = loadDB();
   const all = __schoolAnnCache.list || [];
   const today = todayStr();
-  const pubCount = all.filter(a => a.status === 'published' && (!a.endDate || a.endDate >= today)).length;
-  const draftCount = all.filter(a => a.status === 'draft').length;
-  const expCount = all.filter(a => a.status === 'published' && a.endDate && a.endDate < today).length;
   const filtered = all.filter(a => {
     if(__annFilter.category !== 'all' && a.category !== __annFilter.category) return false;
     if(__annFilter.status !== 'all'){
@@ -6576,6 +6582,58 @@ function renderSchoolAnnouncementsAdmin(){
     }
     return true;
   });
+  if(!filtered.length){
+    return '<div class="ann-card" style="text-align:center;color:#64748b;padding:28px">لا توجد إعلانات مطابقة</div>';
+  }
+  return `<div class="ann-list">
+    ${filtered.map(a => {
+      const cat = annCategoryMeta(a.category);
+      const st = annStatusBadge(a);
+      return `<div class="ann-card ${a.pinned ? 'ann-pinned' : ''}">
+        <div class="ann-card-head">
+          <div>
+            <div class="ann-badges" style="margin-bottom:6px">
+              <span class="ann-badge" style="background:${cat.bg};color:${cat.color};border-color:${cat.border}">${cat.icon} ${cat.label}</span>
+              <span class="ann-badge ${st.cls}">${st.label}</span>
+              ${a.pinned ? '<span class="ann-badge ann-badge-pin">📌 مثبت</span>' : ''}
+            </div>
+            <h3 class="ann-card-title">${escapeHtml(a.title)}</h3>
+          </div>
+          <div style="font-size:12px;color:#831843;font-weight:800">🎯 ${escapeHtml(annTargetLabel(a, d))}</div>
+        </div>
+        <div class="ann-body-rich">${formatAnnouncementRichText(String(a.body || '').slice(0, 220) + (String(a.body || '').length > 220 ? '...' : ''))}</div>
+        <div class="ann-meta-row">
+          ${a.startDate ? `<span>📅 البداية: ${escapeHtml(a.startDate)}</span>` : ''}
+          ${a.endDate ? `<span>⏳ الانتهاء: ${escapeHtml(a.endDate)}</span>` : ''}
+          ${a.hasAttachment ? `<span>📎 ${escapeHtml(a.attachmentName || 'مرفق')}</span>` : ''}
+        </div>
+        <div class="ann-actions">
+          <button type="button" class="ann-btn-soft" onclick="openSchoolAnnouncementDetail('${escapeHtml(a.id)}')">📄 معاينة</button>
+          <button type="button" class="ann-btn-soft" onclick="openSchoolAnnouncementViewsModal('${escapeHtml(a.id)}')">👁️ المشاهدات</button>
+          <button type="button" class="ann-btn-soft" onclick="openSchoolAnnouncementForm('${escapeHtml(a.id)}')">✏️ تعديل</button>
+          ${a.status === 'paused'
+            ? `<button type="button" class="ann-btn-soft" onclick="toggleSchoolAnnouncementStatus('${escapeHtml(a.id)}','published')">▶️ إعادة نشر</button>`
+            : `<button type="button" class="ann-btn-soft" onclick="toggleSchoolAnnouncementStatus('${escapeHtml(a.id)}','paused')">⏸️ إيقاف مؤقت</button>`}
+          <button type="button" class="ann-btn-soft" onclick="toggleSchoolAnnouncementPin('${escapeHtml(a.id)}',${!a.pinned})">${a.pinned ? 'إلغاء التثبيت' : '📌 تثبيت'}</button>
+          <button type="button" class="ann-btn-danger" onclick="deleteSchoolAnnouncementItem('${escapeHtml(a.id)}')">🗑️ حذف</button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function annFilterAdminList(){
+  const wrap = document.getElementById('annAdminListWrap');
+  if(wrap) wrap.innerHTML = renderAnnAdminListHtml();
+}
+function renderSchoolAnnouncementsAdmin(){
+  if(!__schoolAnnCache.loaded && !__schoolAnnCache.loading){
+    setTimeout(() => __loadSchoolAnnouncements(false), 0);
+  }
+  const all = __schoolAnnCache.list || [];
+  const today = todayStr();
+  const pubCount = all.filter(a => a.status === 'published' && (!a.endDate || a.endDate >= today)).length;
+  const draftCount = all.filter(a => a.status === 'draft').length;
+  const expCount = all.filter(a => a.status === 'published' && a.endDate && a.endDate < today).length;
   return `<div class="ann-page">
     <div class="ann-header">
       <div>
@@ -6594,15 +6652,15 @@ function renderSchoolAnnouncementsAdmin(){
       <div class="ann-stat"><div><div class="ann-stat-val" style="color:#b91c1c">${expCount}</div><div class="ann-stat-lbl">منتهية</div></div></div>
     </div>
     <div class="ann-filters">
-      <input type="text" placeholder="بحث بالعنوان أو المحتوى..." value="${escapeHtml(__annFilter.q)}" oninput="__annFilter.q=this.value;renderApp()" style="flex:1;min-width:180px" />
-      <select onchange="__annFilter.status=this.value;renderApp()">
+      <input type="text" placeholder="بحث بالعنوان أو المحتوى..." value="${escapeHtml(__annFilter.q)}" oninput="__annFilter.q=this.value;annFilterAdminList()" style="flex:1;min-width:180px" />
+      <select onchange="__annFilter.status=this.value;annFilterAdminList()">
         <option value="all" ${__annFilter.status==='all'?'selected':''}>جميع الحالات</option>
         <option value="published" ${__annFilter.status==='published'?'selected':''}>منشور</option>
         <option value="draft" ${__annFilter.status==='draft'?'selected':''}>مسودة</option>
         <option value="paused" ${__annFilter.status==='paused'?'selected':''}>متوقف مؤقتاً</option>
         <option value="expired" ${__annFilter.status==='expired'?'selected':''}>منتهي</option>
       </select>
-      <select onchange="__annFilter.category=this.value;renderApp()">
+      <select onchange="__annFilter.category=this.value;annFilterAdminList()">
         <option value="all" ${__annFilter.category==='all'?'selected':''}>جميع التصنيفات</option>
         <option value="general" ${__annFilter.category==='general'?'selected':''}>📢 إعلان عام</option>
         <option value="warning" ${__annFilter.category==='warning'?'selected':''}>⚠️ تنبيه مهم</option>
@@ -6612,42 +6670,7 @@ function renderSchoolAnnouncementsAdmin(){
         <option value="urgent" ${__annFilter.category==='urgent'?'selected':''}>📌 إعلان عاجل</option>
       </select>
     </div>
-    ${!filtered.length ? '<div class="ann-card" style="text-align:center;color:#64748b;padding:28px">لا توجد إعلانات مطابقة</div>' : ''}
-    <div class="ann-list">
-      ${filtered.map(a => {
-        const cat = annCategoryMeta(a.category);
-        const st = annStatusBadge(a);
-        return `<div class="ann-card ${a.pinned ? 'ann-pinned' : ''}">
-          <div class="ann-card-head">
-            <div>
-              <div class="ann-badges" style="margin-bottom:6px">
-                <span class="ann-badge" style="background:${cat.bg};color:${cat.color};border-color:${cat.border}">${cat.icon} ${cat.label}</span>
-                <span class="ann-badge ${st.cls}">${st.label}</span>
-                ${a.pinned ? '<span class="ann-badge ann-badge-pin">📌 مثبت</span>' : ''}
-              </div>
-              <h3 class="ann-card-title">${escapeHtml(a.title)}</h3>
-            </div>
-            <div style="font-size:12px;color:#831843;font-weight:800">🎯 ${escapeHtml(annTargetLabel(a, d))}</div>
-          </div>
-          <div class="ann-body-rich">${formatAnnouncementRichText(String(a.body || '').slice(0, 220) + (String(a.body || '').length > 220 ? '...' : ''))}</div>
-          <div class="ann-meta-row">
-            ${a.startDate ? `<span>📅 البداية: ${escapeHtml(a.startDate)}</span>` : ''}
-            ${a.endDate ? `<span>⏳ الانتهاء: ${escapeHtml(a.endDate)}</span>` : ''}
-            ${a.hasAttachment ? `<span>📎 ${escapeHtml(a.attachmentName || 'مرفق')}</span>` : ''}
-          </div>
-          <div class="ann-actions">
-            <button type="button" class="ann-btn-soft" onclick="openSchoolAnnouncementDetail('${escapeHtml(a.id)}')">📄 معاينة</button>
-            <button type="button" class="ann-btn-soft" onclick="openSchoolAnnouncementViewsModal('${escapeHtml(a.id)}')">👁️ المشاهدات</button>
-            <button type="button" class="ann-btn-soft" onclick="openSchoolAnnouncementForm('${escapeHtml(a.id)}')">✏️ تعديل</button>
-            ${a.status === 'paused'
-              ? `<button type="button" class="ann-btn-soft" onclick="toggleSchoolAnnouncementStatus('${escapeHtml(a.id)}','published')">▶️ إعادة نشر</button>`
-              : `<button type="button" class="ann-btn-soft" onclick="toggleSchoolAnnouncementStatus('${escapeHtml(a.id)}','paused')">⏸️ إيقاف مؤقت</button>`}
-            <button type="button" class="ann-btn-soft" onclick="toggleSchoolAnnouncementPin('${escapeHtml(a.id)}',${!a.pinned})">${a.pinned ? 'إلغاء التثبيت' : '📌 تثبيت'}</button>
-            <button type="button" class="ann-btn-danger" onclick="deleteSchoolAnnouncementItem('${escapeHtml(a.id)}')">🗑️ حذف</button>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
+    <div id="annAdminListWrap">${renderAnnAdminListHtml()}</div>
   </div>`;
 }
 
@@ -17790,7 +17813,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=185', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=186', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
