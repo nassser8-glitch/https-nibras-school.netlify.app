@@ -6749,18 +6749,18 @@ function renderSchoolAnnouncementsAdmin(){
 
 /* ===== الخطة الأسبوعية — قسم البنات ===== */
 const __WP_DAYS = [
-  { key:'sun', label:'الأحد', offset:0 },
   { key:'mon', label:'الإثنين', offset:1 },
   { key:'tue', label:'الثلاثاء', offset:2 },
   { key:'wed', label:'الأربعاء', offset:3 },
   { key:'thu', label:'الخميس', offset:4 },
+  { key:'fri', label:'الجمعة', offset:5 },
 ];
 const __wpCache = {
   loaded:false, loading:false, school:'', weekStart:'', weeks:[],
   plans:[], tasks:[], subjects:[], progress:{}, coverage:null, error:''
 };
 const __wpUi = {
-  viewMode:'weekly', dayKey:'sun', subject:'all', adminTab:'classes',
+  viewMode:'weekly', dayKey:'mon', subject:'all', adminTab:'classes',
   editorOpen:false, editId:'', classId:'', subjectName:'', title:'', weekStart:'', weekLabel:'', items:[]
 };
 
@@ -6776,15 +6776,19 @@ function wpCurrentSundayKey(){
 }
 function wpTodayDayKey(){
   const g = new Date(Date.now() + 5 * 3600 * 1000).getUTCDay();
-  const map = { 0:'sun', 1:'mon', 2:'tue', 3:'wed', 4:'thu' };
-  return map[g] || 'sun';
+  const map = { 1:'mon', 2:'tue', 3:'wed', 4:'thu', 5:'fri' };
+  return map[g] || 'mon';
 }
 function wpDateForDay(weekStart, dayKey){
+  if(!weekStart) return '';
+  const base0 = Date.parse(weekStart + 'T00:00:00Z');
+  if(!Number.isFinite(base0)) return '';
+  const d0 = new Date(base0);
+  const sunMs = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), d0.getUTCDate() - d0.getUTCDay());
+  if(dayKey === 'sun') return new Date(sunMs).toISOString().slice(0, 10);
   const day = __WP_DAYS.find(x => x.key === dayKey);
-  if(!weekStart || !day) return '';
-  const t = Date.parse(weekStart + 'T00:00:00Z');
-  if(!Number.isFinite(t)) return '';
-  return new Date(t + day.offset * 86400000).toISOString().slice(0, 10);
+  if(!day) return '';
+  return new Date(sunMs + day.offset * 86400000).toISOString().slice(0, 10);
 }
 async function __loadWeeklyPlans(force, weekStartOverride){
   const school = getActiveSchool();
@@ -7145,38 +7149,46 @@ function renderWeeklyPlanStudent(){
           </tr>
         </thead>
         <tbody>
-          ${filteredTasks.map(t => {
-            const st = wpSubjectStyle(t.subject);
-            const dayObj = __WP_DAYS.find(x => x.key === t.dayKey) || { label: t.dayKey };
-            const done = !!__wpCache.progress[t.planId + '|' + t.itemId];
-            const hDate = wpHijriOfDate(t.date);
-            return `<tr>
-              <td data-label="اليوم والتاريخ">
-                <div class="wp-day-pill">
-                  <strong>${escapeHtml(dayObj.label)}</strong>
-                  ${hDate ? `<span>${escapeHtml(hDate)}</span>` : ''}
-                  ${t.date ? `<span>${escapeHtml(t.date)}</span>` : ''}
-                </div>
-              </td>
-              <td data-label="المادة">
-                <button type="button" class="wp-sub-btn" style="background:${st.bg};color:${st.color};border-color:${st.border}" onclick="wpOpenTaskDetailModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">
-                  ${st.icon} ${escapeHtml(t.subject)}
-                </button>
-              </td>
-              <td data-label="الدرس / المطلوب" style="font-weight:700">
-                ${escapeHtml(t.lesson || t.assessments || '—')}
-                ${(t.lesson && t.assessments) ? `<div style="font-size:11px;color:#7c3aed;margin-top:2px">🧪 ${escapeHtml(t.assessments)}</div>` : ''}
-              </td>
-              <td data-label="الواجب">${escapeHtml(t.homework || '—')}</td>
-              <td data-label="ملاحظات">
-                ${escapeHtml(t.notes || '—')}
-                ${(t.hasAttachment || (t.links && t.links.length)) ? `<div style="margin-top:3px"><button type="button" class="ann-btn-soft" style="padding:2px 8px;font-size:11px" onclick="wpOpenTaskDetailModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">📎 مرفقات</button></div>` : ''}
-              </td>
-              <td data-label="الإنجاز">
-                <button type="button" class="wp-done-box ${done ? 'checked' : ''}" onclick="wpToggleStudentProgress('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')" title="${done ? 'تم الإنجاز' : 'تحديد كمنجز'}">${done ? '✓' : ''}</button>
-              </td>
-            </tr>`;
-          }).join('')}
+          ${(() => {
+            const orderedDays = [...__WP_DAYS];
+            if(filteredTasks.some(t => t.dayKey === 'sun')) orderedDays.push({ key:'sun', label:'الأحد', offset:0 });
+            return orderedDays.map(dayObj => {
+              const dayTasks = filteredTasks.filter(t => t.dayKey === dayObj.key);
+              if(!dayTasks.length) return '';
+              const dDate = dayTasks[0].date || wpDateForDay(__wpCache.weekStart, dayObj.key);
+              const hDate = wpHijriOfDate(dDate);
+              return dayTasks.map((t, idx) => {
+                const st = wpSubjectStyle(t.subject);
+                const done = !!__wpCache.progress[t.planId + '|' + t.itemId];
+                return `<tr>
+                  ${idx === 0 ? `<td data-label="اليوم والتاريخ" rowspan="${dayTasks.length}" class="wp-day-cell">
+                    <div class="wp-day-pill">
+                      <strong>${escapeHtml(dayObj.label)}</strong>
+                      ${hDate ? `<span>${escapeHtml(hDate)}</span>` : ''}
+                      ${dDate ? `<span>${escapeHtml(dDate)}</span>` : ''}
+                    </div>
+                  </td>` : ''}
+                  <td data-label="المادة">
+                    <button type="button" class="wp-sub-btn" style="background:${st.bg};color:${st.color};border-color:${st.border}" onclick="wpOpenTaskDetailModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">
+                      ${st.icon} ${escapeHtml(t.subject)}
+                    </button>
+                  </td>
+                  <td data-label="الدرس / المطلوب" style="font-weight:700">
+                    ${escapeHtml(t.lesson || t.assessments || '—')}
+                    ${(t.lesson && t.assessments) ? `<div style="font-size:11px;color:#7c3aed;margin-top:2px">🧪 ${escapeHtml(t.assessments)}</div>` : ''}
+                  </td>
+                  <td data-label="الواجب">${escapeHtml(t.homework || '—')}</td>
+                  <td data-label="ملاحظات">
+                    ${escapeHtml(t.notes || '—')}
+                    ${(t.hasAttachment || (t.links && t.links.length)) ? `<div style="margin-top:3px"><button type="button" class="ann-btn-soft" style="padding:2px 8px;font-size:11px" onclick="wpOpenTaskDetailModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">📎 مرفقات</button></div>` : ''}
+                  </td>
+                  <td data-label="الإنجاز">
+                    <button type="button" class="wp-done-box ${done ? 'checked' : ''}" onclick="wpToggleStudentProgress('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')" title="${done ? 'تم الإنجاز' : 'تحديد كمنجز'}">${done ? '✓' : ''}</button>
+                  </td>
+                </tr>`;
+              }).join('');
+            }).join('');
+          })()}
         </tbody>
       </table>` : '<div style="text-align:center;color:#64748b;padding:30px;font-weight:700">لا توجد خطط أسبوعية منشورة لهذا الاختيار بعد</div>'}
     </div>
@@ -7223,7 +7235,7 @@ function wpOpenEditor(planObj){
     __wpUi.title = planObj.title || '';
     __wpUi.items = (Array.isArray(planObj.items) && planObj.items.length)
       ? JSON.parse(JSON.stringify(planObj.items))
-      : [{ id:'wpi_' + Date.now(), dayKey:'sun', lesson:'', homework:'', assessments:'', notes:'', links:[], attachment:null }];
+      : [{ id:'wpi_' + Date.now(), dayKey:'mon', lesson:'', homework:'', assessments:'', notes:'', links:[], attachment:null }];
   } else {
     const cid = classes[0].id;
     const subs = wpTeacherSubjectsForClass(user, d, cid);
@@ -7234,7 +7246,7 @@ function wpOpenEditor(planObj){
     __wpUi.weekStart = __wpCache.weekStart || wpCurrentSundayKey();
     __wpUi.weekLabel = (typeof schoolWeekInfo === 'function' ? schoolWeekInfo().label : '');
     __wpUi.title = '';
-    __wpUi.items = [{ id:'wpi_' + Date.now(), dayKey:'sun', lesson:'', homework:'', assessments:'', notes:'', links:[], attachment:null }];
+    __wpUi.items = [{ id:'wpi_' + Date.now(), dayKey:'mon', lesson:'', homework:'', assessments:'', notes:'', links:[], attachment:null }];
   }
   renderApp();
 }
@@ -7423,7 +7435,7 @@ function renderWeeklyPlanTeacher(user){
         </div>
       </div>`).join('')}
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
-        <button type="button" class="ann-btn-soft" onclick="wpAddItemForDay('sun')">+ إضافة مهمة جديدة</button>
+        <button type="button" class="ann-btn-soft" onclick="wpAddItemForDay('mon')">+ إضافة مهمة جديدة</button>
         <div style="display:flex;gap:8px">
           <button type="button" class="ann-btn-soft" onclick="wpSavePlan('draft')">حفظ كمسودة</button>
           <button type="button" class="ann-btn-primary" onclick="wpSavePlan('published')">نشر الخطة للطالبات</button>
@@ -18693,7 +18705,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=190', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=191', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

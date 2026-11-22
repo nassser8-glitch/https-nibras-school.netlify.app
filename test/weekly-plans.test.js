@@ -100,6 +100,8 @@ test('8 & 9. أرشفة الأسابيع دون تداخل، الظهور في �
   assert.match(indexSrc, /wpOpenArchiveModal/);
   assert.match(indexSrc, /wpOpenFilesModal/);
   assert.match(indexSrc, /wpOpenNotesModal/);
+  assert.match(indexSrc, /rowspan="\$\{dayTasks\.length\}"/);
+  assert.deepEqual(wp.WEEK_DAYS.map(d => d.key), ['mon', 'tue', 'wed', 'thu', 'fri']);
   assert.match(indexSrc, /href:'#\/weekly-plan'/);
   if (db.SCHOOLS[0] === 'GIRLS') {
     assert.match(indexSrc, /\.wp-tab\.active \{ background:#db2777/);
@@ -127,7 +129,7 @@ test('10. تجميع خطط معلمتين أو ثلاث معلمات (سلوم 
   const agg = wp.aggregateUnifiedStudentPlan([saloom, shadia, thirdTeacher], 'c3hs', '2026-11-22');
   assert.equal(agg.plans.length, 3);
   assert.equal(agg.subjects.length, 3);
-  assert.deepEqual(agg.tasks.map(t => t.teacherName), ['سلوم', 'شادية', 'نورة']);
+  assert.deepEqual(agg.tasks.map(t => t.teacherName), ['شادية', 'نورة', 'سلوم']);
 
   // التأكد أن الخادم يبني قائمة الأسابيع للطالبة من الخطط المنشورة لفصلها فقط
   assert.match(serverSrc, /const allClassPub = await db\.listWeeklyPlans\(school, \{ classId, status: 'published' \}\)/);

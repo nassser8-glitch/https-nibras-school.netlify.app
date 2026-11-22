@@ -4,13 +4,13 @@
 const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024; // 3 MB
 
 const WEEK_DAYS = [
-  { key: 'sun', label: 'الأحد', offset: 0 },
   { key: 'mon', label: 'الإثنين', offset: 1 },
   { key: 'tue', label: 'الثلاثاء', offset: 2 },
   { key: 'wed', label: 'الأربعاء', offset: 3 },
   { key: 'thu', label: 'الخميس', offset: 4 },
+  { key: 'fri', label: 'الجمعة', offset: 5 },
 ];
-const DAY_KEY_SET = new Set(WEEK_DAYS.map(d => d.key));
+const DAY_KEY_SET = new Set([...WEEK_DAYS.map(d => d.key), 'sun']);
 const PLAN_STATUSES = ['draft', 'published'];
 
 function normalizeDateStr(val) {
@@ -39,7 +39,8 @@ function sundayOfDateStr(val) {
 }
 
 function weekDateForDay(weekStart, dayKey) {
-  const ws = normalizeDateStr(weekStart);
+  const ws = sundayOfDateStr(weekStart) || normalizeDateStr(weekStart);
+  if (dayKey === 'sun') return ws;
   const day = WEEK_DAYS.find(d => d.key === dayKey);
   if (!ws || !day) return '';
   const base = Date.parse(ws + 'T00:00:00Z');
@@ -257,7 +258,7 @@ function aggregateUnifiedStudentPlan(plans, classId, weekStart) {
       });
     }
   }
-  const dayOrder = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4 };
+  const dayOrder = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sun: 5 };
   tasks.sort((a, b) => {
     const da = dayOrder[a.dayKey] != null ? dayOrder[a.dayKey] : 9;
     const db = dayOrder[b.dayKey] != null ? dayOrder[b.dayKey] : 9;
