@@ -333,6 +333,49 @@ window.__nibrasMarkBooted = function(){
   .sup-chip-del { background:none; border:none; color:#be123c; cursor:pointer; font-weight:800; font-size:12px; padding:0 2px; line-height:1; }
   .sup-picker-box { background:#fdf2f8; border:1px dashed #f9a8d4; border-radius:10px; padding:10px; margin-top:6px; }
 
+  /* إعلانات المدرسة — هوية قسم البنات (وردي وأبيض) */
+  .ann-page { display:flex; flex-direction:column; gap:12px; }
+  .ann-header { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:#fff; border:1px solid #fce7f3; border-inline-start:4px solid #db2777; border-radius:14px; padding:14px 16px; box-shadow:0 3px 12px rgba(190,24,93,.06); }
+  .ann-header h2 { margin:0; font-size:18px; font-weight:900; color:#831843; }
+  .ann-header-sub { font-size:12px; color:#6b7280; margin-top:2px; }
+  .ann-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+  @media (max-width:860px){ .ann-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  .ann-stat { background:#fff; border:1px solid #fce7f3; border-radius:12px; padding:10px 14px; display:flex; align-items:center; gap:10px; box-shadow:0 2px 8px rgba(190,24,93,.04); }
+  .ann-stat-val { font-size:20px; font-weight:900; color:#db2777; line-height:1.1; }
+  .ann-stat-lbl { font-size:11.5px; font-weight:700; color:#64748b; }
+  .ann-filters { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#fff; border:1px solid #fce7f3; border-radius:12px; padding:10px 12px; }
+  .ann-list { display:flex; flex-direction:column; gap:10px; }
+  .ann-card { background:#fff; border:1px solid #fce7f3; border-radius:14px; padding:14px 16px; box-shadow:0 3px 12px rgba(190,24,93,.05); transition:transform .12s, box-shadow .12s; }
+  .ann-card.ann-pinned { border-inline-start:4px solid #db2777; background:linear-gradient(180deg,#fff,#fdf2f8); }
+  .ann-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .ann-card-title { font-size:15.5px; font-weight:900; color:#831843; margin:0; }
+  .ann-badges { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .ann-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 9px; border-radius:999px; font-size:11.5px; font-weight:800; border:1px solid transparent; }
+  .ann-badge-new { background:#db2777; color:#fff; }
+  .ann-badge-pin { background:#fdf2f8; color:#be185d; border-color:#fbcfe8; }
+  .ann-badge-pub { background:#dcfce7; color:#15803d; border-color:#86efac; }
+  .ann-badge-draft { background:#f1f5f9; color:#475569; border-color:#cbd5e1; }
+  .ann-badge-paused { background:#fef3c7; color:#b45309; border-color:#fde68a; }
+  .ann-badge-exp { background:#fee2e2; color:#b91c1c; border-color:#fca5a5; }
+  .ann-body-rich { font-size:13.5px; line-height:1.75; color:#1e293b; margin-top:8px; word-break:break-word; }
+  .ann-li { padding-inline-start:8px; }
+  .ann-meta-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:12px; color:#64748b; margin-top:10px; padding-top:8px; border-top:1px dashed #fce7f3; }
+  .ann-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .ann-btn-primary { background:#db2777; color:#fff; border:none; border-radius:9px; padding:7px 14px; font-size:12.5px; font-weight:800; cursor:pointer; }
+  .ann-btn-primary:hover { background:#be185d; }
+  .ann-btn-soft { background:#fdf2f8; color:#9d174d; border:1px solid #fbcfe8; border-radius:9px; padding:6px 11px; font-size:12px; font-weight:800; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:4px; }
+  .ann-btn-soft:hover { background:#fce7f3; }
+  .ann-btn-danger { background:#fff1f2; color:#be123c; border:1px solid #fecdd3; border-radius:9px; padding:6px 11px; font-size:12px; font-weight:800; cursor:pointer; }
+  .ann-toolbar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
+  .ann-toolbar button { background:#fdf2f8; border:1px solid #fbcfe8; color:#831843; border-radius:7px; padding:4px 10px; font-size:12px; font-weight:800; cursor:pointer; }
+  .ann-student-banner { background:#fff; border:1.5px solid #fbcfe8; border-inline-start:5px solid #db2777; border-radius:16px; padding:14px 16px; margin-bottom:12px; box-shadow:0 6px 20px rgba(219,39,119,.08); }
+  .ann-student-banner-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+  .ann-student-banner-title { font-size:15.5px; font-weight:900; color:#831843; display:flex; align-items:center; gap:8px; }
+  .ann-student-items { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:10px; }
+  .ann-student-item { background:#fdf2f8; border:1px solid #fbcfe8; border-radius:12px; padding:11px 13px; cursor:pointer; transition:transform .12s, box-shadow .12s; display:flex; flex-direction:column; gap:6px; }
+  .ann-student-item:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(219,39,119,.12); background:#fff; }
+  .ann-student-item.ann-item-unread { background:#fff; border-color:#db2777; box-shadow:0 4px 12px rgba(219,39,119,.1); }
+
   /* بطاقات مفكرتي الشخصية */
   .nb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
   .nb-card { background:linear-gradient(180deg,#fffdf5,#fff9e6); border:1px solid #fde68a; border-radius:12px; padding:12px 14px; box-shadow:0 2px 6px rgba(0,0,0,.04); }
@@ -3909,6 +3952,7 @@ function logout(){
     __mirrorClear();
     Object.keys(__schoolSettingsCache).forEach(k => delete __schoolSettingsCache[k]);
     __lessonSettingsTried = false;
+    __schoolAnnReset();
     localStorage.removeItem(SCHOOL_KEY);
     // لا نحذف نسخة المدرسة من الجهاز عند الخروج: قد تحوي تعديلات لم تُرفع بعد
     // (تكليف/نقطة/تحويل) ومسحُها هنا يمحو عملَ المعلمة للأبد إذا فشل رفعها.
@@ -4973,6 +5017,7 @@ function renderLayout(user, hash){
       { href:'#/student-activities', key:'student-activities', label:'أنشطتي', icon:'🎨' },
     ]},
     { title:'المدرسة', items:[
+      { href:'#/school-announcements', key:'school-announcements', label:'إعلانات المدرسة' + (studentUnreadAnnCount() > 0 ? ' (' + studentUnreadAnnCount() + ')' : ''), icon:'📢' },
       { href:'#/student-leaders', key:'student-leaders', label:'الأوائل', icon:'🏆' },
     ]},
     { title:'النظام', items:[
@@ -5018,6 +5063,7 @@ function renderLayout(user, hash){
       { href:'#/memo', key:'memo', label:'المفكرة والتذكير', icon:'📒' },
       { href:'#/daily-msg', key:'daily-msg', label:'رسالة اليوم', icon:'📢' },
       { href:'#/star-of-week', key:'star-of-week', label:'نجمة الأسبوع', icon:'⭐' },
+      (user.role === 'ADMIN') ? { href:'#/school-announcements', key:'school-announcements', label:'إعلانات المدرسة', icon:'📢' } : null,
       (user.role === 'ADMIN') ? { href:'#/thanks', key:'thanks', label:'🌸 بطاقة شكر', icon:'🌸' } : null,
       { href:'#/maintenance', key:'maintenance', label:'الصيانة', icon:'🔧' },
       (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'COUNSELOR') ? { href:'#/guide-msgs', key:'guide-msgs', label:'رسائل المعلمين', icon:'💬', badge: msgMonitorBadge(user) } : null,
@@ -5077,6 +5123,7 @@ function renderLayout(user, hash){
 
   let pageHtml = '';
   if(page === 'home') pageHtml = (user.role === 'STUDENT') ? renderStudentDashboard() : renderDashboard();
+  else if(page === 'school-announcements' && (user.role === 'ADMIN' || user.role === 'STUDENT')) pageHtml = (user.role === 'ADMIN') ? renderSchoolAnnouncementsAdmin() : renderSchoolAnnouncementsStudent();
   else if(page === 'students') pageHtml = renderStudents();
   else if(page === 'attendance') pageHtml = renderAttendance();
   else if(page === 'notes'){
@@ -5947,6 +5994,625 @@ function toggleAssignmentDone(aid){
   saveDB(d);
   renderApp();
 }
+/* ===== إعلانات المدرسة — قسم البنات ===== */
+const __schoolAnnCache = { loaded: false, loading: false, list: [], school: '', error: '' };
+const __annFilter = { q: '', status: 'all', category: 'all' };
+const __annFormState = { id: '', attachment: null, removeAttachment: false };
+
+function __schoolAnnReset(){
+  __schoolAnnCache.loaded = false;
+  __schoolAnnCache.loading = false;
+  __schoolAnnCache.list = [];
+  __schoolAnnCache.school = '';
+  __schoolAnnCache.error = '';
+}
+function annCategoryMeta(id){
+  const map = {
+    general: { id:'general', icon:'📢', label:'إعلان عام', bg:'#fdf2f8', color:'#9d174d', border:'#fbcfe8' },
+    warning: { id:'warning', icon:'⚠️', label:'تنبيه مهم', bg:'#fffbeb', color:'#b45309', border:'#fde68a' },
+    event: { id:'event', icon:'📅', label:'إعلان فعالية أو مناسبة', bg:'#eff6ff', color:'#1d4ed8', border:'#bfdbfe' },
+    academic: { id:'academic', icon:'📚', label:'إعلان أكاديمي', bg:'#f5f3ff', color:'#6d28d9', border:'#ddd6fe' },
+    honor: { id:'honor', icon:'🏆', label:'إعلان تكريم وتهنئة', bg:'#ecfdf5', color:'#047857', border:'#a7f3d0' },
+    urgent: { id:'urgent', icon:'📌', label:'إعلان عاجل', bg:'#fff1f2', color:'#be123c', border:'#fecdd3' },
+  };
+  return map[id] || map.general;
+}
+function formatAnnouncementRichText(raw){
+  const safe = escapeHtml(String(raw || ''));
+  return safe.split(/\r?\n/).map(line => {
+    let l = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>');
+    if(/^\s*[-•]\s+/.test(l)) return '<div class="ann-li">• ' + l.replace(/^\s*[-•]\s+/, '') + '</div>';
+    return l === '' ? '<div style="height:6px"></div>' : '<div>' + l + '</div>';
+  }).join('');
+}
+function annStatusBadge(a){
+  const today = todayStr();
+  if(a && a.status === 'published' && a.endDate && a.endDate < today) return { label:'منتهي', cls:'ann-badge-exp' };
+  if(a && a.status === 'published') return { label:'منشور', cls:'ann-badge-pub' };
+  if(a && a.status === 'paused') return { label:'متوقف مؤقتاً', cls:'ann-badge-paused' };
+  return { label:'مسودة', cls:'ann-badge-draft' };
+}
+function annTargetLabel(a, d){
+  const t = a && a.targetType || 'all';
+  if(t === 'all') return 'جميع الطالبات';
+  if(t === 'primary') return 'المرحلة الابتدائية';
+  if(t === 'middle') return 'المرحلة المتوسطة';
+  if(t === 'high') return 'المرحلة الثانوية';
+  if(t === 'class'){
+    const cls = (d.classes || []).find(c => c && String(c.id) === String(a.targetValue || ''));
+    const gr = cls ? (d.grades || []).find(g => g && g.id === cls.gradeId) : null;
+    return cls ? ((gr ? gr.name + ' — ' : '') + 'فصل ' + cls.name) : 'فصل محدد';
+  }
+  if(t === 'student'){
+    const st = (d.students || []).find(s => s && String(s.id) === String(a.targetValue || ''));
+    return st ? ('طالبة: ' + st.name) : 'طالبة محددة';
+  }
+  return '—';
+}
+function studentUnreadAnnCount(){
+  return (__schoolAnnCache.list || []).filter(a => a && !a.viewed).length;
+}
+async function __loadSchoolAnnouncements(force){
+  const school = getActiveSchool();
+  if(!force && __schoolAnnCache.loaded && __schoolAnnCache.school === school) return;
+  if(__schoolAnnCache.loading) return;
+  __schoolAnnCache.loading = true;
+  __schoolAnnCache.error = '';
+  try {
+    const res = await fetch('/api/announcements/' + encodeURIComponent(school));
+    const j = await res.json().catch(() => ({}));
+    if(res.ok && j && j.ok){
+      __schoolAnnCache.list = Array.isArray(j.announcements) ? j.announcements : [];
+      __schoolAnnCache.loaded = true;
+      __schoolAnnCache.school = school;
+    } else {
+      __schoolAnnCache.error = (j && j.error) || 'load_failed';
+      __schoolAnnCache.loaded = true;
+    }
+  } catch(e){
+    __schoolAnnCache.error = 'network_error';
+    __schoolAnnCache.loaded = true;
+  } finally {
+    __schoolAnnCache.loading = false;
+    try{ renderApp(); }catch(_){}
+  }
+}
+function closeAnnModal(){
+  const el = document.getElementById('annModalOverlay');
+  if(el) el.remove();
+}
+function renderStudentAnnouncementsBanner(){
+  if(!__schoolAnnCache.loaded && !__schoolAnnCache.loading){
+    setTimeout(() => __loadSchoolAnnouncements(false), 0);
+  }
+  const list = __schoolAnnCache.list || [];
+  if(!list.length) return '';
+  const unread = studentUnreadAnnCount();
+  const top = list.slice(0, 3);
+  return `<div class="ann-student-banner">
+    <div class="ann-student-banner-head">
+      <div class="ann-student-banner-title">
+        <span>📢 إعلانات المدرسة</span>
+        ${unread > 0 ? `<span class="ann-badge ann-badge-new">${unread} جديد</span>` : ''}
+      </div>
+      <a href="#/school-announcements" class="ann-btn-soft">عرض جميع الإعلانات (${list.length})</a>
+    </div>
+    <div class="ann-student-items">
+      ${top.map(a => {
+        const cat = annCategoryMeta(a.category);
+        const snippet = String(a.body || '').replace(/\*\*/g, '').replace(/\*/g, '').slice(0, 95);
+        return `<div class="ann-student-item ${!a.viewed ? 'ann-item-unread' : ''}" onclick="openSchoolAnnouncementDetail('${escapeHtml(a.id)}')">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap">
+            <span class="ann-badge" style="background:${cat.bg};color:${cat.color};border-color:${cat.border}">${cat.icon} ${cat.label}</span>
+            <div style="display:flex;gap:4px">
+              ${a.pinned ? '<span class="ann-badge ann-badge-pin">📌 مثبت</span>' : ''}
+              ${!a.viewed ? '<span class="ann-badge ann-badge-new">جديد</span>' : ''}
+            </div>
+          </div>
+          <div style="font-size:14px;font-weight:900;color:#831843">${escapeHtml(a.title)}</div>
+          <div style="font-size:12px;color:#475569;line-height:1.5">${escapeHtml(snippet)}${String(a.body || '').length > 95 ? '...' : ''}</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#9d174d;font-weight:700;margin-top:auto">
+            <span>${a.hasAttachment ? '📎 مرفق' : ''}</span>
+            <span>قراءة التفاصيل ←</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+async function openSchoolAnnouncementDetail(id){
+  const school = getActiveSchool();
+  const user = currentUser();
+  closeAnnModal();
+  const overlay = document.createElement('div');
+  overlay.id = 'annModalOverlay';
+  overlay.className = 'modal-overlay';
+  overlay.onclick = (e) => { if(e.target === overlay) closeAnnModal(); };
+  overlay.innerHTML = `<div class="modal-box" style="max-width:680px;width:96vw;max-height:90vh;overflow-y:auto;border-top:5px solid #db2777"><div style="padding:24px;text-align:center;color:#64748b">جاري تحميل الإعلان...</div></div>`;
+  document.body.appendChild(overlay);
+  try {
+    const res = await fetch('/api/announcements/' + encodeURIComponent(school) + '/' + encodeURIComponent(id));
+    const j = await res.json();
+    if(!res.ok || !j.ok || !j.announcement) throw new Error((j && j.error) || 'not_found');
+    const a = j.announcement;
+    if(user && user.role === 'STUDENT'){
+      fetch('/api/announcements/' + encodeURIComponent(school) + '/' + encodeURIComponent(id) + '/view', { method:'POST' })
+        .then(r => r.json())
+        .then(() => {
+          const item = (__schoolAnnCache.list || []).find(x => x.id === id);
+          if(item) item.viewed = true;
+          try{ renderApp(); }catch(_){}
+        }).catch(() => {});
+    }
+    const cat = annCategoryMeta(a.category);
+    let attHtml = '';
+    if(a.attachmentData){
+      if(String(a.attachmentType || '').startsWith('image/')){
+        attHtml = `<div style="margin-top:14px;border:1px solid #fbcfe8;border-radius:12px;padding:10px;background:#fdf2f8;text-align:center">
+          <img src="${a.attachmentData}" alt="${escapeHtml(a.attachmentName || 'مرفق')}" style="max-width:100%;max-height:420px;border-radius:8px;display:inline-block" />
+          <div style="margin-top:8px"><a href="${a.attachmentData}" download="${escapeHtml(a.attachmentName || 'image')}" class="ann-btn-soft">⬇️ تحميل الصورة</a></div>
+        </div>`;
+      } else if(a.attachmentType === 'application/pdf'){
+        attHtml = `<div style="margin-top:14px;border:1px solid #fbcfe8;border-radius:12px;padding:12px;background:#fdf2f8">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <span style="font-weight:800;color:#831843">📄 ${escapeHtml(a.attachmentName || 'ملف PDF')}</span>
+            <a href="${a.attachmentData}" download="${escapeHtml(a.attachmentName || 'announcement.pdf')}" class="ann-btn-primary" style="text-decoration:none">⬇️ تحميل ملف PDF</a>
+          </div>
+          <iframe src="${a.attachmentData}" style="width:100%;height:380px;border:1px solid #fbcfe8;border-radius:8px;background:#fff"></iframe>
+        </div>`;
+      }
+    }
+    const box = overlay.querySelector('.modal-box');
+    if(box) box.innerHTML = `
+      <div class="modal-head">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="ann-badge" style="background:${cat.bg};color:${cat.color};border-color:${cat.border}">${cat.icon} ${cat.label}</span>
+          ${a.pinned ? '<span class="ann-badge ann-badge-pin">📌 مثبت</span>' : ''}
+        </div>
+        <button type="button" class="modal-close" onclick="closeAnnModal()">✕</button>
+      </div>
+      <div style="padding:14px 4px">
+        <h3 style="margin:0 0 8px;font-size:19px;font-weight:900;color:#831843">${escapeHtml(a.title)}</h3>
+        <div style="font-size:12px;color:#64748b;margin-bottom:12px">
+          ${a.startDate ? `<span>📅 البداية: ${escapeHtml(a.startDate)}</span>` : ''}
+          ${a.endDate ? ` <span style="margin-inline-start:10px">⏳ الانتهاء: ${escapeHtml(a.endDate)}</span>` : ''}
+        </div>
+        <div class="ann-body-rich">${formatAnnouncementRichText(a.body)}</div>
+        ${attHtml}
+      </div>
+      <div style="display:flex;justify-content:flex-end;padding-top:8px;border-top:1px solid #fce7f3">
+        <button type="button" class="ann-btn-soft" onclick="closeAnnModal()">إغلاق</button>
+      </div>`;
+  } catch(e){
+    const box = overlay.querySelector('.modal-box');
+    if(box) box.innerHTML = `<div style="padding:20px;text-align:center;color:#be123c">تعذر فتح الإعلان: ${escapeHtml(e.message || 'خطأ')}</div>`;
+  }
+}
+function renderSchoolAnnouncementsStudent(){
+  if(!__schoolAnnCache.loaded && !__schoolAnnCache.loading){
+    setTimeout(() => __loadSchoolAnnouncements(false), 0);
+  }
+  const list = (__schoolAnnCache.list || []).filter(a => {
+    if(__annFilter.category !== 'all' && a.category !== __annFilter.category) return false;
+    if(__annFilter.q){
+      const q = __annFilter.q.trim().toLowerCase();
+      if(!(String(a.title || '').toLowerCase().includes(q) || String(a.body || '').toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
+  return `<div class="ann-page">
+    <div class="ann-header">
+      <div>
+        <h2>📢 إعلانات المدرسة</h2>
+        <div class="ann-header-sub">جميع الإعلانات والتنبيهات النشطة الموجهة لكِ</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button type="button" class="ann-btn-soft" onclick="__loadSchoolAnnouncements(true)">🔄 تحديث</button>
+        <a href="#/" class="ann-btn-soft">🏠 الرئيسية</a>
+      </div>
+    </div>
+    <div class="ann-filters">
+      <input type="text" placeholder="ابحثي في الإعلانات..." value="${escapeHtml(__annFilter.q)}" oninput="__annFilter.q=this.value;renderApp()" style="flex:1;min-width:180px" />
+      <select onchange="__annFilter.category=this.value;renderApp()">
+        <option value="all" ${__annFilter.category==='all'?'selected':''}>جميع التصنيفات</option>
+        <option value="general" ${__annFilter.category==='general'?'selected':''}>📢 إعلان عام</option>
+        <option value="warning" ${__annFilter.category==='warning'?'selected':''}>⚠️ تنبيه مهم</option>
+        <option value="event" ${__annFilter.category==='event'?'selected':''}>📅 فعالية أو مناسبة</option>
+        <option value="academic" ${__annFilter.category==='academic'?'selected':''}>📚 إعلان أكاديمي</option>
+        <option value="honor" ${__annFilter.category==='honor'?'selected':''}>🏆 تكريم وتهنئة</option>
+        <option value="urgent" ${__annFilter.category==='urgent'?'selected':''}>📌 إعلان عاجل</option>
+      </select>
+    </div>
+    ${__schoolAnnCache.loading && !__schoolAnnCache.loaded ? '<div class="ann-card" style="text-align:center;color:#64748b">جاري تحميل الإعلانات...</div>' : ''}
+    ${(!__schoolAnnCache.loading && !list.length) ? '<div class="ann-card" style="text-align:center;color:#64748b;padding:28px">لا توجد إعلانات نشطة حالياً</div>' : ''}
+    <div class="ann-list">
+      ${list.map(a => {
+        const cat = annCategoryMeta(a.category);
+        return `<div class="ann-card ${a.pinned ? 'ann-pinned' : ''}" style="cursor:pointer" onclick="openSchoolAnnouncementDetail('${escapeHtml(a.id)}')">
+          <div class="ann-card-head">
+            <div>
+              <div class="ann-badges" style="margin-bottom:6px">
+                <span class="ann-badge" style="background:${cat.bg};color:${cat.color};border-color:${cat.border}">${cat.icon} ${cat.label}</span>
+                ${a.pinned ? '<span class="ann-badge ann-badge-pin">📌 مثبت</span>' : ''}
+                ${!a.viewed ? '<span class="ann-badge ann-badge-new">جديد</span>' : '<span class="ann-badge ann-badge-draft">تمت القراءة</span>'}
+              </div>
+              <h3 class="ann-card-title">${escapeHtml(a.title)}</h3>
+            </div>
+            <span class="ann-btn-soft">عرض التفاصيل ←</span>
+          </div>
+          <div class="ann-body-rich">${formatAnnouncementRichText(String(a.body || '').slice(0, 220) + (String(a.body || '').length > 220 ? '...' : ''))}</div>
+          <div class="ann-meta-row">
+            ${a.startDate ? `<span>📅 ${escapeHtml(a.startDate)}</span>` : ''}
+            ${a.endDate ? `<span>⏳ ينتهي: ${escapeHtml(a.endDate)}</span>` : ''}
+            ${a.hasAttachment ? `<span>📎 ${escapeHtml(a.attachmentName || 'مرفق')}</span>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+function annInsertFmt(prefix, suffix){
+  const ta = document.getElementById('annBodyInput');
+  if(!ta) return;
+  const s = ta.selectionStart || 0, e = ta.selectionEnd || 0;
+  const val = ta.value;
+  const sel = val.slice(s, e) || 'نص';
+  ta.value = val.slice(0, s) + prefix + sel + suffix + val.slice(e);
+  ta.focus();
+}
+function annOnTargetTypeChange(){
+  const t = (document.getElementById('annTargetType') || {}).value || 'all';
+  const wrap = document.getElementById('annTargetValWrap');
+  const sel = document.getElementById('annTargetValue');
+  if(!wrap || !sel) return;
+  if(t !== 'class' && t !== 'student'){ wrap.style.display = 'none'; sel.innerHTML = ''; return; }
+  const d = loadDB();
+  wrap.style.display = 'block';
+  if(t === 'class'){
+    const gMap = {};
+    (d.grades || []).forEach(g => { if(g && g.id) gMap[g.id] = g.name; });
+    sel.innerHTML = (d.classes || []).map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml((gMap[c.gradeId] ? gMap[c.gradeId] + ' — ' : '') + 'فصل ' + c.name)}</option>`).join('');
+  } else {
+    const cMap = {};
+    (d.classes || []).forEach(c => { if(c && c.id) cMap[c.id] = c.name; });
+    const sts = (d.students || []).slice().sort((a,b) => String(a.name||'').localeCompare(String(b.name||''), 'ar'));
+    sel.innerHTML = sts.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name + (cMap[s.classId] ? ' (' + cMap[s.classId] + ')' : ''))}</option>`).join('');
+  }
+}
+function annHandleFileInput(input){
+  const file = input && input.files && input.files[0];
+  if(!file) return;
+  if(file.size > 3 * 1024 * 1024){
+    alert('حجم المرفق يجب ألا يتجاوز 3 ميجابايت');
+    input.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    __annFormState.attachment = { name: file.name, type: file.type, data: String(reader.result || '') };
+    __annFormState.removeAttachment = false;
+    const lbl = document.getElementById('annAttStatus');
+    if(lbl) lbl.textContent = '📎 تم إرفاق: ' + file.name;
+  };
+  reader.readAsDataURL(file);
+}
+async function openSchoolAnnouncementForm(editId){
+  const school = getActiveSchool();
+  __annFormState.id = editId || '';
+  __annFormState.attachment = null;
+  __annFormState.removeAttachment = false;
+  let existing = null;
+  if(editId){
+    try {
+      const res = await fetch('/api/announcements/' + encodeURIComponent(school) + '/' + encodeURIComponent(editId));
+      const j = await res.json();
+      if(res.ok && j.ok) existing = j.announcement;
+    } catch(_){}
+    if(!existing) existing = (__schoolAnnCache.list || []).find(x => x.id === editId) || null;
+  }
+  closeAnnModal();
+  const overlay = document.createElement('div');
+  overlay.id = 'annModalOverlay';
+  overlay.className = 'modal-overlay';
+  overlay.onclick = (e) => { if(e.target === overlay) closeAnnModal(); };
+  const a = existing || { title:'', body:'', category:'general', status:'published', pinned:false, targetType:'all', targetValue:'', startDate:todayStr(), endDate:'', attachmentName:'' };
+  overlay.innerHTML = `<div class="modal-box" style="max-width:680px;width:96vw;max-height:92vh;overflow-y:auto;border-top:5px solid #db2777">
+    <div class="modal-head">
+      <h3>${editId ? '✏️ تعديل إعلان' : '📢 إنشاء إعلان جديد'}</h3>
+      <button type="button" class="modal-close" onclick="closeAnnModal()">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;padding:10px 2px">
+      <div>
+        <label style="font-weight:800;font-size:12.5px">عنوان الإعلان *</label>
+        <input id="annTitleInput" type="text" value="${escapeHtml(a.title)}" placeholder="أدخل عنوان الإعلان..." style="width:100%" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-weight:800;font-size:12.5px">تصنيف الإعلان</label>
+          <select id="annCatInput" style="width:100%">
+            <option value="general" ${a.category==='general'?'selected':''}>📢 إعلان عام</option>
+            <option value="warning" ${a.category==='warning'?'selected':''}>⚠️ تنبيه مهم</option>
+            <option value="event" ${a.category==='event'?'selected':''}>📅 إعلان فعالية أو مناسبة</option>
+            <option value="academic" ${a.category==='academic'?'selected':''}>📚 إعلان أكاديمي</option>
+            <option value="honor" ${a.category==='honor'?'selected':''}>🏆 إعلان تكريم وتهنئة</option>
+            <option value="urgent" ${a.category==='urgent'?'selected':''}>📌 إعلان عاجل</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-weight:800;font-size:12.5px">الفئة المستهدفة</label>
+          <select id="annTargetType" style="width:100%" onchange="annOnTargetTypeChange()">
+            <option value="all" ${a.targetType==='all'?'selected':''}>جميع الطالبات</option>
+            <option value="primary" ${a.targetType==='primary'?'selected':''}>طالبات المرحلة الابتدائية</option>
+            <option value="middle" ${a.targetType==='middle'?'selected':''}>طالبات المرحلة المتوسطة</option>
+            <option value="high" ${a.targetType==='high'?'selected':''}>طالبات المرحلة الثانوية</option>
+            <option value="class" ${a.targetType==='class'?'selected':''}>فصل دراسي محدد</option>
+            <option value="student" ${a.targetType==='student'?'selected':''}>طالبة محددة</option>
+          </select>
+        </div>
+      </div>
+      <div id="annTargetValWrap" style="display:none">
+        <label style="font-weight:800;font-size:12.5px">تحديد الفصل أو الطالبة</label>
+        <select id="annTargetValue" style="width:100%"></select>
+      </div>
+      <div>
+        <label style="font-weight:800;font-size:12.5px">محتوى الإعلان (يدعم التنسيق)</label>
+        <div class="ann-toolbar">
+          <button type="button" onclick="annInsertFmt('**','**')"><b>عريض</b></button>
+          <button type="button" onclick="annInsertFmt('*','*')"><i>مائل</i></button>
+          <button type="button" onclick="annInsertFmt('\\n• ','')">• قائمة</button>
+        </div>
+        <textarea id="annBodyInput" rows="5" placeholder="اكتب تفاصيل الإعلان هنا..." style="width:100%">${escapeHtml(a.body)}</textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-weight:800;font-size:12.5px">تاريخ بداية الظهور</label>
+          <input id="annStartDate" type="date" value="${escapeHtml(a.startDate || '')}" style="width:100%" />
+        </div>
+        <div>
+          <label style="font-weight:800;font-size:12.5px">تاريخ انتهاء الإعلان (اختياري)</label>
+          <input id="annEndDate" type="date" value="${escapeHtml(a.endDate || '')}" style="width:100%" />
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#fdf2f8;padding:10px;border-radius:10px;border:1px solid #fbcfe8">
+        <div>
+          <label style="font-weight:800;font-size:12.5px;display:block">إرفاق صورة أو ملف PDF (حتى 3 ميجابايت)</label>
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" onchange="annHandleFileInput(this)" />
+          <div id="annAttStatus" style="font-size:11.5px;color:#831843;margin-top:4px">${a.attachmentName ? ('📎 المرفق الحالي: ' + escapeHtml(a.attachmentName)) : 'لا يوجد مرفق'}</div>
+        </div>
+        ${a.attachmentName ? `<button type="button" class="ann-btn-danger" onclick="__annFormState.removeAttachment=true;__annFormState.attachment=null;document.getElementById('annAttStatus').textContent='تمت إزالة المرفق';">إزالة المرفق</button>` : ''}
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:13px;cursor:pointer">
+        <input id="annPinnedInput" type="checkbox" ${a.pinned ? 'checked' : ''} />
+        📌 تثبيت الإعلان في أعلى الصفحة
+      </label>
+      <div id="annFormErr" style="color:#be123c;font-size:12.5px;font-weight:700"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;padding-top:8px;border-top:1px solid #fce7f3">
+        <button type="button" class="ann-btn-soft" onclick="closeAnnModal()">إلغاء</button>
+        <button type="button" class="ann-btn-soft" onclick="submitSchoolAnnouncementForm('draft')">حفظ كمسودة</button>
+        <button type="button" class="ann-btn-primary" onclick="submitSchoolAnnouncementForm('published')">${editId ? 'حفظ ونشر التعديلات' : 'نشر الإعلان'}</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  annOnTargetTypeChange();
+  if(a.targetValue){
+    const tv = document.getElementById('annTargetValue');
+    if(tv) tv.value = a.targetValue;
+  }
+}
+async function submitSchoolAnnouncementForm(status){
+  const school = getActiveSchool();
+  const title = ((document.getElementById('annTitleInput') || {}).value || '').trim();
+  const errEl = document.getElementById('annFormErr');
+  if(!title){ if(errEl) errEl.textContent = 'يرجى كتابة عنوان الإعلان'; return; }
+  const payload = {
+    title,
+    body: (document.getElementById('annBodyInput') || {}).value || '',
+    category: (document.getElementById('annCatInput') || {}).value || 'general',
+    targetType: (document.getElementById('annTargetType') || {}).value || 'all',
+    targetValue: (document.getElementById('annTargetValue') || {}).value || '',
+    startDate: (document.getElementById('annStartDate') || {}).value || '',
+    endDate: (document.getElementById('annEndDate') || {}).value || '',
+    pinned: !!(document.getElementById('annPinnedInput') || {}).checked,
+    status,
+  };
+  if(__annFormState.attachment) payload.attachment = __annFormState.attachment;
+  if(__annFormState.removeAttachment) payload.removeAttachment = true;
+  try {
+    const isEdit = !!__annFormState.id;
+    const url = '/api/announcements/' + encodeURIComponent(school) + (isEdit ? '/' + encodeURIComponent(__annFormState.id) : '');
+    const res = await fetch(url, {
+      method: isEdit ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const j = await res.json();
+    if(!res.ok || !j.ok){
+      if(errEl) errEl.textContent = 'تعذر الحفظ: ' + ((j && j.error) || 'خطأ');
+      return;
+    }
+    closeAnnModal();
+    await __loadSchoolAnnouncements(true);
+  } catch(e){
+    if(errEl) errEl.textContent = 'تعذر الاتصال بالخادم';
+  }
+}
+async function toggleSchoolAnnouncementStatus(id, status){
+  const school = getActiveSchool();
+  await fetch('/api/announcements/' + encodeURIComponent(school) + '/' + encodeURIComponent(id), {
+    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status }),
+  });
+  await __loadSchoolAnnouncements(true);
+}
+async function toggleSchoolAnnouncementPin(id, pinned){
+  const school = getActiveSchool();
+  await fetch('/api/announcements/' + encodeURIComponent(school) + '/' + encodeURIComponent(id), {
+    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pinned }),
+  });
+  await __loadSchoolAnnouncements(true);
+}
+async function deleteSchoolAnnouncementItem(id){
+  if(!confirm('هل أنت متأكد من حذف هذا الإعلان نهائياً؟')) return;
+  const school = getActiveSchool();
+  await fetch('/api/announcements/' + encodeURIComponent(school) + '/' + encodeURIComponent(id), { method:'DELETE' });
+  await __loadSchoolAnnouncements(true);
+}
+let __annViewsData = { views: [], notViewed: [], tab: 'viewed', q: '' };
+function renderAnnViewsModalBody(){
+  const box = document.getElementById('annViewsListWrap');
+  if(!box) return;
+  const q = (__annViewsData.q || '').trim().toLowerCase();
+  const items = (__annViewsData.tab === 'viewed' ? __annViewsData.views : __annViewsData.notViewed).filter(x => {
+    if(!q) return true;
+    return String(x.studentName || '').toLowerCase().includes(q) || String(x.className || '').toLowerCase().includes(q);
+  });
+  if(!items.length){
+    box.innerHTML = '<div style="text-align:center;color:#64748b;padding:18px">لا توجد نتائج مطابقة</div>';
+    return;
+  }
+  box.innerHTML = items.map(x => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid #fce7f3;font-size:13px">
+    <div>
+      <div style="font-weight:800;color:#831843">${escapeHtml(x.studentName)}</div>
+      <div style="font-size:11.5px;color:#64748b">${escapeHtml(x.className || '—')}</div>
+    </div>
+    <div style="font-size:11.5px;color:#475569">${x.viewedAt ? escapeHtml(new Date(x.viewedAt).toLocaleString('ar-SA')) : 'لم تشاهده بعد'}</div>
+  </div>`).join('');
+}
+async function openSchoolAnnouncementViewsModal(id){
+  const school = getActiveSchool();
+  closeAnnModal();
+  const overlay = document.createElement('div');
+  overlay.id = 'annModalOverlay';
+  overlay.className = 'modal-overlay';
+  overlay.onclick = (e) => { if(e.target === overlay) closeAnnModal(); };
+  overlay.innerHTML = `<div class="modal-box" style="max-width:680px;width:96vw;max-height:90vh;overflow-y:auto;border-top:5px solid #db2777"><div style="padding:24px;text-align:center;color:#64748b">جاري تحميل إحصائيات المشاهدة...</div></div>`;
+  document.body.appendChild(overlay);
+  try {
+    const res = await fetch('/api/announcements/' + encodeURIComponent(school) + '/' + encodeURIComponent(id) + '/views');
+    const j = await res.json();
+    if(!res.ok || !j.ok) throw new Error('failed');
+    __annViewsData = { views: j.views || [], notViewed: j.notViewed || [], tab: 'viewed', q: '' };
+    const box = overlay.querySelector('.modal-box');
+    if(box) box.innerHTML = `
+      <div class="modal-head">
+        <h3>👁️ متابعة مشاهدة الإعلان</h3>
+        <button type="button" class="modal-close" onclick="closeAnnModal()">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0">
+        <div class="ann-stat"><div><div class="ann-stat-val">${j.totalTargeted || 0}</div><div class="ann-stat-lbl">المستهدفات</div></div></div>
+        <div class="ann-stat"><div><div class="ann-stat-val" style="color:#15803d">${j.viewedCount || 0}</div><div class="ann-stat-lbl">شاهدن الإعلان</div></div></div>
+        <div class="ann-stat"><div><div class="ann-stat-val" style="color:#b45309">${j.notViewedCount || 0}</div><div class="ann-stat-lbl">لم يشاهدنه</div></div></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button type="button" class="ann-btn-primary" onclick="__annViewsData.tab='viewed';renderAnnViewsModalBody()">شاهدن (${j.viewedCount || 0})</button>
+        <button type="button" class="ann-btn-soft" onclick="__annViewsData.tab='not_viewed';renderAnnViewsModalBody()">لم يشاهدن (${j.notViewedCount || 0})</button>
+        <input type="text" placeholder="بحث باسم الطالبة أو الفصل..." oninput="__annViewsData.q=this.value;renderAnnViewsModalBody()" style="flex:1;min-width:180px" />
+      </div>
+      <div id="annViewsListWrap" style="max-height:360px;overflow-y:auto;border:1px solid #fce7f3;border-radius:10px"></div>`;
+    renderAnnViewsModalBody();
+  } catch(e){
+    const box = overlay.querySelector('.modal-box');
+    if(box) box.innerHTML = `<div style="padding:20px;text-align:center;color:#be123c">تعذر تحميل بيانات المشاهدة</div>`;
+  }
+}
+function renderSchoolAnnouncementsAdmin(){
+  if(!__schoolAnnCache.loaded && !__schoolAnnCache.loading){
+    setTimeout(() => __loadSchoolAnnouncements(false), 0);
+  }
+  const d = loadDB();
+  const all = __schoolAnnCache.list || [];
+  const today = todayStr();
+  const pubCount = all.filter(a => a.status === 'published' && (!a.endDate || a.endDate >= today)).length;
+  const draftCount = all.filter(a => a.status === 'draft').length;
+  const expCount = all.filter(a => a.status === 'published' && a.endDate && a.endDate < today).length;
+  const filtered = all.filter(a => {
+    if(__annFilter.category !== 'all' && a.category !== __annFilter.category) return false;
+    if(__annFilter.status !== 'all'){
+      const expired = a.status === 'published' && a.endDate && a.endDate < today;
+      if(__annFilter.status === 'expired' && !expired) return false;
+      if(__annFilter.status !== 'expired' && (expired || a.status !== __annFilter.status)) return false;
+    }
+    if(__annFilter.q){
+      const q = __annFilter.q.trim().toLowerCase();
+      if(!(String(a.title || '').toLowerCase().includes(q) || String(a.body || '').toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
+  return `<div class="ann-page">
+    <div class="ann-header">
+      <div>
+        <h2>📢 إعلانات المدرسة</h2>
+        <div class="ann-header-sub">إنشاء ونشر ومتابعة إعلانات قسم البنات</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="ann-btn-soft" onclick="__loadSchoolAnnouncements(true)">🔄 تحديث</button>
+        <button type="button" class="ann-btn-primary" onclick="openSchoolAnnouncementForm('')">+ إنشاء إعلان جديد</button>
+      </div>
+    </div>
+    <div class="ann-stats">
+      <div class="ann-stat"><div><div class="ann-stat-val">${all.length}</div><div class="ann-stat-lbl">إجمالي الإعلانات</div></div></div>
+      <div class="ann-stat"><div><div class="ann-stat-val" style="color:#15803d">${pubCount}</div><div class="ann-stat-lbl">منشورة ونشطة</div></div></div>
+      <div class="ann-stat"><div><div class="ann-stat-val" style="color:#475569">${draftCount}</div><div class="ann-stat-lbl">مسودات</div></div></div>
+      <div class="ann-stat"><div><div class="ann-stat-val" style="color:#b91c1c">${expCount}</div><div class="ann-stat-lbl">منتهية</div></div></div>
+    </div>
+    <div class="ann-filters">
+      <input type="text" placeholder="بحث بالعنوان أو المحتوى..." value="${escapeHtml(__annFilter.q)}" oninput="__annFilter.q=this.value;renderApp()" style="flex:1;min-width:180px" />
+      <select onchange="__annFilter.status=this.value;renderApp()">
+        <option value="all" ${__annFilter.status==='all'?'selected':''}>جميع الحالات</option>
+        <option value="published" ${__annFilter.status==='published'?'selected':''}>منشور</option>
+        <option value="draft" ${__annFilter.status==='draft'?'selected':''}>مسودة</option>
+        <option value="paused" ${__annFilter.status==='paused'?'selected':''}>متوقف مؤقتاً</option>
+        <option value="expired" ${__annFilter.status==='expired'?'selected':''}>منتهي</option>
+      </select>
+      <select onchange="__annFilter.category=this.value;renderApp()">
+        <option value="all" ${__annFilter.category==='all'?'selected':''}>جميع التصنيفات</option>
+        <option value="general" ${__annFilter.category==='general'?'selected':''}>📢 إعلان عام</option>
+        <option value="warning" ${__annFilter.category==='warning'?'selected':''}>⚠️ تنبيه مهم</option>
+        <option value="event" ${__annFilter.category==='event'?'selected':''}>📅 فعالية أو مناسبة</option>
+        <option value="academic" ${__annFilter.category==='academic'?'selected':''}>📚 إعلان أكاديمي</option>
+        <option value="honor" ${__annFilter.category==='honor'?'selected':''}>🏆 تكريم وتهنئة</option>
+        <option value="urgent" ${__annFilter.category==='urgent'?'selected':''}>📌 إعلان عاجل</option>
+      </select>
+    </div>
+    ${!filtered.length ? '<div class="ann-card" style="text-align:center;color:#64748b;padding:28px">لا توجد إعلانات مطابقة</div>' : ''}
+    <div class="ann-list">
+      ${filtered.map(a => {
+        const cat = annCategoryMeta(a.category);
+        const st = annStatusBadge(a);
+        return `<div class="ann-card ${a.pinned ? 'ann-pinned' : ''}">
+          <div class="ann-card-head">
+            <div>
+              <div class="ann-badges" style="margin-bottom:6px">
+                <span class="ann-badge" style="background:${cat.bg};color:${cat.color};border-color:${cat.border}">${cat.icon} ${cat.label}</span>
+                <span class="ann-badge ${st.cls}">${st.label}</span>
+                ${a.pinned ? '<span class="ann-badge ann-badge-pin">📌 مثبت</span>' : ''}
+              </div>
+              <h3 class="ann-card-title">${escapeHtml(a.title)}</h3>
+            </div>
+            <div style="font-size:12px;color:#831843;font-weight:800">🎯 ${escapeHtml(annTargetLabel(a, d))}</div>
+          </div>
+          <div class="ann-body-rich">${formatAnnouncementRichText(String(a.body || '').slice(0, 220) + (String(a.body || '').length > 220 ? '...' : ''))}</div>
+          <div class="ann-meta-row">
+            ${a.startDate ? `<span>📅 البداية: ${escapeHtml(a.startDate)}</span>` : ''}
+            ${a.endDate ? `<span>⏳ الانتهاء: ${escapeHtml(a.endDate)}</span>` : ''}
+            ${a.hasAttachment ? `<span>📎 ${escapeHtml(a.attachmentName || 'مرفق')}</span>` : ''}
+          </div>
+          <div class="ann-actions">
+            <button type="button" class="ann-btn-soft" onclick="openSchoolAnnouncementDetail('${escapeHtml(a.id)}')">📄 معاينة</button>
+            <button type="button" class="ann-btn-soft" onclick="openSchoolAnnouncementViewsModal('${escapeHtml(a.id)}')">👁️ المشاهدات</button>
+            <button type="button" class="ann-btn-soft" onclick="openSchoolAnnouncementForm('${escapeHtml(a.id)}')">✏️ تعديل</button>
+            ${a.status === 'paused'
+              ? `<button type="button" class="ann-btn-soft" onclick="toggleSchoolAnnouncementStatus('${escapeHtml(a.id)}','published')">▶️ إعادة نشر</button>`
+              : `<button type="button" class="ann-btn-soft" onclick="toggleSchoolAnnouncementStatus('${escapeHtml(a.id)}','paused')">⏸️ إيقاف مؤقت</button>`}
+            <button type="button" class="ann-btn-soft" onclick="toggleSchoolAnnouncementPin('${escapeHtml(a.id)}',${!a.pinned})">${a.pinned ? 'إلغاء التثبيت' : '📌 تثبيت'}</button>
+            <button type="button" class="ann-btn-danger" onclick="deleteSchoolAnnouncementItem('${escapeHtml(a.id)}')">🗑️ حذف</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
 function renderStudentDashboard(){
   const d = loadDB();
   const user = currentUser();
@@ -5999,6 +6665,7 @@ function renderStudentDashboard(){
       </div>
     </div>
   </div>
+  ${renderStudentAnnouncementsBanner()}
   <div class="sd-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:10px">
     <div class="dash-panel" style="padding:12px 14px">
       <div class="dash-panel-head" style="margin-bottom:6px"><div class="dash-panel-title">⭐ نقاطي</div></div>
@@ -17085,7 +17752,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=181', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=184', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

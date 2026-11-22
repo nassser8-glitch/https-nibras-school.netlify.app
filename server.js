@@ -15,6 +15,7 @@ const notePrivacy = require('./notes-privacy');
 const transferPrivacy = require('./transfers-privacy');
 // صلاحية واتساب لمسار الموافقة الفردية (منطق خالص بلا وصول لقاعدة البيانات)
 const wa = require('./whatsapp');
+const schoolAnn = require('./school-announcements');
 
 // قراءة متغير: من Environment أولاً، ثم من ملف سري في /etc/secrets (بديل Render)
 function envOrSecret(name, fallback) {
@@ -3391,6 +3392,199 @@ app.post('/api/wa/consent', requireAuth, async (req, res) => {
     });
     res.json({ ok: true, updated: out.value || 0, value });
   } catch (e) { fail(res)(e); }
+});
+
+/* ===== إعلانات المدرسة — API مستقل لكل قسم بصلاحيات خادم صارمة ===== */
+function todayAnnouncementDate() {
+  return new Date(Date.now() + 5 * 3600 * 1000).toISOString().slice(0, 10);
+}
+function stripAnnouncementAttachment(a) {
+  if (!a) return a;
+  return {
+    id: a.id, school: a.school, title: a.title, body: a.body,
+    category: a.category, pinned: !!a.pinned, status: a.status,
+    targetType: a.targetType, targetValue: a.targetValue,
+    startDate: a.startDate, endDate: a.endDate,
+    attachmentName: a.attachmentName || '', attachmentType: a.attachmentType || '',
+    hasAttachment: !!a.attachmentData,
+    createdBy: a.createdBy || '', createdByName: a.createdByName || '',
+    createdAt: a.createdAt, updatedAt: a.updatedAt,
+  };
+}
+async function resolveStudentAnnouncementContext(school, userId) {
+  const rec = await db.getSchoolData(school);
+  const data = (rec && rec.data) ? rec.data : {};
+  const students = Array.isArray(data.students) ? data.students : [];
+  const grades = Array.isArray(data.grades) ? data.grades : [];
+  const classes = Array.isArray(data.classes) ? data.classes : [];
+  const student = students.find(s => s && String(s.id) === String(userId)) || null;
+  const gradeMap = {};
+  grades.forEach(g => { if (g && g.id) gradeMap[g.id] = g; });
+  const classMap = {};
+  classes.forEach(c => { if (c && c.id) classMap[c.id] = c; });
+  return { data, student, gradeMap, classMap };
+}
+function checkAnnouncementSchoolAccess(req, res) {
+  const reqSchool = String(req.params.school || '').toUpperCase();
+  const school = db.SCHOOLS[0];
+  if (reqSchool !== school || !schoolAccess(req.session, school)) {
+    res.status(403).json({ error: 'forbidden' });
+    return null;
+  }
+  return school;
+}
+
+app.get('/api/announcements/:school', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    const role = req.session.role;
+    if (role !== 'ADMIN' && role !== 'STUDENT') return res.status(403).json({ error: 'forbidden' });
+    const rows = await db.listSchoolAnnouncements(school);
+    if (role === 'ADMIN') {
+      return res.json({ ok: true, announcements: schoolAnn.sortAnnouncements(rows).map(stripAnnouncementAttachment) });
+    }
+    const ctx = await resolveStudentAnnouncementContext(school, req.session.userId);
+    if (!ctx.student) return res.json({ ok: true, announcements: [] });
+    const today = todayAnnouncementDate();
+    const visible = rows.filter(a =>
+      schoolAnn.isAnnouncementActiveOnDate(a, today) &&
+      schoolAnn.matchesTarget(a, ctx.student, ctx.gradeMap, ctx.classMap)
+    );
+    const viewedIds = new Set(await db.listStudentAnnouncementViewIds(school, ctx.student.id));
+    const list = schoolAnn.sortAnnouncements(visible).map(a =>
+      Object.assign(stripAnnouncementAttachment(a), { viewed: viewedIds.has(a.id) })
+    );
+    res.json({ ok: true, announcements: list });
+  })().catch(fail(res));
+});
+
+app.get('/api/announcements/:school/:id', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    const role = req.session.role;
+    if (role !== 'ADMIN' && role !== 'STUDENT') return res.status(403).json({ error: 'forbidden' });
+    const ann = await db.getSchoolAnnouncement(school, req.params.id);
+    if (!ann) return res.status(404).json({ error: 'not_found' });
+    if (role === 'STUDENT') {
+      const ctx = await resolveStudentAnnouncementContext(school, req.session.userId);
+      const today = todayAnnouncementDate();
+      if (!ctx.student || !schoolAnn.isAnnouncementActiveOnDate(ann, today) || !schoolAnn.matchesTarget(ann, ctx.student, ctx.gradeMap, ctx.classMap)) {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+    }
+    res.json({ ok: true, announcement: ann });
+  })().catch(fail(res));
+});
+
+app.post('/api/announcements/:school', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const v = schoolAnn.validateAnnouncementPayload(req.body);
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    const id = 'ann_' + crypto.randomBytes(8).toString('hex');
+    const created = await db.createSchoolAnnouncement(Object.assign({
+      id, school, createdBy: req.session.userId, createdByName: req.session.name || '',
+    }, v.value));
+    res.json({ ok: true, announcement: stripAnnouncementAttachment(created) });
+  })().catch(fail(res));
+});
+
+app.put('/api/announcements/:school/:id', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const existing = await db.getSchoolAnnouncement(school, req.params.id);
+    if (!existing) return res.status(404).json({ error: 'not_found' });
+    const body = req.body || {};
+    const merged = Object.assign({}, existing, body);
+    if (body.removeAttachment) {
+      merged.attachment = null;
+    } else if (!Object.prototype.hasOwnProperty.call(body, 'attachment')) {
+      merged.attachment = existing.attachmentData
+        ? { name: existing.attachmentName, type: existing.attachmentType, data: existing.attachmentData }
+        : null;
+    }
+    const v = schoolAnn.validateAnnouncementPayload(merged);
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    const updated = await db.updateSchoolAnnouncement(school, req.params.id, v.value);
+    res.json({ ok: true, announcement: stripAnnouncementAttachment(updated) });
+  })().catch(fail(res));
+});
+
+app.delete('/api/announcements/:school/:id', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const ok = await db.deleteSchoolAnnouncement(school, req.params.id);
+    if (!ok) return res.status(404).json({ error: 'not_found' });
+    res.json({ ok: true, deleted: true });
+  })().catch(fail(res));
+});
+
+app.post('/api/announcements/:school/:id/view', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    if (req.session.role !== 'STUDENT') return res.status(403).json({ error: 'forbidden' });
+    const ann = await db.getSchoolAnnouncement(school, req.params.id);
+    if (!ann) return res.status(404).json({ error: 'not_found' });
+    const ctx = await resolveStudentAnnouncementContext(school, req.session.userId);
+    const today = todayAnnouncementDate();
+    if (!ctx.student || !schoolAnn.isAnnouncementActiveOnDate(ann, today) || !schoolAnn.matchesTarget(ann, ctx.student, ctx.gradeMap, ctx.classMap)) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    const cls = ctx.student.classId ? ctx.classMap[ctx.student.classId] : null;
+    const view = await db.recordSchoolAnnouncementView({
+      announcementId: ann.id,
+      school,
+      studentId: ctx.student.id,
+      studentName: ctx.student.name || req.session.name || '',
+      className: cls ? cls.name : '',
+    });
+    res.json({ ok: true, view });
+  })().catch(fail(res));
+});
+
+app.get('/api/announcements/:school/:id/views', requireAuth, (req, res) => {
+  (async () => {
+    const school = checkAnnouncementSchoolAccess(req, res);
+    if (!school) return;
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    const ann = await db.getSchoolAnnouncement(school, req.params.id);
+    if (!ann) return res.status(404).json({ error: 'not_found' });
+    const views = await db.listSchoolAnnouncementViews(school, ann.id);
+    const rec = await db.getSchoolData(school);
+    const data = (rec && rec.data) ? rec.data : {};
+    const students = Array.isArray(data.students) ? data.students : [];
+    const grades = Array.isArray(data.grades) ? data.grades : [];
+    const classes = Array.isArray(data.classes) ? data.classes : [];
+    const classMap = {};
+    classes.forEach(c => { if (c && c.id) classMap[c.id] = c; });
+    const targeted = schoolAnn.resolveTargetedStudents(ann, students, grades, classes);
+    const viewedSet = new Set(views.map(v => String(v.studentId)));
+    const notViewed = targeted
+      .filter(s => s && !viewedSet.has(String(s.id)))
+      .map(s => ({
+        studentId: s.id,
+        studentName: s.name || '',
+        className: (s.classId && classMap[s.classId] && classMap[s.classId].name) || '',
+      }));
+    res.json({
+      ok: true,
+      announcementId: ann.id,
+      totalTargeted: targeted.length,
+      viewedCount: views.length,
+      notViewedCount: notViewed.length,
+      views,
+      notViewed,
+    });
+  })().catch(fail(res));
 });
 
 app.use(express.static(ROOT, { index: 'index.html', fallthrough: true, etag: true, maxAge: 0 }));

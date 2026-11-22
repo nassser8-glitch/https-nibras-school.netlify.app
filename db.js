@@ -187,6 +187,39 @@ async function initSchema() {
         PRIMARY KEY (school, teacher_id, checkin_date)
       )`);
     await client.query(`CREATE INDEX IF NOT EXISTS teacher_supervision_checkins_date_idx ON teacher_supervision_checkins(school, checkin_date)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS school_announcements (
+        id              TEXT PRIMARY KEY,
+        school          TEXT NOT NULL CHECK (school IN ('BOYS','GIRLS')),
+        title           TEXT NOT NULL,
+        body            TEXT NOT NULL DEFAULT '',
+        category        TEXT NOT NULL DEFAULT 'general',
+        pinned          BOOLEAN NOT NULL DEFAULT false,
+        status          TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('draft','published','paused')),
+        target_type     TEXT NOT NULL DEFAULT 'all' CHECK (target_type IN ('all','primary','middle','high','class','student')),
+        target_value    TEXT NOT NULL DEFAULT '',
+        start_date      TEXT NOT NULL DEFAULT '',
+        end_date        TEXT NOT NULL DEFAULT '',
+        attachment_name TEXT NOT NULL DEFAULT '',
+        attachment_type TEXT NOT NULL DEFAULT '',
+        attachment_data TEXT NOT NULL DEFAULT '',
+        created_by      TEXT,
+        created_by_name TEXT,
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`);
+    await client.query(`CREATE INDEX IF NOT EXISTS school_announcements_school_idx ON school_announcements(school, pinned DESC, created_at DESC)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS school_announcement_views (
+        announcement_id TEXT NOT NULL REFERENCES school_announcements(id) ON DELETE CASCADE,
+        school          TEXT NOT NULL CHECK (school IN ('BOYS','GIRLS')),
+        student_id      TEXT NOT NULL,
+        student_name    TEXT NOT NULL DEFAULT '',
+        class_name      TEXT NOT NULL DEFAULT '',
+        viewed_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (announcement_id, student_id)
+      )`);
+    await client.query(`CREATE INDEX IF NOT EXISTS school_announcement_views_school_idx ON school_announcement_views(school, announcement_id)`);
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
@@ -1025,6 +1058,120 @@ async function setFlag(key, value) {
 }
 
 
+/* ===== إعلانات المدرسة ===== */
+async function listSchoolAnnouncements(school) {
+  assertSupportedSchool(school);
+  const r = await pool.query(
+    `SELECT id, school, title, body, category, pinned, status, target_type, target_value,
+            start_date, end_date, attachment_name, attachment_type,
+            (attachment_data <> '') AS has_attachment,
+            created_by, created_by_name, created_at, updated_at
+       FROM school_announcements
+      WHERE school = $1
+      ORDER BY pinned DESC, created_at DESC`,
+    [school]
+  );
+  return r.rows;
+}
+
+async function getSchoolAnnouncement(school, id) {
+  assertSupportedSchool(school);
+  const r = await pool.query(
+    `SELECT * FROM school_announcements WHERE school = $1 AND id = $2`,
+    [school, String(id || '')]
+  );
+  return r.rows[0] || null;
+}
+
+async function createSchoolAnnouncement(rec) {
+  const a = rec || {};
+  assertSupportedSchool(a.school);
+  const r = await pool.query(
+    `INSERT INTO school_announcements
+       (id, school, title, body, category, pinned, status, target_type, target_value,
+        start_date, end_date, attachment_name, attachment_type, attachment_data,
+        created_by, created_by_name)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+     RETURNING *`,
+    [
+      String(a.id), a.school, String(a.title || ''), String(a.body || ''),
+      String(a.category || 'general'), !!a.pinned, String(a.status || 'published'),
+      String(a.targetType || 'all'), String(a.targetValue || ''),
+      String(a.startDate || ''), String(a.endDate || ''),
+      String(a.attachmentName || ''), String(a.attachmentType || ''), String(a.attachmentData || ''),
+      a.createdBy || null, a.createdByName || null,
+    ]
+  );
+  return r.rows[0] || null;
+}
+
+async function updateSchoolAnnouncement(school, id, patch) {
+  assertSupportedSchool(school);
+  const p = patch || {};
+  const map = {
+    title: 'title', body: 'body', category: 'category', pinned: 'pinned',
+    status: 'status', targetType: 'target_type', targetValue: 'target_value',
+    startDate: 'start_date', endDate: 'end_date',
+    attachmentName: 'attachment_name', attachmentType: 'attachment_type', attachmentData: 'attachment_data',
+  };
+  const sets = [];
+  const vals = [school, String(id || '')];
+  let idx = 3;
+  for (const [k, col] of Object.entries(map)) {
+    if (Object.prototype.hasOwnProperty.call(p, k)) {
+      sets.push(`${col} = $${idx++}`);
+      vals.push(p[k]);
+    }
+  }
+  if (!sets.length) return getSchoolAnnouncement(school, id);
+  sets.push('updated_at = now()');
+  const r = await pool.query(
+    `UPDATE school_announcements SET ${sets.join(', ')} WHERE school = $1 AND id = $2 RETURNING *`,
+    vals
+  );
+  return r.rows[0] || null;
+}
+
+async function deleteSchoolAnnouncement(school, id) {
+  assertSupportedSchool(school);
+  const r = await pool.query(
+    `DELETE FROM school_announcements WHERE school = $1 AND id = $2 RETURNING id`,
+    [school, String(id || '')]
+  );
+  return r.rowCount > 0;
+}
+
+async function recordSchoolAnnouncementView({ announcementId, school, studentId, studentName, className }) {
+  assertSupportedSchool(school);
+  await pool.query(
+    `INSERT INTO school_announcement_views (announcement_id, school, student_id, student_name, class_name)
+     VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (announcement_id, student_id) DO NOTHING`,
+    [String(announcementId), school, String(studentId), String(studentName || ''), String(className || '')]
+  );
+}
+
+async function listSchoolAnnouncementViews(school, announcementId) {
+  assertSupportedSchool(school);
+  const r = await pool.query(
+    `SELECT announcement_id, student_id, student_name, class_name, viewed_at
+       FROM school_announcement_views
+      WHERE school = $1 AND announcement_id = $2
+      ORDER BY viewed_at DESC`,
+    [school, String(announcementId || '')]
+  );
+  return r.rows;
+}
+
+async function listStudentAnnouncementViewIds(school, studentId) {
+  assertSupportedSchool(school);
+  const r = await pool.query(
+    `SELECT announcement_id FROM school_announcement_views WHERE school = $1 AND student_id = $2`,
+    [school, String(studentId || '')]
+  );
+  return r.rows.map(x => x.announcement_id);
+}
+
 module.exports = {
   pool, SCHOOLS,
   REQUIRED_DB_NAME, ALLOWED_DB_HOST, ALLOWED_DB_PORT,
@@ -1048,4 +1195,7 @@ module.exports = {
   getSchoolSettings, setSchoolSettings,
   saveBackup, listBackups, getBackup,
   auditSync, listSyncAudit,
+  listSchoolAnnouncements, getSchoolAnnouncement, createSchoolAnnouncement,
+  updateSchoolAnnouncement, deleteSchoolAnnouncement,
+  recordSchoolAnnouncementView, listSchoolAnnouncementViews, listStudentAnnouncementViewIds,
 };
