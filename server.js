@@ -3639,7 +3639,9 @@ app.get('/api/weekly-plans/:school', requireAuth, (req, res) => {
       if (!classId) {
         return res.json({ ok: true, weekStart, weeks: [], plans: [], tasks: [], subjects: [], progress: {} });
       }
+      const stuId = (ctx.student && ctx.student.id) || uid;
       const allClassPub = await db.listWeeklyPlans(school, { classId, status: 'published' });
+      const schoolData = ctx.data || {};
       const weekMap = new Map();
       for (const p of allClassPub) {
         const sun = weeklyPlans.sundayOfDateStr(p.weekStart) || p.weekStart;
@@ -3649,6 +3651,13 @@ app.get('/api/weekly-plans/:school', requireAuth, (req, res) => {
         prev.planCount++;
         weekMap.set(sun, prev);
       }
+      for (const a of (Array.isArray(schoolData.assignments) ? schoolData.assignments : [])) {
+        if (!a || a.deleted || String(a.classId || '') !== classId || !a.date) continue;
+        if (!weeklyPlans.dayKeyOfIsoDate(a.date)) continue;
+        const sun = weeklyPlans.sundayOfDateStr(a.date);
+        if (!sun) continue;
+        if (!weekMap.has(sun)) weekMap.set(sun, { weekStart: sun, weekLabel: '', planCount: 1 });
+      }
       const classWeeks = Array.from(weekMap.values()).sort((a, b) => String(b.weekStart).localeCompare(String(a.weekStart)));
       const curSun = weeklyPlans.currentSundayKey();
       const targetWeek = reqWeek
@@ -3657,8 +3666,19 @@ app.get('/api/weekly-plans/:school', requireAuth, (req, res) => {
 
       const stripped = allClassPub.map(weeklyPlans.stripPlanAttachments);
       const unified = weeklyPlans.aggregateUnifiedStudentPlan(stripped, classId, targetWeek);
-      const progRows = await db.listStudentWeeklyProgress(school, (ctx.student && ctx.student.id) || uid);
-      const progress = {};
+      const assignRes = weeklyPlans.extractClassAssignmentsForWeek(schoolData, classId, targetWeek, stuId);
+      const dayOrder = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4 };
+      const allTasks = [...unified.tasks, ...assignRes.tasks].sort((a, b) => {
+        const da = dayOrder[a.dayKey] != null ? dayOrder[a.dayKey] : 9;
+        const db = dayOrder[b.dayKey] != null ? dayOrder[b.dayKey] : 9;
+        if (da !== db) return da - db;
+        const sc = String(a.subject || '').localeCompare(String(b.subject || ''), 'ar');
+        if (sc !== 0) return sc;
+        return String(a.teacherName || '').localeCompare(String(b.teacherName || ''), 'ar');
+      });
+      const allSubjects = Array.from(new Set([...unified.subjects, ...assignRes.subjects])).sort((a, b) => a.localeCompare(b, 'ar'));
+      const progRows = await db.listStudentWeeklyProgress(school, stuId);
+      const progress = Object.assign({}, assignRes.completedKeys);
       progRows.forEach(r => { if (r.completed) progress[r.planId + '|' + r.itemId] = true; });
       return res.json({
         ok: true,
@@ -3666,8 +3686,8 @@ app.get('/api/weekly-plans/:school', requireAuth, (req, res) => {
         weeks: classWeeks,
         classId,
         plans: unified.plans,
-        tasks: unified.tasks,
-        subjects: unified.subjects,
+        tasks: allTasks,
+        subjects: allSubjects,
         progress,
       });
     }
@@ -3803,18 +3823,38 @@ app.post('/api/weekly-plans/:school/:id/items/:itemId/progress', requireAuth, (r
     const school = checkAnnouncementSchoolAccess(req, res);
     if (!school) return;
     if (req.session.role !== 'STUDENT') return res.status(403).json({ error: 'forbidden' });
+    const ctx = await resolveStudentAnnouncementContext(school, req.session);
+    const stuId = String((ctx.student && ctx.student.id) || ctx.uid || '');
+    const completed = !(req.body && req.body.completed === false);
+
+    if (String(req.params.id || '').startsWith('assign_')) {
+      const aid = String(req.params.itemId || '');
+      const classId = String((ctx.student && ctx.student.classId) || '');
+      const out = await db.mutateSchoolData(school, (d) => {
+        const a = (Array.isArray(d.assignments) ? d.assignments : []).find(x => x && !x.deleted && String(x.id) === aid);
+        if (!a || String(a.classId || '') !== classId) return { changed: false, value: 'forbidden' };
+        if (!Array.isArray(a.completedBy)) a.completedBy = [];
+        const idx = a.completedBy.map(String).indexOf(stuId);
+        if (completed && idx < 0) a.completedBy.push(stuId);
+        else if (!completed && idx >= 0) a.completedBy.splice(idx, 1);
+        else return { changed: false, value: 'ok' };
+        a._v = (typeof a._v === 'number' ? a._v : 0) + 1;
+        return { changed: true, value: 'ok' };
+      });
+      if (out.value === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      return res.json({ ok: true, progress: { planId: req.params.id, itemId: aid, studentId: stuId, completed } });
+    }
+
     const plan = await db.getWeeklyPlan(school, req.params.id);
     if (!plan) return res.status(404).json({ error: 'not_found' });
-    const ctx = await resolveStudentAnnouncementContext(school, req.session);
     if (!canAccessWeeklyPlan('STUDENT', '', ctx, plan)) return res.status(403).json({ error: 'forbidden' });
     const itemExists = (plan.items || []).some(it => String(it.id) === String(req.params.itemId));
     if (!itemExists) return res.status(404).json({ error: 'item_not_found' });
-    const completed = !(req.body && req.body.completed === false);
     const row = await db.setWeeklyPlanItemProgress({
       planId: plan.id,
       itemId: req.params.itemId,
       school,
-      studentId: (ctx.student && ctx.student.id) || ctx.uid,
+      studentId: stuId,
       studentName: (ctx.student && ctx.student.name) || req.session.name || '',
       completed,
     });

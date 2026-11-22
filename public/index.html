@@ -437,7 +437,7 @@ window.__nibrasMarkBooted = function(){
   .wp-day-card-title { font-size:14.5px; font-weight:900; color:#831843; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .wp-day-card-dates { font-size:12px; font-weight:700; color:#9d174d; background:#fff; border:1px solid #fbcfe8; border-radius:999px; padding:2px 10px; }
   .wp-rows-list { display:flex; flex-direction:column; }
-  .wp-subject-row { display:grid; grid-template-columns:150px 1.4fr 1fr 1fr auto 44px; gap:10px; align-items:center; padding:9px 14px; border-bottom:1px solid #fce7f3; transition:background .12s; }
+  .wp-subject-row { display:grid; grid-template-columns:145px 1.2fr 1fr 1fr 1fr auto 44px; gap:8px; align-items:center; padding:9px 14px; border-bottom:1px solid #fce7f3; transition:background .12s; }
   .wp-subject-row:last-child { border-bottom:none; }
   .wp-subject-row:hover { background:#fdf2f8; }
   .wp-subject-row.wp-row-done { background:#f0fdf4; }
@@ -6758,7 +6758,7 @@ const __wpCache = {
   plans:[], tasks:[], subjects:[], progress:{}, coverage:null, error:''
 };
 const __wpUi = {
-  viewMode:'weekly', dayKey:'mon', subject:'all', adminTab:'classes',
+  subject:'all', adminTab:'classes',
   editorOpen:false, editId:'', classId:'', subjectName:'', title:'', weekStart:'', weekLabel:'', items:[]
 };
 
@@ -6959,6 +6959,7 @@ function wpOpenTaskDetailModal(planId, itemId){
     <div style="display:flex;flex-direction:column;gap:10px;padding:6px 2px">
       ${t.lesson ? `<div class="wp-field"><b>📖 الدرس / المطلوب:</b> ${escapeHtml(t.lesson)}</div>` : ''}
       ${t.homework ? `<div class="wp-field"><b>📝 الواجب:</b> ${escapeHtml(t.homework)}</div>` : ''}
+      ${t.assignmentText ? `<div class="wp-field"><b>📌 التكليف:</b> ${escapeHtml(t.assignmentText)}</div>` : ''}
       ${t.assessments ? `<div class="wp-field"><b>🧪 التقويم / الاختبار:</b> ${escapeHtml(t.assessments)}</div>` : ''}
       ${t.notes ? `<div class="wp-field"><b>💬 ملاحظات المعلمة:</b> ${escapeHtml(t.notes)}</div>` : ''}
       <div class="wp-field"><b>👩‍🏫 المعلمة:</b> ${escapeHtml(t.teacherName || '—')}</div>
@@ -7043,30 +7044,23 @@ function renderWeeklyPlanStudent(){
   const gr = cls ? (d.grades || []).find(g => g && g.id === cls.gradeId) : null;
   const classText = cls ? ((gr ? gr.name + ' — ' : '') + 'فصل ' + cls.name) : '—';
 
-  const rawTasks = __wpCache.tasks || [];
+  const rawTasks = (__wpCache.tasks || []).filter(t => __WP_DAYS.some(d0 => d0.key === t.dayKey));
   const subs = __wpCache.subjects || [];
   if(__wpUi.subject !== 'all' && !subs.includes(__wpUi.subject)) __wpUi.subject = 'all';
-  const filteredTasks = rawTasks.filter(t => {
-    if(__wpUi.subject !== 'all' && t.subject !== __wpUi.subject) return false;
-    if(__wpUi.viewMode === 'daily' && t.dayKey !== __wpUi.dayKey) return false;
-    return true;
-  });
+  const filteredTasks = rawTasks.filter(t => (__wpUi.subject === 'all' || t.subject === __wpUi.subject));
 
   const totalTasks = rawTasks.length;
   const lessonsCount = rawTasks.filter(t => t.lesson).length;
-  const hwCount = rawTasks.filter(t => t.homework).length;
+  const hwCount = rawTasks.filter(t => t.homework || t.assignmentText).length;
   const assessCount = rawTasks.filter(t => t.assessments).length;
   const doneTasks = rawTasks.filter(t => __wpCache.progress[t.planId + '|' + t.itemId]).length;
   const pct = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
   const weekText = (typeof schoolWeekInfo === 'function' ? schoolWeekInfo().label : '') || __wpCache.weekStart;
   const unreadAnn = (typeof studentUnreadAnnCount === 'function') ? studentUnreadAnnCount() : 0;
 
-  const orderedDays = [...__WP_DAYS];
-  if(filteredTasks.some(t => t.dayKey === 'sun')) orderedDays.push({ key:'sun', label:'الأحد', offset:0 });
-  const dayCardsHtml = orderedDays.map((dayObj, dIdx) => {
+  const dayCardsHtml = __WP_DAYS.map((dayObj, dIdx) => {
     const dayTasks = filteredTasks.filter(t => t.dayKey === dayObj.key);
-    if(!dayTasks.length) return '';
-    const dDate = dayTasks[0].date || wpDateForDay(__wpCache.weekStart, dayObj.key);
+    const dDate = (dayTasks[0] && dayTasks[0].date) || wpDateForDay(__wpCache.weekStart, dayObj.key);
     const hDate = wpHijriOfDate(dDate);
     return `<div class="wp-day-card ${dIdx % 2 === 1 ? 'wp-day-alt' : ''}">
       <div class="wp-day-card-head">
@@ -7077,7 +7071,7 @@ function renderWeeklyPlanStudent(){
         <span class="ann-badge ann-badge-pin">${dayTasks.length} مهام</span>
       </div>
       <div class="wp-rows-list">
-        ${dayTasks.map(t => {
+        ${dayTasks.length ? dayTasks.map(t => {
           const st = wpSubjectStyle(t.subject);
           const done = !!__wpCache.progress[t.planId + '|' + t.itemId];
           const hasFiles = !!(t.hasAttachment || (t.links && t.links.length));
@@ -7096,6 +7090,10 @@ function renderWeeklyPlanStudent(){
               <span class="wp-row-lbl">📝 الواجب:</span>
               <span>${escapeHtml(t.homework || '—')}</span>
             </div>
+            <div class="wp-row-cell">
+              <span class="wp-row-lbl">📌 التكليف:</span>
+              <span>${t.assignmentText ? `<span class="ann-badge ann-badge-pin">${escapeHtml(t.assignmentText)}</span>` : '—'}</span>
+            </div>
             <div class="wp-row-cell" style="color:#475569">
               <span class="wp-row-lbl">💬 ملاحظات:</span>
               <span>${escapeHtml(t.notes || '—')}</span>
@@ -7109,7 +7107,7 @@ function renderWeeklyPlanStudent(){
               <button type="button" class="wp-big-check ${done ? 'checked' : ''}" onclick="wpToggleStudentProgress('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')" title="${done ? 'تم الإنجاز' : 'تحديد كمنجز'}">${done ? '✓' : ''}</button>
             </div>
           </div>`;
-        }).join('')}
+        }).join('') : '<div style="padding:12px 14px;text-align:center;color:#64748b;font-size:13px;font-weight:700">لا توجد مهام لهذا اليوم</div>'}
       </div>
     </div>`;
   }).join('');
@@ -7123,7 +7121,7 @@ function renderWeeklyPlanStudent(){
           <span class="ann-badge ann-badge-draft">${escapeHtml(classText)}</span>
         </h2>
         <div class="wp-compact-meta">
-          <span>مرحباً بكِ يا ${escapeHtml(user.name || 'طالبة')} · جميع المواد الدراسية في مكان واحد</span>
+          <span>مرحباً بكِ يا ${escapeHtml(user.name || 'طالبة')} · خطة الأسبوع الكاملة (الإثنين – الجمعة) في مكان واحد</span>
         </div>
       </div>
       <div class="wp-stu-topactions">
@@ -7141,7 +7139,7 @@ function renderWeeklyPlanStudent(){
         <span style="font-size:20px">📚</span>
       </div>
       <div class="wp-kpi">
-        <div><div style="font-size:11px;color:#64748b;font-weight:700">الواجبات</div><div style="font-size:19px;font-weight:900;color:#d97706">${hwCount}</div></div>
+        <div><div style="font-size:11px;color:#64748b;font-weight:700">الواجبات والتكليفات</div><div style="font-size:19px;font-weight:900;color:#d97706">${hwCount}</div></div>
         <span style="font-size:20px">📖</span>
       </div>
       <div class="wp-kpi">
@@ -7162,10 +7160,7 @@ function renderWeeklyPlanStudent(){
     </div>
 
     <div class="wp-controls-bar">
-      <div class="wp-tabs">
-        <button type="button" class="wp-tab ${__wpUi.viewMode==='weekly'?'active':''}" onclick="__wpUi.viewMode='weekly';renderApp()">🗓️ العرض الأسبوعي</button>
-        <button type="button" class="wp-tab ${__wpUi.viewMode==='daily'?'active':''}" onclick="__wpUi.viewMode='daily';renderApp()">📋 العرض اليومي</button>
-      </div>
+      <div style="font-size:13px;font-weight:900;color:#831843">🗓️ خطة الأسبوع كاملة (الإثنين ← الجمعة)</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <select onchange="__wpUi.subject=this.value;renderApp()">
           <option value="all" ${__wpUi.subject==='all'?'selected':''}>جميع المواد</option>
@@ -7175,10 +7170,8 @@ function renderWeeklyPlanStudent(){
       </div>
     </div>
 
-    ${__wpUi.viewMode === 'daily' ? `<div class="wp-tabs">${__WP_DAYS.map(day => `<button type="button" class="wp-tab ${__wpUi.dayKey===day.key?'active':''}" onclick="__wpUi.dayKey='${day.key}';renderApp()">${day.label}</button>`).join('')}</div>` : ''}
-
     <div class="wp-days-stack">
-      ${dayCardsHtml || '<div class="ann-card" style="text-align:center;color:#64748b;padding:30px;font-weight:700">لا توجد خطط أسبوعية منشورة لهذا الاختيار بعد</div>'}
+      ${dayCardsHtml}
     </div>
 
     <div class="wp-bottom-dock">
@@ -18693,7 +18686,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=192', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=193', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

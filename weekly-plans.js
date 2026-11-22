@@ -10,7 +10,7 @@ const WEEK_DAYS = [
   { key: 'thu', label: 'الخميس', offset: 4 },
   { key: 'fri', label: 'الجمعة', offset: 5 },
 ];
-const DAY_KEY_SET = new Set([...WEEK_DAYS.map(d => d.key), 'sun']);
+const DAY_KEY_SET = new Set(WEEK_DAYS.map(d => d.key));
 const PLAN_STATUSES = ['draft', 'published'];
 
 function normalizeDateStr(val) {
@@ -79,7 +79,9 @@ function sanitizeLinks(rawLinks) {
 
 function validatePlanItem(raw, idx, weekStart) {
   const it = raw || {};
-  const dayKey = DAY_KEY_SET.has(it.dayKey) ? it.dayKey : 'sun';
+  const rawDay = String(it.dayKey || 'mon').trim().toLowerCase();
+  if (!DAY_KEY_SET.has(rawDay)) return { ok: false, error: 'invalid_day_key' };
+  const dayKey = rawDay;
   const id = String(it.id || ('wpi_' + (idx + 1))).trim().slice(0, 64);
   const date = normalizeDateStr(it.date) || weekDateForDay(weekStart, dayKey);
   const lesson = String(it.lesson || '').trim().slice(0, 500);
@@ -233,9 +235,11 @@ function aggregateUnifiedStudentPlan(plans, classId, weekStart) {
   const tasks = [];
   const subjectsSet = new Set();
   for (const p of matching) {
-    subjectsSet.add(p.subject);
     for (const it of (Array.isArray(p.items) ? p.items : [])) {
+      if (!DAY_KEY_SET.has(it.dayKey)) continue;
+      subjectsSet.add(p.subject);
       tasks.push({
+        source: 'plan',
         planId: p.id,
         itemId: it.id,
         classId: p.classId,
@@ -249,6 +253,7 @@ function aggregateUnifiedStudentPlan(plans, classId, weekStart) {
         date: it.date || weekDateForDay(p.weekStart, it.dayKey),
         lesson: it.lesson || '',
         homework: it.homework || '',
+        assignmentText: '',
         assessments: it.assessments || '',
         notes: it.notes || '',
         links: Array.isArray(it.links) ? it.links : [],
@@ -258,7 +263,7 @@ function aggregateUnifiedStudentPlan(plans, classId, weekStart) {
       });
     }
   }
-  const dayOrder = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sun: 5 };
+  const dayOrder = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4 };
   tasks.sort((a, b) => {
     const da = dayOrder[a.dayKey] != null ? dayOrder[a.dayKey] : 9;
     const db = dayOrder[b.dayKey] != null ? dayOrder[b.dayKey] : 9;
@@ -272,6 +277,73 @@ function aggregateUnifiedStudentPlan(plans, classId, weekStart) {
     tasks,
     subjects: Array.from(subjectsSet).sort((a, b) => a.localeCompare(b, 'ar')),
   };
+}
+
+function dayKeyOfIsoDate(dateStr) {
+  const s = normalizeDateStr(dateStr);
+  if (!s) return '';
+  const t = Date.parse(s + 'T00:00:00Z');
+  if (!Number.isFinite(t)) return '';
+  const map = { 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri' };
+  return map[new Date(t).getUTCDay()] || '';
+}
+
+function extractClassAssignmentsForWeek(schoolData, classId, weekStart, studentId) {
+  const d = schoolData || {};
+  const cid = String(classId || '');
+  const wsSun = sundayOfDateStr(weekStart);
+  const userMap = {};
+  (Array.isArray(d.users) ? d.users : []).forEach(u => { if (u && u.id) userMap[String(u.id)] = u.name || ''; });
+
+  const tasks = [];
+  const subjectsSet = new Set();
+  const seenIds = new Set();
+  const completedKeys = {};
+
+  for (const a of (Array.isArray(d.assignments) ? d.assignments : [])) {
+    if (!a || a.deleted || !a.id) continue;
+    if (String(a.classId || '') !== cid) continue;
+    const aid = String(a.id);
+    if (seenIds.has(aid)) continue;
+    const aDate = normalizeDateStr(a.date);
+    if (!aDate) continue;
+    if (wsSun && sundayOfDateStr(aDate) !== wsSun) continue;
+    const dayKey = dayKeyOfIsoDate(aDate);
+    if (!DAY_KEY_SET.has(dayKey)) continue; // يستبعد السبت والأحد
+    seenIds.add(aid);
+    const sub = String(a.subject || 'تكليف').trim();
+    subjectsSet.add(sub);
+    const planId = 'assign_' + aid;
+    if (studentId && Array.isArray(a.completedBy) && a.completedBy.map(String).includes(String(studentId))) {
+      completedKeys[planId + '|' + aid] = true;
+    }
+    const typeLabel = a.type ? (a.type + ': ') : 'تكليف: ';
+    tasks.push({
+      source: 'assignment',
+      assignmentId: aid,
+      planId,
+      itemId: aid,
+      classId: cid,
+      weekStart: wsSun || sundayOfDateStr(aDate),
+      weekLabel: '',
+      planTitle: a.title || '',
+      subject: sub,
+      teacherId: String(a.teacherId || ''),
+      teacherName: a.teacherName || userMap[String(a.teacherId || '')] || '',
+      dayKey,
+      date: aDate,
+      lesson: '',
+      homework: '',
+      assignmentText: typeLabel + String(a.title || 'بدون عنوان'),
+      assessments: '',
+      notes: '',
+      links: [],
+      attachmentName: '',
+      attachmentType: '',
+      hasAttachment: false,
+    });
+  }
+  return { tasks, subjects: Array.from(subjectsSet), completedKeys };
 }
 
 function buildAdminCoverageSummary(schoolData, plans, weekStart) {
@@ -348,5 +420,7 @@ module.exports = {
   extractClassExpectedSubjects,
   stripPlanAttachments,
   aggregateUnifiedStudentPlan,
+  dayKeyOfIsoDate,
+  extractClassAssignmentsForWeek,
   buildAdminCoverageSummary,
 };
