@@ -108,6 +108,12 @@ test('8 & 9. أرشفة الأسابيع دون تداخل، الظهور في �
   assert.match(indexSrc, /تحديد الإنجاز لجميع/);
   assert.match(indexSrc, /wpTeacherBulkCompleteAll/);
   assert.match(indexSrc, /wpTeacherToggleStudentProgress/);
+  assert.match(indexSrc, /wpTeacherToggleStudentProgress\(.+?,\s*true\)/);
+  assert.match(indexSrc, /wpTeacherToggleStudentProgress\(.+?,\s*false\)/);
+  assert.match(indexSrc, /stu\.fullName \|\| stu\.name \|\| stu\.studentName/);
+  assert.match(serverSrc, /s\.fullName \|\| s\.name \|\| s\.studentName/);
+  assert.match(serverSrc, /class_not_assigned/);
+  assert.match(serverSrc, /student_not_in_class/);
   assert.match(serverSrc, /if \(req\.session\.role !== 'TEACHER'\) return res\.status\(403\)/);
   assert.match(serverSrc, /setWeeklyPlanItemProgressBulk/);
   assert.equal(typeof db.setWeeklyPlanItemProgressBulk, 'function');

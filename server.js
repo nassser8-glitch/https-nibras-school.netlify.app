@@ -3862,8 +3862,9 @@ app.post('/api/weekly-plans/:school/:id/items/:itemId/progress', requireAuth, (r
     const assigned = weeklyPlans.extractTeacherAssignments(schoolData, uid);
     if (!assigned.classIds.has(String(plan.classId))) return res.status(403).json({ error: 'class_not_assigned' });
 
+    const stuName = (s) => String((s && (s.fullName || s.name || s.studentName)) || '').trim();
     const classStudents = (Array.isArray(schoolData.students) ? schoolData.students : [])
-      .filter(s => s && !s.deleted && String(s.classId || '') === String(plan.classId));
+      .filter(s => s && !s.deleted && s.active !== false && String(s.classId || '') === String(plan.classId));
     const completed = !(req.body && req.body.completed === false);
     const updatedByName = req.session.name || plan.teacherName || '';
 
@@ -3872,7 +3873,7 @@ app.post('/api/weekly-plans/:school/:id/items/:itemId/progress', requireAuth, (r
         planId: plan.id,
         itemId: req.params.itemId,
         school,
-        students: classStudents,
+        students: classStudents.map(s => ({ id: s.id, name: stuName(s), fullName: stuName(s) })),
         completed,
         updatedBy: uid,
         updatedByName,
@@ -3890,7 +3891,7 @@ app.post('/api/weekly-plans/:school/:id/items/:itemId/progress', requireAuth, (r
       itemId: req.params.itemId,
       school,
       studentId: targetStu.id,
-      studentName: targetStu.name || '',
+      studentName: stuName(targetStu),
       completed,
       updatedBy: uid,
       updatedByName,
@@ -3912,9 +3913,11 @@ app.get('/api/weekly-plans/:school/:id/progress', requireAuth, (req, res) => {
     const progress = await db.listPlanWeeklyProgress(school, plan.id);
     const rec = await db.getSchoolData(school);
     const data = (rec && rec.data) ? rec.data : {};
+    const stuName = (s) => String((s && (s.fullName || s.name || s.studentName)) || '').trim();
     const classStudents = (Array.isArray(data.students) ? data.students : [])
-      .filter(s => s && !s.deleted && String(s.classId || '') === String(plan.classId))
-      .map(s => ({ id: s.id, name: s.name || '' }));
+      .filter(s => s && !s.deleted && s.active !== false && String(s.classId || '') === String(plan.classId))
+      .map(s => ({ id: s.id, name: stuName(s), fullName: stuName(s) }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ar'));
     const strippedPlan = weeklyPlans.stripPlanAttachments(plan);
     res.json({
       ok: true,

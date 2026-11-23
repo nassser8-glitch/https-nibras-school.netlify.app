@@ -1316,7 +1316,7 @@ async function setWeeklyPlanItemProgressBulk({ planId, itemId, school, students,
     await setWeeklyPlanItemProgress({
       planId, itemId, school,
       studentId: st.id,
-      studentName: st.name || '',
+      studentName: st.fullName || st.name || st.studentName || '',
       completed: !!completed,
       updatedBy,
       updatedByName,

@@ -7387,14 +7387,23 @@ function wpRenderProgressModalContent(){
         ${students.map(stu => {
           const rec = progMap[String(stu.id)];
           const isDone = !!(rec && rec.completed);
+          const studentDisplayName = String(stu.fullName || stu.name || stu.studentName || '').trim() || 'طالبة';
+          const doneBtnStyle = isDone
+            ? 'background:#16a34a;color:#fff;border:1.5px solid #15803d;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:800;cursor:pointer'
+            : 'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer';
+          const notDoneBtnStyle = !isDone
+            ? 'background:#fef3c7;color:#92400e;border:1.5px solid #f59e0b;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:800;cursor:pointer'
+            : 'background:#fff;color:#64748b;border:1px solid #cbd5e1;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer';
           return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid #fce7f3;font-size:13px;flex-wrap:wrap">
             <div>
-              <div style="font-weight:800;color:#831843">${escapeHtml(stu.name)}</div>
-              ${(rec && rec.updatedByName) ? `<div style="font-size:11px;color:#64748b">${escapeHtml(rec.updatedByName)}${rec.completedAt ? ' · ' + escapeHtml(new Date(rec.completedAt).toLocaleString('ar-SA')) : ''}</div>` : ''}
+              <div style="font-weight:800;color:#831843">${escapeHtml(studentDisplayName)}</div>
+              ${(rec && rec.updatedByName) ? `<div style="font-size:11px;color:#64748b">آخر تحديث: ${escapeHtml(rec.updatedByName)}${rec.completedAt ? ' · ' + escapeHtml(new Date(rec.completedAt).toLocaleString('ar-SA')) : ''}</div>` : ''}
             </div>
             <div style="display:flex;align-items:center;gap:6px">
-              <span class="ann-badge ${isDone ? 'ann-badge-pub' : 'ann-badge-draft'}">${isDone ? 'أنجزت المطلوب' : 'لم تنجز'}</span>
-              ${(canEdit && selItemId) ? `<button type="button" class="ann-btn-soft" onclick="wpTeacherToggleStudentProgress('${escapeHtml(stu.id)}', ${!isDone})">${isDone ? '↩️ لم تنجز' : '✓ أنجزت'}</button>` : ''}
+              ${(canEdit && selItemId) ? `
+                <button type="button" style="${doneBtnStyle}" onclick="wpTeacherToggleStudentProgress('${escapeHtml(stu.id)}', true)">أنجزت ✓</button>
+                <button type="button" style="${notDoneBtnStyle}" onclick="wpTeacherToggleStudentProgress('${escapeHtml(stu.id)}', false)">لم تنجز</button>
+              ` : `<span class="ann-badge ${isDone ? 'ann-badge-pub' : 'ann-badge-draft'}">${isDone ? 'أنجزت المطلوب' : 'لم تنجز'}</span>`}
             </div>
           </div>`;
         }).join('') || '<div style="padding:18px;text-align:center;color:#64748b">لا توجد طالبات مسجلات في هذا الفصل</div>'}
@@ -18789,7 +18798,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=197', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=198', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
