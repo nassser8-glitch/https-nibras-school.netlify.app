@@ -74,6 +74,10 @@ test('2. ظهور الإعلان في حساب الطالب واللوحة ال�
   assert.match(indexSrc, /href:'#\/school-announcements'/);
   assert.match(indexSrc, /renderSchoolAnnouncementsStudent\(\)/);
   assert.match(indexSrc, /renderSchoolAnnouncementsAdmin\(\)/);
+  assert.doesNotMatch(indexSrc, /فتح الإعلانات/);
+  assert.doesNotMatch(indexSrc, /أحدث إعلانات المدرسة/);
+  assert.doesNotMatch(indexSrc, /عرض جميع الإعلانات/);
+  assert.match(indexSrc, /seenIds\.has\(a\.id\)/);
 
   const a = { status: 'published', targetType: 'all', startDate: '2026-11-20', endDate: '2026-11-30' };
   assert.equal(ann.isAnnouncementActiveOnDate(a, '2026-11-22'), true);

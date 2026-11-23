@@ -6219,41 +6219,27 @@ function renderStudentAnnouncementsBanner(){
   if(!__schoolAnnCache.loaded && !__schoolAnnCache.loading){
     setTimeout(() => __loadSchoolAnnouncements(false), 0);
   }
-  const list = __schoolAnnCache.list || [];
-  const unread = studentUnreadAnnCount();
-  const indicatorHtml = `<a href="#/school-announcements" class="ann-indicator ${unread > 0 ? 'ann-indicator-glow' : ''}">
-    <div class="ann-indicator-left">
-      <div class="ann-bell-wrap">
-        <span>🔔</span>
-        ${unread > 0 ? `<span class="ann-bell-count">${unread}</span>` : ''}
-      </div>
-      <div>
-        <div style="font-size:15px;font-weight:900;color:#831843;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span>إعلانات المدرسة</span>
-          ${unread > 0 ? '<span class="ann-new-pill">إعلان جديد</span>' : ''}
-        </div>
-        <div style="font-size:12px;color:#64748b;font-weight:700">
-          ${unread > 0 ? ('لديكِ ' + unread + ' إعلان جديد بانتظار القراءة') : (list.length ? ('عرض جميع الإعلانات (' + list.length + ')') : 'لا توجد إعلانات جديدة حالياً')}
-        </div>
-      </div>
-    </div>
-    <span class="ann-btn-soft">فتح الإعلانات ←</span>
-  </a>`;
-  if(!list.length) return indicatorHtml;
-  const top = list.slice(0, 3);
-  return `${indicatorHtml}
-  <div class="ann-student-banner">
-    <div class="ann-student-banner-head">
+  const seenIds = new Set();
+  const list = (__schoolAnnCache.list || []).filter(a => {
+    if(!a || !a.id || seenIds.has(a.id)) return false;
+    seenIds.add(a.id);
+    return true;
+  });
+  const unread = list.filter(a => !a.viewed).length;
+  return `<div class="ann-student-banner ${unread > 0 ? 'ann-indicator-glow' : ''}">
+    <div class="ann-student-banner-head" style="${!list.length ? 'margin-bottom:0' : ''}">
       <div class="ann-student-banner-title">
-        <span>📢 أحدث إعلانات المدرسة</span>
-        ${unread > 0 ? `<span class="ann-badge ann-badge-new">${unread} جديد</span>` : ''}
+        <span>📢 إعلانات المدرسة</span>
+        ${unread > 0 ? `<span class="ann-bell-count" style="position:static">${unread}</span><span class="ann-new-pill">إعلان جديد</span>` : ''}
       </div>
-      <a href="#/school-announcements" class="ann-btn-soft">عرض جميع الإعلانات (${list.length})</a>
+      ${list.length ? `<span style="font-size:12px;color:#64748b;font-weight:700">${list.length} ${list.length === 1 ? 'إعلان' : 'إعلانات'}</span>` : '<span style="font-size:12px;color:#64748b;font-weight:700">لا توجد إعلانات حالياً</span>'}
     </div>
-    <div class="ann-student-items">
-      ${top.map(a => {
+    ${list.length ? `<div class="ann-student-items">
+      ${list.map(a => {
         const cat = annCategoryMeta(a.category);
-        const snippet = String(a.body || '').replace(/\*\*/g, '').replace(/\*/g, '').slice(0, 95);
+        const rawBody = String(a.body || '').replace(/\*\*/g, '').replace(/\*/g, '').trim();
+        const snippet = rawBody.slice(0, 110);
+        const pubDate = a.startDate || (a.createdAt ? String(a.createdAt).slice(0, 10) : '');
         return `<div class="ann-student-item ${!a.viewed ? 'ann-item-unread' : ''}" onclick="openSchoolAnnouncementDetail('${escapeHtml(a.id)}')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap">
             <span class="ann-badge" style="background:${cat.bg};color:${cat.color};border-color:${cat.border}">${cat.icon} ${cat.label}</span>
@@ -6262,15 +6248,15 @@ function renderStudentAnnouncementsBanner(){
               ${!a.viewed ? '<span class="ann-badge ann-badge-new">جديد</span>' : ''}
             </div>
           </div>
-          <div style="font-size:14px;font-weight:900;color:#831843">${escapeHtml(a.title)}</div>
-          <div style="font-size:12px;color:#475569;line-height:1.5">${escapeHtml(snippet)}${String(a.body || '').length > 95 ? '...' : ''}</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#9d174d;font-weight:700;margin-top:auto">
-            <span>${a.hasAttachment ? '📎 مرفق' : ''}</span>
-            <span>قراءة التفاصيل ←</span>
+          <div style="font-size:14.5px;font-weight:900;color:#831843">${escapeHtml(a.title)}</div>
+          ${snippet ? `<div style="font-size:12.5px;color:#475569;line-height:1.55">${escapeHtml(snippet)}${rawBody.length > 110 ? '...' : ''}</div>` : ''}
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;color:#64748b;font-weight:700;margin-top:auto;padding-top:4px;border-top:1px dashed #fce7f3">
+            <span>${pubDate ? '📅 ' + escapeHtml(pubDate) : ''}</span>
+            <span style="color:#9d174d">${a.hasAttachment ? '📎 مرفق · ' : ''}عرض التفاصيل ←</span>
           </div>
         </div>`;
       }).join('')}
-    </div>
+    </div>` : ''}
   </div>`;
 }
 async function openSchoolAnnouncementDetail(id){
@@ -18803,7 +18789,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=196', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=197', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
