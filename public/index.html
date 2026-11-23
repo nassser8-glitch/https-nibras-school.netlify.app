@@ -1473,6 +1473,70 @@ window.__nibrasMarkBooted = function(){
   }
   /* إخفاء شريط الأيقونات أسفل نجم/نجمة الأسبوع مع الإبقاء على خدمات الطقس والروابط المفيدة */
   #nibrasToolbarDock, #nibrasToolbar { display: none !important; }
+
+  /* ===== التوافق الشامل مع الهواتف المحمولة والأجهزة اللوحية ===== */
+  html, body { max-width:100%; overflow-x:hidden; -webkit-text-size-adjust:100%; }
+  .layout, .layout-body, .main, #page, .card, .dash-panel { max-width:100%; min-width:0; }
+  .main { overflow-x:hidden; }
+  img, svg, video, canvas, iframe { max-width:100%; }
+  .sidebar-mobile-head { display:none; }
+  .modal-overlay { z-index:1200; }
+
+  @media (max-width:820px) {
+    .menu-toggle { min-width:42px; min-height:42px; align-items:center; justify-content:center; border-radius:10px; font-size:20px; }
+    .layout-body .sidebar { z-index:1100; padding-top:10px; width:270px; max-width:84vw; }
+    .sidebar-backdrop { z-index:1090; }
+    .sidebar-mobile-head { display:flex; align-items:center; justify-content:space-between; padding:6px 14px 10px; border-bottom:1px solid var(--sidebar-border,#fce7f3); margin-bottom:6px; }
+    .sidebar-mobile-close { width:36px; height:36px; border-radius:9px; border:1px solid var(--border-color,#fce7f3); background:#fff; color:var(--primary,#db2777); font-size:16px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
+    .sidebar nav .nav-link { min-height:42px; display:flex; align-items:center; }
+  }
+
+  @media (max-width:768px) {
+    .modal-overlay { padding:8px; align-items:center; }
+    .modal-box { width:100% !important; max-width:100% !important; max-height:calc(100dvh - 16px) !important; overflow-y:auto !important; overflow-x:hidden !important; padding:14px !important; border-radius:14px !important; }
+    .modal-box .modal-head { position:sticky; top:-14px; background:#fff; z-index:5; padding:10px 0 8px; margin:-14px 0 10px; border-bottom:1px solid #fdf2f8; }
+    .modal-box .modal-close { min-width:36px; min-height:36px; font-size:16px; }
+    .modal-box .btn-group, .modal-box .ann-actions, .modal-box .form-inline { flex-wrap:wrap; width:100%; }
+    .table-card, .tbl-scroll { max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  }
+
+  @media (max-width:640px) {
+    .main { padding:10px !important; }
+    .topbar-inner { padding:6px 10px 8px; }
+    .topbar-row { gap:8px; }
+    .topbar-logo { width:36px; height:36px; }
+    .topbar-brand h1 { font-size:13px; line-height:1.25; }
+    .topbar-brand p { font-size:11px; }
+    .topbar-actions { gap:6px; }
+    .topbar-strip { display:flex; flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; gap:6px; padding-bottom:2px; scrollbar-width:none; }
+    .topbar-strip::-webkit-scrollbar { display:none; }
+    .topbar-strip .strip-item { flex:0 0 auto; white-space:nowrap; }
+    .header-row { flex-direction:column; align-items:stretch; gap:8px; }
+    .btn-group { width:100%; gap:6px; }
+    .btn-group > button, .btn-group > a { flex:1 1 auto; justify-content:center; text-align:center; }
+    .form-inline { flex-direction:column; align-items:stretch; gap:8px; }
+    .form-inline > * { width:100% !important; min-width:0 !important; }
+    .input, select, textarea, input[type="text"], input[type="password"], input[type="date"], input[type="number"], input[type="tel"], input[type="search"] { font-size:16px !important; min-height:40px; max-width:100%; }
+    button, .btn-primary, .btn-secondary, .ann-btn-primary, .ann-btn-soft, .ann-btn-danger, .wp-btn { min-height:38px; }
+    .teacher-grid, .class-grid, .ann-student-items, .sd-grid, .nibras-grid, .school-dash-grid { grid-template-columns:1fr !important; }
+    .wp-subject-row { flex-direction:column; align-items:stretch; gap:8px; }
+    table.data-table th, table.data-table td { padding:8px 6px; font-size:12.5px; }
+    .card { overflow-x:auto; }
+  }
+
+  @media (max-width:480px) {
+    .topbar-user-block { display:none; }
+    .topbar-actions .btn-secondary { padding:6px 10px !important; font-size:12px; min-height:36px; }
+    .grid-2, .grid-3, .grid-4, .grid-5, .grid-6, .form-grid-3, .form-grid-4, .form-grid-5 { grid-template-columns:1fr !important; }
+    .ann-stats, .wp-kpis, .sup-stats, .cls-stats { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:8px !important; }
+  }
+
+  @media (max-width:360px) {
+    .topbar-brand h1 { font-size:11.5px; }
+    .ann-stats, .wp-kpis, .sup-stats, .cls-stats { grid-template-columns:1fr !important; }
+    .sd-hero-stats { width:100%; }
+    .sd-herostat { flex:1 1 0; min-width:0 !important; }
+  }
 </style>
 </head>
 <body>
@@ -5328,7 +5392,11 @@ function renderLayout(user, hash){
     <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
     <div class="layout-body">
       <aside class="sidebar" id="sidebar">
-        <nav class="menu">${nav}</nav>
+        <div class="sidebar-mobile-head">
+          <span style="font-weight:900;font-size:14px;color:var(--primary,#831843)">☰ القائمة الرئيسية</span>
+          <button type="button" class="sidebar-mobile-close" onclick="toggleSidebar(true)" title="إغلاق القائمة">✕</button>
+        </div>
+        <nav class="menu" onclick="if(event.target.closest('a')) toggleSidebar(true)">${nav}</nav>
         <div class="sidebar-widgets">
           ${msgTodayWidget}
           ${starOfWeekWidget}
@@ -18798,7 +18866,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=198', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=199', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
