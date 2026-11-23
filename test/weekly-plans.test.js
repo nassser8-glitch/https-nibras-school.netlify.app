@@ -103,7 +103,14 @@ test('8 & 9. أرشفة الأسابيع دون تداخل، الظهور في �
   assert.match(indexSrc, /wp-days-stack/);
   assert.match(indexSrc, /wp-day-card/);
   assert.match(indexSrc, /wp-subject-row/);
-  assert.match(indexSrc, /wp-big-check/);
+  assert.match(indexSrc, /wpRenderStudentStatusBadge/);
+  assert.doesNotMatch(indexSrc, /wpToggleStudentProgress/);
+  assert.match(indexSrc, /تحديد الإنجاز لجميع/);
+  assert.match(indexSrc, /wpTeacherBulkCompleteAll/);
+  assert.match(indexSrc, /wpTeacherToggleStudentProgress/);
+  assert.match(serverSrc, /if \(req\.session\.role !== 'TEACHER'\) return res\.status\(403\)/);
+  assert.match(serverSrc, /setWeeklyPlanItemProgressBulk/);
+  assert.equal(typeof db.setWeeklyPlanItemProgressBulk, 'function');
   assert.deepEqual(wp.WEEK_DAYS.map(d => d.key), ['mon', 'tue', 'wed', 'thu', 'fri']);
   assert.doesNotMatch(indexSrc, /العرض اليومي/);
   assert.match(indexSrc, /لا توجد مهام لهذا اليوم/);

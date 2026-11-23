@@ -3698,7 +3698,12 @@ app.get('/api/weekly-plans/:school', requireAuth, (req, res) => {
       const allSubjects = Array.from(new Set([...unified.subjects, ...assignRes.subjects])).sort((a, b) => a.localeCompare(b, 'ar'));
       const progRows = await db.listStudentWeeklyProgress(school, stuId);
       const progress = Object.assign({}, assignRes.completedKeys);
-      progRows.forEach(r => { if (r.completed) progress[r.planId + '|' + r.itemId] = true; });
+      const progressMeta = {};
+      progRows.forEach(r => {
+        const k = r.planId + '|' + r.itemId;
+        progress[k] = !!r.completed;
+        progressMeta[k] = { updatedByName: r.updatedByName || '', completedAt: r.completedAt || null };
+      });
       return res.json({
         ok: true,
         weekStart: targetWeek,
@@ -3708,6 +3713,7 @@ app.get('/api/weekly-plans/:school', requireAuth, (req, res) => {
         tasks: allTasks,
         subjects: allSubjects,
         progress,
+        progressMeta,
       });
     }
 
@@ -3841,41 +3847,53 @@ app.post('/api/weekly-plans/:school/:id/items/:itemId/progress', requireAuth, (r
   (async () => {
     const school = checkAnnouncementSchoolAccess(req, res);
     if (!school) return;
-    if (req.session.role !== 'STUDENT') return res.status(403).json({ error: 'forbidden' });
-    const ctx = await resolveStudentAnnouncementContext(school, req.session);
-    const stuId = String((ctx.student && ctx.student.id) || ctx.uid || '');
-    const completed = !(req.body && req.body.completed === false);
-
-    if (String(req.params.id || '').startsWith('assign_')) {
-      const aid = String(req.params.itemId || '');
-      const classId = String((ctx.student && ctx.student.classId) || '');
-      const out = await db.mutateSchoolData(school, (d) => {
-        const a = (Array.isArray(d.assignments) ? d.assignments : []).find(x => x && !x.deleted && String(x.id) === aid);
-        if (!a || String(a.classId || '') !== classId) return { changed: false, value: 'forbidden' };
-        if (!Array.isArray(a.completedBy)) a.completedBy = [];
-        const idx = a.completedBy.map(String).indexOf(stuId);
-        if (completed && idx < 0) a.completedBy.push(stuId);
-        else if (!completed && idx >= 0) a.completedBy.splice(idx, 1);
-        else return { changed: false, value: 'ok' };
-        a._v = (typeof a._v === 'number' ? a._v : 0) + 1;
-        return { changed: true, value: 'ok' };
-      });
-      if (out.value === 'forbidden') return res.status(403).json({ error: 'forbidden' });
-      return res.json({ ok: true, progress: { planId: req.params.id, itemId: aid, studentId: stuId, completed } });
-    }
-
+    // تسجيل إنجاز المهام في الخطة الأسبوعية مقتصر على المعلم صاحب المادة والخطة فقط
+    if (req.session.role !== 'TEACHER') return res.status(403).json({ error: 'forbidden' });
+    const uid = String(req.session.user_id || req.session.userId || '');
     const plan = await db.getWeeklyPlan(school, req.params.id);
     if (!plan) return res.status(404).json({ error: 'not_found' });
-    if (!canAccessWeeklyPlan('STUDENT', '', ctx, plan)) return res.status(403).json({ error: 'forbidden' });
+    if (String(plan.teacherId) !== uid) return res.status(403).json({ error: 'forbidden' });
+
     const itemExists = (plan.items || []).some(it => String(it.id) === String(req.params.itemId));
     if (!itemExists) return res.status(404).json({ error: 'item_not_found' });
+
+    const rec = await db.getSchoolData(school);
+    const schoolData = (rec && rec.data) ? rec.data : {};
+    const assigned = weeklyPlans.extractTeacherAssignments(schoolData, uid);
+    if (!assigned.classIds.has(String(plan.classId))) return res.status(403).json({ error: 'class_not_assigned' });
+
+    const classStudents = (Array.isArray(schoolData.students) ? schoolData.students : [])
+      .filter(s => s && !s.deleted && String(s.classId || '') === String(plan.classId));
+    const completed = !(req.body && req.body.completed === false);
+    const updatedByName = req.session.name || plan.teacherName || '';
+
+    if (req.body && req.body.bulkAll === true) {
+      const updatedCount = await db.setWeeklyPlanItemProgressBulk({
+        planId: plan.id,
+        itemId: req.params.itemId,
+        school,
+        students: classStudents,
+        completed,
+        updatedBy: uid,
+        updatedByName,
+      });
+      return res.json({ ok: true, bulkAll: true, updatedCount });
+    }
+
+    const targetStuId = String((req.body && req.body.studentId) || '').trim();
+    if (!targetStuId) return res.status(400).json({ error: 'student_required' });
+    const targetStu = classStudents.find(s => String(s.id) === targetStuId);
+    if (!targetStu) return res.status(403).json({ error: 'student_not_in_class' });
+
     const row = await db.setWeeklyPlanItemProgress({
       planId: plan.id,
       itemId: req.params.itemId,
       school,
-      studentId: stuId,
-      studentName: (ctx.student && ctx.student.name) || req.session.name || '',
+      studentId: targetStu.id,
+      studentName: targetStu.name || '',
       completed,
+      updatedBy: uid,
+      updatedByName,
     });
     res.json({ ok: true, progress: row });
   })().catch(fail(res));
@@ -3897,9 +3915,13 @@ app.get('/api/weekly-plans/:school/:id/progress', requireAuth, (req, res) => {
     const classStudents = (Array.isArray(data.students) ? data.students : [])
       .filter(s => s && !s.deleted && String(s.classId || '') === String(plan.classId))
       .map(s => ({ id: s.id, name: s.name || '' }));
+    const strippedPlan = weeklyPlans.stripPlanAttachments(plan);
     res.json({
       ok: true,
       planId: plan.id,
+      subject: plan.subject,
+      classId: plan.classId,
+      items: strippedPlan.items || [],
       itemsCount: (plan.items || []).length,
       totalStudents: classStudents.length,
       students: classStudents,

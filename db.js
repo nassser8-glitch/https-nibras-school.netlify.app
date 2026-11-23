@@ -252,6 +252,8 @@ async function initSchema() {
       );
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS weekly_plan_progress_student_idx ON weekly_plan_progress(school, student_id)`);
+    await client.query(`ALTER TABLE weekly_plan_progress ADD COLUMN IF NOT EXISTS updated_by TEXT NOT NULL DEFAULT ''`);
+    await client.query(`ALTER TABLE weekly_plan_progress ADD COLUMN IF NOT EXISTS updated_by_name TEXT NOT NULL DEFAULT ''`);
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
@@ -1289,40 +1291,64 @@ async function listWeeklyPlanWeeks(school) {
   );
   return r.rows.map(x => ({ weekStart: x.week_start, weekLabel: x.week_label || '', planCount: x.plan_count }));
 }
-async function setWeeklyPlanItemProgress({ planId, itemId, school, studentId, studentName, completed }) {
+async function setWeeklyPlanItemProgress({ planId, itemId, school, studentId, studentName, completed, updatedBy, updatedByName }) {
   assertSupportedSchool(school);
   const r = await pool.query(
-    `INSERT INTO weekly_plan_progress (plan_id, item_id, school, student_id, student_name, completed, completed_at)
-     VALUES ($1,$2,$3,$4,$5,$6,NOW())
+    `INSERT INTO weekly_plan_progress (plan_id, item_id, school, student_id, student_name, completed, updated_by, updated_by_name, completed_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
      ON CONFLICT (plan_id, item_id, student_id) DO UPDATE SET
        completed = EXCLUDED.completed,
        student_name = EXCLUDED.student_name,
+       updated_by = EXCLUDED.updated_by,
+       updated_by_name = EXCLUDED.updated_by_name,
        completed_at = NOW()
-     RETURNING plan_id, item_id, student_id, completed, completed_at`,
-    [planId, String(itemId), school, String(studentId), String(studentName || ''), !!completed]
+     RETURNING plan_id, item_id, student_id, completed, updated_by, updated_by_name, completed_at`,
+    [planId, String(itemId), school, String(studentId), String(studentName || ''), !!completed, String(updatedBy || ''), String(updatedByName || '')]
   );
   return r.rows[0] || null;
+}
+async function setWeeklyPlanItemProgressBulk({ planId, itemId, school, students, completed, updatedBy, updatedByName }) {
+  assertSupportedSchool(school);
+  const list = Array.isArray(students) ? students : [];
+  let count = 0;
+  for (const st of list) {
+    if (!st || !st.id) continue;
+    await setWeeklyPlanItemProgress({
+      planId, itemId, school,
+      studentId: st.id,
+      studentName: st.name || '',
+      completed: !!completed,
+      updatedBy,
+      updatedByName,
+    });
+    count++;
+  }
+  return count;
 }
 async function listStudentWeeklyProgress(school, studentId) {
   assertSupportedSchool(school);
   const r = await pool.query(
-    `SELECT plan_id, item_id, completed, completed_at
+    `SELECT plan_id, item_id, completed, updated_by, updated_by_name, completed_at
      FROM weekly_plan_progress WHERE school = $1 AND student_id = $2`,
     [school, String(studentId)]
   );
-  return r.rows.map(x => ({ planId: x.plan_id, itemId: x.item_id, completed: !!x.completed, completedAt: x.completed_at }));
+  return r.rows.map(x => ({
+    planId: x.plan_id, itemId: x.item_id, completed: !!x.completed,
+    updatedBy: x.updated_by || '', updatedByName: x.updated_by_name || '', completedAt: x.completed_at,
+  }));
 }
 async function listPlanWeeklyProgress(school, planId) {
   assertSupportedSchool(school);
   const r = await pool.query(
-    `SELECT plan_id, item_id, student_id, student_name, completed, completed_at
+    `SELECT plan_id, item_id, student_id, student_name, completed, updated_by, updated_by_name, completed_at
      FROM weekly_plan_progress WHERE school = $1 AND plan_id = $2
      ORDER BY completed_at DESC`,
     [school, planId]
   );
   return r.rows.map(x => ({
     planId: x.plan_id, itemId: x.item_id, studentId: x.student_id,
-    studentName: x.student_name || '', completed: !!x.completed, completedAt: x.completed_at,
+    studentName: x.student_name || '', completed: !!x.completed,
+    updatedBy: x.updated_by || '', updatedByName: x.updated_by_name || '', completedAt: x.completed_at,
   }));
 }
 
@@ -1353,5 +1379,5 @@ module.exports = {
   updateSchoolAnnouncement, deleteSchoolAnnouncement,
   recordSchoolAnnouncementView, listSchoolAnnouncementViews, listStudentAnnouncementViewIds,
   listWeeklyPlans, getWeeklyPlan, upsertWeeklyPlan, updateWeeklyPlanById, deleteWeeklyPlan,
-  listWeeklyPlanWeeks, setWeeklyPlanItemProgress, listStudentWeeklyProgress, listPlanWeeklyProgress,
+  listWeeklyPlanWeeks, setWeeklyPlanItemProgress, setWeeklyPlanItemProgressBulk, listStudentWeeklyProgress, listPlanWeeklyProgress,
 };

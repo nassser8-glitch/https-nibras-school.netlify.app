@@ -6799,7 +6799,7 @@ const __WP_DAYS = [
 ];
 const __wpCache = {
   loaded:false, loading:false, school:'', weekStart:'', weeks:[],
-  plans:[], tasks:[], subjects:[], progress:{}, coverage:null, error:''
+  plans:[], tasks:[], subjects:[], progress:{}, progressMeta:{}, coverage:null, error:''
 };
 const __wpUi = {
   subject:'all', adminTab:'classes',
@@ -6809,7 +6809,7 @@ const __wpUi = {
 function __weeklyPlanReset(){
   __wpCache.loaded = false; __wpCache.loading = false; __wpCache.school = '';
   __wpCache.weekStart = ''; __wpCache.weeks = []; __wpCache.plans = [];
-  __wpCache.tasks = []; __wpCache.subjects = []; __wpCache.progress = {}; __wpCache.coverage = null;
+  __wpCache.tasks = []; __wpCache.subjects = []; __wpCache.progress = {}; __wpCache.progressMeta = {}; __wpCache.coverage = null;
 }
 function wpMondayOfDate(dateStr){
   if(!dateStr) return '';
@@ -6859,6 +6859,7 @@ async function __loadWeeklyPlans(force, weekStartOverride){
       __wpCache.tasks = Array.isArray(j.tasks) ? j.tasks : [];
       __wpCache.subjects = Array.isArray(j.subjects) ? j.subjects : [];
       __wpCache.progress = (j.progress && typeof j.progress === 'object') ? j.progress : {};
+      __wpCache.progressMeta = (j.progressMeta && typeof j.progressMeta === 'object') ? j.progressMeta : {};
       __wpCache.coverage = j.coverage || null;
       if(!__wpUi.dayKey) __wpUi.dayKey = wpTodayDayKey();
     } else {
@@ -6897,18 +6898,14 @@ function renderStudentWeeklyPlanBanner(){
     <a href="#/weekly-plan" class="ann-btn-primary" style="text-decoration:none">فتح الخطة الأسبوعية ←</a>
   </div>`;
 }
-async function wpToggleStudentProgress(planId, itemId){
-  const school = getActiveSchool();
-  const key = planId + '|' + itemId;
-  const next = !__wpCache.progress[key];
-  __wpCache.progress[key] = next;
-  renderApp();
-  try {
-    const res = await fetch('/api/weekly-plans/' + encodeURIComponent(school) + '/' + encodeURIComponent(planId) + '/items/' + encodeURIComponent(itemId) + '/progress', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ completed: next }),
-    });
-    if(!res.ok){ __wpCache.progress[key] = !next; renderApp(); }
-  } catch(_){ __wpCache.progress[key] = !next; renderApp(); }
+function wpRenderStudentStatusBadge(planId, itemId){
+  const k = planId + '|' + itemId;
+  const done = !!__wpCache.progress[k];
+  const meta = __wpCache.progressMeta && __wpCache.progressMeta[k];
+  const tip = meta && meta.updatedByName ? ('آخر تحديث: ' + meta.updatedByName + (meta.completedAt ? ' · ' + new Date(meta.completedAt).toLocaleString('ar-SA') : '')) : '';
+  return done
+    ? `<span class="ann-badge ann-badge-pub" title="${escapeHtml(tip)}">✅ أنجز المطلوب</span>`
+    : `<span class="ann-badge ann-badge-draft" title="${escapeHtml(tip)}">⏳ لم ينجز المطلوب</span>`;
 }
 async function wpOpenAttachmentModal(planId, itemId){
   const school = getActiveSchool();
@@ -6958,7 +6955,7 @@ function wpRenderTaskCard(t, isStudent){
     ${(t.links && t.links.length) ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${t.links.map((lk, i) => `<a href="${escapeHtml(lk)}" target="_blank" rel="noopener noreferrer" class="ann-btn-soft">🔗 رابط ${i+1}</a>`).join('')}</div>` : ''}
     ${t.hasAttachment ? `<div><button type="button" class="ann-btn-soft" onclick="wpOpenAttachmentModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">📎 ${escapeHtml(t.attachmentName || 'عرض المرفق')}</button></div>` : ''}
     ${isStudent ? `<div style="margin-top:auto;padding-top:6px;border-top:1px dashed #fce7f3;display:flex;justify-content:flex-end">
-      <button type="button" class="wp-check-btn ${done ? 'checked' : ''}" onclick="wpToggleStudentProgress('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">${done ? '✓ تم الإنجاز' : '☐ تحديد كمنجز'}</button>
+      ${wpRenderStudentStatusBadge(t.planId, t.itemId)}
     </div>` : ''}
   </div>`;
 }
@@ -7017,8 +7014,14 @@ function wpOpenTaskDetailModal(planId, itemId){
       ${(t.links && t.links.length) ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${t.links.map((lk, i) => `<a href="${escapeHtml(lk)}" target="_blank" rel="noopener noreferrer" class="ann-btn-soft">🔗 رابط تعليمي ${i+1}</a>`).join('')}</div>` : ''}
       ${t.hasAttachment ? `<div><button type="button" class="ann-btn-primary" onclick="wpOpenAttachmentModal('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')">📎 عرض المرفق: ${escapeHtml(t.attachmentName || 'ملف')}</button></div>` : ''}
     </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:14px;padding-top:10px;border-top:1px solid #fce7f3">
-      <button type="button" class="wp-check-btn ${done ? 'checked' : ''}" onclick="wpToggleStudentProgress('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}');closeAnnModal()">${done ? '✓ تم الإنجاز' : '☐ تحديد كمنجز'}</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:14px;padding-top:10px;border-top:1px solid #fce7f3;flex-wrap:wrap">
+      <div>
+        ${wpRenderStudentStatusBadge(t.planId, t.itemId)}
+        ${(() => {
+          const m = __wpCache.progressMeta && __wpCache.progressMeta[t.planId + '|' + t.itemId];
+          return (m && m.updatedByName) ? `<div style="font-size:11px;color:#64748b;margin-top:4px">👩‍🏫 ${escapeHtml(m.updatedByName)}${m.completedAt ? ' · ' + escapeHtml(new Date(m.completedAt).toLocaleString('ar-SA')) : ''}</div>` : '';
+        })()}
+      </div>
       <button type="button" class="ann-btn-soft" onclick="closeAnnModal()">إغلاق</button>
     </div>
   </div>`;
@@ -7155,7 +7158,7 @@ function renderWeeklyPlanStudent(){
               ${!hasFiles ? '<span style="color:#cbd5e1;font-size:11px">—</span>' : ''}
             </div>
             <div class="wp-row-check-wrap" style="display:flex;justify-content:center">
-              <button type="button" class="wp-big-check ${done ? 'checked' : ''}" onclick="wpToggleStudentProgress('${escapeHtml(t.planId)}','${escapeHtml(t.itemId)}')" title="${done ? 'تم الإنجاز' : 'تحديد كمنجز'}">${done ? '✓' : ''}</button>
+              ${wpRenderStudentStatusBadge(t.planId, t.itemId)}
             </div>
           </div>`;
         }).join('') : '<div style="padding:12px 14px;text-align:center;color:#64748b;font-size:13px;font-weight:700">لا توجد مهام لهذا اليوم</div>'}
@@ -7355,45 +7358,104 @@ async function wpDeletePlan(id){
   await fetch('/api/weekly-plans/' + encodeURIComponent(school) + '/' + encodeURIComponent(id), { method:'DELETE' });
   await __loadWeeklyPlans(true);
 }
-async function wpOpenPlanProgressModal(id){
+let __wpProgModalState = { planId:'', itemId:'', data:null };
+function wpRenderProgressModalContent(){
+  const box = document.getElementById('wpProgModalBody');
+  const st = __wpProgModalState;
+  const j = st.data;
+  if(!box || !j) return;
+  const user = currentUser() || {};
+  const canEdit = user.role === 'TEACHER';
+  const items = Array.isArray(j.items) ? j.items : [];
+  if(!st.itemId && items[0]) st.itemId = items[0].id;
+  const selItemId = st.itemId;
+  const progMap = {};
+  (j.progress || []).forEach(r => {
+    if(String(r.itemId) === String(selItemId)) progMap[String(r.studentId)] = r;
+  });
+  const students = Array.isArray(j.students) ? j.students : [];
+  const doneCount = students.filter(s => progMap[String(s.id)] && progMap[String(s.id)].completed).length;
+  const notDoneCount = Math.max(0, students.length - doneCount);
+  const pct = students.length ? Math.round((doneCount / students.length) * 100) : 0;
+
+  box.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${items.length ? `<div>
+        <label style="font-weight:800;font-size:12.5px">اختر المهمة لمتابعة إنجاز الطالبات:</label>
+        <select style="width:100%" onchange="__wpProgModalState.itemId=this.value;wpRenderProgressModalContent()">
+          ${items.map((it, idx) => {
+            const dObj = __WP_DAYS.find(x => x.key === it.dayKey) || { label: it.dayKey };
+            return `<option value="${escapeHtml(it.id)}" ${String(it.id)===String(selItemId)?'selected':''}>${idx+1}) ${escapeHtml(dObj.label)} — ${escapeHtml(it.lesson || it.homework || it.assessments || 'مهمة')}</option>`;
+          }).join('')}
+        </select>
+      </div>` : '<div style="color:#64748b">لا توجد مهام في هذه الخطة</div>'}
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <div class="ann-stat"><div><div class="ann-stat-val" style="color:#15803d">${doneCount}</div><div class="ann-stat-lbl">أنجزن المطلوب</div></div></div>
+        <div class="ann-stat"><div><div class="ann-stat-val" style="color:#b45309">${notDoneCount}</div><div class="ann-stat-lbl">لم ينجزن</div></div></div>
+        <div class="ann-stat"><div><div class="ann-stat-val">${pct}%</div><div class="ann-stat-lbl">نسبة الإنجاز</div></div></div>
+      </div>
+      ${(canEdit && selItemId && students.length) ? `<div style="display:flex;justify-content:flex-end">
+        <button type="button" class="ann-btn-primary" onclick="wpTeacherBulkCompleteAll()">✅ تحديد الإنجاز لجميع الطالبات</button>
+      </div>` : ''}
+      <div style="max-height:340px;overflow-y:auto;border:1px solid #fce7f3;border-radius:10px">
+        ${students.map(stu => {
+          const rec = progMap[String(stu.id)];
+          const isDone = !!(rec && rec.completed);
+          return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid #fce7f3;font-size:13px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:800;color:#831843">${escapeHtml(stu.name)}</div>
+              ${(rec && rec.updatedByName) ? `<div style="font-size:11px;color:#64748b">${escapeHtml(rec.updatedByName)}${rec.completedAt ? ' · ' + escapeHtml(new Date(rec.completedAt).toLocaleString('ar-SA')) : ''}</div>` : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="ann-badge ${isDone ? 'ann-badge-pub' : 'ann-badge-draft'}">${isDone ? 'أنجزت المطلوب' : 'لم تنجز'}</span>
+              ${(canEdit && selItemId) ? `<button type="button" class="ann-btn-soft" onclick="wpTeacherToggleStudentProgress('${escapeHtml(stu.id)}', ${!isDone})">${isDone ? '↩️ لم تنجز' : '✓ أنجزت'}</button>` : ''}
+            </div>
+          </div>`;
+        }).join('') || '<div style="padding:18px;text-align:center;color:#64748b">لا توجد طالبات مسجلات في هذا الفصل</div>'}
+      </div>
+    </div>`;
+}
+async function wpTeacherToggleStudentProgress(studentId, completed){
   const school = getActiveSchool();
-  closeAnnModal();
-  const overlay = document.createElement('div');
-  overlay.id = 'annModalOverlay';
-  overlay.className = 'modal-overlay';
-  overlay.onclick = (e) => { if(e.target === overlay) closeAnnModal(); };
-  overlay.innerHTML = `<div class="modal-box" style="max-width:680px;width:96vw;max-height:90vh;overflow-y:auto;border-top:5px solid #db2777"><div style="padding:24px;text-align:center;color:#64748b">جاري تحميل متابعة الإنجاز...</div></div>`;
-  document.body.appendChild(overlay);
+  const { planId, itemId } = __wpProgModalState;
+  if(!planId || !itemId) return;
+  const res = await fetch('/api/weekly-plans/' + encodeURIComponent(school) + '/' + encodeURIComponent(planId) + '/items/' + encodeURIComponent(itemId) + '/progress', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ studentId, completed }),
+  });
+  if(res.ok) await wpOpenPlanProgressModal(planId, itemId);
+  else alert('تعذر تحديث حالة الإنجاز');
+}
+async function wpTeacherBulkCompleteAll(){
+  if(!confirm('هل تريدين تحديد هذه المهمة على أنها أنجزت لجميع طالبات الفصل؟')) return;
+  const school = getActiveSchool();
+  const { planId, itemId } = __wpProgModalState;
+  if(!planId || !itemId) return;
+  const res = await fetch('/api/weekly-plans/' + encodeURIComponent(school) + '/' + encodeURIComponent(planId) + '/items/' + encodeURIComponent(itemId) + '/progress', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bulkAll: true, completed: true }),
+  });
+  if(res.ok) await wpOpenPlanProgressModal(planId, itemId);
+  else alert('تعذر تنفيذ الإنجاز الجماعي');
+}
+async function wpOpenPlanProgressModal(id, keepItemId){
+  const school = getActiveSchool();
+  const isRefresh = !!keepItemId && !!document.getElementById('wpProgModalBody');
+  if(!isRefresh){
+    closeAnnModal();
+    const overlay = document.createElement('div');
+    overlay.id = 'annModalOverlay';
+    overlay.className = 'modal-overlay';
+    overlay.onclick = (e) => { if(e.target === overlay) closeAnnModal(); };
+    overlay.innerHTML = `<div class="modal-box" style="max-width:720px;width:96vw;max-height:90vh;overflow-y:auto;border-top:5px solid #db2777"><div class="modal-head"><h3>📊 متابعة إنجاز الطالبات</h3><button type="button" class="modal-close" onclick="closeAnnModal()">✕</button></div><div id="wpProgModalBody" style="padding:20px;text-align:center;color:#64748b">جاري تحميل متابعة الإنجاز...</div></div>`;
+    document.body.appendChild(overlay);
+  }
   try {
     const res = await fetch('/api/weekly-plans/' + encodeURIComponent(school) + '/' + encodeURIComponent(id) + '/progress');
     const j = await res.json();
     if(!res.ok || !j.ok) throw new Error('failed');
-    const byStudent = {};
-    (j.progress || []).forEach(r => {
-      if(r.completed){
-        if(!byStudent[r.studentId]) byStudent[r.studentId] = 0;
-        byStudent[r.studentId]++;
-      }
-    });
-    const rows = (j.students || []).map(st => {
-      const done = byStudent[st.id] || 0;
-      const tot = j.itemsCount || 0;
-      const pct = tot ? Math.round((done / tot) * 100) : 0;
-      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #fce7f3;font-size:13px">
-        <span style="font-weight:800;color:#831843">${escapeHtml(st.name)}</span>
-        <span class="ann-badge ${pct===100?'ann-badge-pub':'ann-badge-pin'}">${done} / ${tot} (${pct}%)</span>
-      </div>`;
-    }).join('') || '<div style="padding:18px;text-align:center;color:#64748b">لا توجد طالبات مسجلات في هذا الفصل</div>';
-    const box = overlay.querySelector('.modal-box');
-    if(box) box.innerHTML = `
-      <div class="modal-head">
-        <h3>📊 متابعة إنجاز الطالبات</h3>
-        <button type="button" class="modal-close" onclick="closeAnnModal()">✕</button>
-      </div>
-      <div style="font-size:12.5px;color:#64748b;margin-bottom:10px">إجمالي الطالبات: ${j.totalStudents || 0} · عدد المهام في الخطة: ${j.itemsCount || 0}</div>
-      <div style="max-height:380px;overflow-y:auto;border:1px solid #fce7f3;border-radius:10px">${rows}</div>`;
+    __wpProgModalState = { planId: id, itemId: keepItemId || (j.items && j.items[0] && j.items[0].id) || '', data: j };
+    wpRenderProgressModalContent();
   } catch(_){
-    const box = overlay.querySelector('.modal-box');
+    const box = document.getElementById('wpProgModalBody');
     if(box) box.innerHTML = `<div style="padding:20px;text-align:center;color:#be123c">تعذر تحميل بيانات الإنجاز</div>`;
   }
 }
@@ -18741,7 +18803,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=195', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=196', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
