@@ -16460,6 +16460,7 @@ function renderActivities(){
   const openForm = activityFormOpen;
   return `
   <div class="header-row"><h1 class="page-title">🎉 الأنشطة والفعاليات</h1>${isAdm ? '<button class="btn-primary" onclick="openActivityForm()">+ إضافة نشاط</button>' : ''}</div>
+  ${renderAdminActivityApprovals(acts, currentUser())}
   ${isAdm ? `<div id="activityForm" class="card mb" style="display:${openForm ? '' : 'none'}">
     <div style="font-size:14px;font-weight:700;margin-bottom:10px">${activityEditId ? '✏️ تعديل النشاط' : '➕ نشاط جديد'}</div>
     <div class="form-grid-3">
@@ -17314,49 +17315,83 @@ function renderActivityDetail(id){
         <button class="btn-primary" onclick="addParticipant('${a.id}')" ${notAdded.length ? '' : 'disabled'}>💾 إضافة</button>
       </div>
     </div>` : '';
-  // طلب المشاركة (للمعلم والموجه/الموجهة)
+  // طلب المشاركة (للمعلمة والموجهة)
   let teacherReqBox = '';
   if(canRequestPart){
     const myReq = reqs.find(r => r.teacherId === me.id);
-    if(myReq && myReq.status === 'PENDING'){
-      teacherReqBox = `<div class="card mb" style="border-color:#fcd34d;background:#fffbeb"><div style="font-size:13px;font-weight:700">⏳ طلبك قيد المراجعة</div><div class="small" style="color:#6b7280;margin-top:4px">نوع المشاركة: ${escapeHtml(myReq.kind)}</div><div class="small muted" style="margin-top:2px">بانتظار اعتماد الوكيل</div></div>`;
-    } else if(myReq && myReq.status === 'APPROVED'){
-      teacherReqBox = `<div class="card mb" style="border-color:#86efac;background:#f0fdf4"><div style="font-size:13px;font-weight:700">✅ تم اعتماد طلبك وستظهر ضمن المشاركين</div><div class="small" style="color:#6b7280;margin-top:4px">نوع المشاركة: ${escapeHtml(myReq.kind)}</div></div>`;
-    } else {
-      const rejBox = myReq && myReq.status === 'REJECTED'
-        ? `<div class="card mb" style="border-color:#fca5a5;background:#fef2f2"><div style="font-size:13px;font-weight:700">❌ رُفض طلبك</div><div class="small" style="color:#6b7280;margin-top:4px">نوع المشاركة: ${escapeHtml(myReq.kind)}</div>${myReq.reason ? `<div class="small" style="margin-top:4px;color:#b91c1c">📝 سبب الرفض: ${escapeHtml(myReq.reason)}</div>` : ''}</div>`
-        : '';
-      teacherReqBox = `${rejBox}
-      <div class="card mb">
-        <div style="font-size:14px;font-weight:700;margin-bottom:8px">✋ طلب المشاركة في: <b>${escapeHtml(a.name)}</b></div>
-        <div class="small muted" style="margin-bottom:8px">اختر نوع مشاركتك المطلوبة في هذا النشاط</div>
-        <div class="form-inline">
-          <select id="partKind" class="input" style="min-width:220px" data-tip="اختر نوع مشاركتك المطلوبة في هذا النشاط، مثل: عمل مسابقة، لوحة جدارية، توزيعات..." onchange="if(this.value==='أخرى'){openOtherKindModal('${a.id}')}"><option value="">اختر نوع المشاركة...</option>${activityReqKinds.map(k=>`<option value="${k}">${k}</option>`).join('')}</select>
-          <button class="btn-primary" onclick="if(document.getElementById('partKind').value==='أخرى'){openOtherKindModal('${a.id}')}else{requestParticipation('${a.id}')}">📨 إرسال الطلب</button>
+    const stMeta = myReq ? actReqStatusMeta(myReq.status) : null;
+    if(myReq && myReq.status !== 'NEEDS_INFO' && myReq.status !== 'REJECTED'){
+      teacherReqBox = `<div class="card mb" style="border-color:${stMeta.border};background:${stMeta.bg}">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <div style="font-size:14px;font-weight:800;color:${stMeta.color}">${stMeta.icon} ${stMeta.label}</div>
+          ${myReq.decidedAt ? `<span class="small muted">${fmtTime(myReq.decidedAt)}</span>` : ''}
         </div>
-        <div class="small muted" style="margin-top:6px">سيُعرض طلبك على الوكيل ليختار المشاركين، ويطّلع عليه المدير.</div>
+        <div class="small" style="color:#374151;margin-top:6px"><b>نوع المشاركة:</b> ${escapeHtml(myReq.kind || '—')}</div>
+        ${myReq.description ? `<div class="small" style="color:#374151;margin-top:3px"><b>وصف المشاركة:</b> ${escapeHtml(myReq.description)}</div>` : ''}
+        ${myReq.note ? `<div class="small muted" style="margin-top:3px"><b>ملاحظاتك:</b> ${escapeHtml(myReq.note)}</div>` : ''}
+        ${myReq.attachment && myReq.attachment.data ? `<div style="margin-top:6px"><a class="btn-secondary" style="padding:4px 10px;font-size:12px" href="${escapeHtml(myReq.attachment.data)}" download="${escapeHtml(myReq.attachment.name || 'attachment')}">📎 ${escapeHtml(myReq.attachment.name || 'المرفق')}</a></div>` : ''}
+        ${myReq.decidedByName ? `<div class="small" style="color:#831843;margin-top:6px;font-weight:700">قرار المديرة (${escapeHtml(myReq.decidedByName)})${myReq.decisionNote ? ': ' + escapeHtml(myReq.decisionNote) : ''}</div>` : ''}
+      </div>`;
+    } else {
+      const prevBox = myReq ? `<div class="card mb" style="border-color:${stMeta.border};background:${stMeta.bg}">
+        <div style="font-size:13.5px;font-weight:800;color:${stMeta.color}">${stMeta.icon} ${stMeta.label}</div>
+        <div class="small" style="color:#374151;margin-top:4px"><b>المشاركة:</b> ${escapeHtml(myReq.description || myReq.kind || '—')}</div>
+        ${(myReq.decisionNote || myReq.reason) ? `<div class="small" style="margin-top:4px;color:${stMeta.color};font-weight:700">📝 ملاحظة المديرة${myReq.decidedByName ? ' (' + escapeHtml(myReq.decidedByName) + ')' : ''}: ${escapeHtml(myReq.decisionNote || myReq.reason)}</div>` : ''}
+      </div>` : '';
+      teacherReqBox = `${prevBox}
+      <div class="card mb">
+        <div style="font-size:14px;font-weight:800;margin-bottom:8px">✋ ${myReq && myReq.status === 'NEEDS_INFO' ? 'استكمال وتعديل طلب المشاركة في' : 'طلب المشاركة في'}: <b>${escapeHtml(a.name)}</b></div>
+        <div class="form-grid-3" style="margin-bottom:8px">
+          <div>
+            <label class="small" style="display:block;font-weight:700;margin-bottom:4px">نوع المشاركة</label>
+            <select id="partKind" class="input" onchange="if(this.value==='أخرى'){openOtherKindModal('${a.id}')}"><option value="">اختر نوع المشاركة...</option>${activityReqKinds.map(k=>`<option value="${k}" ${myReq && myReq.kind===k ? 'selected' : ''}>${k}</option>`).join('')}</select>
+          </div>
+          <div>
+            <label class="small" style="display:block;font-weight:700;margin-bottom:4px">وصف المشاركة أو المهمة</label>
+            <input id="partDesc" class="input" maxlength="500" value="${escapeHtml(myReq && myReq.description ? myReq.description : '')}" placeholder="اكتبي وصف المشاركة..." />
+          </div>
+          <div>
+            <label class="small" style="display:block;font-weight:700;margin-bottom:4px">مرفق (اختياري)</label>
+            <input id="partFile" type="file" class="input" accept="image/*,.pdf,.doc,.docx" />
+          </div>
+        </div>
+        <textarea id="partNote" class="input" rows="2" maxlength="500" placeholder="ملاحظات إضافية (اختياري)">${escapeHtml(myReq && myReq.note ? myReq.note : '')}</textarea>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button type="button" class="btn-primary" onclick="requestParticipation('${a.id}')">📨 ${myReq && myReq.status === 'NEEDS_INFO' ? 'إعادة إرسال الطلب' : 'إرسال طلب المشاركة'}</button>
+          <span class="small muted">تكون حالة الطلب «بانتظار اعتماد المديرة» حتى تراجعه المديرة وتعتمد المشاركة.</span>
+        </div>
       </div>`;
     }
   }
-  // قائمة طلبات المشاركة (الوكيل يدير، والمدير يطّلع)
+  // قائمة طلبات المشاركة (الاعتماد والرفض والاستكمال للمديرة فقط)
   let reqSection = '';
   if(isMgr && reqs.length){
+    const isPrincipal = me?.role === 'ADMIN';
     const reqRows = reqs.map(r => {
-      const statusHtml = r.status === 'PENDING'
-        ? (isAgent ? `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn-primary" style="padding:4px 12px;font-size:12px" onclick="approveRequest('${a.id}','${r.id}')">✓ اعتماد</button><button class="btn-secondary danger" style="padding:4px 12px;font-size:12px" onclick="rejectRequest('${a.id}','${r.id}')">✖ رفض</button></div>` : `<span class="muted small">قيد المراجعة (يتولى الوكيل الاعتماد)</span>`)
-        : `<span style="font-size:12px;font-weight:700;color:${r.status==='APPROVED' ? '#16a34a' : '#dc2626'}">${r.status==='APPROVED' ? '✅ معتمد' : '❌ مرفوض'}</span>`;
-      return `<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      const st = actReqStatusMeta(r.status);
+      const decisionBtns = isPrincipal ? `<div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button type="button" class="btn-primary" style="padding:4px 10px;font-size:12px" onclick="openActDecisionModal('${a.id}','${r.id}','APPROVED')">✓ اعتماد</button>
+        <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:12px;color:#db2777;border-color:#fbcfe8" onclick="openActDecisionModal('${a.id}','${r.id}','NEEDS_INFO')">🔵 استكمال</button>
+        <button type="button" class="btn-secondary danger" style="padding:4px 10px;font-size:12px" onclick="openActDecisionModal('${a.id}','${r.id}','REJECTED')">✖ رفض</button>
+      </div>` : '';
+      return `<div class="card" style="border-inline-start:4px solid ${st.color};display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
         <div style="flex:1;min-width:200px">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:14px">${escapeHtml(r.teacherName || '—')}</b><span class="muted small">${fmtTime(r.createdAt)}</span></div>
-          <div class="small" style="color:#374151;margin-top:4px">🎯 نوع المشاركة: <b>${escapeHtml(r.kind)}</b></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <b style="font-size:14px">${escapeHtml(r.teacherName || '—')}</b>
+            <span style="font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:${st.bg};color:${st.color};border:1px solid ${st.border}">${st.icon} ${st.label}</span>
+            <span class="muted small">${fmtTime(r.createdAt)}</span>
+          </div>
+          <div class="small" style="color:#374151;margin-top:4px">🎯 <b>${escapeHtml(r.kind || '—')}</b>${r.description && r.description !== r.kind ? ' — ' + escapeHtml(r.description) : ''}</div>
           ${r.note ? `<div class="small muted">📝 ${escapeHtml(r.note)}</div>` : ''}
-          ${r.status === 'REJECTED' && r.reason ? `<div class="small" style="color:#b91c1c">📝 سبب الرفض: ${escapeHtml(r.reason)}</div>` : ''}
+          ${r.attachment && r.attachment.data ? `<div style="margin-top:4px"><a class="btn-secondary" style="padding:3px 8px;font-size:11.5px" href="${escapeHtml(r.attachment.data)}" download="${escapeHtml(r.attachment.name || 'attachment')}">📎 ${escapeHtml(r.attachment.name || 'المرفق')}</a></div>` : ''}
+          ${(r.decisionNote || r.reason) ? `<div class="small" style="color:${st.color};margin-top:4px">💬 قرار المديرة${r.decidedByName ? ' (' + escapeHtml(r.decidedByName) + ')' : ''}: ${escapeHtml(r.decisionNote || r.reason)}</div>` : ''}
+          ${r.decidedAt ? `<div class="small muted">📅 تاريخ القرار: ${fmtTime(r.decidedAt)}</div>` : ''}
         </div>
-        ${statusHtml}
+        ${decisionBtns}
       </div>`;
     }).join('');
     reqSection = `
-    <h2 class="section-title">📥 طلبات المشاركة (${reqs.length})</h2>
+    <h2 class="section-title">📥 طلبات مشاركة المعلمات (${reqs.length})</h2>
     <div class="grid grid-2">${reqRows}</div>`;
   }
   return `
@@ -17374,31 +17409,177 @@ function renderActivityDetail(id){
   <p class="muted small" style="margin-top:12px">سيظهر تقرير بأسماء المشاركين في نهاية العام من صفحة التقارير ← "تقرير الأنشطة والمشاركين".</p>
   `;
 }
-function requestParticipation(id, kindOverride){
+function actReqStatusMeta(status){
+  const s = String(status || 'PENDING').toUpperCase();
+  if(s === 'APPROVED') return { icon:'🟢', label:'معتمدة', color:'#15803d', bg:'#f0fdf4', border:'#86efac' };
+  if(s === 'REJECTED') return { icon:'🔴', label:'مرفوضة', color:'#b91c1c', bg:'#fef2f2', border:'#fca5a5' };
+  if(s === 'NEEDS_INFO') return { icon:'🔵', label:'بحاجة إلى استكمال', color:'#db2777', bg:'#fdf2f8', border:'#fbcfe8' };
+  return { icon:'🟠', label:'بانتظار اعتماد المديرة', color:'#b45309', bg:'#fffbeb', border:'#fcd34d' };
+}
+let __actApprovalFilter = 'ALL';
+function renderAdminActivityApprovals(acts, user){
+  if(!user || user.role !== 'ADMIN') return '';
+  const allReqs = [];
+  (acts || []).forEach(a => {
+    (a.requests || []).forEach(r => {
+      allReqs.push({ a, r });
+    });
+  });
+  allReqs.sort((x, y) => {
+    if(x.r.status === 'PENDING' && y.r.status !== 'PENDING') return -1;
+    if(y.r.status === 'PENDING' && x.r.status !== 'PENDING') return 1;
+    return String(y.r.createdAt || '').localeCompare(String(x.r.createdAt || ''));
+  });
+  const counts = {
+    ALL: allReqs.length,
+    PENDING: allReqs.filter(x => x.r.status === 'PENDING').length,
+    APPROVED: allReqs.filter(x => x.r.status === 'APPROVED').length,
+    REJECTED: allReqs.filter(x => x.r.status === 'REJECTED').length,
+    NEEDS_INFO: allReqs.filter(x => x.r.status === 'NEEDS_INFO').length,
+  };
+  const filtered = __actApprovalFilter === 'ALL' ? allReqs : allReqs.filter(x => x.r.status === __actApprovalFilter);
+  const tabs = [
+    { key:'ALL', label:`الكل (${counts.ALL})` },
+    { key:'PENDING', label:`🟠 بانتظار الاعتماد (${counts.PENDING})` },
+    { key:'APPROVED', label:`🟢 معتمدة (${counts.APPROVED})` },
+    { key:'NEEDS_INFO', label:`🔵 للاستكمال (${counts.NEEDS_INFO})` },
+    { key:'REJECTED', label:`🔴 مرفوضة (${counts.REJECTED})` },
+  ];
+  return `<div class="card mb" style="border-inline-start:4px solid #db2777">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <h2 class="section-title" style="margin:0">📋 اعتماد مشاركات المعلمات (${counts.PENDING} بانتظار الاعتماد)</h2>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${tabs.map(tb => `<button type="button" class="${__actApprovalFilter === tb.key ? 'btn-primary' : 'btn-secondary'}" style="padding:4px 10px;font-size:12px" onclick="__actApprovalFilter='${tb.key}';renderApp()">${tb.label}</button>`).join('')}
+      </div>
+    </div>
+    ${filtered.length ? `<div class="grid grid-2">
+      ${filtered.map(({ a, r }) => {
+        const st = actReqStatusMeta(r.status);
+        return `<div class="card" style="border:1px solid ${st.border};background:#fff">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap">
+            <b style="font-size:14px;color:#831843">${escapeHtml(r.teacherName || 'معلمة')}</b>
+            <span style="font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:${st.bg};color:${st.color};border:1px solid ${st.border}">${st.icon} ${st.label}</span>
+          </div>
+          <div class="small" style="color:#374151;margin-top:4px">🎉 النشاط: <a class="link" href="#/activity/${escapeHtml(a.id)}">${escapeHtml(a.name || '')}</a> · ${fmtDateOnly(a.date)}</div>
+          <div class="small" style="color:#374151;margin-top:3px">🎯 المشاركة: <b>${escapeHtml(r.kind || '—')}</b>${r.description && r.description !== r.kind ? ' — ' + escapeHtml(r.description) : ''}</div>
+          ${r.note ? `<div class="small muted">📝 ملاحظات المعلمة: ${escapeHtml(r.note)}</div>` : ''}
+          ${r.attachment && r.attachment.data ? `<div style="margin-top:4px"><a class="btn-secondary" style="padding:3px 8px;font-size:11.5px" href="${escapeHtml(r.attachment.data)}" download="${escapeHtml(r.attachment.name || 'attachment')}">📎 ${escapeHtml(r.attachment.name || 'المرفق')}</a></div>` : ''}
+          ${(r.decisionNote || r.reason) ? `<div class="small" style="color:${st.color};margin-top:4px">💬 ملاحظة القرار: ${escapeHtml(r.decisionNote || r.reason)}</div>` : ''}
+          ${r.decidedByName ? `<div class="small muted">👤 ${escapeHtml(r.decidedByName)}${r.decidedAt ? ' · ' + fmtTime(r.decidedAt) : ''}</div>` : ''}
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+            <button type="button" class="btn-primary" style="padding:4px 10px;font-size:12px" onclick="openActDecisionModal('${escapeHtml(a.id)}','${escapeHtml(r.id)}','APPROVED')">✓ اعتماد</button>
+            <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:12px;color:#db2777;border-color:#fbcfe8" onclick="openActDecisionModal('${escapeHtml(a.id)}','${escapeHtml(r.id)}','NEEDS_INFO')">🔵 إعادة للاستكمال</button>
+            <button type="button" class="btn-secondary danger" style="padding:4px 10px;font-size:12px" onclick="openActDecisionModal('${escapeHtml(a.id)}','${escapeHtml(r.id)}','REJECTED')">✖ رفض</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : '<p class="muted small">لا توجد طلبات مشاركة ضمن هذا التصنيف.</p>'}
+  </div>`;
+}
+let __actDecisionTarget = null;
+function openActDecisionModal(actId, reqId, decision){
+  const d = loadDB();
+  const a = (d.activities || []).find(x => x.id === actId);
+  const r = (a?.requests || []).find(x => x.id === reqId);
+  if(!a || !r) return;
+  __actDecisionTarget = { actId, reqId, decision };
+  const titles = { APPROVED:'✓ اعتماد مشاركة المعلمة', REJECTED:'✖ رفض طلب المشاركة', NEEDS_INFO:'🔵 إعادة الطلب للاستكمال' };
+  const required = decision !== 'APPROVED';
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `<div class="modal-box" style="max-width:440px">
+    <div class="modal-head"><h3>${titles[decision] || 'قرار المديرة'} — ${escapeHtml(r.teacherName || '')}</h3><button type="button" class="modal-close" onclick="closeActDecisionModal()">✕</button></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="small" style="color:#475569">النشاط: <b>${escapeHtml(a.name || '')}</b></div>
+      <div>
+        <label style="display:block;font-weight:700;font-size:13px;margin-bottom:6px">ملاحظات القرار ${required ? '(إلزامي)' : '(اختياري)'}</label>
+        <textarea id="actDecisionNote" class="input" rows="3" maxlength="500" placeholder="اكتب ملاحظاتك للمعلمة..."></textarea>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn-primary" style="${decision==='REJECTED' ? 'background:#dc2626;border-color:#dc2626' : ''}" onclick="submitActDecision()">💾 تأكيد القرار</button>
+        <button type="button" class="btn-secondary" onclick="closeActDecisionModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>`;
+  overlay.onclick = e => { if(e.target === overlay) closeActDecisionModal(); };
+  document.body.appendChild(overlay);
+}
+function closeActDecisionModal(){
+  const ov = document.querySelector('.modal-overlay');
+  if(ov) ov.remove();
+  __actDecisionTarget = null;
+}
+async function submitActDecision(){
+  if(!__actDecisionTarget) return;
+  const { actId, reqId, decision } = __actDecisionTarget;
+  const note = (document.getElementById('actDecisionNote')?.value || '').trim();
+  if((decision === 'REJECTED' || decision === 'NEEDS_INFO') && !note){
+    alert('يرجى كتابة ملاحظة توضيحية قبل تأكيد القرار');
+    return;
+  }
+  const school = getActiveSchool();
+  try {
+    const res = await fetch('/api/activities/' + encodeURIComponent(school) + '/' + encodeURIComponent(actId) + '/requests/' + encodeURIComponent(reqId) + '/decision', {
+      method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ decision, decisionNote: note }),
+    });
+    const j = await res.json();
+    if(!res.ok || !j.ok){ alert('تعذر حفظ القرار (تأكد من صلاحية المديرة)'); return; }
+    const d = loadDB();
+    const a = (d.activities || []).find(x => x.id === actId);
+    if(a){
+      a.requests = (a.requests || []).map(x => x.id === reqId ? j.request : x);
+      a.participants = Array.isArray(a.participants) ? a.participants : [];
+      if(decision === 'APPROVED' && !a.participants.includes(j.request.teacherId)) a.participants.push(j.request.teacherId);
+      if(decision !== 'APPROVED') a.participants = a.participants.filter(pid => pid !== j.request.teacherId);
+      saveDB(d);
+      __activitiesCache[school] = d.activities.slice();
+    }
+    closeActDecisionModal();
+    renderApp();
+  } catch(_){ alert('تعذر الاتصال بالخادم'); }
+}
+async function requestParticipation(id, kindOverride){
   const d = loadDB();
   const a = (d.activities || []).find(x => x.id === id);
   const me = currentUser();
   if(!a || !me) return;
   const kindEl = document.getElementById('partKind');
   const selVal = kindEl ? kindEl.value : '';
-  // حماية إضافية: لو اختار المعلم "أخرى" لكن لم تُدمج التفاصيل لسبب ما، نفتح النافذة بدلاً من رسالة الخطأ
   if((!kindOverride || !kindOverride.trim()) && selVal === 'أخرى'){
     openOtherKindModal(id);
     return;
   }
-  // النوع: إن وُرد صراحةً (نافذة "أخرى") يُستخدم مباشرة، وإلا من القائمة المنسدلة
   const kind = (kindOverride && kindOverride.trim()) ? kindOverride.trim() : selVal.trim();
-  if(!kind){ alert('اكتب نوع المشاركة المطلوبة (مثال: عمل مسابقة، لوحة جدارية)'); return; }
-  a.requests = a.requests || [];
-  if(a.requests.some(r => r.teacherId === me.id && r.status === 'PENDING')){ alert('لديك طلب قيد المراجعة بالفعل'); return; }
-  a.requests.push({ id: uid(), teacherId: me.id, teacherName: me.name, kind, note: '', status: 'PENDING', createdAt: new Date().toISOString() });
-  a._v = (typeof a._v === 'number' ? a._v : 0) + 1;
-  notifyPartRequestToAgent(d, a, a.requests[a.requests.length-1]);
-  d._ts = Date.now();
-  saveDB(d);
-  __syncSchedule(getActiveSchool(), 0);
-  renderApp();
-  alert('تم إرسال طلب مشاركتك إلى الوكيل ✅');
+  const description = (document.getElementById('partDesc')?.value || '').trim() || kind;
+  const note = (document.getElementById('partNote')?.value || '').trim();
+  if(!kind && !description){ alert('اكتب نوع المشاركة أو وصفها'); return; }
+  let attachment = null;
+  const fileEl = document.getElementById('partFile');
+  if(fileEl && fileEl.files && fileEl.files[0]){
+    const f = fileEl.files[0];
+    if(f.size > 2.5 * 1024 * 1024){ alert('حجم المرفق يتجاوز 2.5 ميجابايت'); return; }
+    attachment = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ name: f.name, type: f.type, data: reader.result });
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(f);
+    });
+  }
+  const school = getActiveSchool();
+  try {
+    const res = await fetch('/api/activities/' + encodeURIComponent(school) + '/' + encodeURIComponent(id) + '/requests', {
+      method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ kind, description, note, attachment }),
+    });
+    const j = await res.json();
+    if(!res.ok || !j.ok){ alert(j.error === 'request_already_exists' ? 'لديك طلب قيد المراجعة أو معتمد بالفعل' : 'تعذر إرسال الطلب'); return; }
+    a.requests = Array.isArray(a.requests) ? a.requests : [];
+    const idx = a.requests.findIndex(r => r.id === j.request.id);
+    if(idx >= 0) a.requests[idx] = j.request; else a.requests.push(j.request);
+    saveDB(d);
+    __activitiesCache[school] = d.activities.slice();
+    renderApp();
+    alert('تم إرسال طلب مشاركتك بنجاح (بانتظار اعتماد المديرة) ✅');
+  } catch(_){ alert('تعذر الاتصال بالخادم'); }
 }
 function notifyPartRequestToAgent(d, a, req){
   const me = currentUser();
@@ -18866,7 +19047,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=199', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=200', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

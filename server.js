@@ -3984,17 +3984,55 @@ app.post('/api/activities/:school', requireAuth, (req, res) => {
         }
         data.activities = next;
       } else {
+        const uid = String(req.session.user_id || req.session.userId || '');
+        const actorName = String(req.session.name || '').trim();
         for (const a of current) {
           const inc = incoming.find(x => x && x.id === a.id);
           if (inc && Array.isArray(inc.requests) && inc.requests.length) {
             const reqMap = new Map((a.requests || []).map(r => [r.id, r]));
-            for (const r of inc.requests) if (r && r.id) reqMap.set(r.id, r);
+            for (const r of inc.requests) {
+              if (!r || !r.id) continue;
+              const existing = reqMap.get(r.id);
+              if (existing) {
+                // لا يُسمح للمعلمة بتعديل قرار المديرة أو اعتماد مشاركتها بنفسها
+                if (String(existing.teacherId || '') !== uid) continue;
+                if (existing.status === 'NEEDS_INFO' && r.status === 'PENDING') {
+                  reqMap.set(r.id, {
+                    ...existing,
+                    kind: String(r.kind || existing.kind || '').slice(0, 120),
+                    description: String(r.description || existing.description || '').slice(0, 1000),
+                    note: String(r.note || '').slice(0, 600),
+                    attachment: r.attachment || existing.attachment || null,
+                    status: 'PENDING',
+                    updatedAt: new Date().toISOString(),
+                    auditLog: [...(Array.isArray(existing.auditLog) ? existing.auditLog : []), {
+                      action: 'RESUBMITTED', by: uid, byName: actorName, at: new Date().toISOString(), note: String(r.note || '').slice(0, 300),
+                    }],
+                  });
+                }
+              } else {
+                // أي طلب جديد من معلمة يبدأ دائماً بحالة بانتظار اعتماد المديرة
+                reqMap.set(r.id, {
+                  id: String(r.id),
+                  teacherId: uid,
+                  teacherName: actorName || String(r.teacherName || ''),
+                  activityId: a.id,
+                  activityName: a.name || '',
+                  activityDate: a.date || '',
+                  kind: String(r.kind || '').slice(0, 120),
+                  description: String(r.description || r.kind || '').slice(0, 1000),
+                  note: String(r.note || '').slice(0, 600),
+                  attachment: r.attachment || null,
+                  status: 'PENDING',
+                  createdAt: r.createdAt || new Date().toISOString(),
+                  auditLog: [{
+                    action: 'SUBMITTED', by: uid, byName: actorName, at: new Date().toISOString(), note: String(r.note || '').slice(0, 300),
+                  }],
+                });
+              }
+            }
             a.requests = Array.from(reqMap.values());
           }
-        }
-        const curIds = new Set(current.map(x => x.id));
-        for (const inc of incoming) {
-          if (inc && inc.id && !curIds.has(inc.id)) current.push(inc);
         }
         data.activities = current;
       }
@@ -4003,6 +4041,139 @@ app.post('/api/activities/:school', requireAuth, (req, res) => {
     });
 
     res.json({ ok: true, count: mutRes.value, ts: mutRes.ts });
+  })().catch(fail(res));
+});
+
+app.post('/api/activities/:school/:id/requests', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.params.school).toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    if (req.session.role !== 'TEACHER' && req.session.role !== 'COUNSELOR') return res.status(403).json({ error: 'forbidden' });
+
+    const uid = String(req.session.user_id || req.session.userId || '');
+    const actorName = String(req.session.name || '').trim();
+    const body = req.body || {};
+    const kind = String(body.kind || '').trim().slice(0, 120);
+    const description = String(body.description || '').trim().slice(0, 1000);
+    const note = String(body.note || '').trim().slice(0, 600);
+    if (!kind && !description) return res.status(400).json({ error: 'description_required' });
+
+    let attachment = null;
+    if (body.attachment && typeof body.attachment === 'object' && body.attachment.data) {
+      const dataStr = String(body.attachment.data || '');
+      if (dataStr.length > 4 * 1024 * 1024) return res.status(400).json({ error: 'attachment_too_large' });
+      attachment = {
+        name: String(body.attachment.name || 'attachment').slice(0, 140),
+        type: String(body.attachment.type || 'application/octet-stream').slice(0, 80),
+        data: dataStr,
+      };
+    }
+
+    let savedReq = null;
+    let errorCode = null;
+    const now = new Date().toISOString();
+
+    await db.mutateSchoolData(school, (data) => {
+      const acts = Array.isArray(data.activities) ? data.activities : [];
+      const act = acts.find(x => x && String(x.id) === String(req.params.id));
+      if (!act) { errorCode = 'not_found'; return { changed: false }; }
+      act.requests = Array.isArray(act.requests) ? act.requests : [];
+
+      const activeBlocking = act.requests.find(r => r && String(r.teacherId) === uid && (r.status === 'PENDING' || r.status === 'APPROVED'));
+      if (activeBlocking) { errorCode = 'already_exists'; return { changed: false }; }
+
+      const needsInfoReq = act.requests.find(r => r && String(r.teacherId) === uid && r.status === 'NEEDS_INFO');
+      if (needsInfoReq) {
+        needsInfoReq.kind = kind || needsInfoReq.kind || description;
+        needsInfoReq.description = description || kind || needsInfoReq.description || '';
+        needsInfoReq.note = note;
+        if (attachment) needsInfoReq.attachment = attachment;
+        needsInfoReq.status = 'PENDING';
+        needsInfoReq.updatedAt = now;
+        needsInfoReq.auditLog = Array.isArray(needsInfoReq.auditLog) ? needsInfoReq.auditLog : [];
+        needsInfoReq.auditLog.push({ action: 'RESUBMITTED', by: uid, byName: actorName, at: now, note });
+        savedReq = needsInfoReq;
+      } else {
+        savedReq = {
+          id: 'req_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+          teacherId: uid,
+          teacherName: actorName || 'معلمة',
+          activityId: act.id,
+          activityName: act.name || '',
+          activityDate: act.date || '',
+          kind: kind || description,
+          description: description || kind,
+          note,
+          attachment,
+          status: 'PENDING',
+          createdAt: now,
+          auditLog: [{ action: 'SUBMITTED', by: uid, byName: actorName, at: now, note }],
+        };
+        act.requests.push(savedReq);
+      }
+      act._v = (typeof act._v === 'number' ? act._v : 0) + 1;
+      return { changed: true, value: act.requests.length };
+    });
+
+    if (errorCode === 'not_found') return res.status(404).json({ error: 'not_found' });
+    if (errorCode === 'already_exists') return res.status(409).json({ error: 'request_already_exists' });
+    res.json({ ok: true, request: savedReq });
+  })().catch(fail(res));
+});
+
+app.post('/api/activities/:school/:id/requests/:reqId/decision', requireAuth, (req, res) => {
+  (async () => {
+    const school = String(req.params.school).toUpperCase();
+    if (!db.SCHOOLS.includes(school)) return res.status(400).json({ error: 'bad_school' });
+    if (!schoolAccess(req.session, school)) return res.status(403).json({ error: 'forbidden' });
+    // الاعتماد والرفض والإعادة للاستكمال من صلاحيات المديرة فقط
+    if (req.session.role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+
+    const uid = String(req.session.user_id || req.session.userId || '');
+    const adminName = String(req.session.name || 'المديرة').trim();
+    const decision = String((req.body && req.body.decision) || '').trim().toUpperCase();
+    const decisionNote = String((req.body && (req.body.decisionNote ?? req.body.note)) || '').trim().slice(0, 500);
+    if (!['APPROVED', 'REJECTED', 'NEEDS_INFO'].includes(decision)) {
+      return res.status(400).json({ error: 'invalid_decision' });
+    }
+    if ((decision === 'REJECTED' || decision === 'NEEDS_INFO') && !decisionNote) {
+      return res.status(400).json({ error: 'decision_note_required' });
+    }
+
+    let updatedReq = null;
+    let errorCode = null;
+    const now = new Date().toISOString();
+
+    await db.mutateSchoolData(school, (data) => {
+      const acts = Array.isArray(data.activities) ? data.activities : [];
+      const act = acts.find(x => x && String(x.id) === String(req.params.id));
+      if (!act) { errorCode = 'not_found'; return { changed: false }; }
+      const target = (Array.isArray(act.requests) ? act.requests : []).find(r => r && String(r.id) === String(req.params.reqId));
+      if (!target) { errorCode = 'request_not_found'; return { changed: false }; }
+
+      target.status = decision;
+      target.decisionNote = decisionNote;
+      target.reason = decision === 'REJECTED' ? decisionNote : '';
+      target.decidedBy = uid;
+      target.decidedByName = adminName;
+      target.decidedAt = now;
+      target.auditLog = Array.isArray(target.auditLog) ? target.auditLog : [];
+      target.auditLog.push({ action: decision, by: uid, byName: adminName, at: now, note: decisionNote });
+
+      act.participants = Array.isArray(act.participants) ? act.participants : [];
+      if (decision === 'APPROVED') {
+        if (!act.participants.includes(target.teacherId)) act.participants.push(target.teacherId);
+      } else {
+        act.participants = act.participants.filter(pid => String(pid) !== String(target.teacherId));
+      }
+      act._v = (typeof act._v === 'number' ? act._v : 0) + 1;
+      updatedReq = target;
+      return { changed: true, value: target.status };
+    });
+
+    if (errorCode) return res.status(404).json({ error: errorCode });
+    res.json({ ok: true, request: updatedReq });
   })().catch(fail(res));
 });
 
