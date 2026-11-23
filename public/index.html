@@ -4658,7 +4658,51 @@ function renderAccount(){
     <label>تأكيد كلمة المرور الجديدة</label>
     <input id="accSec2" class="input" type="password" placeholder="••••••••" minlength="8" />
     <button class="btn-primary" style="margin-top:16px" onclick="saveAccount()">حفظ التغييرات</button>
+    ${(user.role === 'ADMINISTRATIVE' || user.role === 'COUNSELOR') ? `
+    <div style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--border-color,#e2e8f0)">
+      <div style="font-weight:800;font-size:14px;margin-bottom:6px">📱 رقم الجوال</div>
+      <div style="font-size:12.5px;color:var(--muted,#64748b);margin-bottom:8px">رقم الجوال الحالي: <strong dir="ltr">${escapeHtml(user.phone || 'غير مسجل')}</strong></div>
+      <div id="accPhoneMsg" class="error-box" style="display:none;margin-bottom:8px"></div>
+      <label>رقم الجوال الجديد (بصيغة محلية أو دولية)</label>
+      <input id="accPhone" class="input" type="tel" style="direction:ltr" value="${escapeHtml(user.phone || '')}" placeholder="05xxxxxxxx أو +9665xxxxxxxx" />
+      <button type="button" class="btn-secondary" style="margin-top:10px" onclick="saveAccountPhone()">💾 حفظ رقم الجوال</button>
+    </div>` : ''}
   </div>`;
+}
+let __accPhoneBusy = false;
+async function saveAccountPhone(){
+  if(__accPhoneBusy) return;
+  const user = currentUser();
+  if(!user || (user.role !== 'ADMINISTRATIVE' && user.role !== 'COUNSELOR')) return;
+  const raw = (document.getElementById('accPhone') || {}).value || '';
+  const el = document.getElementById('accPhoneMsg');
+  const ascii = String(raw).replace(/[\u0660-\u0669]/g, c => String(c.charCodeAt(0) - 0x0660)).replace(/[\u06F0-\u06F9]/g, c => String(c.charCodeAt(0) - 0x06F0)).trim().replace(/[\s\-().]/g, '');
+  if(!ascii){
+    if(el){ el.style.display='block'; el.style.background='#fef2f2'; el.style.color='#dc2626'; el.textContent='يرجى إدخال رقم الجوال'; }
+    return;
+  }
+  if(!/^\+?\d{8,15}$/.test(ascii)){
+    if(el){ el.style.display='block'; el.style.background='#fef2f2'; el.style.color='#dc2626'; el.textContent='صيغة رقم الجوال غير صالحة (أدخل 8 إلى 15 رقماً بصيغة محلية أو دولية)'; }
+    return;
+  }
+  __accPhoneBusy = true;
+  try{
+    if(__serverEnabled()){
+      const r = await __api('POST', 'update-phone', { phone: ascii });
+      if(r.status === 200 && r.j && r.j.user){
+        __sessionUser = r.j.user;
+        __mirrorSet(r.j.user);
+        renderApp();
+        const el2 = document.getElementById('accPhoneMsg');
+        if(el2){ el2.style.display='block'; el2.style.background='#ecfdf5'; el2.style.color='#15803d'; el2.textContent='✅ تم حفظ رقم الجوال بنجاح'; }
+      } else {
+        const errCode = (r.j && r.j.error) || '';
+        const msg = errCode === 'invalid_phone' ? 'صيغة رقم الجوال غير صالحة' : (errCode === 'forbidden' ? 'غير مصرح لك بتعديل رقم الجوال' : 'تعذر حفظ رقم الجوال — أعد المحاولة');
+        if(el){ el.style.display='block'; el.style.background='#fef2f2'; el.style.color='#dc2626'; el.textContent=msg; }
+      }
+      return;
+    }
+  } finally { __accPhoneBusy = false; }
 }
 let __accBusy = false;
 async function saveAccount(){
@@ -18697,7 +18741,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=194', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=195', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

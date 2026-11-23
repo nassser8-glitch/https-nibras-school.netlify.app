@@ -17,6 +17,7 @@ const transferPrivacy = require('./transfers-privacy');
 const wa = require('./whatsapp');
 const schoolAnn = require('./school-announcements');
 const weeklyPlans = require('./weekly-plans');
+const phonePolicy = require('./phone-policy');
 const usernamePolicy = require('./username-policy');
 
 // قراءة متغير: من Environment أولاً، ثم من ملف سري في /etc/secrets (بديل Render)
@@ -813,6 +814,24 @@ app.post('/api/auth/update-profile', requireAuth, (req, res) => {
     }
     const updated = await db.userById(u.id);
     res.json({ ok: true, user: sendUser(updated, req.session, req.session.role) });
+  })().catch(fail(res));
+});
+
+app.post('/api/auth/update-phone', requireAuth, (req, res) => {
+  (async () => {
+    if (rateLimit('phone', 15, 15 * 60 * 1000, req)) return res.status(429).json({ error: 'rate_limited' });
+    const me = await db.userById(req.session.user_id);
+    if (!me) return res.status(401).json({ error: 'unauthorized' });
+    if (!phonePolicy.canSelfEditPhone(me.role)) return res.status(403).json({ error: 'forbidden' });
+    const targetId = req.body && (req.body.userId || req.body.id);
+    if (targetId && String(targetId) !== String(me.id)) return res.status(403).json({ error: 'forbidden' });
+    const v = phonePolicy.validatePhone(req.body && req.body.phone);
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    const nextData = Object.assign({}, me.data || {}, { phone: v.phone });
+    await db.updateUserProfile(me.id, { data: nextData });
+    await updateSchoolUser(me.school, me.id, { phone: v.phone });
+    const updated = await db.userById(me.id);
+    res.json({ ok: true, phone: v.phone, user: sendUser(updated, req.session, req.session.role) });
   })().catch(fail(res));
 });
 

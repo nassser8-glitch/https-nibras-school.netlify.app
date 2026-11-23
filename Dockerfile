@@ -7,7 +7,7 @@ RUN npm ci --omit=dev
 
 # ملفات الخادم المطلوبة فعليًا. أي require() في server.js يجب أن يكون ملفه
 # مُدرجًا هنا، وإلا فشل الإقلاع على Render.
-COPY server.js db.js seed.js notes-privacy.js transfers-privacy.js whatsapp.js school-announcements.js username-policy.js weekly-plans.js ./
+COPY server.js db.js seed.js notes-privacy.js transfers-privacy.js whatsapp.js school-announcements.js username-policy.js weekly-plans.js phone-policy.js ./
 COPY public ./public
 
 ENV NODE_ENV=production
