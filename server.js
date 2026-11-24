@@ -1537,24 +1537,33 @@ function mergeTransfers(prev, incoming) {
     if (!t || t.id == null || t.deleted === true) return t;
     const id = String(t.id);
     const p = prevById.get(id), inc = incById.get(id);
+    let out = t;
     // الحل في الخادم والوارد بلا حل ⇒ نحفظ الحل ولا ننتظر الدفعة التالية.
     if (p && p.solution && !(inc && inc.solution)) {
-      return Object.assign({}, t, {
+      out = Object.assign({}, t, {
         solution: p.solution, status: p.status || 'RESOLVED',
         resolvedBy: p.resolvedBy, resolvedByName: p.resolvedByName,
         resolvedAt: p.resolvedAt,
       });
-    }
-    // حلّان على جهازين: الأحدث (resolvedAt) يكسب أيّهما كان على الخادم.
-    if (p && p.solution && inc && inc.solution) {
+    } else if (p && p.solution && inc && inc.solution) {
+      // حلّان على جهازين: الأحدث (resolvedAt) يكسب أيّهما كان على الخادم.
       const newer = solveStamp(inc) > solveStamp(p) ? inc : p;
-      return Object.assign({}, t, {
+      out = Object.assign({}, t, {
         solution: newer.solution, status: newer.status || 'RESOLVED',
         resolvedBy: newer.resolvedBy, resolvedByName: newer.resolvedByName,
         resolvedAt: newer.resolvedAt,
       });
+    } else if (out.status !== 'RESOLVED' && ((p && p.status === 'IN_PROGRESS') || (inc && inc.status === 'IN_PROGRESS'))) {
+      out = Object.assign({}, out, { status: 'IN_PROGRESS' });
     }
-    return t;
+    // دمج سجل المشاهدة (اتحاد) حتى لا يضيع الاطلاع عند المزامنة
+    const mergedViewedBy = Object.assign({}, (p && p.viewedBy) || {}, (inc && inc.viewedBy) || {});
+    if (Object.keys(mergedViewedBy).length > 0) {
+      const viewedAt = [p && p.viewedAt, inc && inc.viewedAt].filter(Boolean).sort()[0] || out.viewedAt;
+      const lastViewedAt = [p && p.lastViewedAt, inc && inc.lastViewedAt].filter(Boolean).sort().pop() || out.lastViewedAt;
+      out = Object.assign({}, out, { viewedBy: mergedViewedBy, viewedAt, lastViewedAt });
+    }
+    return out;
   });
 }
 // ===== دمج رسائل المدير/الإشعارات (adminMsgs) =====

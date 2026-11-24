@@ -87,11 +87,13 @@ test('رسالة التحويل تظهر للوكيلة قبل الاطلاع (�
   assert.ok(html.includes('محتوى مخفي'), 'بطاقة الإشعار غير موجودة (كان يُفترض أنها مخفية المحتوى)');
 });
 
-test('كشف المحتوى يُسقط البطاقة أيضاً (سلوك موجود)', () => {
+test('كشف المحتوى يُظهر محتوى التحويل ولا يُسقط البطاقة قبل «تم الاطلاع»', () => {
   const { ctx } = makeEnv(AGENT, { users: [ADMIN, AGENT, TEACHER], adminMsgs: [transferMsg()], transfers: [] });
   assert.ok(ctx.__render().includes('محتوى مخفي'));
   ctx.revealAdminMsg('srv_t1_' + AGENT.id);
-  assert.strictEqual(ctx.__render(), '', 'الكشف لم يُسقط البطاقة');
+  const afterReveal = ctx.__render();
+  assert.ok(afterReveal.includes('ملاذ ناصر'), 'اختفى التحويل عند الضغط على الاطلاع على المحتوى');
+  assert.ok(afterReveal.includes('تم الاطلاع'), 'زر تم الاطلاع غير ظاهر بعد الكشف');
 });
 
 test('«تم الاطلاع» يُخفي الإشعار عن الوكالة', () => {

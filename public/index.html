@@ -1914,6 +1914,18 @@ function __mergeTransfersPull(lArr, sArr){
     if(srvRec && srvRec.solution && x.solution && String(srvRec.status || '') === 'RESOLVED'
        && __transferSolveStamp(x) >= __transferSolveStamp(srvRec)){
       out[idx.get(k)] = copy;
+      continue;
+    }
+    if(srvRec){
+      const mergedViewedBy = Object.assign({}, srvRec.viewedBy || {}, x.viewedBy || {});
+      if(Object.keys(mergedViewedBy).length > 0){
+        srvRec.viewedBy = mergedViewedBy;
+        srvRec.viewedAt = [srvRec.viewedAt, x.viewedAt].filter(Boolean).sort()[0] || srvRec.viewedAt;
+        srvRec.lastViewedAt = [srvRec.lastViewedAt, x.lastViewedAt].filter(Boolean).sort().pop() || srvRec.lastViewedAt;
+      }
+      if(srvRec.status !== 'RESOLVED' && x.status === 'IN_PROGRESS'){
+        srvRec.status = 'IN_PROGRESS';
+      }
     }
   }
   return out;
@@ -5894,10 +5906,12 @@ function revealAdminMsg(id){
   m.revealed = true;
   m.revealedBy = u.name || '';
   m.read = true;
-  // الاطلاع يُسقط الرسالة فوراً للاطَّلاع: تختفي من بطاقات المعلم مباشرة
-  // ولا تعود بعد السحب القادم (نُرفع للخادم فوراً).
-  m.clearedBy = m.clearedBy || {};
-  if(!(u.id in m.clearedBy)) m.clearedBy[u.id] = stamp;
+  // إشعار التحويل: فتح المحتوى يكشفه للقارئ ولا يُخفي البطاقة فوراً؛
+  // الإخفاء يتم فقط عند الضغط على «تم الاطلاع» مع بقاء التحويل نفسه في خانة التحويلات.
+  if(m.senderRole !== 'TRANSFER'){
+    m.clearedBy = m.clearedBy || {};
+    if(!(u.id in m.clearedBy)) m.clearedBy[u.id] = stamp;
+  }
   m.updatedAt = stamp;
   saveAdminMsgsFor(school, arr);
   if(__serverEnabled()) __syncSchedule(school, 0);
@@ -5942,7 +5956,7 @@ function renderGuideMsgs(){
   const all = aliveMsgs(msgSources.map(s => loadAdminMsgsFor(s).map(m => ({ ...m, _school: s }))).flat());
   // المدير يرى جميع الرسائل المرسلة للمعلمين (من أي مرسل)، وغيره يرى رسائله فقط
   const msgs = all.filter(m => (isAdmin ? (m.senderRole !== 'TRANSFER' || adminSeesTransferMsg(m)) : m.senderId === user.id)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  const transIn = all.filter(m => m.senderRole === 'TRANSFER' && m.teacherId === user.id && !m.dismissed && (isAdmin ? adminSeesTransferMsg(m) : true)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const transIn = all.filter(m => m.senderRole === 'TRANSFER' && m.teacherId === user.id && (isAdmin ? adminSeesTransferMsg(m) : true)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   const schoolBadge = (s) => `<span class="badge badge-girls" style="margin-left:6px">${campusLabels[s] || s}</span>`;
   const targetOpts = isAdmin
     ? [`<option value="${active}:ALL">${tl('جميع المعلمين')} (${campusLabels[active]})</option>`]
@@ -8002,8 +8016,8 @@ function renderDashboard(){
   const present = dayAttCounts.present;
   const rate = students.length ? (present + late) / students.length * 100 : null;
   const pendingTransfers = (isAdmin
-    ? ['GIRLS'].reduce((n,s) => n + loadSchoolDB(s).transfers.filter(t => t.status === 'PENDING' && transferForMe(t)).length, 0)
-    : d.transfers.filter(t => t.status === 'PENDING' && transferForMe(t)).length);
+    ? ['GIRLS'].reduce((n,s) => n + loadSchoolDB(s).transfers.filter(t => !t.deleted && (t.status === 'PENDING' || t.status === 'IN_PROGRESS') && transferForMe(t)).length, 0)
+    : d.transfers.filter(t => !t.deleted && (t.status === 'PENDING' || t.status === 'IN_PROGRESS') && transferForMe(t)).length);
 
   // إحصائية المعلم لكل فصل يدرسه (تُطبق على المعلمات أيضًا)
   const isTeacher = user?.role === 'TEACHER';
@@ -9967,7 +9981,7 @@ function showPendingTransfers(){
   const isAdmin = user?.role === 'ADMIN';
   const active = getActiveSchool();
   const sources = isAdmin ? ['GIRLS'].map(s => ({ school: s, d: loadSchoolDB(s) })) : [{ school: active, d: loadDB() }];
-  const recs = sources.map(({ school, d }) => d.transfers.filter(t => t.status === 'PENDING' && transferForMe(t)).map(t => ({ t, school, d })))
+  const recs = sources.map(({ school, d }) => d.transfers.filter(t => !t.deleted && (t.status === 'PENDING' || t.status === 'IN_PROGRESS') && transferForMe(t)).map(t => ({ t, school, d })))
     .flat().sort((a,b) => (b.t.createdAt||'').localeCompare(a.t.createdAt||''));
   const priorityColor = { LOW:'#6b7280', MEDIUM:'#1d4ed8', HIGH:'#d97706', URGENT:'#dc2626' };
   const rows = recs.length === 0 ? `<tr><td colspan="5" style="text-align:center;padding:20px;color:#9ca3af">لا توجد تحويلات معلّقة اليوم</td></tr>` :
@@ -13389,13 +13403,101 @@ function NRC_mergeNotes(base, add){
   return Array.from(m.values()).map(o => o.n);
 }
 /* ============ التحويلات ============ */
+let __transferStatusFilter = 'ALL';
+function transferStatusInfo(t){
+  if(!t) return { key:'NEW', label:'جديد', color:'#d97706', bg:'#fffbeb' };
+  if(t.status === 'RESOLVED') return { key:'RESOLVED', label:'مكتمل', color:'#16a34a', bg:'#f0fdf4' };
+  if(t.status === 'IN_PROGRESS') return { key:'IN_PROGRESS', label:'قيد المعالجة', color:'#2563eb', bg:'#eff6ff' };
+  const hasViewed = !!(t.viewedAt || (t.viewedBy && Object.keys(t.viewedBy).length > 0));
+  if(hasViewed) return { key:'VIEWED', label:'تمت المشاهدة', color:'#7c3aed', bg:'#f5f3ff' };
+  return { key:'NEW', label:'جديد', color:'#d97706', bg:'#fffbeb' };
+}
+function openTransferDetails(id){
+  const d = loadDB();
+  const t = (d.transfers || []).find(x => x && !x.deleted && x.id === id);
+  if(!t) return;
+  const me = currentUser();
+  const isViewerTarget = me && (me.role === 'AGENT' || me.role === 'COUNSELOR' || me.role === 'ADMIN');
+  // تسجيل المشاهدة فقط دون حذف التحويل أو إخفائه من القائمة
+  if(me && isViewerTarget){
+    const nowIso = new Date().toISOString();
+    t.viewedBy = t.viewedBy || {};
+    if(!t.viewedBy[me.id]){
+      t.viewedBy[me.id] = { name: me.name || '', role: me.role || '', at: nowIso };
+    }
+    if(!t.viewedAt) t.viewedAt = nowIso;
+    t.lastViewedAt = nowIso;
+    saveDB(d);
+    try{ if(typeof __syncSchedule === 'function') __syncSchedule(getActiveSchool(), 0); }catch(e){}
+  }
+  const st = transferStatusInfo(t);
+  const ss = studentIdsOf(t).map(sid => d.students.find(s => s && s.id === sid)).filter(Boolean);
+  const sNames = ss.length ? ss.map(s => s.fullName || s.name || '—').join('، ') : '—';
+  const sender = t.createdBy ? (d.users || []).find(u => u && String(u.id) === String(t.createdBy)) : null;
+  const senderName = sender ? sender.name : (t.createdByName || 'الإدارة');
+  const canAct = me && (t.status !== 'RESOLVED') && (
+    (t.target === 'AGENT' && me.role === 'AGENT') ||
+    (t.target === 'COUNSELOR' && me.role === 'COUNSELOR') ||
+    (t.target === 'ADMIN' && me.role === 'ADMIN') ||
+    me.role === 'ADMIN'
+  );
+  const viewedList = Object.values(t.viewedBy || {}).map(v => `${escapeHtml(v.name || '—')} (${fmtTime(v.at)})`).join(' · ');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:560px;width:95%">
+      <div class="modal-head">
+        <h3>📨 تفاصيل التحويل</h3>
+        <button class="modal-close" onclick="closeDetails();renderApp()">✕</button>
+      </div>
+      <div style="padding:6px 2px 12px">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px">
+          <span style="background:${st.bg};color:${st.color};border:1px solid ${st.color}33;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800">${st.label}</span>
+          <span class="small muted">📅 ${fmtTime(t.createdAt)}</span>
+          <span class="small muted">👤 المرسل: ${escapeHtml(senderName)}</span>
+        </div>
+        <p style="font-weight:800;font-size:15px;margin:6px 0">${escapeHtml(sNames)}</p>
+        <p class="small" style="margin:4px 0"><b>الجهة:</b> ${targetLabel(t.target)} &nbsp;|&nbsp; <b>الأولوية:</b> ${priorityLabels[t.priority] || t.priority}</p>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin:10px 0;white-space:pre-wrap;line-height:1.6">
+          <div class="small muted" style="margin-bottom:4px">السبب:</div>
+          <div style="font-weight:600">${escapeHtml(t.reason || '—')}</div>
+        </div>
+        ${viewedList ? `<div class="small muted" style="margin-bottom:8px">👁 تمت المشاهدة بواسطة: ${viewedList}</div>` : ''}
+        ${t.solution ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;margin:10px 0"><div style="font-weight:700;color:#16a34a;margin-bottom:4px">✔ الحل (${escapeHtml(t.resolvedByName || '—')}):</div><div style="white-space:pre-wrap">${escapeHtml(t.solution)}</div></div>` : ''}
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">
+          ${canAct && t.status !== 'IN_PROGRESS' ? `<button class="btn-secondary" style="color:#2563eb;border-color:#93c5fd" onclick="setTransferInProgress('${t.id}')">⏳ وضع قيد المعالجة</button>` : ''}
+          ${canAct ? `<button class="btn-primary" onclick="closeDetails();openTransferSolve('${t.id}')">✔ حل المشكلة / إكمال</button>` : ''}
+          <button class="btn-secondary" onclick="closeDetails();renderApp()">إغلاق</button>
+        </div>
+      </div>
+    </div>`;
+  overlay.onclick = e => { if(e.target === overlay){ closeDetails(); renderApp(); } };
+  document.body.appendChild(overlay);
+}
+function setTransferInProgress(id){
+  const d = loadDB();
+  const t = (d.transfers || []).find(x => x && !x.deleted && x.id === id);
+  if(!t || t.status === 'RESOLVED') return;
+  const me = currentUser();
+  const nowIso = new Date().toISOString();
+  t.status = 'IN_PROGRESS';
+  t.viewedBy = t.viewedBy || {};
+  if(me && !t.viewedBy[me.id]) t.viewedBy[me.id] = { name: me.name || '', role: me.role || '', at: nowIso };
+  if(!t.viewedAt) t.viewedAt = nowIso;
+  t.lastViewedAt = nowIso;
+  saveDB(d);
+  try{ if(typeof __syncSchedule === 'function') __syncSchedule(getActiveSchool(), 0); }catch(e){}
+  closeDetails();
+  renderApp();
+}
 function renderTransfers(){
   const user = currentUser();
   const isAdmin = user?.role === 'ADMIN';
   const isStudent = user?.role === 'STUDENT';
   const active = getActiveSchool();
   const sources = [{ school: active, d: loadDB() }];
-  const canResolve = (t) => t.status === 'PENDING' && (
+  const canResolve = (t) => (t.status === 'PENDING' || t.status === 'IN_PROGRESS') && (
     (t.target === 'AGENT' && user?.role === 'AGENT') || (t.target === 'COUNSELOR' && user?.role === 'COUNSELOR')
   );
   const priorityColor = { LOW:'#6b7280', MEDIUM:'#1d4ed8', HIGH:'#d97706', URGENT:'#dc2626' };
@@ -13410,28 +13512,43 @@ function renderTransfers(){
         const ids = studentIdsOf(t);
         if(!ids.includes(user.id)) return;
       }
-      if(transferForMe(t)) all.push({ t, school, d, pts });
+      if(transferForMe(t)){
+        const stInfo = transferStatusInfo(t);
+        if(__transferStatusFilter !== 'ALL' && stInfo.key !== __transferStatusFilter) return;
+        all.push({ t, school, d, pts, stInfo });
+      }
     });
   });
   const schoolBadge = (school) => `<span class="badge badge-girls" style="margin-left:6px">${campusLabels[school] || school}</span>`;
 
-  const rows = all.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">لا توجد تحويلات بعد</td></tr>` :
-    all.map(({ t, school, d, pts }) => {
+  const rows = all.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af">لا توجد تحويلات مطابقة</td></tr>` :
+    all.map(({ t, school, d, pts, stInfo }) => {
       const ss = studentIdsOf(t).map(id => d.students.find(st => st.id === id)).filter(Boolean);
       const nameCell = ss.length ? ss.map(s => studentNameLink(s, s ? (pts[s.id] || 0) : undefined)).join('<br>') : '<span class="muted">—</span>';
       return `<tr>
         <td style="font-weight:600">${isAdmin ? schoolBadge(school) : ''}${nameCell}</td>
         <td>${targetLabel(t.target)}</td>
         <td style="color:${priorityColor[t.priority]};font-weight:600">${priorityLabels[t.priority]}</td>
-        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.reason)}</td>
+        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><button type="button" onclick="openTransferDetails('${t.id}')" style="background:none;border:none;padding:0;color:#1e293b;cursor:pointer;text-align:right;font-family:inherit;font-size:inherit;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:underline dotted" title="اضغط لعرض تفاصيل التحويل">${escapeHtml(t.reason)}</button></td>
         <td style="text-align:center">${t.deductedPoints ? `<span style="color:#dc2626;font-weight:700">${t.deductedPoints} نقطة</span>` : '<span class="muted">—</span>'}</td>
-        <td>${t.status==='PENDING' ? '<span style="color:#d97706">قيد المتابعة</span>' : '<span style="color:#16a34a">تم الحل</span>'}</td>
-        <td>${t.status==='PENDING' ? (canResolve(t) ? `<button class="del-btn" style="color:#1d7fd6" onclick="openTransferSolve('${t.id}')">حل المشكلة</button>` : '<span class="muted" style="font-size:12px">بانتظار الجهة المعنية</span>') : (t.solution ? `<div style="max-width:280px;white-space:pre-wrap"><span style="font-weight:700;color:#16a34a">الحل:</span> ${escapeHtml(t.solution)}</div><div class="muted small">بواسطة ${escapeHtml(t.resolvedByName || '—')}</div>` : '<span style="color:#16a34a">تم الحل</span>')}${isAdmin ? ` <button class="del-btn" style="color:#dc2626" onclick="deleteTransfer('${t.id}')" title="حذف التحويل (للمدير فقط)">🗑</button>` : ''}</td>
+        <td><span style="background:${stInfo.bg};color:${stInfo.color};padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700">${stInfo.label}</span></td>
+        <td style="white-space:nowrap"><button type="button" class="del-btn" style="color:#475569" onclick="openTransferDetails('${t.id}')" title="عرض التفاصيل">👁 عرض</button> ${t.status!=='RESOLVED' ? (canResolve(t) ? `<button class="del-btn" style="color:#1d7fd6" onclick="openTransferSolve('${t.id}')">حل المشكلة</button>` : '<span class="muted" style="font-size:12px">بانتظار الجهة المعنية</span>') : (t.solution ? `<div style="max-width:280px;white-space:pre-wrap"><span style="font-weight:700;color:#16a34a">الحل:</span> ${escapeHtml(t.solution)}</div><div class="muted small">بواسطة ${escapeHtml(t.resolvedByName || '—')}</div>` : '<span style="color:#16a34a">تم الحل</span>')}${isAdmin ? ` <button class="del-btn" style="color:#dc2626" onclick="deleteTransfer('${t.id}')" title="حذف التحويل (للمدير فقط)">🗑</button>` : ''}</td>
       </tr>`;
     }).join('');
 
+  const filterBtns = [
+    { key:'ALL', label:'الكل' },
+    { key:'NEW', label:'جديد' },
+    { key:'VIEWED', label:'تمت المشاهدة' },
+    { key:'IN_PROGRESS', label:'قيد المعالجة' },
+    { key:'RESOLVED', label:'مكتمل' }
+  ];
+
   return `
   <div class="header-row"><h1 class="page-title">${isStudent ? 'تحويلاتي' : 'التحويلات'}</h1>${isStudent ? '' : '<button class="btn-primary" onclick="toggleEl(\'transferForm\')">+ تحويل طالب</button>'}</div>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+    ${filterBtns.map(f => `<button type="button" class="${__transferStatusFilter===f.key?'btn-primary':'btn-secondary'}" style="padding:5px 12px;font-size:12px" onclick="__transferStatusFilter='${f.key}';renderApp()">${f.label}</button>`).join('')}
+  </div>
   ${isStudent ? '' : `<div id="transferForm" class="card mb" style="display:none">
     <div class="form-grid-3">
       <select id="tClassId" class="input" onchange="fillStudentMulti('tClassId','tStudentList','t')" data-tip="اختر الفصل الذي يدرس فيه الطالبات المطلوب تحويلهم"><option value="">اختر الفصل</option>${getClassesSorted().map(c=>`<option value="${c.id}">${escapeHtml(classLabel(c))}</option>`).join('')}</select>
@@ -19210,7 +19327,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=200', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=203', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
