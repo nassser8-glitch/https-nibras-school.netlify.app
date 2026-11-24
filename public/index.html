@@ -11037,6 +11037,349 @@ async function __eduCancelAdmin(){
   await openEduLinks();
 }
 
+/* ============ إحصائية الغياب التراكمية للعام الدراسي ============ */
+const ACADEMIC_MONTH_NAMES = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+
+function academicYearOfDate(dateStr){
+  const s = String(dateStr || '').slice(0, 10);
+  const p = s.split('-');
+  if(p.length < 2) return null;
+  const y = Number(p[0]), m = Number(p[1]);
+  if(!y || !m) return null;
+  return m >= 9 ? y : (y - 1);
+}
+
+function academicYearInfo(refDateStr, startYearOverride){
+  const ref = String(refDateStr || (typeof todayStr === 'function' ? todayStr() : new Date().toISOString().slice(0,10))).slice(0, 10);
+  let startYear = Number(startYearOverride);
+  if(!startYear || !Number.isFinite(startYear)){
+    startYear = academicYearOfDate(ref) || new Date().getFullYear();
+  }
+  const endYear = startYear + 1;
+  return {
+    startYear,
+    endYear,
+    start: startYear + '-09-01',
+    end: endYear + '-08-31',
+    label: startYear + ' / ' + endYear
+  };
+}
+
+function academicYearMonths(startYear, db, opts){
+  const sy = Number(startYear);
+  const ey = sy + 1;
+  const ref = String((opts && opts.refDate) || (typeof todayStr === 'function' ? todayStr() : new Date().toISOString().slice(0,10))).slice(0, 10);
+  const refYm = ref.slice(0, 7);
+  const seq = [
+    { y: sy, m: 9 }, { y: sy, m: 10 }, { y: sy, m: 11 }, { y: sy, m: 12 },
+    { y: ey, m: 1 }, { y: ey, m: 2 }, { y: ey, m: 3 }, { y: ey, m: 4 }, { y: ey, m: 5 }, { y: ey, m: 6 }
+  ];
+  const att = Array.isArray(db && db.attendance) ? db.attendance : [];
+  const hasJul = refYm === (ey + '-07') || refYm === (ey + '-08') || att.some(a => a && !a.deleted && String(a.date || '').startsWith(ey + '-07'));
+  const hasAug = refYm === (ey + '-08') || att.some(a => a && !a.deleted && String(a.date || '').startsWith(ey + '-08'));
+  if(hasJul || hasAug) seq.push({ y: ey, m: 7 });
+  if(hasAug) seq.push({ y: ey, m: 8 });
+  return seq.map(item => {
+    const mm = String(item.m).padStart(2, '0');
+    const lastDay = new Date(item.y, item.m, 0).getDate();
+    const key = item.y + '-' + mm;
+    const label = ACADEMIC_MONTH_NAMES[item.m - 1];
+    return {
+      key,
+      year: item.y,
+      month: item.m,
+      label,
+      fullLabel: label + ' ' + item.y,
+      start: key + '-01',
+      end: key + '-' + String(lastDay).padStart(2, '0')
+    };
+  });
+}
+
+function listAcademicYears(db, refDateStr){
+  const ref = String(refDateStr || (typeof todayStr === 'function' ? todayStr() : new Date().toISOString().slice(0,10))).slice(0, 10);
+  const curSy = academicYearInfo(ref).startYear;
+  const set = new Set([curSy]);
+  (Array.isArray(db && db.attendance) ? db.attendance : []).forEach(a => {
+    if(!a || a.deleted || !a.date) return;
+    const sy = academicYearOfDate(a.date);
+    if(sy && sy >= 2000 && sy <= curSy + 1) set.add(sy);
+  });
+  return Array.from(set).sort((a, b) => b - a).map(sy => academicYearInfo(ref, sy));
+}
+
+function computeCumulativeAbsenceStats(db, opts){
+  const o = opts || {};
+  const refDate = String(o.refDate || (typeof todayStr === 'function' ? todayStr() : new Date().toISOString().slice(0,10))).slice(0, 10);
+  const ay = academicYearInfo(refDate, o.academicYearStartYear);
+  const toDate = refDate < ay.end ? (refDate >= ay.start ? refDate : ay.end) : ay.end;
+  const months = academicYearMonths(ay.startYear, db, { refDate });
+
+  const grades = Array.isArray(db && db.grades) ? db.grades : [];
+  const classes = Array.isArray(db && db.classes) ? db.classes : [];
+  const allStudents = Array.isArray(db && db.students) ? db.students : [];
+  const gradeMap = new Map(grades.map(g => [g.id, g]));
+  const classMap = new Map(classes.map(c => [c.id, c]));
+
+  const visibleIdSet = o.visibleStudentIds ? new Set(o.visibleStudentIds) : (o.ids ? new Set(o.ids) : null);
+  const qNorm = String(o.studentQuery || '').trim().toLowerCase();
+
+  const matchingStudents = allStudents.filter(s => {
+    if(!s || s.active === false) return false;
+    if(visibleIdSet && !visibleIdSet.has(s.id)) return false;
+    const cls = s.classId ? classMap.get(s.classId) : null;
+    if(o.gradeId && (!cls || cls.gradeId !== o.gradeId)) return false;
+    if(o.classId && o.classId !== 'STAFF' && s.classId !== o.classId) return false;
+    if(o.studentId && s.id !== o.studentId) return false;
+    if(qNorm){
+      const nm = String(s.fullName || s.name || '').toLowerCase();
+      const no = String(s.studentNo || '').toLowerCase();
+      if(!nm.includes(qNorm) && !no.includes(qNorm)) return false;
+    }
+    return true;
+  });
+
+  const studentMap = new Map(matchingStudents.map(s => [s.id, s]));
+
+  const winFn = typeof __attWinner === 'function'
+    ? __attWinner
+    : ((a, b) => {
+        if(!a) return b;
+        if(!b) return a;
+        if(!!a.deleted !== !!b.deleted) return a.deleted ? a : b;
+        return (b._t || 0) > (a._t || 0) ? b : a;
+      });
+  const effFn = typeof __attEffStatus === 'function'
+    ? __attEffStatus
+    : (rec => (!rec ? 'PRESENT' : (rec.status === 'ABSENT' ? 'ABSENT' : (rec.status === 'LATE' ? 'LATE' : 'PRESENT'))));
+
+  const byStudentDay = new Map();
+  (Array.isArray(db && db.attendance) ? db.attendance : []).forEach(a => {
+    if(!a || !a.studentId || !a.date) return;
+    if(!studentMap.has(a.studentId)) return;
+    const ds = String(a.date).slice(0, 10);
+    if(ds < ay.start || ds > toDate) return;
+    const k = a.studentId + '|' + ds;
+    byStudentDay.set(k, byStudentDay.has(k) ? winFn(byStudentDay.get(k), a) : a);
+  });
+
+  const absTypeLbl = t => t === 'EXCUSED' ? 'بعذر / مستأذنة' : (t === 'ESCAPE' ? 'هروب من الحصة' : 'غياب عادي');
+
+  const studentAgg = new Map();
+  matchingStudents.forEach(s => {
+    const cls = s.classId ? classMap.get(s.classId) : null;
+    const grd = cls ? gradeMap.get(cls.gradeId) : null;
+    studentAgg.set(s.id, {
+      studentId: s.id,
+      studentNo: s.studentNo || '—',
+      name: s.fullName || s.name || '—',
+      gradeId: grd ? grd.id : '',
+      gradeName: grd ? grd.name : '—',
+      gradeOrder: grd && typeof grd.order === 'number' ? grd.order : 999,
+      classId: cls ? cls.id : '',
+      className: cls ? cls.name : '—',
+      annualTotal: 0,
+      byMonth: {},
+      lastAbsenceDate: '',
+      dates: []
+    });
+  });
+
+  const monthBuckets = new Map();
+  months.forEach(m => monthBuckets.set(m.key, { count: 0, students: new Set() }));
+
+  const dailyRecords = [];
+  let annualTotalAbsences = 0;
+
+  byStudentDay.forEach((rec, key) => {
+    if(!rec || rec.deleted) return;
+    if(effFn(rec) !== 'ABSENT') return;
+    const ds = String(rec.date).slice(0, 10);
+    const mKey = ds.slice(0, 7);
+    const st = studentAgg.get(rec.studentId);
+    if(!st) return;
+
+    annualTotalAbsences++;
+    st.annualTotal++;
+    st.byMonth[mKey] = (st.byMonth[mKey] || 0) + 1;
+    if(!st.lastAbsenceDate || ds > st.lastAbsenceDate) st.lastAbsenceDate = ds;
+    st.dates.push({ date: ds, absenceType: rec.absenceType || '', absenceTypeLabel: absTypeLbl(rec.absenceType) });
+
+    if(!monthBuckets.has(mKey)) monthBuckets.set(mKey, { count: 0, students: new Set() });
+    const mb = monthBuckets.get(mKey);
+    mb.count++;
+    mb.students.add(rec.studentId);
+
+    dailyRecords.push({
+      date: ds,
+      monthKey: mKey,
+      studentId: st.studentId,
+      studentName: st.name,
+      studentNo: st.studentNo,
+      gradeId: st.gradeId,
+      gradeName: st.gradeName,
+      classId: st.classId,
+      className: st.className,
+      absenceType: rec.absenceType || '',
+      absenceTypeLabel: absTypeLbl(rec.absenceType)
+    });
+  });
+
+  const currentMonthKey = refDate.slice(0, 7);
+  const selectedMonthKey = (o.monthKey && monthBuckets.has(o.monthKey)) ? o.monthKey : '';
+  const activeMonthKey = selectedMonthKey || currentMonthKey;
+
+  let runningCumulative = 0;
+  const monthlySeries = months.map(m => {
+    const mb = monthBuckets.get(m.key) || { count: 0, students: new Set() };
+    const isFuture = m.start > toDate;
+    if(!isFuture) runningCumulative += mb.count;
+    return {
+      key: m.key,
+      label: m.label,
+      fullLabel: m.fullLabel,
+      count: mb.count,
+      uniqueStudents: mb.students.size,
+      cumulativeTotal: isFuture ? null : runningCumulative,
+      isFuture,
+      isCurrent: m.key === currentMonthKey,
+      isSelected: m.key === selectedMonthKey
+    };
+  });
+
+  const currentMonthBucket = monthBuckets.get(currentMonthKey);
+  const currentMonthAbsences = currentMonthBucket ? currentMonthBucket.count : 0;
+  const selectedMonthBucket = selectedMonthKey ? monthBuckets.get(selectedMonthKey) : null;
+  const selectedMonthAbsences = selectedMonthBucket ? selectedMonthBucket.count : annualTotalAbsences;
+  const selectedMonthPct = annualTotalAbsences > 0
+    ? Math.round((selectedMonthAbsences / annualTotalAbsences) * 100)
+    : 0;
+
+  const byStudent = Array.from(studentAgg.values()).map(st => {
+    st.dates.sort((a, b) => b.date.localeCompare(a.date));
+    return {
+      ...st,
+      monthCount: st.byMonth[activeMonthKey] || 0
+    };
+  }).sort((a, b) => b.annualTotal - a.annualTotal || b.monthCount - a.monthCount || String(a.name).localeCompare(String(b.name), 'ar'));
+
+  const annualAbsentStudentsCount = byStudent.filter(s => s.annualTotal > 0).length;
+
+  const gradeAgg = new Map();
+  byStudent.forEach(st => {
+    const gid = st.gradeId || '__none__';
+    if(!gradeAgg.has(gid)){
+      gradeAgg.set(gid, {
+        gradeId: st.gradeId,
+        gradeName: st.gradeName,
+        gradeOrder: st.gradeOrder,
+        studentCount: 0,
+        absentStudentCount: 0,
+        annualTotal: 0,
+        monthCount: 0
+      });
+    }
+    const g = gradeAgg.get(gid);
+    g.studentCount++;
+    if(st.annualTotal > 0) g.absentStudentCount++;
+    g.annualTotal += st.annualTotal;
+    g.monthCount += st.monthCount;
+  });
+  const byGrade = Array.from(gradeAgg.values()).map(g => ({
+    ...g,
+    avgPerStudent: g.studentCount > 0 ? +(g.annualTotal / g.studentCount).toFixed(1) : 0
+  })).sort((a, b) => b.annualTotal - a.annualTotal || a.gradeOrder - b.gradeOrder);
+
+  const classAgg = new Map();
+  byStudent.forEach(st => {
+    const cid = st.classId || '__none__';
+    if(!classAgg.has(cid)){
+      classAgg.set(cid, {
+        classId: st.classId,
+        gradeName: st.gradeName,
+        gradeOrder: st.gradeOrder,
+        className: st.className,
+        label: (st.gradeName !== '—' ? st.gradeName + ' — ' : '') + st.className,
+        studentCount: 0,
+        absentStudentCount: 0,
+        annualTotal: 0,
+        monthCount: 0
+      });
+    }
+    const c = classAgg.get(cid);
+    c.studentCount++;
+    if(st.annualTotal > 0) c.absentStudentCount++;
+    c.annualTotal += st.annualTotal;
+    c.monthCount += st.monthCount;
+  });
+  const byClass = Array.from(classAgg.values()).map(c => ({
+    ...c,
+    avgPerStudent: c.studentCount > 0 ? +(c.annualTotal / c.studentCount).toFixed(1) : 0
+  })).sort((a, b) => b.annualTotal - a.annualTotal || a.gradeOrder - b.gradeOrder || String(a.className).localeCompare(String(b.className), 'ar'));
+
+  const filteredDaily = (selectedMonthKey
+    ? dailyRecords.filter(r => r.monthKey === selectedMonthKey)
+    : dailyRecords
+  ).sort((a, b) => b.date.localeCompare(a.date) || String(a.studentName).localeCompare(String(b.studentName), 'ar'));
+
+  const totalStudents = matchingStudents.length;
+  const avgPerStudent = totalStudents > 0 ? +(annualTotalAbsences / totalStudents).toFixed(1) : 0;
+
+  return {
+    academicYear: ay,
+    toDate,
+    totalStudents,
+    annualTotalAbsences,
+    annualAbsentStudentsCount,
+    avgPerStudent,
+    currentMonthKey,
+    currentMonthAbsences,
+    selectedMonthKey,
+    selectedMonthAbsences,
+    selectedMonthPct,
+    activeMonthKey,
+    monthlySeries,
+    byStudent,
+    byGrade,
+    byClass,
+    dailyRecords: filteredDaily
+  };
+}
+
+function buildAcademicYearAbsenceChart(statsOrDb, opts){
+  const stats = (statsOrDb && statsOrDb.monthlySeries)
+    ? statsOrDb
+    : computeCumulativeAbsenceStats(statsOrDb, opts);
+  const series = stats.monthlySeries || [];
+  const maxVal = Math.max(...series.map(m => m.count || 0), 1);
+  const clickable = !!(opts && opts.clickable);
+  const compact = !!(opts && opts.compact);
+  const barAreaH = compact ? 76 : 112;
+
+  const barsHtml = series.map(m => {
+    const h = m.count > 0 ? Math.max(8, Math.round((m.count / maxVal) * barAreaH)) : (m.isFuture ? 2 : 4);
+    const barColor = m.isFuture
+      ? '#e5e7eb'
+      : (m.isSelected ? '#1d4ed8' : (m.isCurrent ? '#dc2626' : '#f87171'));
+    const cumTxt = m.cumulativeTotal != null ? `تراكمي: ${m.cumulativeTotal}` : 'قادم';
+    const title = `${m.fullLabel}: ${m.count} غياب | ${cumTxt}`;
+    const clickAttr = clickable && !m.isFuture ? `onclick="selectAbsenceMonth('${m.key}')" style="cursor:pointer;` : `style="`;
+    const activeRing = m.isSelected ? 'background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:3px 2px;' : 'padding:3px 2px;';
+    return `<div ${clickAttr}flex:1;min-width:${compact?'26px':'44px'};display:flex;flex-direction:column;align-items:center;gap:2px;${activeRing}" title="${escapeHtml(title)}">
+      <div style="font-size:${compact?'10px':'11px'};font-weight:800;color:${m.isFuture?'#9ca3af':(m.isSelected?'#1d4ed8':'#b91c1c')}">${m.isFuture ? '—' : m.count}</div>
+      <div style="width:100%;max-width:${compact?'22px':'32px'};height:${barAreaH}px;display:flex;align-items:flex-end;justify-content:center;background:#f9fafb;border-radius:6px 6px 0 0;overflow:hidden">
+        <div style="width:100%;height:${h}px;background:${barColor};border-radius:6px 6px 0 0;transition:height .3s"></div>
+      </div>
+      <div style="font-size:${compact?'9.5px':'11px'};font-weight:${m.isCurrent||m.isSelected?'800':'600'};color:${m.isSelected?'#1d4ed8':(m.isCurrent?'#111827':'#6b7280')};white-space:nowrap">${m.label}</div>
+      ${!compact ? `<div style="font-size:9.5px;color:#64748b;white-space:nowrap" title="الإجمالي التراكمي حتى نهاية ${m.label}">${m.cumulativeTotal != null ? 'تراكمي ' + m.cumulativeTotal : ''}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const html = `<div style="display:flex;gap:${compact?'4px':'6px'};align-items:flex-end;overflow-x:auto;padding:4px 2px;direction:rtl">${barsHtml}</div>`;
+  const sig = stats.academicYear.label + '|' + stats.annualTotalAbsences + '|' + series.map(m => m.key + ':' + m.count + ':' + (m.isSelected?1:0)).join('|');
+  return { html, sig, stats };
+}
+
 /* ============ الرسوم البيانية ============ */
 // بناء عمود اليوم الواحد + الرسم الأسبوعي (الإثنين → الجمعة) من أي نسخة قاعدة بيانات
 function buildWeekChart(db, idsArr, offset){
@@ -11181,7 +11524,7 @@ function buildQuarterChart(db, idsArr){
   const now = new Date();
   const fmt = dt => dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
   const ids = Array.from(idsArr || []);
-  const year = now.getFullYear();
+  const ay = academicYearInfo(fmt(now));
   const mNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   // الفصل الدراسي = ٤ أشهر متتالية، والعام الدراسي يبدأ من سبتمبر (سبتمبر..ديسمبر = الفصل الأول)
   const fromSep = (now.getMonth() - 8 + 12) % 12;
@@ -11189,8 +11532,9 @@ function buildQuarterChart(db, idsArr){
   const qMonths = [];
   for(let i=0; i<4; i++){
     const m = (semStart + i) % 12;
-    const mStart = new Date(year, m, 1);
-    const mEnd = new Date(year, m+1, 0);
+    const mYear = m >= 8 ? ay.startYear : ay.endYear;
+    const mStart = new Date(mYear, m, 1);
+    const mEnd = new Date(mYear, m+1, 0);
     let presentSum = 0, daysWithRecs = 0;
     const dIter = new Date(mStart);
     while(dIter <= mEnd){
@@ -11215,7 +11559,19 @@ function buildQuarterChart(db, idsArr){
   const sig = qMonths.map(m => m.label+':'+m.rate+':'+m.total).join('|');
   return { html, sig };
 }
-// تحديث الرسوم الثلاثة (أسبوعي/شهري/فصلي) مباشرة من الخادم كل فترة —
+function __buildAyDashSummaryHtml(st){
+  return `
+    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+        <span style="font-size:12px;font-weight:800;color:#1e3a8a">📆 العام الدراسي ${escapeHtml(st.academicYear.label)} (تراكمي منذ ${escapeHtml(st.academicYear.start)})</span>
+        <span style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:800">إجمالي الغياب التراكمي: ${st.annualTotalAbsences} يوم</span>
+        <span style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;padding:2px 10px;border-radius:999px;font-size:11.5px;font-weight:700">الطالبات المتغيبات: ${st.annualAbsentStudentsCount}</span>
+        <span style="background:#f8fafc;color:#475569;border:1px solid #e2e8f0;padding:2px 10px;border-radius:999px;font-size:11.5px;font-weight:700">الشهر الحالي: ${st.currentMonthAbsences} يوم</span>
+      </div>
+      <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:11.5px" onclick="openCumulativeAbsenceReport()">📊 تفاصيل الغياب التراكمية ←</button>
+    </div>`;
+}
+// تحديث الرسوم (أسبوعي/شهري/فصلي + التراكمي السنوي) مباشرة من الخادم كل فترة —
 // فلا تتأثر الإحصائيات بتأخر/تعطل المزامنة المحلية
 async function __refreshAnalyticsCharts(){
   if(!__serverEnabled()) return;
@@ -11225,7 +11581,9 @@ async function __refreshAnalyticsCharts(){
   const boxW = document.getElementById('weekChartBox');
   const boxM = document.getElementById('monthChartBox');
   const boxQ = document.getElementById('quarterChartBox');
-  if(!boxW && !boxM && !boxQ) return;
+  const boxAY = document.getElementById('academicYearChartBox');
+  const sumAY = document.getElementById('academicYearSummaryBox');
+  if(!boxW && !boxM && !boxQ && !boxAY) return;
   try{
     const resp = await fetch(SYNC_API + school);
     if(resp.status === 401){ __handleAuthError(resp); return; }
@@ -11255,6 +11613,14 @@ async function __refreshAnalyticsCharts(){
       window.__quarterChartSig = qRes.sig;
       boxQ.innerHTML = qRes.html || '<p class="muted small">لا توجد بيانات</p>';
     }
+    if(boxAY || sumAY){
+      const ayRes = buildAcademicYearAbsenceChart(d, { ids, compact: true });
+      if(ayRes.sig !== (window.__ayChartSig || '')){
+        window.__ayChartSig = ayRes.sig;
+        if(sumAY) sumAY.innerHTML = __buildAyDashSummaryHtml(ayRes.stats);
+        if(boxAY) boxAY.innerHTML = ayRes.html || '';
+      }
+    }
   }catch(e){}
 }
 function renderCharts(d){
@@ -11268,6 +11634,10 @@ function renderCharts(d){
     const classIds = new Set(getClassesSorted().map(c => c.id));
     att = att.filter(a => classIds.has(a.classId));
   }
+
+  // 0) الإحصائية السنوية التراكمية للعام الدراسي + تطور الغياب خلال أشهر العام الدراسي
+  const ayRes = buildAcademicYearAbsenceChart(d, { ids: Array.from(visibleIds), compact: true });
+  window.__ayChartSig = ayRes.sig;
 
   // 1) رسم بياني أسبوعي (الإثنين → الجمعة)
   const weekIds = Array.from(visibleIds);
@@ -11288,7 +11658,12 @@ function renderCharts(d){
 
   return `
   <div class="card" style="padding:14px">
-    <p class="card-label" style="font-size:13px;margin-bottom:10px">📊 تحليلات مقارنة الغياب</p>
+    <p class="card-label" style="font-size:13px;margin-bottom:10px">📊 تحليلات مقارنة الغياب — الإحصائية التراكمية للعام الدراسي</p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;margin-bottom:12px">
+      <div id="academicYearSummaryBox">${__buildAyDashSummaryHtml(ayRes.stats)}</div>
+      <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:4px">📈 تطور الغياب خلال أشهر العام الدراسي</div>
+      <div id="academicYearChartBox">${ayRes.html}</div>
+    </div>
     <div class="grid grid-3" style="gap:12px">
       <div style="min-width:0">
         <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:4px">📅 أسبوعي — آخر 5 أيام</div>
@@ -17770,9 +18145,24 @@ function activityPartIds(a){
 }
 
 /* ============ التقارير ============ */
-let reportState = { type:'absence', classId:'', from:'', to:'', view:'table', rows:null, period:'month' };
+let reportState = {
+  type:'absence', classId:'', from:'', to:'', view:'table', rows:null, period:'month',
+  ayYear:null, absGradeId:'', absStudentId:'', absStudentQuery:'', absMonth:'', absGroup:'students'
+};
+function openCumulativeAbsenceReport(opts){
+  const o = opts || {};
+  reportState.type = 'absence';
+  if(o.classId !== undefined) reportState.classId = o.classId;
+  else if(reportState.classId === 'STAFF') reportState.classId = '';
+  if(o.gradeId !== undefined) reportState.absGradeId = o.gradeId;
+  if(o.studentId !== undefined) reportState.absStudentId = o.studentId;
+  if(o.monthKey !== undefined) reportState.absMonth = o.monthKey;
+  if(o.group) reportState.absGroup = o.group;
+  location.hash = '#/reports';
+  if(typeof renderApp === 'function') renderApp();
+}
 const reportTypes = [
-  { value:'absence', label:'تقرير الغياب', adminOnly:true }, { value:'late', label:'تقرير التأخر', adminOnly:true },
+  { value:'absence', label:'تقرير الغياب (التراكمي السنوي)', adminOnly:true }, { value:'late', label:'تقرير التأخر', adminOnly:true },
   { value:'notes', label:'تقرير الملاحظات' }, { value:'transfers', label:'تقرير التحويلات' }, { value:'assignments', label:'تقرير التكليفات' },
   { value:'messages', label:'تقرير الرسائل', adminOnly:true },
   { value:'activities', label:'تقرير الأنشطة والمشاركين', adminOnly:true },
@@ -17786,8 +18176,281 @@ const reportViews = [
   { value:'table', label:'📋 جدول' }, { value:'bars', label:'📊 سلالم (أعمدة)' }, { value:'pie', label:'🍩 دائرة' },
 ];
 const chartColors = ['#1d7fd6','#16a34a','#dc2626','#d97706','#7c3aed','#0d9488','#db2777','#64748b','#ca8a04','#0891b2'];
+function selectAbsenceMonth(monthKey){
+  reportState.absMonth = (reportState.absMonth === monthKey) ? '' : (monthKey || '');
+  const el = document.getElementById('rAbsMonth');
+  if(el) el.value = reportState.absMonth;
+  const res = document.getElementById('reportResults');
+  if(res) res.innerHTML = renderCumulativeAbsenceReport();
+}
+function selectAbsenceGroup(grp){
+  reportState.absGroup = grp || 'students';
+  const res = document.getElementById('reportResults');
+  if(res) res.innerHTML = renderCumulativeAbsenceReport();
+}
+function __getCumulativeAbsenceContext(){
+  const d = loadDB();
+  const user = currentUser();
+  const isAdmin = isManager(user);
+  const visibleStudentIds = isAdmin ? null : getVisibleStudents().map(s => s.id);
+  const ayList = listAcademicYears(d);
+  const ayYear = reportState.ayYear || (ayList[0] && ayList[0].startYear);
+  const stats = computeCumulativeAbsenceStats(d, {
+    academicYearStartYear: ayYear,
+    gradeId: reportState.absGradeId || '',
+    classId: (reportState.classId && reportState.classId !== 'STAFF') ? reportState.classId : '',
+    studentId: reportState.absStudentId || '',
+    studentQuery: reportState.absStudentQuery || '',
+    monthKey: reportState.absMonth || '',
+    visibleStudentIds,
+    isAdmin
+  });
+  return { d, stats, ayList };
+}
+function showStudentAbsenceModal(studentId){
+  const { stats } = __getCumulativeAbsenceContext();
+  const st = (stats.byStudent || []).find(s => s.studentId === studentId);
+  if(!st) return;
+  const monthsRows = stats.monthlySeries.map(m => {
+    const cnt = st.byMonth[m.key] || 0;
+    return `<tr>
+      <td>${escapeHtml(m.fullLabel)}</td>
+      <td style="font-weight:800;color:${cnt>0?'#dc2626':'#6b7280'}">${cnt}</td>
+    </tr>`;
+  }).join('');
+  const datesRows = st.dates.length
+    ? st.dates.map(x => `<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml(x.absenceTypeLabel)}</td></tr>`).join('')
+    : '<tr><td colspan="2" class="muted" style="text-align:center">لا توجد أيام غياب مسجلة في هذا العام الدراسي</td></tr>';
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-card" style="max-width:620px;width:95%">
+      <div class="modal-head">
+        <h3>📋 سجل غياب الطالبة — ${escapeHtml(st.name)}</h3>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      </div>
+      <div class="modal-body" style="max-height:75vh;overflow-y:auto">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+          <span style="background:#eff6ff;color:#1e40af;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700">الصف: ${escapeHtml(st.gradeName)} — ${escapeHtml(st.className)}</span>
+          <span style="background:#fef2f2;color:#b91c1c;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:800">إجمالي العام الدراسي (${escapeHtml(stats.academicYear.label)}): ${st.annualTotal} يوم</span>
+        </div>
+        <div class="grid grid-2" style="gap:12px">
+          <div>
+            <div style="font-size:12px;font-weight:700;margin-bottom:6px">📆 التوزيع حسب الشهر</div>
+            <table class="data-table"><thead><tr><th>الشهر</th><th>أيام الغياب</th></tr></thead><tbody>${monthsRows}</tbody></table>
+          </div>
+          <div>
+            <div style="font-size:12px;font-weight:700;margin-bottom:6px">📅 التواريخ المسجلة (${st.dates.length})</div>
+            <table class="data-table"><thead><tr><th>التاريخ</th><th>النوع</th></tr></thead><tbody>${datesRows}</tbody></table>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  overlay.onclick = e => { if(e.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
+}
+function renderCumulativeAbsenceReport(){
+  const { stats } = __getCumulativeAbsenceContext();
+  const chart = buildAcademicYearAbsenceChart(stats, { clickable: true, compact: false });
+  const selM = stats.selectedMonthKey
+    ? stats.monthlySeries.find(m => m.key === stats.selectedMonthKey)
+    : null;
+  const grp = reportState.absGroup || 'students';
+  const tabs = [
+    { key:'students', label:'👩‍🎓 حسب الطالبة' },
+    { key:'grades', label:'🏫 حسب الصف' },
+    { key:'classes', label:'🚪 حسب الفصل' },
+    { key:'months', label:'📆 حسب الشهر' },
+    { key:'daily', label:'📋 السجل اليومي' }
+  ];
+
+  const kpiHtml = `
+  <div class="grid grid-4" style="gap:10px;margin-bottom:12px">
+    <div class="card" style="padding:12px;border-right:4px solid #dc2626;margin:0">
+      <div class="small muted">إجمالي الغياب التراكمي للعام الدراسي</div>
+      <div style="font-size:24px;font-weight:900;color:#dc2626;margin:4px 0">${stats.annualTotalAbsences} <span style="font-size:12px;font-weight:700">يوم</span></div>
+      <div class="small" style="color:#475569">العام الدراسي ${escapeHtml(stats.academicYear.label)} (من ${escapeHtml(stats.academicYear.start)} حتى ${escapeHtml(stats.toDate)})</div>
+    </div>
+    <div class="card" style="padding:12px;border-right:4px solid #ea580c;margin:0">
+      <div class="small muted">الطالبات المتغيبات (تراكمي)</div>
+      <div style="font-size:24px;font-weight:900;color:#ea580c;margin:4px 0">${stats.annualAbsentStudentsCount} <span style="font-size:12px;font-weight:700">من ${stats.totalStudents}</span></div>
+      <div class="small" style="color:#475569">متوسط الغياب: ${stats.avgPerStudent} يوم / طالبة</div>
+    </div>
+    <div class="card" style="padding:12px;border-right:4px solid #2563eb;margin:0">
+      <div class="small muted">${selM ? 'غياب شهر ' + escapeHtml(selM.fullLabel) : 'غياب الشهر الحالي'}</div>
+      <div style="font-size:24px;font-weight:900;color:#2563eb;margin:4px 0">${selM ? stats.selectedMonthAbsences : stats.currentMonthAbsences} <span style="font-size:12px;font-weight:700">يوم</span></div>
+      <div class="small" style="color:#475569">${selM ? `يمثل ${stats.selectedMonthPct}% من الإجمالي السنوي (${stats.annualTotalAbsences})` : 'الإجمالي السنوي لا يتصفّر عند انتقال الشهر'}</div>
+    </div>
+    <div class="card" style="padding:12px;border-right:4px solid #16a34a;margin:0">
+      <div class="small muted">حالة السجلات التاريخية</div>
+      <div style="font-size:15px;font-weight:800;color:#15803d;margin:6px 0">🔒 محفوظة بالكامل</div>
+      <div class="small" style="color:#475569">تُحتسب تراكمياً منذ بداية العام الدراسي دون حذف</div>
+    </div>
+  </div>`;
+
+  const chartHtml = `
+  <div class="card mb" style="padding:14px">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <div>
+        <div style="font-size:13.5px;font-weight:800;color:#1e293b">📈 تطور الغياب خلال أشهر العام الدراسي (${escapeHtml(stats.academicYear.label)})</div>
+        <div class="small muted">اضغط على أي شهر لعرض تفاصيله مع بقاء الإجمالي السنوي التراكمي ظاهراً في الأعلى</div>
+      </div>
+      ${selM ? `<button type="button" class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="selectAbsenceMonth('')">✕ إلغاء تحديد الشهر (${escapeHtml(selM.label)})</button>` : ''}
+    </div>
+    ${chart.html}
+  </div>`;
+
+  const tabsHtml = `
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+    ${tabs.map(t => `<button type="button" class="${grp===t.key?'btn-primary':'btn-secondary'}" style="padding:6px 12px;font-size:12.5px" onclick="selectAbsenceGroup('${t.key}')">${t.label}</button>`).join('')}
+  </div>`;
+
+  let tableHtml = '';
+  if(grp === 'students'){
+    const list = stats.byStudent.filter(s => s.annualTotal > 0 || reportState.absStudentId || reportState.absStudentQuery || reportState.classId || reportState.absGradeId);
+    if(list.length === 0){
+      tableHtml = `<div class="card" style="text-align:center;padding:28px;color:#9ca3af">لا توجد حالات غياب مسجلة في هذا العام الدراسي ضمن الفلاتر المحددة</div>`;
+    } else {
+      const mColTitle = selM ? `غياب ${escapeHtml(selM.label)}` : 'الشهر الحالي';
+      tableHtml = `<div class="card table-card"><table class="data-table">
+        <thead><tr><th>الطالبة</th><th>الرقم</th><th>الصف</th><th>الفصل</th><th>إجمالي العام الدراسي (تراكمي)</th><th>${mColTitle}</th><th>آخر غياب</th><th>تفاصيل</th></tr></thead>
+        <tbody>${list.map(s => `<tr>
+          <td style="font-weight:700">${escapeHtml(s.name)}</td>
+          <td>${escapeHtml(s.studentNo)}</td>
+          <td>${escapeHtml(s.gradeName)}</td>
+          <td>${escapeHtml(s.className)}</td>
+          <td style="font-weight:900;color:${s.annualTotal>0?'#dc2626':'#6b7280'}">${s.annualTotal} يوم</td>
+          <td style="font-weight:700;color:#2563eb">${s.monthCount}</td>
+          <td>${escapeHtml(s.lastAbsenceDate || '—')}</td>
+          <td><button type="button" class="btn-secondary" style="padding:2px 8px;font-size:11.5px" onclick="showStudentAbsenceModal('${s.studentId}')">📅 عرض الأشهر</button></td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+    }
+  } else if(grp === 'grades'){
+    const mColTitle = selM ? `غياب ${escapeHtml(selM.label)}` : 'الشهر الحالي';
+    tableHtml = stats.byGrade.length === 0
+      ? `<div class="card" style="text-align:center;padding:28px;color:#9ca3af">لا توجد صفوف مطابقة</div>`
+      : `<div class="card table-card"><table class="data-table">
+        <thead><tr><th>الصف</th><th>عدد الطالبات</th><th>الطالبات المتغيبات</th><th>إجمالي الغياب التراكمي</th><th>${mColTitle}</th><th>المتوسط / طالبة</th></tr></thead>
+        <tbody>${stats.byGrade.map(g => `<tr>
+          <td style="font-weight:700">${escapeHtml(g.gradeName)}</td>
+          <td>${g.studentCount}</td>
+          <td>${g.absentStudentCount}</td>
+          <td style="font-weight:900;color:#dc2626">${g.annualTotal} يوم</td>
+          <td style="font-weight:700;color:#2563eb">${g.monthCount}</td>
+          <td>${g.avgPerStudent}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+  } else if(grp === 'classes'){
+    const mColTitle = selM ? `غياب ${escapeHtml(selM.label)}` : 'الشهر الحالي';
+    tableHtml = stats.byClass.length === 0
+      ? `<div class="card" style="text-align:center;padding:28px;color:#9ca3af">لا توجد فصول مطابقة</div>`
+      : `<div class="card table-card"><table class="data-table">
+        <thead><tr><th>الصف</th><th>الفصل</th><th>عدد الطالبات</th><th>الطالبات المتغيبات</th><th>إجمالي الغياب التراكمي</th><th>${mColTitle}</th><th>المتوسط / طالبة</th></tr></thead>
+        <tbody>${stats.byClass.map(c => `<tr>
+          <td>${escapeHtml(c.gradeName)}</td>
+          <td style="font-weight:700">${escapeHtml(c.className)}</td>
+          <td>${c.studentCount}</td>
+          <td>${c.absentStudentCount}</td>
+          <td style="font-weight:900;color:#dc2626">${c.annualTotal} يوم</td>
+          <td style="font-weight:700;color:#2563eb">${c.monthCount}</td>
+          <td>${c.avgPerStudent}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+  } else if(grp === 'months'){
+    tableHtml = `<div class="card table-card"><table class="data-table">
+      <thead><tr><th>الشهر</th><th>حالات الغياب في الشهر</th><th>الطالبات المتغيبات</th><th>الإجمالي التراكمي حتى نهاية الشهر</th><th>النسبة من الإجمالي السنوي</th></tr></thead>
+      <tbody>${stats.monthlySeries.map(m => {
+        const pct = stats.annualTotalAbsences > 0 ? Math.round((m.count / stats.annualTotalAbsences) * 100) : 0;
+        const rowStyle = m.isSelected ? 'background:#eff6ff;font-weight:700;' : '';
+        return `<tr style="${rowStyle}">
+          <td>${escapeHtml(m.fullLabel)} ${m.isCurrent?'<span style="font-size:10px;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:999px">الحالي</span>':''}</td>
+          <td style="font-weight:800;color:${m.count>0?'#dc2626':'#6b7280'}">${m.isFuture ? '—' : m.count}</td>
+          <td>${m.isFuture ? '—' : m.uniqueStudents}</td>
+          <td style="font-weight:900;color:#1e3a8a">${m.cumulativeTotal != null ? m.cumulativeTotal + ' يوم' : '—'}</td>
+          <td>${m.isFuture ? '—' : pct + '%'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+  } else {
+    const recs = stats.dailyRecords || [];
+    tableHtml = recs.length === 0
+      ? `<div class="card" style="text-align:center;padding:28px;color:#9ca3af">لا توجد سجلات غياب يومية مطابقة</div>`
+      : `<div class="card table-card"><table class="data-table">
+        <thead><tr><th>التاريخ</th><th>الطالبة</th><th>الرقم</th><th>الصف</th><th>الفصل</th><th>نوع الغياب</th></tr></thead>
+        <tbody>${recs.map(r => `<tr>
+          <td>${escapeHtml(r.date)}</td>
+          <td style="font-weight:700">${escapeHtml(r.studentName)}</td>
+          <td>${escapeHtml(r.studentNo)}</td>
+          <td>${escapeHtml(r.gradeName)}</td>
+          <td>${escapeHtml(r.className)}</td>
+          <td>${escapeHtml(r.absenceTypeLabel)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+  }
+
+  return kpiHtml + chartHtml + tabsHtml + tableHtml;
+}
+function computeCumulativeAbsenceExportRows(){
+  const { stats } = __getCumulativeAbsenceContext();
+  const grp = reportState.absGroup || 'students';
+  if(grp === 'grades'){
+    return stats.byGrade.map(g => ({
+      'العام الدراسي': stats.academicYear.label,
+      'الصف': g.gradeName,
+      'عدد الطالبات': g.studentCount,
+      'الطالبات المتغيبات': g.absentStudentCount,
+      'إجمالي الغياب التراكمي': g.annualTotal,
+      'غياب الشهر': g.monthCount,
+      'المتوسط لكل طالبة': g.avgPerStudent
+    }));
+  }
+  if(grp === 'classes'){
+    return stats.byClass.map(c => ({
+      'العام الدراسي': stats.academicYear.label,
+      'الصف': c.gradeName,
+      'الفصل': c.className,
+      'عدد الطالبات': c.studentCount,
+      'الطالبات المتغيبات': c.absentStudentCount,
+      'إجمالي الغياب التراكمي': c.annualTotal,
+      'غياب الشهر': c.monthCount,
+      'المتوسط لكل طالبة': c.avgPerStudent
+    }));
+  }
+  if(grp === 'months'){
+    return stats.monthlySeries.map(m => ({
+      'العام الدراسي': stats.academicYear.label,
+      'الشهر': m.fullLabel,
+      'حالات الغياب في الشهر': m.isFuture ? 0 : m.count,
+      'الطالبات المتغيبات': m.isFuture ? 0 : m.uniqueStudents,
+      'الإجمالي التراكمي حتى نهاية الشهر': m.cumulativeTotal != null ? m.cumulativeTotal : ''
+    }));
+  }
+  if(grp === 'daily'){
+    return (stats.dailyRecords || []).map(r => ({
+      'التاريخ': r.date,
+      'الطالبة': r.studentName,
+      'الرقم': r.studentNo,
+      'الصف': r.gradeName,
+      'الفصل': r.className,
+      'نوع الغياب': r.absenceTypeLabel
+    }));
+  }
+  return stats.byStudent.filter(s => s.annualTotal > 0).map(s => ({
+    'العام الدراسي': stats.academicYear.label,
+    'الطالبة': s.name,
+    'الرقم': s.studentNo,
+    'الصف': s.gradeName,
+    'الفصل': s.className,
+    'إجمالي الغياب التراكمي': s.annualTotal,
+    'غياب الشهر': s.monthCount,
+    'آخر غياب': s.lastAbsenceDate || '—'
+  }));
+}
 function renderReports(){
+  const d = loadDB();
   const classes = getClassesSorted();
+  const grades = (d.grades || []).slice().sort((a,b) => (a.order||0) - (b.order||0));
   const user = currentUser();
   const isAdmin = isManager(user);
   // التقارير الإدارية (الغياب/التأخر وما دونها) هي جوهر عمل «وكيل الشؤون المدرسية» — يراها مع فئات التقارير العامة
@@ -17795,29 +18458,62 @@ function renderReports(){
   const types = reportTypes.filter(t => !t.adminOnly || repAllowedAdmin(t));
   if(types.length && !types.some(t => t.value === reportState.type)) reportState.type = types[0].value;
   const isEng = reportState.type === 'teacher_engagement' || reportState.type === 'teacher_logins' || reportState.type === 'points_detail' || reportState.type === 'sync_log';
+  const isCumAbsence = reportState.type === 'absence' && reportState.classId !== 'STAFF';
   const periodOptions = [
     { value:'day', label:'اليوم' }, { value:'week', label:'هذا الأسبوع' }, { value:'month', label:'هذا الشهر' },
     { value:'term', label:'هذا الفصل' }, { value:'year', label:'منذ بداية العام' },
   ];
+
+  let extraControls = '';
+  let initialResults = '';
+  if(isCumAbsence){
+    const ayList = listAcademicYears(d);
+    const activeAyYear = reportState.ayYear || (ayList[0] && ayList[0].startYear);
+    const ayMonths = academicYearMonths(activeAyYear, d);
+    const filteredClasses = reportState.absGradeId
+      ? classes.filter(c => c.gradeId === reportState.absGradeId)
+      : classes;
+    const studentsList = getVisibleStudents()
+      .filter(s => (!reportState.absGradeId || (classById(s.classId)?.gradeId === reportState.absGradeId)) && (!reportState.classId || s.classId === reportState.classId))
+      .sort((a,b) => String(a.fullName||'').localeCompare(String(b.fullName||''), 'ar'));
+    extraControls = `
+      <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">العام الدراسي</label>
+        <select id="rAyYear" class="input" style="min-width:130px" onchange="reportState.ayYear=Number(this.value)||null;reportState.absMonth='';renderApp()">${ayList.map(ay=>`<option value="${ay.startYear}" ${ay.startYear===activeAyYear?'selected':''}>${escapeHtml(ay.label)}</option>`).join('')}</select></div>
+      <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">الصف</label>
+        <select id="rAbsGradeId" class="input" style="min-width:140px" onchange="reportState.absGradeId=this.value;reportState.classId='';reportState.absStudentId='';renderApp()"><option value="">كل الصفوف</option>${grades.map(g=>`<option value="${g.id}" ${g.id===reportState.absGradeId?'selected':''}>${escapeHtml(g.name)}</option>`).join('')}</select></div>
+      <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفصل</label>
+        <select id="rClassId" class="input" style="min-width:160px" onchange="reportState.classId=this.value;reportState.absStudentId='';renderApp()"><option value="">كل الفصول</option><option value="STAFF" ${reportState.classId==='STAFF'?'selected':''}>👥 المعلمون والإداريون</option>${filteredClasses.map(c=>`<option value="${c.id}" ${c.id===reportState.classId?'selected':''}>${escapeHtml(classLabel(c))}</option>`).join('')}</select></div>
+      <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">الطالبة</label>
+        <select id="rAbsStudentId" class="input" style="min-width:160px" onchange="reportState.absStudentId=this.value;previewReport()"><option value="">كل الطالبات</option>${studentsList.map(s=>`<option value="${s.id}" ${s.id===reportState.absStudentId?'selected':''}>${escapeHtml(s.fullName||s.name)}</option>`).join('')}</select></div>
+      <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">بحث بالاسم/الرقم</label>
+        <input type="text" id="rAbsStudentQ" class="input" style="min-width:140px" placeholder="اسم الطالبة..." value="${escapeHtml(reportState.absStudentQuery||'')}" oninput="reportState.absStudentQuery=this.value;previewReport()" /></div>
+      <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">تحليل حسب الشهر</label>
+        <select id="rAbsMonth" class="input" style="min-width:160px" onchange="reportState.absMonth=this.value;previewReport()"><option value="">كل أشهر العام الدراسي (تراكمي)</option>${ayMonths.map(m=>`<option value="${m.key}" ${m.key===reportState.absMonth?'selected':''}>${escapeHtml(m.fullLabel)}</option>`).join('')}</select></div>`;
+    initialResults = renderCumulativeAbsenceReport();
+  } else {
+    extraControls = isEng ? `<div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفترة</label>
+      <select id="rPeriod" class="input" style="min-width:170px" onchange="reportState.period=this.value" data-tip="${reportState.type === 'teacher_logins' ? 'اختر الفترة الزمنية لعدّ دخولات المعلمات (التحقق من النشاط/المداومة داخل النظام)' : 'اختر الفترة الزمنية لقياس تفاعل المعلمين — يُحسب النشاط الفعلي داخل النظام (الغياب والملاحظات والتحويلات والأنشطة والفيديوهات)'}">${periodOptions.map(p=>`<option value="${p.value}" ${p.value===reportState.period?'selected':''}>${p.label}</option>`).join('')}</select></div>` : `
+    <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفصل (اختياري)</label>
+      <select id="rClassId" class="input" style="min-width:170px" onchange="reportState.classId=this.value;${reportState.type==='absence'?'renderApp()':''}" data-tip="اختر فصلًا محددًا لعرض التقرير له فقط، أو (المعلمون والإداريون) لعرض غياب/تأخر الكادر، أو اترك (كل الفصول) لعرض شامل"><option value="">كل الفصول</option><option value="STAFF" ${reportState.classId==='STAFF'?'selected':''}>👥 المعلمون والإداريون</option>${classes.map(c=>`<option value="${c.id}" ${c.id===reportState.classId?'selected':''}>${escapeHtml(classLabel(c))}</option>`).join('')}</select></div>
+    <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">من تاريخ</label><input type="date" id="rFrom" class="input" value="${reportState.from}" onchange="reportState.from=this.value" data-tip="بداية الفترة الزمنية المشمولة في التقرير" /></div>
+    <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">إلى تاريخ</label><input type="date" id="rTo" class="input" value="${reportState.to}" onchange="reportState.to=this.value" data-tip="نهاية الفترة الزمنية المشمولة في التقرير" /></div>
+    <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">طريقة العرض</label>
+      <select id="rView" class="input" style="min-width:150px" onchange="reportState.view=this.value" data-tip="طريقة عرض نتائج التقرير: جدول تفصيلي، أعمدة، أو دائرة بيانية">${reportViews.map(v=>`<option value="${v.value}" ${v.value===reportState.view?'selected':''}>${v.label}</option>`).join('')}</select></div>`;
+    initialResults = reportState.rows ? renderReportResult(reportState.rows) : '';
+  }
+
   return `
   <h1 class="page-title">التقارير</h1>
   <div class="card mb form-inline">
     <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">نوع التقرير</label>
-      <select id="rType" class="input" style="min-width:170px" onchange="reportState.type=this.value;reportState.rows=null;reportState.period='month';renderApp()" data-tip="اختر نوع التقرير المطلوب">${types.map(t=>`<option value="${t.value}" ${t.value===reportState.type?'selected':''}>${t.label}</option>`).join('')}</select></div>
-    ${isEng ? `<div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفترة</label>
-      <select id="rPeriod" class="input" style="min-width:170px" onchange="reportState.period=this.value" data-tip="${reportState.type === 'teacher_logins' ? 'اختر الفترة الزمنية لعدّ دخولات المعلمات (التحقق من النشاط/المداومة داخل النظام)' : 'اختر الفترة الزمنية لقياس تفاعل المعلمين — يُحسب النشاط الفعلي داخل النظام (الغياب والملاحظات والتحويلات والأنشطة والفيديوهات)'}">${periodOptions.map(p=>`<option value="${p.value}" ${p.value===reportState.period?'selected':''}>${p.label}</option>`).join('')}</select></div>` : `
-    <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">الفصل (اختياري)</label>
-      <select id="rClassId" class="input" style="min-width:170px" onchange="reportState.classId=this.value" data-tip="اختر فصلًا محددًا لعرض التقرير له فقط، أو (المعلمون والإداريون) لعرض غياب/تأخر الكادر، أو اترك (كل الفصول) لعرض شامل"><option value="">كل الفصول</option><option value="STAFF" ${reportState.classId==='STAFF'?'selected':''}>👥 المعلمون والإداريون</option>${classes.map(c=>`<option value="${c.id}" ${c.id===reportState.classId?'selected':''}>${escapeHtml(classLabel(c))}</option>`).join('')}</select></div>
-    <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">من تاريخ</label><input type="date" id="rFrom" class="input" value="${reportState.from}" onchange="reportState.from=this.value" data-tip="بداية الفترة الزمنية المشمولة في التقرير" /></div>
-    <div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">إلى تاريخ</label><input type="date" id="rTo" class="input" value="${reportState.to}" onchange="reportState.to=this.value" data-tip="نهاية الفترة الزمنية المشمولة في التقرير" /></div>`}
-    ${isEng ? '' : `<div><label class="small" style="display:block;font-weight:600;margin-bottom:4px">طريقة العرض</label>
-      <select id="rView" class="input" style="min-width:150px" onchange="reportState.view=this.value" data-tip="طريقة عرض نتائج التقرير: جدول تفصيلي، أعمدة، أو دائرة بيانية">${reportViews.map(v=>`<option value="${v.value}" ${v.value===reportState.view?'selected':''}>${v.label}</option>`).join('')}</select></div>`}
+      <select id="rType" class="input" style="min-width:190px" onchange="reportState.type=this.value;reportState.rows=null;reportState.period='month';renderApp()" data-tip="اختر نوع التقرير المطلوب">${types.map(t=>`<option value="${t.value}" ${t.value===reportState.type?'selected':''}>${t.label}</option>`).join('')}</select></div>
+    ${extraControls}
     <button class="btn-secondary" onclick="previewReport()">🔍 عرض</button>
     <button class="btn-primary" onclick="exportReport()">⬇ تصدير Excel</button>
     <button class="btn-secondary" onclick="__refreshSchool(getActiveSchool()); setTimeout(renderApp, 700)" title="يجلب من الخادم أحدث حالة الحسابات (أول دخول/مفعّل) وسجلات النقاط — تصحيح أي نسخة محلية قديمة">🔄 تحديث مباشر من الخادم</button>
     ${reportState.type === 'points_detail' ? `<button class="btn-secondary" style="color:#b91c1c" onclick="__cleanupOrphanPointRows()" title="مسح سجلات النقاط المعزولة: بلا طالبة أو بلا معلمة (بنين محذوفة/بيانات قديمة) — تبقى كل طالبة مسجلة كما هي">🧹 مسح المعزول</button>` : ''}
   </div>
-  <div id="reportResults">${reportState.rows ? renderReportResult(reportState.rows) : ''}</div>
+  <div id="reportResults">${initialResults}</div>
   `;
 }
 // تسمية الكادر في تقريري الغياب والتأخر: المعلمات (TEACHER) عن بقية الأدوار الإدارية
@@ -18245,11 +18941,19 @@ function renderColumns(data){
   </div></div>`;
 }
 function previewReport(){
+  const resEl = document.getElementById('reportResults');
+  if(!resEl) return;
+  if(reportState.type === 'absence' && reportState.classId !== 'STAFF'){
+    resEl.innerHTML = renderCumulativeAbsenceReport();
+    return;
+  }
   reportState.rows = computeReportRows();
-  document.getElementById('reportResults').innerHTML = renderReportResult(reportState.rows);
+  resEl.innerHTML = renderReportResult(reportState.rows);
 }
 function exportReport(){
-  const rows = computeReportRows();
+  const rows = (reportState.type === 'absence' && reportState.classId !== 'STAFF')
+    ? computeCumulativeAbsenceExportRows()
+    : computeReportRows();
   if(rows.length === 0){ alert('لا توجد بيانات للتصدير'); return; }
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
