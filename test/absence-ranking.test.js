@@ -127,3 +127,23 @@ test('4) إزالة التعديل السابق بالكامل والمحافظ�
   assert.ok(HTML.includes('id="absenceRankingBox"'));
   assert.ok(HTML.includes('id="reportsAbsenceRankingBox"'));
 });
+
+test('5) استقلالية خيار إظهار بدون غياب بين التقارير والواجهة الرئيسية', () => {
+  const E = loadRankingEngine();
+  const db = makeSampleDB();
+  const dashHtml = E.renderAbsenceRankingTable(db);
+  const repHtml = E.renderAbsenceRankingTable(db, { isReport: true });
+
+  assert.ok(dashHtml.includes('__toggleAbsRankZero(this.checked)'));
+  assert.ok(repHtml.includes('__toggleReportsAbsRankZero(this.checked)'));
+  assert.equal(dashHtml.includes('هند سعد'), false);
+  assert.equal(repHtml.includes('هند سعد'), false);
+
+  E.loadDB = () => db;
+  E.currentUser = () => ({ role: 'ADMIN' });
+  E.seesAllClasses = () => true;
+  E.document = { getElementById: () => null };
+  E.__toggleReportsAbsRankZero(true);
+  assert.equal(E.renderAbsenceRankingTable(db, { isReport: true }).includes('هند سعد'), true);
+  assert.equal(E.renderAbsenceRankingTable(db).includes('هند سعد'), false);
+});

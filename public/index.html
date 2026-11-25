@@ -11053,6 +11053,7 @@ async function __eduCancelAdmin(){
 
 /* ============ ترتيب الطالبات حسب الغياب (منذ بداية العام الدراسي) ============ */
 let __absRankShowZero = false;
+let __reportsAbsRankShowZero = false;
 function __academicYearStartKey(refDateStr){
   const ref = String(refDateStr || (typeof todayStr === 'function' ? todayStr() : new Date().toISOString().slice(0,10))).slice(0, 10);
   const p = ref.split('-');
@@ -11139,11 +11140,16 @@ function __toggleAbsRankZero(checked){
   const d = loadDB();
   const user = currentUser();
   const visibleIds = (user && !seesAllClasses(user)) ? getVisibleStudents().map(s => s.id) : null;
-  const html = renderAbsenceRankingTable(d, { visibleStudentIds: visibleIds });
   const box1 = document.getElementById('absenceRankingBox');
-  if(box1) box1.innerHTML = html;
+  if(box1) box1.innerHTML = renderAbsenceRankingTable(d, { visibleStudentIds: visibleIds });
+}
+function __toggleReportsAbsRankZero(checked){
+  __reportsAbsRankShowZero = !!checked;
+  const d = loadDB();
+  const user = currentUser();
+  const visibleIds = (user && seesAllClasses(user)) ? null : (user ? getVisibleStudents().map(s => s.id) : null);
   const box2 = document.getElementById('reportsAbsenceRankingBox');
-  if(box2) box2.innerHTML = html;
+  if(box2) box2.innerHTML = renderAbsenceRankingTable(d, { isReport: true, visibleStudentIds: visibleIds });
 }
 function __showStudentAbsenceDatesModal(studentId){
   const d = loadDB();
@@ -11177,8 +11183,11 @@ function __showStudentAbsenceDatesModal(studentId){
 }
 function renderAbsenceRankingTable(db, opts){
   const o = opts || {};
+  const isReport = !!o.isReport;
+  const showZero = isReport ? __reportsAbsRankShowZero : __absRankShowZero;
+  const toggleFn = isReport ? '__toggleReportsAbsRankZero' : '__toggleAbsRankZero';
   const res = computeStudentAbsenceRanking(db, {
-    includeZero: __absRankShowZero,
+    includeZero: showZero,
     visibleStudentIds: o.visibleStudentIds || null
   });
   const rowsHtml = res.rows.length
@@ -11194,7 +11203,7 @@ function renderAbsenceRankingTable(db, opts){
     <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
       <div style="font-size:13px;font-weight:800;color:#1e293b">📊 ترتيب الطالبات حسب الغياب <span class="small muted" style="font-weight:500">(منذ ${escapeHtml(res.startDate)} حتى ${escapeHtml(res.refDate)})</span></div>
       <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#475569;cursor:pointer">
-        <input type="checkbox" ${__absRankShowZero ? 'checked' : ''} onchange="__toggleAbsRankZero(this.checked)" />
+        <input type="checkbox" ${showZero ? 'checked' : ''} onchange="${toggleFn}(this.checked)" />
         إظهار الطالبات بدون غياب
       </label>
     </div>
@@ -18097,7 +18106,7 @@ function renderReports(){
     ${reportState.type === 'points_detail' ? `<button class="btn-secondary" style="color:#b91c1c" onclick="__cleanupOrphanPointRows()" title="مسح سجلات النقاط المعزولة: بلا طالبة أو بلا معلمة (بنين محذوفة/بيانات قديمة) — تبقى كل طالبة مسجلة كما هي">🧹 مسح المعزول</button>` : ''}
   </div>
   <div id="reportResults">${reportState.rows ? renderReportResult(reportState.rows) : ''}</div>
-  ${reportState.type === 'absence' && reportState.classId !== 'STAFF' ? `<div id="reportsAbsenceRankingBox" class="card" style="margin-top:12px;padding:14px">${renderAbsenceRankingTable(loadDB(), { visibleStudentIds: isAdmin ? null : getVisibleStudents().map(s => s.id) })}</div>` : ''}
+  ${reportState.type === 'absence' && reportState.classId !== 'STAFF' ? `<div id="reportsAbsenceRankingBox" class="card" style="margin-top:12px;padding:14px">${renderAbsenceRankingTable(loadDB(), { isReport: true, visibleStudentIds: isAdmin ? null : getVisibleStudents().map(s => s.id) })}</div>` : ''}
   `;
 }
 // تسمية الكادر في تقريري الغياب والتأخر: المعلمات (TEACHER) عن بقية الأدوار الإدارية
@@ -19327,7 +19336,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=204', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=205', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
