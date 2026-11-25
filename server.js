@@ -3648,6 +3648,9 @@ function canAccessWeeklyPlan(role, uid, studentCtx, plan) {
   }
   return false;
 }
+function teacherAssignedElementaryClassIds(schoolData, uid) {
+  return weeklyPlans.extractTeacherAssignments(schoolData || {}, uid, { elementaryOnly: true }).classIds;
+}
 
 app.get('/api/weekly-plans/:school', requireAuth, (req, res) => {
   (async () => {
@@ -3664,8 +3667,8 @@ app.get('/api/weekly-plans/:school', requireAuth, (req, res) => {
     if (role === 'STUDENT') {
       const ctx = await resolveStudentAnnouncementContext(school, req.session);
       const classId = ctx.student && ctx.student.classId ? String(ctx.student.classId) : '';
-      if (!classId) {
-        return res.json({ ok: true, weekStart, weeks: [], plans: [], tasks: [], subjects: [], progress: {} });
+      if (!classId || !weeklyPlans.isElementaryClass(ctx.data || {}, classId)) {
+        return res.status(403).json({ error: 'elementary_only' });
       }
       const stuId = (ctx.student && ctx.student.id) || uid;
       const allClassPub = await db.listWeeklyPlans(school, { classId, status: 'published' });
@@ -3728,11 +3731,13 @@ app.get('/api/weekly-plans/:school', requireAuth, (req, res) => {
 
     if (role === 'TEACHER') {
       const rec = await db.getSchoolData(school);
-      const assigned = weeklyPlans.extractTeacherAssignments((rec && rec.data) || {}, uid);
+      const schoolData = (rec && rec.data) || {};
+      const elemClassIds = teacherAssignedElementaryClassIds(schoolData, uid);
+      if (elemClassIds.size === 0) return res.status(403).json({ error: 'elementary_teachers_only' });
       const targetSun = weeklyPlans.sundayOfDateStr(weekStart) || weekStart;
       const rawPlans = await db.listWeeklyPlans(school, { teacherId: uid });
       const filtered = rawPlans
-        .filter(p => assigned.classIds.has(String(p.classId)) && (weeklyPlans.sundayOfDateStr(p.weekStart) || p.weekStart) === targetSun)
+        .filter(p => elemClassIds.has(String(p.classId)) && (weeklyPlans.sundayOfDateStr(p.weekStart) || p.weekStart) === targetSun)
         .map(weeklyPlans.stripPlanAttachments);
       return res.json({ ok: true, weekStart: targetSun, weeks, plans: filtered });
     }
@@ -3758,6 +3763,14 @@ app.get('/api/weekly-plans/:school/:id', requireAuth, (req, res) => {
     if (!plan) return res.status(404).json({ error: 'not_found' });
     const ctx = role === 'STUDENT' ? await resolveStudentAnnouncementContext(school, req.session) : null;
     if (!canAccessWeeklyPlan(role, uid, ctx, plan)) return res.status(403).json({ error: 'forbidden' });
+    if (role === 'TEACHER') {
+      const rec = await db.getSchoolData(school);
+      if (!teacherAssignedElementaryClassIds(rec && rec.data, uid).has(String(plan.classId))) {
+        return res.status(403).json({ error: 'elementary_teachers_only' });
+      }
+    } else if (role === 'STUDENT' && !weeklyPlans.isElementaryClass(ctx && ctx.data, plan.classId)) {
+      return res.status(403).json({ error: 'elementary_only' });
+    }
     res.json({ ok: true, plan });
   })().catch(fail(res));
 });
@@ -3772,6 +3785,14 @@ app.get('/api/weekly-plans/:school/:id/attachment/:itemId', requireAuth, (req, r
     if (!plan) return res.status(404).json({ error: 'not_found' });
     const ctx = role === 'STUDENT' ? await resolveStudentAnnouncementContext(school, req.session) : null;
     if (!canAccessWeeklyPlan(role, uid, ctx, plan)) return res.status(403).json({ error: 'forbidden' });
+    if (role === 'TEACHER') {
+      const rec = await db.getSchoolData(school);
+      if (!teacherAssignedElementaryClassIds(rec && rec.data, uid).has(String(plan.classId))) {
+        return res.status(403).json({ error: 'elementary_teachers_only' });
+      }
+    } else if (role === 'STUDENT' && !weeklyPlans.isElementaryClass(ctx && ctx.data, plan.classId)) {
+      return res.status(403).json({ error: 'elementary_only' });
+    }
     const item = (plan.items || []).find(it => String(it.id) === String(req.params.itemId));
     if (!item || !item.attachmentData) return res.status(404).json({ error: 'not_found' });
     res.json({
@@ -3792,9 +3813,13 @@ app.post('/api/weekly-plans/:school', requireAuth, (req, res) => {
     if (role !== 'TEACHER' && role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
     const v = weeklyPlans.validateWeeklyPlanPayload(req.body);
     if (!v.ok) return res.status(400).json({ error: v.error });
+    const rec = await db.getSchoolData(school);
+    const schoolData = (rec && rec.data) || {};
+    if (!weeklyPlans.isElementaryClass(schoolData, v.value.classId)) {
+      return res.status(403).json({ error: 'elementary_classes_only' });
+    }
     if (role === 'TEACHER') {
-      const rec = await db.getSchoolData(school);
-      const assigned = weeklyPlans.extractTeacherAssignments((rec && rec.data) || {}, uid);
+      const assigned = weeklyPlans.extractTeacherAssignments(schoolData, uid, { elementaryOnly: true });
       if (!assigned.classIds.has(String(v.value.classId))) {
         return res.status(403).json({ error: 'class_not_assigned' });
       }
@@ -3823,9 +3848,13 @@ app.put('/api/weekly-plans/:school/:id', requireAuth, (req, res) => {
     }
     const v = weeklyPlans.validateWeeklyPlanPayload(Object.assign({}, existing, req.body || {}));
     if (!v.ok) return res.status(400).json({ error: v.error });
+    const rec = await db.getSchoolData(school);
+    const schoolData = (rec && rec.data) || {};
+    if (!weeklyPlans.isElementaryClass(schoolData, v.value.classId)) {
+      return res.status(403).json({ error: 'elementary_classes_only' });
+    }
     if (role === 'TEACHER') {
-      const rec = await db.getSchoolData(school);
-      const assigned = weeklyPlans.extractTeacherAssignments((rec && rec.data) || {}, uid);
+      const assigned = weeklyPlans.extractTeacherAssignments(schoolData, uid, { elementaryOnly: true });
       if (!assigned.classIds.has(String(v.value.classId))) {
         return res.status(403).json({ error: 'class_not_assigned' });
       }
@@ -3844,8 +3873,12 @@ app.delete('/api/weekly-plans/:school/:id', requireAuth, (req, res) => {
     if (role !== 'TEACHER' && role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
     const existing = await db.getWeeklyPlan(school, req.params.id);
     if (!existing) return res.status(404).json({ error: 'not_found' });
-    if (role === 'TEACHER' && String(existing.teacherId) !== uid) {
-      return res.status(403).json({ error: 'forbidden' });
+    if (role === 'TEACHER') {
+      if (String(existing.teacherId) !== uid) return res.status(403).json({ error: 'forbidden' });
+      const rec = await db.getSchoolData(school);
+      if (!teacherAssignedElementaryClassIds(rec && rec.data, uid).has(String(existing.classId))) {
+        return res.status(403).json({ error: 'elementary_teachers_only' });
+      }
     }
     await db.deleteWeeklyPlan(school, req.params.id);
     res.json({ ok: true, deleted: true });
@@ -3868,8 +3901,7 @@ app.post('/api/weekly-plans/:school/:id/items/:itemId/progress', requireAuth, (r
 
     const rec = await db.getSchoolData(school);
     const schoolData = (rec && rec.data) ? rec.data : {};
-    const assigned = weeklyPlans.extractTeacherAssignments(schoolData, uid);
-    if (!assigned.classIds.has(String(plan.classId))) return res.status(403).json({ error: 'class_not_assigned' });
+    if (!teacherAssignedElementaryClassIds(schoolData, uid).has(String(plan.classId))) return res.status(403).json({ error: 'class_not_assigned' });
 
     const stuName = (s) => String((s && (s.fullName || s.name || s.studentName)) || '').trim();
     const classStudents = (Array.isArray(schoolData.students) ? schoolData.students : [])
@@ -3919,9 +3951,12 @@ app.get('/api/weekly-plans/:school/:id/progress', requireAuth, (req, res) => {
     const plan = await db.getWeeklyPlan(school, req.params.id);
     if (!plan) return res.status(404).json({ error: 'not_found' });
     if (role === 'TEACHER' && String(plan.teacherId) !== uid) return res.status(403).json({ error: 'forbidden' });
-    const progress = await db.listPlanWeeklyProgress(school, plan.id);
     const rec = await db.getSchoolData(school);
     const data = (rec && rec.data) ? rec.data : {};
+    if (role === 'TEACHER' && !teacherAssignedElementaryClassIds(data, uid).has(String(plan.classId))) {
+      return res.status(403).json({ error: 'elementary_teachers_only' });
+    }
+    const progress = await db.listPlanWeeklyProgress(school, plan.id);
     const stuName = (s) => String((s && (s.fullName || s.name || s.studentName)) || '').trim();
     const classStudents = (Array.isArray(data.students) ? data.students : [])
       .filter(s => s && !s.deleted && s.active !== false && String(s.classId || '') === String(plan.classId))

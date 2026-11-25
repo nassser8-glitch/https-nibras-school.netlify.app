@@ -12,6 +12,27 @@ const WEEK_DAYS = [
 ];
 const DAY_KEY_SET = new Set(WEEK_DAYS.map(d => d.key));
 const PLAN_STATUSES = ['draft', 'published'];
+const ELEMENTARY_GRADE_IDS = new Set(['b_g1', 'b_g2', 'b_g3', 'b_g4', 'b_g5', 'b_g6']);
+const ELEMENTARY_GRADE_NAMES = new Set([
+  'الأول الابتدائي', 'الثاني الابتدائي', 'الثالث الابتدائي',
+  'الرابع الابتدائي', 'الخامس الابتدائي', 'السادس الابتدائي',
+]);
+
+function isElementaryGrade(grade) {
+  if (!grade || typeof grade !== 'object') return false;
+  if (ELEMENTARY_GRADE_IDS.has(String(grade.id || '').trim())) return true;
+  return ELEMENTARY_GRADE_NAMES.has(String(grade.name || '').trim());
+}
+
+function isElementaryClass(schoolData, classId) {
+  const d = schoolData || {};
+  const cid = String(classId || '').trim();
+  if (!cid) return false;
+  const cls = (Array.isArray(d.classes) ? d.classes : []).find(c => c && !c.deleted && String(c.id) === cid);
+  if (!cls) return false;
+  const grade = (Array.isArray(d.grades) ? d.grades : []).find(g => g && String(g.id) === String(cls.gradeId));
+  return isElementaryGrade(grade);
+}
 
 function normalizeDateStr(val) {
   const s = String(val == null ? '' : val).trim();
@@ -148,12 +169,19 @@ function validateWeeklyPlanPayload(body) {
   };
 }
 
-function extractTeacherAssignments(schoolData, teacherId) {
+function extractTeacherAssignments(schoolData, teacherId, opts) {
   const d = schoolData || {};
   const tid = String(teacherId || '').trim();
+  const elemOnly = !!(opts && opts.elementaryOnly);
+  const grades = Array.isArray(d.grades) ? d.grades : [];
+  const gradeMap = new Map(grades.filter(g => g && g.id).map(g => [String(g.id), g]));
   const classIds = new Set();
   const pairsMap = {};
-  const classes = Array.isArray(d.classes) ? d.classes.filter(c => c && !c.deleted) : [];
+  const classes = Array.isArray(d.classes) ? d.classes.filter(c => {
+    if (!c || c.deleted) return false;
+    if (elemOnly && !isElementaryGrade(gradeMap.get(String(c.gradeId)))) return false;
+    return true;
+  }) : [];
   const validClassSet = new Set(classes.map(c => String(c.id)));
 
   for (const c of classes) {
@@ -350,10 +378,16 @@ function extractClassAssignmentsForWeek(schoolData, classId, weekStart, studentI
 function buildAdminCoverageSummary(schoolData, plans, weekStart) {
   const d = schoolData || {};
   const ws = normalizeDateStr(weekStart);
-  const classes = (Array.isArray(d.classes) ? d.classes : []).filter(c => c && !c.deleted);
   const grades = Array.isArray(d.grades) ? d.grades : [];
   const gradeMap = {};
-  grades.forEach(g => { if (g && g.id) gradeMap[String(g.id)] = g.name; });
+  const gradeObjMap = new Map();
+  grades.forEach(g => { if (g && g.id) { gradeMap[String(g.id)] = g.name; gradeObjMap.set(String(g.id), g); } });
+  const hasElemGrade = grades.some(isElementaryGrade);
+  const classes = (Array.isArray(d.classes) ? d.classes : []).filter(c => {
+    if (!c || c.deleted) return false;
+    if (hasElemGrade && !isElementaryGrade(gradeObjMap.get(String(c.gradeId)))) return false;
+    return true;
+  });
   const users = (Array.isArray(d.users) ? d.users : []).filter(u => u && u.role === 'TEACHER' && u.active !== false && !u.deleted);
 
   const wsMon = mondayOfDateStr(weekStart);
@@ -372,7 +406,7 @@ function buildAdminCoverageSummary(schoolData, plans, weekStart) {
     pubKeys.add(cid + '|' + p.subject + '|' + String(p.teacherId));
   }
 
-  const assignedTeachers = users.filter(t => extractTeacherAssignments(d, t.id).classIds.size > 0);
+  const assignedTeachers = users.filter(t => extractTeacherAssignments(d, t.id, { elementaryOnly: hasElemGrade }).classIds.size > 0);
   const teachersPublished = assignedTeachers.filter(t => pubByTeacher.has(String(t.id)));
   const teachersPending = assignedTeachers.filter(t => !pubByTeacher.has(String(t.id)));
 
@@ -409,6 +443,10 @@ module.exports = {
   MAX_ATTACHMENT_BYTES,
   WEEK_DAYS,
   PLAN_STATUSES,
+  ELEMENTARY_GRADE_IDS,
+  ELEMENTARY_GRADE_NAMES,
+  isElementaryGrade,
+  isElementaryClass,
   normalizeDateStr,
   currentMondayKey,
   mondayOfDateStr,

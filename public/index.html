@@ -5249,7 +5249,7 @@ function renderLayout(user, hash){
     ]},
     { title:'المدرسة', items:[
       { href:'#/school-announcements', key:'school-announcements', label:'إعلانات المدرسة' + (studentUnreadAnnCount() > 0 ? ' (' + studentUnreadAnnCount() + ')' : ''), icon:'📢' },
-      { href:'#/weekly-plan', key:'weekly-plan', label:'الخطة الأسبوعية', icon:'📅' },
+      wpIsStudentElementary(user, loadDB()) ? { href:'#/weekly-plan', key:'weekly-plan', label:'الخطة الأسبوعية', icon:'📅' } : null,
       { href:'#/student-leaders', key:'student-leaders', label:'الأوائل', icon:'🏆' },
     ]},
     { title:'النظام', items:[
@@ -5289,7 +5289,7 @@ function renderLayout(user, hash){
       { href:'#/transfers', key:'transfers', label:'التحويلات', icon:'↔' },
       { href:'#/reports', key:'reports', label:'التقارير', icon:'▥' },
       (user.role === 'TEACHER' || user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT' || user.role === 'ADMINISTRATIVE') ? { href:'#/assignments', key:'assignments', label:'التكليفات', icon:'📝' } : null,
-      (user.role === 'TEACHER') ? { href:'#/weekly-plan', key:'weekly-plan', label:'خطتي الأسبوعية', icon:'📅' } : (user.role === 'ADMIN' ? { href:'#/weekly-plan', key:'weekly-plan', label:'الخطة الأسبوعية', icon:'📅' } : null),
+      (user.role === 'TEACHER') ? (wpTeacherAvailableClasses(user, loadDB()).length > 0 ? { href:'#/weekly-plan', key:'weekly-plan', label:'خطتي الأسبوعية', icon:'📅' } : null) : (user.role === 'ADMIN' ? { href:'#/weekly-plan', key:'weekly-plan', label:'الخطة الأسبوعية', icon:'📅' } : null),
     ]},
     { title:'المدرسة', items:[
       (user.role !== 'STUDENT') ? { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉', badge: user.role === 'AGENT' ? pendingPartRequests() : 0 } : null,
@@ -6967,6 +6967,7 @@ async function __loadWeeklyPlans(force, weekStartOverride){
   }
 }
 function renderStudentWeeklyPlanBanner(){
+  if(!wpIsStudentElementary(currentUser(), loadDB())) return '';
   if(!__wpCache.loaded && !__wpCache.loading){
     setTimeout(() => __loadWeeklyPlans(false), 0);
   }
@@ -7327,11 +7328,34 @@ function renderWeeklyPlanStudent(){
     </div>
   </div>`;
 }
+const __WP_ELEM_GRADE_IDS = new Set(['b_g1', 'b_g2', 'b_g3', 'b_g4', 'b_g5', 'b_g6']);
+const __WP_ELEM_GRADE_NAMES = new Set([
+  'الأول الابتدائي', 'الثاني الابتدائي', 'الثالث الابتدائي',
+  'الرابع الابتدائي', 'الخامس الابتدائي', 'السادس الابتدائي'
+]);
+function wpIsElementaryGrade(grade){
+  if(!grade || typeof grade !== 'object') return false;
+  if(__WP_ELEM_GRADE_IDS.has(String(grade.id || '').trim())) return true;
+  return __WP_ELEM_GRADE_NAMES.has(String(grade.name || '').trim());
+}
+function wpIsElementaryClass(cls, d){
+  if(!cls || cls.deleted) return false;
+  const grades = (d && Array.isArray(d.grades)) ? d.grades : [];
+  const g = grades.find(x => x && String(x.id) === String(cls.gradeId));
+  return wpIsElementaryGrade(g);
+}
+function wpIsStudentElementary(user, d){
+  if(!user || user.role !== 'STUDENT') return false;
+  const st = (d && Array.isArray(d.students) ? d.students : []).find(s => s && String(s.id) === String(user.id));
+  if(!st || !st.classId) return false;
+  const cls = (d && Array.isArray(d.classes) ? d.classes : []).find(c => c && !c.deleted && String(c.id) === String(st.classId));
+  return wpIsElementaryClass(cls, d);
+}
 function wpTeacherAvailableClasses(user, d){
   const ids = getAssignmentClassIds(user, d);
   const gMap = {};
   (d.grades || []).forEach(g => { if(g && g.id) gMap[g.id] = String(g.name || '').trim(); });
-  return (d.classes || []).filter(c => c && !c.deleted && ids.includes(c.id)).map(c => {
+  return (d.classes || []).filter(c => c && !c.deleted && ids.includes(c.id) && wpIsElementaryClass(c, d)).map(c => {
     const gName = gMap[c.gradeId] || '';
     const cName = String(c.name || '').trim();
     return {
@@ -7758,8 +7782,14 @@ function renderWeeklyPlanAdmin(){
 }
 function renderWeeklyPlanPage(user){
   if(!user) return '';
-  if(user.role === 'STUDENT') return renderWeeklyPlanStudent();
-  if(user.role === 'TEACHER') return renderWeeklyPlanTeacher(user);
+  if(user.role === 'STUDENT'){
+    if(!wpIsStudentElementary(user, loadDB())) return '<div class="ann-card" style="text-align:center;padding:28px;color:#b91c1c">⛔ خدمة الخطة الأسبوعية مخصصة للمرحلة الابتدائية فقط (من الأول الابتدائي إلى السادس الابتدائي).</div>';
+    return renderWeeklyPlanStudent();
+  }
+  if(user.role === 'TEACHER'){
+    if(wpTeacherAvailableClasses(user, loadDB()).length === 0) return '<div class="ann-card" style="text-align:center;padding:28px;color:#b91c1c">⛔ خدمة الخطة الأسبوعية مخصصة لمعلمي ومعلمات المرحلة الابتدائية فقط (من الأول الابتدائي إلى السادس الابتدائي).</div>';
+    return renderWeeklyPlanTeacher(user);
+  }
   if(user.role === 'ADMIN') return renderWeeklyPlanAdmin();
   return '';
 }
@@ -19349,7 +19379,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=207', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=208', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
