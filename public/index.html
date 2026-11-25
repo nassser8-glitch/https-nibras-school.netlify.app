@@ -11052,7 +11052,6 @@ async function __eduCancelAdmin(){
 }
 
 /* ============ ترتيب الطالبات حسب الغياب (منذ بداية العام الدراسي) ============ */
-let __absRankShowZero = false;
 let __reportsAbsRankShowZero = false;
 function __academicYearStartKey(refDateStr){
   const ref = String(refDateStr || (typeof todayStr === 'function' ? todayStr() : new Date().toISOString().slice(0,10))).slice(0, 10);
@@ -11135,14 +11134,6 @@ function computeStudentAbsenceRanking(db, opts){
 
   return { startDate, refDate, totalWithAbsence, totalStudents: activeStudents.length, rows: filtered };
 }
-function __toggleAbsRankZero(checked){
-  __absRankShowZero = !!checked;
-  const d = loadDB();
-  const user = currentUser();
-  const visibleIds = (user && !seesAllClasses(user)) ? getVisibleStudents().map(s => s.id) : null;
-  const box1 = document.getElementById('absenceRankingBox');
-  if(box1) box1.innerHTML = renderAbsenceRankingTable(d, { visibleStudentIds: visibleIds });
-}
 function __toggleReportsAbsRankZero(checked){
   __reportsAbsRankShowZero = !!checked;
   const d = loadDB();
@@ -11183,9 +11174,8 @@ function __showStudentAbsenceDatesModal(studentId){
 }
 function renderAbsenceRankingTable(db, opts){
   const o = opts || {};
-  const isReport = !!o.isReport;
-  const showZero = isReport ? __reportsAbsRankShowZero : __absRankShowZero;
-  const toggleFn = isReport ? '__toggleReportsAbsRankZero' : '__toggleAbsRankZero';
+  const showZero = !!__reportsAbsRankShowZero;
+  const toggleFn = '__toggleReportsAbsRankZero';
   const res = computeStudentAbsenceRanking(db, {
     includeZero: showZero,
     visibleStudentIds: o.visibleStudentIds || null
@@ -11433,10 +11423,6 @@ async function __refreshAnalyticsCharts(){
       window.__quarterChartSig = qRes.sig;
       boxQ.innerHTML = qRes.html || '<p class="muted small">لا توجد بيانات</p>';
     }
-    const boxRank = document.getElementById('absenceRankingBox');
-    if(boxRank){
-      boxRank.innerHTML = renderAbsenceRankingTable(d, { visibleStudentIds: ids });
-    }
   }catch(e){}
 }
 function renderCharts(d){
@@ -11494,9 +11480,6 @@ function renderCharts(d){
       <span><span style="display:inline-block;width:10px;height:10px;background:#16a34a;border-radius:2px;vertical-align:middle;margin-left:4px"></span>حاضر</span>
       <span><span style="display:inline-block;width:10px;height:10px;background:#dc2626;border-radius:2px;vertical-align:middle;margin-left:4px"></span>غائب</span>
       <span><span style="display:inline-block;width:10px;height:10px;background:#d97706;border-radius:2px;vertical-align:middle;margin-left:4px"></span>متأخر</span>
-    </div>
-    <div id="absenceRankingBox" style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border-color,#eef2f7)">
-      ${renderAbsenceRankingTable(d, { visibleStudentIds: Array.from(visibleIds) })}
     </div>
   </div>`;
 }
@@ -19336,7 +19319,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=205', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=206', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة

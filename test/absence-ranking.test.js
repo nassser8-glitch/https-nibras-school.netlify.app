@@ -124,19 +124,17 @@ test('4) إزالة التعديل السابق بالكامل والمحافظ�
   assert.equal(HTML.includes('renderCumulativeAbsenceReport'), false);
   assert.equal(HTML.includes('buildAcademicYearAbsenceChart'), false);
   assert.equal(HTML.includes('academicYearSummaryBox'), false);
-  assert.ok(HTML.includes('id="absenceRankingBox"'));
+  assert.equal(HTML.includes('id="absenceRankingBox"'), false);
   assert.ok(HTML.includes('id="reportsAbsenceRankingBox"'));
 });
 
-test('5) استقلالية خيار إظهار بدون غياب بين التقارير والواجهة الرئيسية', () => {
+test('5) خيار إظهار بدون غياب متاح ويعمل داخل التقارير فقط', () => {
   const E = loadRankingEngine();
   const db = makeSampleDB();
-  const dashHtml = E.renderAbsenceRankingTable(db);
   const repHtml = E.renderAbsenceRankingTable(db, { isReport: true });
 
-  assert.ok(dashHtml.includes('__toggleAbsRankZero(this.checked)'));
+  assert.equal(HTML.includes('__toggleAbsRankZero'), false);
   assert.ok(repHtml.includes('__toggleReportsAbsRankZero(this.checked)'));
-  assert.equal(dashHtml.includes('هند سعد'), false);
   assert.equal(repHtml.includes('هند سعد'), false);
 
   E.loadDB = () => db;
@@ -145,5 +143,4 @@ test('5) استقلالية خيار إظهار بدون غياب بين الت�
   E.document = { getElementById: () => null };
   E.__toggleReportsAbsRankZero(true);
   assert.equal(E.renderAbsenceRankingTable(db, { isReport: true }).includes('هند سعد'), true);
-  assert.equal(E.renderAbsenceRankingTable(db).includes('هند سعد'), false);
 });
