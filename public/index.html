@@ -3184,16 +3184,24 @@ async function __syncPull(school){
             if(cid) stuCount[cid] = (stuCount[cid] || 0) + 1;
           });
           const seenKeys = new Set();
-          merged.classes = merged.classes.filter(c => {
-            if(!c || typeof c !== 'object') return false;
-            if(c.deleted) return false;                                  // محذوف في الخادم: لا يُحيا
-            if(!c.gradeId || !gradeIds.has(c.gradeId)) return false;
-            if(!stuCount[c.id] && !serverClassIds.has(c.id)) return false; // شبح محلي فقط
-            const k = c.gradeId + '|' + (c.name||'');
-            if(seenKeys.has(k)) return false;
-            seenKeys.add(k);
-            return true;
-          });
+          const seenIds = new Set();
+          merged.classes = merged.classes
+            .slice()
+            .sort((a,b) => (stuCount[b && b.id]||0) - (stuCount[a && a.id]||0))
+            .filter(c => {
+              if(!c || typeof c !== 'object') return false;
+              if(c.deleted) return false;                                  // محذوف في الخادم: لا يُحيا
+              if(!c.id || !String(c.name || '').trim()) return false;      // فصل فارغ بلا معرف أو اسم
+              if(!c.gradeId || !gradeIds.has(c.gradeId)) return false;
+              if(!stuCount[c.id] && !serverClassIds.has(c.id)) return false; // شبح محلي فقط
+              const cid = String(c.id).trim();
+              if(seenIds.has(cid)) return false;
+              const k = String(c.gradeId) + '|' + String(c.name || '').trim() + '|' + String(c.campus || '');
+              if(seenKeys.has(k)) return false;
+              seenIds.add(cid);
+              seenKeys.add(k);
+              return true;
+            });
         }
       } catch(_){}
       merged._ts = Math.max(__syncTS(server), __syncTS(local), Date.now());
@@ -4150,7 +4158,23 @@ function userById(id){ return loadDB().users.find(u => u.id === id); }
 function getClassesSorted(){
   const d = loadDB();
   const user = currentUser();
-  let classes = d.classes.filter(c => !c.deleted);
+  const students = Array.isArray(d.students) ? d.students : [];
+  const activeCount = {};
+  students.forEach(s => { if(s && s.active && s.classId) activeCount[s.classId] = (activeCount[s.classId] || 0) + 1; });
+  const raw = (Array.isArray(d.classes) ? d.classes : []).filter(c =>
+    c && typeof c === 'object' && !c.deleted && c.id && String(c.name || '').trim() && gradeById(c.gradeId)
+  );
+  const byKey = new Map();
+  const seenIds = new Set();
+  raw.slice().sort((a,b) => (activeCount[b.id]||0) - (activeCount[a.id]||0) || ((b.teacherIds||[]).length - (a.teacherIds||[]).length)).forEach(c => {
+    const cid = String(c.id).trim();
+    if(seenIds.has(cid)) return;
+    const k = String(c.gradeId) + '|' + String(c.name).trim() + '|' + String(c.campus || '');
+    if(byKey.has(k)) return;
+    seenIds.add(cid);
+    byKey.set(k, c);
+  });
+  let classes = Array.from(byKey.values());
   // غير الشموليين (معلم فقط) يرون الفصول المسندة إليهم؛ المدير/الوكيل/المرشدة/الإداري يرون الكل
   if(user && !seesAllClasses(user)){
     const uidStr = String(user.id != null ? user.id : '').trim();
@@ -9144,7 +9168,7 @@ function openQuickSchedule(){
     return;
   }
   const campus = typeof getActiveSchool === 'function' ? getActiveSchool() : '';
-  const classes = (d.classes || []).filter(c => !campus || !c.campus || c.campus === campus);
+  const classes = getClassesSorted().filter(c => !campus || !c.campus || c.campus === campus);
   if(!classes.length){ alert('لا توجد فصول مضافة بعد'); return; }
   if(classes.length === 1){ viewClassSchedule(classes[0].id); return; }
   const btns = classes.map(c => {
@@ -13899,7 +13923,13 @@ function deleteClass(id){
   const count = d.students.filter(s => s.active && s.classId === id).length;
   if(count > 0){ alert('لا يمكن حذف فصل يحتوي على طلاب — انقل الطالبات أولًا'); return; }
   if(!confirm('هل تريد حذف هذا الفصل؟')) return;
-  d.classes = d.classes.filter(c => c.id !== id);
+  const cls = d.classes.find(c => c.id === id);
+  if(cls){
+    cls.deleted = true;
+    cls._v = (typeof cls._v === 'number' ? cls._v : 0) + 1;
+  }
+  if(!Array.isArray(d._blockedClasses)) d._blockedClasses = [];
+  if(!d._blockedClasses.includes(id)) d._blockedClasses.push(id);
   saveDB(d);
   renderApp();
 }
@@ -19319,7 +19349,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=206', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=207', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
