@@ -3639,9 +3639,12 @@ app.get('/api/announcements/:school/:id/views', requireAuth, (req, res) => {
 });
 
 /* ===== الخطة الأسبوعية — API موحد بصلاحيات صارمة ===== */
+function isWeeklyPlanManagerRole(role) {
+  return role === 'ADMIN' || role === 'AGENT' || role === 'SCHOOL_AGENT';
+}
 function canAccessWeeklyPlan(role, uid, studentCtx, plan) {
   if (!plan) return false;
-  if (role === 'ADMIN') return true;
+  if (isWeeklyPlanManagerRole(role)) return true;
   if (role === 'TEACHER') return String(plan.teacherId) === String(uid);
   if (role === 'STUDENT') {
     return plan.status === 'published' && studentCtx && studentCtx.student && String(studentCtx.student.classId || '') === String(plan.classId);
@@ -3658,7 +3661,7 @@ app.get('/api/weekly-plans/:school', requireAuth, (req, res) => {
     if (!school) return;
     const role = req.session.role;
     const uid = String(req.session.user_id || req.session.userId || '');
-    if (!['ADMIN', 'TEACHER', 'STUDENT'].includes(role)) return res.status(403).json({ error: 'forbidden' });
+    if (!isWeeklyPlanManagerRole(role) && role !== 'TEACHER' && role !== 'STUDENT') return res.status(403).json({ error: 'forbidden' });
 
     const weeks = await db.listWeeklyPlanWeeks(school);
     const reqWeek = weeklyPlans.normalizeDateStr(req.query && req.query.weekStart);
@@ -3810,7 +3813,7 @@ app.post('/api/weekly-plans/:school', requireAuth, (req, res) => {
     if (!school) return;
     const role = req.session.role;
     const uid = String(req.session.user_id || req.session.userId || '');
-    if (role !== 'TEACHER' && role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    if (role !== 'TEACHER' && !isWeeklyPlanManagerRole(role)) return res.status(403).json({ error: 'forbidden' });
     const v = weeklyPlans.validateWeeklyPlanPayload(req.body);
     if (!v.ok) return res.status(400).json({ error: v.error });
     const rec = await db.getSchoolData(school);
@@ -3824,8 +3827,8 @@ app.post('/api/weekly-plans/:school', requireAuth, (req, res) => {
         return res.status(403).json({ error: 'class_not_assigned' });
       }
     }
-    const teacherId = (role === 'ADMIN' && req.body && req.body.teacherId) ? String(req.body.teacherId) : uid;
-    const teacherName = (role === 'ADMIN' && req.body && req.body.teacherName) ? String(req.body.teacherName) : (req.session.name || '');
+    const teacherId = (isWeeklyPlanManagerRole(role) && req.body && req.body.teacherId) ? String(req.body.teacherId) : uid;
+    const teacherName = (isWeeklyPlanManagerRole(role) && req.body && req.body.teacherName) ? String(req.body.teacherName) : (req.session.name || '');
     const id = 'wp_' + crypto.randomBytes(8).toString('hex');
     const saved = await db.upsertWeeklyPlan(Object.assign({
       id, school, teacherId, teacherName,
@@ -3840,7 +3843,7 @@ app.put('/api/weekly-plans/:school/:id', requireAuth, (req, res) => {
     if (!school) return;
     const role = req.session.role;
     const uid = String(req.session.user_id || req.session.userId || '');
-    if (role !== 'TEACHER' && role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    if (role !== 'TEACHER' && !isWeeklyPlanManagerRole(role)) return res.status(403).json({ error: 'forbidden' });
     const existing = await db.getWeeklyPlan(school, req.params.id);
     if (!existing) return res.status(404).json({ error: 'not_found' });
     if (role === 'TEACHER' && String(existing.teacherId) !== uid) {
@@ -3870,7 +3873,7 @@ app.delete('/api/weekly-plans/:school/:id', requireAuth, (req, res) => {
     if (!school) return;
     const role = req.session.role;
     const uid = String(req.session.user_id || req.session.userId || '');
-    if (role !== 'TEACHER' && role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    if (role !== 'TEACHER' && !isWeeklyPlanManagerRole(role)) return res.status(403).json({ error: 'forbidden' });
     const existing = await db.getWeeklyPlan(school, req.params.id);
     if (!existing) return res.status(404).json({ error: 'not_found' });
     if (role === 'TEACHER') {
@@ -3947,7 +3950,7 @@ app.get('/api/weekly-plans/:school/:id/progress', requireAuth, (req, res) => {
     if (!school) return;
     const role = req.session.role;
     const uid = String(req.session.user_id || req.session.userId || '');
-    if (role !== 'TEACHER' && role !== 'ADMIN') return res.status(403).json({ error: 'forbidden' });
+    if (role !== 'TEACHER' && !isWeeklyPlanManagerRole(role)) return res.status(403).json({ error: 'forbidden' });
     const plan = await db.getWeeklyPlan(school, req.params.id);
     if (!plan) return res.status(404).json({ error: 'not_found' });
     if (role === 'TEACHER' && String(plan.teacherId) !== uid) return res.status(403).json({ error: 'forbidden' });

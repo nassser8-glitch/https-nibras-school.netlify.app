@@ -99,8 +99,36 @@ test('3) الواجهة: المعلم غير الابتدائي محجوب حت�
 
 test('4) الخادم يتحقق من المرحلة الابتدائية والصلاحية على مسارات الخطة الأسبوعية', () => {
   assert.ok(SERVER.includes('function teacherAssignedElementaryClassIds('));
+  assert.ok(SERVER.includes('function isWeeklyPlanManagerRole('));
   assert.ok(SERVER.includes("error: 'elementary_teachers_only'"));
   assert.ok(SERVER.includes("error: 'elementary_classes_only'"));
   assert.ok(SERVER.includes("error: 'elementary_only'"));
   assert.ok(HTML.includes("wpTeacherAvailableClasses(user, loadDB()).length > 0"));
+  assert.ok(HTML.includes("function wpIsManagerRole("));
+});
+
+test('5) الوكلاء (AGENT و SCHOOL_AGENT) يمتلكون صلاحيات المدير نفسها في الواجهة والخادم', () => {
+  const ctx = {
+    loadDB: () => sampleData,
+    getAssignmentClassIds: () => [],
+    renderWeeklyPlanTeacher: () => 'TEACHER_PAGE',
+    renderWeeklyPlanStudent: () => 'STUDENT_PAGE',
+    renderWeeklyPlanAdmin: () => 'ADMIN_PAGE',
+  };
+  vm.createContext(ctx);
+  vm.runInContext(
+    "const __WP_ELEM_GRADE_IDS = new Set(['b_g1', 'b_g2', 'b_g3', 'b_g4', 'b_g5', 'b_g6']);\n" +
+    "const __WP_ELEM_GRADE_NAMES = new Set(['الأول الابتدائي', 'الثاني الابتدائي', 'الثالث الابتدائي', 'الرابع الابتدائي', 'الخامس الابتدائي', 'السادس الابتدائي']);\n" +
+    extractFn('wpIsElementaryGrade') + '\n' +
+    extractFn('wpIsElementaryClass') + '\n' +
+    extractFn('wpIsStudentElementary') + '\n' +
+    extractFn('wpTeacherAvailableClasses') + '\n' +
+    extractFn('wpIsManagerRole') + '\n' +
+    extractFn('renderWeeklyPlanPage'),
+    ctx
+  );
+
+  assert.equal(ctx.renderWeeklyPlanPage({ id: 'u_admin', role: 'ADMIN' }), 'ADMIN_PAGE');
+  assert.equal(ctx.renderWeeklyPlanPage({ id: 'u_agent', role: 'AGENT' }), 'ADMIN_PAGE');
+  assert.equal(ctx.renderWeeklyPlanPage({ id: 'u_sagent', role: 'SCHOOL_AGENT' }), 'ADMIN_PAGE');
 });

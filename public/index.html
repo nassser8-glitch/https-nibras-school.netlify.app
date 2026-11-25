@@ -5266,6 +5266,7 @@ function renderLayout(user, hash){
       { href:'#/attendance', key:'attendance', label:'الحضور والغياب', icon:'✓' },
       { href:'#/reports', key:'reports', label:'التقارير', icon:'▥' },
       { href:'#/notes', key:'notes', label:'الملاحظات', icon:'★' },
+      { href:'#/weekly-plan', key:'weekly-plan', label:'الخطة الأسبوعية', icon:'📅' },
     ]},
     { title:'المدرسة', items:[
       { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉' },
@@ -5289,7 +5290,7 @@ function renderLayout(user, hash){
       { href:'#/transfers', key:'transfers', label:'التحويلات', icon:'↔' },
       { href:'#/reports', key:'reports', label:'التقارير', icon:'▥' },
       (user.role === 'TEACHER' || user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT' || user.role === 'ADMINISTRATIVE') ? { href:'#/assignments', key:'assignments', label:'التكليفات', icon:'📝' } : null,
-      (user.role === 'TEACHER') ? (wpTeacherAvailableClasses(user, loadDB()).length > 0 ? { href:'#/weekly-plan', key:'weekly-plan', label:'خطتي الأسبوعية', icon:'📅' } : null) : (user.role === 'ADMIN' ? { href:'#/weekly-plan', key:'weekly-plan', label:'الخطة الأسبوعية', icon:'📅' } : null),
+      (user.role === 'TEACHER') ? (wpTeacherAvailableClasses(user, loadDB()).length > 0 ? { href:'#/weekly-plan', key:'weekly-plan', label:'خطتي الأسبوعية', icon:'📅' } : null) : (wpIsManagerRole(user) ? { href:'#/weekly-plan', key:'weekly-plan', label:'الخطة الأسبوعية', icon:'📅' } : null),
     ]},
     { title:'المدرسة', items:[
       (user.role !== 'STUDENT') ? { href:'#/activities', key:'activities', label:'الأنشطة والفعاليات', icon:'🎉', badge: user.role === 'AGENT' ? pendingPartRequests() : 0 } : null,
@@ -5357,7 +5358,7 @@ function renderLayout(user, hash){
   let pageHtml = '';
   if(page === 'home') pageHtml = (user.role === 'STUDENT') ? renderStudentDashboard() : renderDashboard();
   else if(page === 'school-announcements' && (user.role === 'ADMIN' || user.role === 'STUDENT')) pageHtml = (user.role === 'ADMIN') ? renderSchoolAnnouncementsAdmin() : renderSchoolAnnouncementsStudent();
-  else if(page === 'weekly-plan' && (user.role === 'TEACHER' || user.role === 'ADMIN' || user.role === 'STUDENT')) pageHtml = renderWeeklyPlanPage(user);
+  else if(page === 'weekly-plan' && (user.role === 'TEACHER' || wpIsManagerRole(user) || user.role === 'STUDENT')) pageHtml = renderWeeklyPlanPage(user);
   else if(page === 'students') pageHtml = renderStudents();
   else if(page === 'attendance') pageHtml = renderAttendance();
   else if(page === 'notes'){
@@ -7780,6 +7781,9 @@ function renderWeeklyPlanAdmin(){
     ${bodyHtml}
   </div>`;
 }
+function wpIsManagerRole(user){
+  return !!(user && (user.role === 'ADMIN' || user.role === 'AGENT' || user.role === 'SCHOOL_AGENT'));
+}
 function renderWeeklyPlanPage(user){
   if(!user) return '';
   if(user.role === 'STUDENT'){
@@ -7790,7 +7794,7 @@ function renderWeeklyPlanPage(user){
     if(wpTeacherAvailableClasses(user, loadDB()).length === 0) return '<div class="ann-card" style="text-align:center;padding:28px;color:#b91c1c">⛔ خدمة الخطة الأسبوعية مخصصة لمعلمي ومعلمات المرحلة الابتدائية فقط (من الأول الابتدائي إلى السادس الابتدائي).</div>';
     return renderWeeklyPlanTeacher(user);
   }
-  if(user.role === 'ADMIN') return renderWeeklyPlanAdmin();
+  if(wpIsManagerRole(user)) return renderWeeklyPlanAdmin();
   return '';
 }
 
@@ -19379,7 +19383,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=208', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=209', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
