@@ -1550,6 +1550,29 @@ const SCHOOL_KEY = 'nibras_school_v1';
 const ANNOUNCEMENT_KEY = s => 'nibras_announcement_'+s+'_v1';
 const ANNOUNCEMENT_SENDER_KEY = s => 'nibras_announcement_sender_'+s+'_v1';
 function firstNameOf(name){ return String(name || '').trim().split(/\s+/)[0] || ''; }
+function twoPartNameOf(name){
+  const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if(words.length <= 1) return words[0] || '';
+  const tokens = [];
+  for(let i = 0; i < words.length; i++){
+    if(words[i] === 'عبد' && i + 1 < words.length){
+      tokens.push(words[i] + ' ' + words[i + 1]);
+      i++;
+    } else {
+      tokens.push(words[i]);
+    }
+  }
+  const units = [];
+  for(let i = 0; i < tokens.length; i++){
+    if((tokens[i] === 'بن' || tokens[i] === 'بنت' || tokens[i] === 'ابن') && i + 1 < tokens.length){
+      units.push(tokens[i] + ' ' + tokens[i + 1]);
+      i++;
+    } else {
+      units.push(tokens[i]);
+    }
+  }
+  return units.slice(0, 2).join(' ');
+}
 const ADMIN_MSGS_KEY = s => 'nibras_adminmsgs_'+s+'_v1';
 const SESS_MIRROR_KEY = 'nibras_secure_session_v1';
 const AUTH_API = '/api/auth/';
@@ -9278,7 +9301,7 @@ function viewClassSchedule(classId){
     const cells = TIMETABLE_DAYS.map((day, di) => {
       const info = sched[day.key][p];
       const cellBg = info ? dayColors[di] : rowBg;
-      return `<td style="padding:6px;text-align:center;font-size:12px;border:1px solid #e2e8f0;background:${cellBg};">${info ? escapeHtml(info.subject) + '<br><span class="muted small">' + escapeHtml(String(info.teacher).trim().split(/\s+/).filter(Boolean).slice(0,2).join(' ')) + '</span>' : '<span class="muted">—</span>'}</td>`;
+      return `<td style="padding:6px;text-align:center;font-size:12px;border:1px solid #e2e8f0;background:${cellBg};">${info ? escapeHtml(info.subject) + '<br><span class="muted small">' + escapeHtml(twoPartNameOf(info.teacher)) + '</span>' : '<span class="muted">—</span>'}</td>`;
     }).join('');
     return `<tr style="background:${rowBg};"><td style="padding:6px;font-weight:700;font-size:12px;border:1px solid #e2e8f0;background:#e2e8f0;">${name}</td>${cells}</tr>`;
   }).join('');
@@ -15051,7 +15074,7 @@ function renderSupervisionAdmin(){
     if(serverItem && serverItem.name) return serverItem.name;
     return id;
   };
-  const shortName = n => escapeHtml(String(n || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).join(' '));
+  const shortName = n => escapeHtml(twoPartNameOf(n || ''));
   const today = __supervisionToday;
   const todayDow = (today && typeof today.dayOfWeek === 'number') ? today.dayOfWeek : new Date().getDay();
   const todayLabel = (SUPERVISION_DAYS.find(x => x.dow === todayDow) || {}).label || 'لا يوجد إشراف';
@@ -16255,7 +16278,7 @@ function __renderAssignmentFormFields(d, user, classId, subject, assignmentType)
         ${teachers.map(t => {
           const checked = defaultTids.has(t.id) ? 'checked' : '';
           const inCls = clsTids.has(t.id);
-          const shortName = String(t.name || t.username || t.id).trim().split(/\s+/).filter(Boolean).slice(0,2).join(' ');
+          const shortName = twoPartNameOf(t.name || t.username || t.id);
           return `<label style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:12.5px;background:${inCls ? '#fdf2f8' : '#fff7fb'}">
             <input type="checkbox" class="ass-teacher-cb" value="${escapeHtml(t.id)}" ${checked && activeTeacherIds.has(String(t.id)) ? 'checked' : ''} />
             <span style="font-weight:${inCls ? '700' : '500'}">${escapeHtml(shortName)}</span>
@@ -19383,7 +19406,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=209', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=210', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
