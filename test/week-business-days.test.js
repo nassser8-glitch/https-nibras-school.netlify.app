@@ -124,10 +124,11 @@ test('5) الرسم: ٥ أعمدة بأيام العمل، والأعداد مط
 
   const cc23 = A.attCountsByDate(db(), '2026-10-23', ['s1', 's2', 's3']);
   assert.deepStrictEqual([cc23.present, cc23.absent, cc23.late], [1, 1, 1]);
-  assert.ok(res.html.includes('1/1/1'), 'أعداد 23/10 غير مطابقة');
+  const plain = res.html.replace(/<[^>]+>/g, '');
+  assert.ok(plain.includes('1/1/1'), 'أعداد 23/10 غير مطابقة');
   const cc22 = A.attCountsByDate(db(), '2026-10-22', ['s1', 's2', 's3']);
   assert.deepStrictEqual([cc22.present, cc22.absent, cc22.late], [2, 1, 0]);
-  assert.ok(res.html.includes('2/1/0'), 'أعداد 22/10 غير مطابقة');
+  assert.ok(plain.includes('2/1/0'), 'أعداد 22/10 غير مطابقة');
   assert.strictEqual(res.label, '19/10 – 23/10');
 });
 

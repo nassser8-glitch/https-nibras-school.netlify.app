@@ -11237,7 +11237,7 @@ function buildWeekChart(db, idsArr, offset){
       </div>
       <div style="font-size:10px;color:#6b7280">${w.label}</div>
       <div style="font-size:11px;color:#0f766e;font-weight:800" title="نسبة الحضور">${w.rate}%</div>
-      <div style="font-size:9px;color:#374151" title="حاضر/غائب/متأخر">${w.present}/${w.absent}/${w.late}</div>
+      <div style="font-size:9px;color:#374151" title="حاضر/غائب/متأخر"><span style="color:#16a34a;font-weight:700">${w.present}</span>/<span style="color:#dc2626;font-weight:700">${w.absent}</span>/<span style="color:#d97706;font-weight:700">${w.late}</span></div>
     </div>`;
   }).join('');
   const sig = days.join(',') + '|' + weekDays.map(w => w.label+':'+w.present+':'+w.absent+':'+w.late+':'+w.rate).join('|');
@@ -19327,7 +19327,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     // نرفع رقم الاستعلام مع كل تغيير في CACHE_NAME داخل sw.js: المتصفح يقارن
     // عنوان السكربت لا محتواه، فبلا رقم جديد يبقى على النسخة المخزّنة
     // ولا يسجّل الحارس الجديد فلا يُحدَّث index.html عند المستخدمين.
-          navigator.serviceWorker.register('sw.js?v=203', { updateViaCache: 'none' }).catch(function(){});
+          navigator.serviceWorker.register('sw.js?v=204', { updateViaCache: 'none' }).catch(function(){});
     setTimeout(function(){ navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })).catch(function(){}); }, 1500);
   });
   /* عند تفعيل نسخة Service Worker جديدة: نُحدّث الصفحة تلقائياً مرة واحدة
