@@ -276,11 +276,18 @@ async function usersByEmail(email) {
   const r = await pool.query('SELECT * FROM users WHERE lower(email) = lower($1)', [value]);
   return r.rows;
 }
-async function userByUsername(username) {
+async function usersByUsername(username) {
   const value = String(username || '').trim();
-  if (!value) return null;
-  const r = await pool.query('SELECT * FROM users WHERE lower(username) = lower($1)', [value]);
-  return r.rows[0] || null;
+  if (!value) return [];
+  const r = await pool.query(
+    'SELECT * FROM users WHERE lower(username) = lower($1) ORDER BY active DESC, granted DESC, id DESC',
+    [value]
+  );
+  return r.rows;
+}
+async function userByUsername(username) {
+  const rows = await usersByUsername(username);
+  return rows[0] || null;
 }
 async function usernameExists(username) {
   const value = String(username || '').trim();
@@ -1359,7 +1366,7 @@ module.exports = {
   databaseNameFromUrl, validateDatabaseUrl,
   initSchema,
   getFlag, setFlag,
-  userByEmail, usersByEmail, userByUsername, usernameExists, generateUsername, baseUsername,
+  userByEmail, usersByEmail, userByUsername, usersByUsername, usernameExists, generateUsername, baseUsername,
   userById, listUsers, listAllUsers, findDiagnosticUsers, usersForLoginStats, usernamesByIds, countAdmins, insertUser,
   createStudentAccountAndRecord,
   updateUserPasswordHash, updateUserPlainPassword, updateUserProfile, grantUserAccess, clearFirstLogin,

@@ -562,6 +562,7 @@ app.post('/api/auth/login', (req, res) => {
     // الدخول يكون باسم المستخدم (username)، مع بقاء دعم البريد الإلكتروني كبديل (يحتوي @)
     let candidates;
     if (login.includes('@')) candidates = await db.usersByEmail(login);
+    else if (typeof db.usersByUsername === 'function') candidates = await db.usersByUsername(login);
     else { const single = await db.userByUsername(login); candidates = single ? [single] : []; }
     let u = null;
     for (const c of candidates) {
@@ -845,6 +846,7 @@ app.post('/api/auth/forgot-password', (req, res) => {
     // الدخول بالاسم أو البريد: الاسم فريد فلا لبس في تحديد الحساب المستهدف (البريد قد يتكرر)
     let candidates;
     if (login.includes('@')) candidates = await db.usersByEmail(login);
+    else if (typeof db.usersByUsername === 'function') candidates = await db.usersByUsername(login);
     else { const single = await db.userByUsername(login); candidates = single ? [single] : []; }
     if (!candidates.length) return res.status(404).json({ error: 'not_found' });
     const active = candidates.filter(c => c.active);
@@ -877,6 +879,7 @@ app.post('/api/auth/recover-password', (req, res) => {
     if (!login || !code || !pw) return res.status(400).json({ error: 'missing' });
     let candidates;
     if (login.includes('@')) candidates = await db.usersByEmail(login);
+    else if (typeof db.usersByUsername === 'function') candidates = await db.usersByUsername(login);
     else { const single = await db.userByUsername(login); candidates = single ? [single] : []; }
     let u = candidates.find(c => c.active && c.data && String(c.data.resetCode) === code);
     if (!u) return res.status(400).json({ error: 'bad_code' });
